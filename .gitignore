@@ -1,0 +1,6 @@
+third_party/limine/
+build/
+.vagrant/
+*.iso
+*.elf
+.DS_Store
