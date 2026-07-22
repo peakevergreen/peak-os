@@ -94,6 +94,10 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/desktop_damage.c \
 	kernel/gui/desktop_windows.c \
 	kernel/gui/desktop_compose.c \
+	kernel/gui/desktop_terminal.c \
+	kernel/gui/desktop_files.c \
+	kernel/gui/desktop_settings.c \
+	kernel/gui/desktop_agent.c \
 	kernel/gui/game.c \
 	kernel/gui/browser.c \
 	kernel/gui/monitor.c
