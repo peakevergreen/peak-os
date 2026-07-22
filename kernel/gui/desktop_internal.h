@@ -108,6 +108,8 @@ void desktop_close_win(int idx);
 
 void desktop_mark_focus_surf_dirty(void);
 void desktop_mark_win_surf_dirty(int idx);
+void desktop_mark_win_surf_dirty_rect(int idx, uint32_t x, uint32_t y,
+                                      uint32_t w, uint32_t h);
 void desktop_cursor_erase_front(void);
 void desktop_draw_cursor(int32_t x, int32_t y);
 void desktop_opaque_move_free(void);

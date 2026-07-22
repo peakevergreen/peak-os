@@ -51,6 +51,12 @@ void desktop_mark_win_surf_dirty(int idx) {
         surface_mark_dirty(&wins[idx].surf);
 }
 
+void desktop_mark_win_surf_dirty_rect(int idx, uint32_t x, uint32_t y,
+                                      uint32_t w, uint32_t h) {
+    if (idx >= 0 && idx < MAX_WINS && wins[idx].open)
+        surface_mark_dirty_rect(&wins[idx].surf, x, y, w, h);
+}
+
 static void cursor_sprite_ensure(uint32_t scale) {
     if (scale < 1)
         scale = 1;
@@ -217,19 +223,22 @@ static void paint_win_to_surface(int i) {
     fb_set_draw_target(NULL, 0, 0, 0);
     w->x = ox;
     w->y = oy;
-    w->surf.dirty = 0;
 }
 
-static void compose_win(int i) {
+static void compose_win(int i, uint32_t cx, uint32_t cy, uint32_t cw, uint32_t ch) {
     struct win *w = &wins[i];
     if (!w->open || w->minimized)
         return;
-    if (w->surf.px && w->surf.dirty)
+    int clip = cw > 0 && ch > 0;
+    if (w->surf.px && surface_is_dirty(&w->surf)) {
         paint_win_to_surface(i);
-    if (w->surf.px && !w->surf.dirty)
-        surface_blit(&w->surf, w->x, w->y);
-    else
+        surface_blit_damage(&w->surf, w->x, w->y, cx, cy, clip ? cw : 0, clip ? ch : 0);
+        surface_damage_clear(&w->surf);
+    } else if (w->surf.px) {
+        surface_blit_damage(&w->surf, w->x, w->y, cx, cy, clip ? cw : 0, clip ? ch : 0);
+    } else {
         desktop_draw_win_content(i);
+    }
 }
 
 static void draw_windows(void) {
@@ -248,7 +257,7 @@ static void draw_windows(void) {
     for (int k = 0; k < n; k++) {
         if (wins[order[k]].minimized)
             continue;
-        compose_win(order[k]);
+        compose_win(order[k], 0, 0, 0, 0);
     }
 }
 
@@ -265,9 +274,10 @@ static void proto_blit_cb(int id, uint32_t x, uint32_t y, uint32_t w, uint32_t h
     (void)h;
     if (!s || !s->px)
         return;
-    if (c->clip && !rects_overlap(x, y, s->w, s->h, c->dx, c->dy, c->dw, c->dh))
-        return;
-    surface_blit(s, x, y);
+    if (c->clip)
+        surface_blit_damage(s, x, y, c->dx, c->dy, c->dw, c->dh);
+    else
+        surface_blit_damage(s, x, y, 0, 0, 0, 0);
 }
 
 static void draw_proto_surfaces(uint32_t dx, uint32_t dy, uint32_t dw, uint32_t dh, int clip) {
@@ -309,7 +319,7 @@ static void draw_wins_below(int skip_idx, uint32_t x, uint32_t y, uint32_t w, ui
         int i = order[k];
         if (!rects_overlap(wins[i].x, wins[i].y, wins[i].w, wins[i].h, x, y, w, h))
             continue;
-        compose_win(i);
+        compose_win(i, x, y, w, h);
     }
 }
 
@@ -425,7 +435,7 @@ static void compose_damage(void) {
             int i = order[k];
             if (!rects_overlap(wins[i].x, wins[i].y, wins[i].w, wins[i].h, x, y, w, h))
                 continue;
-            compose_win(i);
+            compose_win(i, x, y, w, h);
         }
         draw_proto_surfaces(x, y, w, h, 1);
         if (rects_overlap(0, tby, (uint32_t)fb->width, tb, x, y, w, h))
@@ -502,28 +512,23 @@ static int try_partial_present(void) {
     fb_begin_frame();
 
     if (mi >= 0) {
-        desktop_mark_win_surf_dirty(mi);
-        compose_win(mi);
+        compose_win(mi, 0, 0, 0, 0);
         damage_add_win(mi);
     }
     if (ti >= 0) {
-        desktop_mark_win_surf_dirty(ti);
-        compose_win(ti);
+        compose_win(ti, 0, 0, 0, 0);
         damage_add_win(ti);
     }
     if (gi >= 0) {
-        desktop_mark_win_surf_dirty(gi);
-        compose_win(gi);
+        compose_win(gi, 0, 0, 0, 0);
         damage_add_win(gi);
     }
     if (bi >= 0) {
-        desktop_mark_win_surf_dirty(bi);
-        compose_win(bi);
+        compose_win(bi, 0, 0, 0, 0);
         damage_add_win(bi);
     }
     if (wi >= 0) {
-        desktop_mark_win_surf_dirty(wi);
-        compose_win(wi);
+        compose_win(wi, 0, 0, 0, 0);
         damage_add_win(wi);
     }
     if (bits & DIRTY_CLOCK) {
