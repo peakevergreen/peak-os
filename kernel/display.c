@@ -1,4 +1,5 @@
 #include "display.h"
+#include "display_clip.h"
 #include "serial.h"
 #include "util.h"
 
@@ -162,14 +163,12 @@ void display_frame_begin(void) {
 
 void display_present_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                           const uint32_t *src, uint32_t src_stride) {
-    if (!g_inited || !src || !w || !h)
+    if (!g_inited || !src)
         return;
-    if (x >= g_disp.width || y >= g_disp.height)
+    uint32_t fw = (uint32_t)g_disp.width;
+    uint32_t fh = (uint32_t)g_disp.height;
+    if (!display_clip_rect(fw, fh, x, y, w, h, &x, &y, &w, &h))
         return;
-    if (x + w > g_disp.width)
-        w = (uint32_t)g_disp.width - x;
-    if (y + h > g_disp.height)
-        h = (uint32_t)g_disp.height - y;
 
 #if defined(__aarch64__)
     if (g_flip_ok) {

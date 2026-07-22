@@ -25,6 +25,11 @@ int main(void) {
     expect(rows == 32, "copy_rows = height - glyph");
     expect(console_scroll_plan(800, 48, &rows) == 1 && rows == 752, "scale-3 cell");
 
+    expect(console_scroll_plan(49, 17, NULL) == 1, "NULL copy_rows allowed");
+    expect(console_scroll_plan(17, 17, &rows) == 0, "exact fit no scroll");
+    expect(console_scroll_bytes(4096, 752) == (uint64_t)4096 * 752,
+           "scroll byte count");
+
     if (fails) {
         fprintf(stderr, "%d console_scroll test(s) failed\n", fails);
         return 1;
