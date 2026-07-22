@@ -56,11 +56,11 @@ echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c
 grep -q 'agent_approve_write' kernel/agent.c
-grep -q 'hlt_if_enabled' kernel/net/net.c
+grep -q 'hlt_if_enabled' kernel/net/*.c
 grep -q 'blockdev_flush' kernel/peakdisk.c
 grep -q 'peak_bootinfo' kernel/boot.c
 grep -q 'net_attempt_stats_reset' kernel/gui/desktop.c
-grep -q 'PeakBrowser/1' kernel/net/net.c
+grep -q 'PeakBrowser/1' kernel/net/*.c
 ! grep -q 'COM2\|COM3\|0x2F8\|0x3E8' kernel/agent.c kernel/user/ubin.c
 ! grep -rq 'limine\.h\|LIMINE_' kernel boot --include='*.c' --include='*.h' --include='*.S' --include='*.ld'
 
