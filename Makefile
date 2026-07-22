@@ -65,6 +65,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/dom.c \
 	kernel/gui/css.c \
 	kernel/gui/browser_js.c \
+	kernel/gui/browser_parse.c \
 	kernel/gui/webapi.c \
 	kernel/net/dhcp_util.c \
 	kernel/net/http_util.c \
