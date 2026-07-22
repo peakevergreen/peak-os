@@ -7,15 +7,58 @@
 struct heap_block {
     size_t size;
     int free;
-    struct heap_block *next;
+    struct heap_block *next;      /* all blocks (stats / coalesce) */
+    struct heap_block *free_next; /* size-class freelist when free */
+};
+
+/* Segregated free lists for small allocations (16-byte aligned). */
+#define HEAP_NCLASSES 9
+static const size_t heap_class_size[HEAP_NCLASSES] = {
+    16, 32, 64, 128, 256, 512, 1024, 2048, 4032
 };
 
 static struct heap_block *blocks;
+static struct heap_block *free_lists[HEAP_NCLASSES];
 static struct spinlock heap_lock;
+
+static int heap_size_class(size_t size) {
+    for (int i = 0; i < HEAP_NCLASSES; i++) {
+        if (size <= heap_class_size[i])
+            return i;
+    }
+    return -1;
+}
+
+static void freelist_push(struct heap_block *b) {
+    int cls = heap_size_class(b->size);
+    if (cls < 0) {
+        b->free_next = NULL;
+        return;
+    }
+    b->free_next = free_lists[cls];
+    free_lists[cls] = b;
+}
+
+static void freelist_remove(struct heap_block *b) {
+    int cls = heap_size_class(b->size);
+    if (cls < 0)
+        return;
+    struct heap_block **pp = &free_lists[cls];
+    while (*pp) {
+        if (*pp == b) {
+            *pp = b->free_next;
+            b->free_next = NULL;
+            return;
+        }
+        pp = &(*pp)->free_next;
+    }
+}
 
 void heap_init(void) {
     spin_init(&heap_lock, "heap");
     blocks = NULL;
+    for (int i = 0; i < HEAP_NCLASSES; i++)
+        free_lists[i] = NULL;
     for (int i = 0; i < 128; i++) {
         void *phys = pmm_alloc();
         if (!phys)
@@ -23,8 +66,10 @@ void heap_init(void) {
         struct heap_block *b = (struct heap_block *)vmm_phys_to_virt((uint64_t)phys);
         b->size = 4096 - sizeof(struct heap_block);
         b->free = 1;
+        b->free_next = NULL;
         b->next = blocks;
         blocks = b;
+        freelist_push(b);
     }
 }
 
@@ -37,6 +82,7 @@ static void *alloc_pages_block(size_t size) {
     struct heap_block *b = (struct heap_block *)vmm_phys_to_virt((uint64_t)phys);
     b->size = npages * (size_t)PAGE_SIZE - sizeof(struct heap_block);
     b->free = 0;
+    b->free_next = NULL;
     b->next = blocks;
     blocks = b;
     return (void *)(b + 1);
@@ -48,16 +94,26 @@ void *kmalloc(size_t size) {
     size = (size + 15) & ~(size_t)15;
 
     spin_lock(&heap_lock);
-    for (struct heap_block *b = blocks; b; b = b->next) {
-        if (b->free && b->size >= size) {
+
+    int cls = heap_size_class(size);
+    if (cls >= 0) {
+        /* Exact class first, then larger classes (split leftover). */
+        for (int c = cls; c < HEAP_NCLASSES; c++) {
+            struct heap_block *b = free_lists[c];
+            if (!b)
+                continue;
+            free_lists[c] = b->free_next;
+            b->free_next = NULL;
             if (b->size >= size + sizeof(struct heap_block) + 64) {
                 uint8_t *split_at = (uint8_t *)(b + 1) + size;
                 struct heap_block *n = (struct heap_block *)split_at;
                 n->size = b->size - size - sizeof(struct heap_block);
                 n->free = 1;
+                n->free_next = NULL;
                 n->next = b->next;
                 b->next = n;
                 b->size = size;
+                freelist_push(n);
             }
             b->free = 0;
             void *ret = (void *)(b + 1);
@@ -65,6 +121,8 @@ void *kmalloc(size_t size) {
             return ret;
         }
     }
+
+    /* Large request or empty freelists: grow from PMM. */
     void *ret = alloc_pages_block(size);
     spin_unlock(&heap_lock);
     return ret;
@@ -111,8 +169,11 @@ static void heap_coalesce(void) {
             uint8_t *end = (uint8_t *)(b + 1) + b->size;
             if (end != (uint8_t *)b->next)
                 break;
+            freelist_remove(b);
+            freelist_remove(b->next);
             b->size += sizeof(struct heap_block) + b->next->size;
             b->next = b->next->next;
+            freelist_push(b);
         }
     }
 }
@@ -150,6 +211,7 @@ void kfree(void *ptr) {
         return;
     }
     b->free = 1;
+    freelist_push(b);
     heap_coalesce();
     spin_unlock(&heap_lock);
 }
