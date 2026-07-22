@@ -11,6 +11,9 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Peak BIOS + UEFI loaders; hybrid ISO; Limine / host serial bridges removed
 - BootInfo v4 (HHDM, framebuffer, mmap, optional DTB, net config, entropy flags)
 - `make purity` / CI purity gates
+- CI honesty: hard-fail fuzz/manifest/doctor; require BOOTX64 + kernel.elf PHDR; tighten aarch64 smoke markers; clear `net_up` on DHCP fail
+- CI gates: UEFI smoke, smoke-cli static gate, host `-Werror`, real ELF fuzz, PeakFS QEMU roundtrip (`smoke_persist`)
+- PeakDisk atomic publish (payload→header) + SDHCI CMD13 flush; DWC2 hub enum/split/hotplug; `/bin/disksave`
 
 ### Desktop / Commercial GFX
 

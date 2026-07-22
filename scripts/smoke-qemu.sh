@@ -129,7 +129,9 @@ if [[ ! -f "$SERIAL_LOG" ]]; then
 fi
 
 echo "==> checking serial boot markers"
-grep -q "PeakOS booting" "$SERIAL_LOG" || grep -q "Peak BIOS loader\|Peak UEFI loader" "$SERIAL_LOG" || true
+grep -q "PeakOS booting" "$SERIAL_LOG" || grep -q "Peak BIOS loader\|Peak UEFI loader" "$SERIAL_LOG" || {
+  echo "FAIL: no boot banner / loader"; tail -40 "$SERIAL_LOG"; exit 1;
+}
 grep -q "Physical memory" "$SERIAL_LOG" || { echo "FAIL: no PMM"; tail -40 "$SERIAL_LOG"; exit 1; }
 grep -q "System monitor" "$SERIAL_LOG" || { echo "FAIL: no System monitor"; exit 1; }
 grep -q "Network (e1000)" "$SERIAL_LOG" || grep -q "net: ipv4 ready" "$SERIAL_LOG" || {

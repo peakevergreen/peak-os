@@ -50,11 +50,11 @@ Framebuffer console (soft-fail if no FB), PMM/VMM/heap (PMM to 16 GiB), VFS + st
 
 ## I/O (Pi)
 
-- **BCM2837:** BCM local IRQs, PL011 UART, DWC2 USB + HID, SDHCI, mailbox FB, USB LAN when present.
-- **BCM2711:** GIC, GENET, PCIe → VL805 xHCI, SDHCI.
-- **BCM2712:** GIC, PCIe → RP1 (USB/Ethernet/GPIO).
+- **BCM2837:** BCM local IRQs, PL011 UART, DWC2 HID with hub enum/split/hotplug, SDHCI (CMD13 flush), mailbox FB. USB LAN bulk: not ready.
+- **BCM2711:** GIC, SDHCI; GENET and PCIe → VL805 xHCI are staged stubs (not registered ready).
+- **BCM2712:** GIC; PCIe → RP1 USB/Ethernet/GPIO staged; high MMIO often unmapped.
 
-Wi-Fi: SDIO + runtime firmware (binary exception). DMA drivers use explicit cache maintenance on BCM.
+Wi-Fi: SDIO path stub (not registered ready). DMA drivers use explicit cache maintenance on BCM. See [docs/rpi.md](docs/rpi.md).
 
 ## Serial
 

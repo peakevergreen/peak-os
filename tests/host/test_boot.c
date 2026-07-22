@@ -32,8 +32,8 @@ static int map_page(uint64_t virt, uint64_t phys, int writable) {
     return 0;
 }
 
-/* Minimal ELF64 with one PT_LOAD */
-static uint8_t *make_elf(size_t *out_size) {
+/* Minimal ELF64 with one PT_LOAD; p_flags defaults to R+X (5). */
+static uint8_t *make_elf(size_t *out_size, uint32_t p_flags) {
     size_t sz = 4096;
     uint8_t *buf = calloc(1, sz);
     /* e_ident */
@@ -55,7 +55,6 @@ static uint8_t *make_elf(size_t *out_size) {
 
     uint8_t *ph = buf + 64;
     uint32_t p_type = 1; /* PT_LOAD */
-    uint32_t p_flags = 5;
     uint64_t p_offset = 0x200;
     uint64_t p_vaddr = 0xffffffff80001000ULL;
     uint64_t p_filesz = 16;
@@ -85,13 +84,90 @@ static void expect(int cond, const char *msg) {
     }
 }
 
-int main(void) {
+static int try_load(uint8_t *elf, size_t esz) {
+    struct boot_elf_image img = { .data = elf, .size = esz };
+    struct boot_loaded_kernel k;
+    arena_off = 0;
+    map_count = 0;
+    return boot_elf_load(&img, alloc_pages, map_page, &k);
+}
+
+/* Adversarial mutations — must reject without crashing. */
+static int fuzz_mutations(unsigned seed, int iters) {
+    unsigned s = seed ? seed : 1u;
+    int bad_accept = 0;
+    for (int i = 0; i < iters; i++) {
+        size_t esz = 0;
+        uint8_t *elf = make_elf(&esz, 5);
+        s = s * 1103515245u + 12345u;
+        unsigned kind = s % 8;
+        switch (kind) {
+        case 0: /* truncate */
+            esz = 16 + (s % 48);
+            break;
+        case 1: /* W+X */
+            {
+                uint32_t flags = 7;
+                memcpy(elf + 64 + 4, &flags, 4);
+            }
+            break;
+        case 2: /* bad magic */
+            elf[1] = 'X';
+            break;
+        case 3: /* memsz < filesz */
+            {
+                uint64_t fs = 4096, ms = 16;
+                memcpy(elf + 64 + 32, &fs, 8);
+                memcpy(elf + 64 + 40, &ms, 8);
+            }
+            break;
+        case 4: /* unaligned vaddr */
+            {
+                uint64_t v = 0xffffffff80001001ULL;
+                memcpy(elf + 64 + 16, &v, 8);
+                memcpy(elf + 64 + 24, &v, 8);
+            }
+            break;
+        case 5: /* huge phoff */
+            {
+                uint64_t phoff = 0xffffff00ULL;
+                memcpy(elf + 32, &phoff, 8);
+            }
+            break;
+        case 6: /* zero phnum */
+            {
+                uint16_t z = 0;
+                memcpy(elf + 56, &z, 2);
+            }
+            break;
+        default: /* corrupt e_machine */
+            elf[18] = 0xff;
+            break;
+        }
+        if (try_load(elf, esz) == 0)
+            bad_accept++;
+        free(elf);
+    }
+    return bad_accept;
+}
+
+int main(int argc, char **argv) {
+    int fuzz_iters = 0;
+    unsigned fuzz_seed = 1;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "--fuzz") && i + 1 < argc) {
+            fuzz_iters = atoi(argv[++i]);
+        } else if (!strcmp(argv[i], "--seed") && i + 1 < argc) {
+            fuzz_seed = (unsigned)atoi(argv[++i]);
+        }
+    }
+
     failures = 0;
     expect(PEAK_BOOT_VERSION == 4, "boot ABI version");
     expect(sizeof(struct peak_bootinfo) > 64, "bootinfo size");
 
     size_t esz = 0;
-    uint8_t *elf = make_elf(&esz);
+    uint8_t *elf = make_elf(&esz, 5);
     struct boot_elf_image img = { .data = elf, .size = esz };
     struct boot_loaded_kernel k;
     arena_off = 0;
@@ -108,9 +184,20 @@ int main(void) {
     img.size = sizeof(bad);
     expect(boot_elf_load(&img, alloc_pages, map_page, &k) != 0, "reject short elf");
 
+    /* Reject W+X PHDR */
+    elf = make_elf(&esz, 7); /* R|W|X */
+    expect(try_load(elf, esz) != 0, "reject W+X phdr");
+    free(elf);
+
     char a[] = "BOOT";
     char b[] = "boot";
     expect(boot_strncasecmp(a, b, 4) == 0, "strncasecmp");
+
+    if (fuzz_iters > 0) {
+        int bad_accept = fuzz_mutations(fuzz_seed, fuzz_iters);
+        expect(bad_accept == 0, "fuzz mutations all rejected");
+        printf("fuzz: %d mutations (seed=%u)\n", fuzz_iters, fuzz_seed);
+    }
 
     if (failures) {
         printf("%d failure(s)\n", failures);

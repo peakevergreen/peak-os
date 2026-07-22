@@ -137,13 +137,8 @@ int peakdisk_save(void) {
         memcpy(hdr + 8, &sz, 4);
     }
 
-    if (blockdev_write(PEAKDISK_LBA0, 1, hdr) != 0) {
-        if (enc)
-            kfree_sensitive(enc, sz);
-        kfree(blob);
-        save_busy = 0;
-        return -1;
-    }
+    /* Atomic publish: write payload first while the old header (if any) remains
+     * authoritative; only then flip LBA1 to the new envelope and flush. */
     if (write_payload_streamed(payload, sz) != 0) {
         if (enc)
             kfree_sensitive(enc, sz);
@@ -151,7 +146,29 @@ int peakdisk_save(void) {
         save_busy = 0;
         return -1;
     }
-    (void)blockdev_flush();
+    if (blockdev_flush() != 0) {
+        if (enc)
+            kfree_sensitive(enc, sz);
+        kfree(blob);
+        save_busy = 0;
+        serial_write_str("peakdisk: payload flush failed\n");
+        return -1;
+    }
+    if (blockdev_write(PEAKDISK_LBA0, 1, hdr) != 0) {
+        if (enc)
+            kfree_sensitive(enc, sz);
+        kfree(blob);
+        save_busy = 0;
+        return -1;
+    }
+    if (blockdev_flush() != 0) {
+        if (enc)
+            kfree_sensitive(enc, sz);
+        kfree(blob);
+        save_busy = 0;
+        serial_write_str("peakdisk: header flush failed\n");
+        return -1;
+    }
     if (enc)
         kfree_sensitive(enc, sz);
     kfree(blob);
@@ -226,7 +243,12 @@ int peakdisk_load(void) {
         memzero_explicit(key, sizeof(key));
         plain = dec;
     }
+    /* Load must not be gated by the current privacy persist profile (defaults
+     * to private at boot). Temporarily allow full PeakFS namespaces. */
+    int prev_profile = privacy_persist_profile();
+    privacy_set_persist_profile(2);
     int r = vfs_load_ramdisk(plain, sz);
+    privacy_set_persist_profile(prev_profile);
     if (dec)
         kfree_sensitive(dec, sz);
     kfree(blob);

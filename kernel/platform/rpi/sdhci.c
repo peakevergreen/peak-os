@@ -240,7 +240,23 @@ static int sdhci_write(uint64_t lba, uint32_t count, const void *buf) {
 }
 
 static int sdhci_flush(void) {
-    return 0;
+    if (!sdhci_present())
+        return -1;
+    /* Finish any outstanding CMD/DAT activity, then CMD13 until READY_FOR_DATA
+     * in Tran state. SD has no ATA-style FLUSH CACHE; this is the durable barrier. */
+    sd_wait_idle();
+    uint32_t resp[4];
+    for (int i = 0; i < 1000; i++) {
+        if (sd_cmd(13, rca, CMD_RSP48 | CMD_CRC | CMD_IXCHK, resp) != 0)
+            return -1;
+        uint32_t st = resp[0];
+        int ready = (st & (1u << 8)) != 0;           /* READY_FOR_DATA */
+        int state = (int)((st >> 9) & 0xfu);         /* CURRENT_STATE */
+        if (ready && state == 4)                     /* Tran */
+            return 0;
+        sd_delay();
+    }
+    return -1;
 }
 
 static const struct blockdev_ops sdhci_ops = {

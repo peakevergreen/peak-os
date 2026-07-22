@@ -228,7 +228,7 @@ UEFI_SRCS := \
 UEFI_OBJS := $(patsubst %.c,$(BUILD)/uefi/%.o,$(notdir $(UEFI_SRCS)))
 
 .PHONY: all iso kernel bootloaders run clean test test-host smoke smoke-qemu \
-        smoke-bios smoke-uefi purity doctor pi-image pi-image-check flash-pi \
+        smoke-bios smoke-uefi smoke-peakfs purity doctor pi-image pi-image-check flash-pi \
         kernel8 run-aarch64-virt smoke-aarch64 firmware-fetch
 
 ifeq ($(ARCH),x86_64)
@@ -237,41 +237,46 @@ else
 all: pi-image
 endif
 
+HOST_CFLAGS := -std=c11 -Wall -Wextra -Werror -O2
+HOST_CFLAGS_REDECL := $(HOST_CFLAGS) -Wno-incompatible-library-redeclaration
+
 test: test-host
 test-host:
 	@mkdir -p $(BUILD)/tests
-	$(CC) -std=c11 -Wall -Wextra -O2 \
+	$(CC) $(HOST_CFLAGS) \
 		-o $(BUILD)/tests/test_phase7 tests/host/test_phase7.c
-	$(CC) -std=c11 -Wall -Wextra -O2 \
+	$(CC) $(HOST_CFLAGS) \
 		-o $(BUILD)/tests/test_gfx tests/host/test_gfx.c
-	$(CC) -std=c11 -Wall -Wextra -O2 -Iboot/include \
+	$(CC) $(HOST_CFLAGS) -Iboot/include \
 		-o $(BUILD)/tests/test_boot tests/host/test_boot.c \
 		boot/common/elf_load.c boot/common/util.c
-	$(CC) -std=c11 -Wall -Wextra -O2 -DPEAK_HOST_TEST \
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
 		-Iboot/include \
 		-o $(BUILD)/tests/test_lan tests/host/test_lan.c \
 		kernel/net/dhcp_util.c kernel/net/http_util.c \
 		boot/common/peak_conf.c boot/common/util.c
-	$(CC) -std=c11 -Wall -Wextra -Wno-incompatible-library-redeclaration -O2 \
+	$(CC) $(HOST_CFLAGS_REDECL) \
 		-DPEAK_HOST_TEST \
 		-Itests/host/include -Ikernel/include -Ikernel/js \
 		-o $(BUILD)/tests/test_js tests/host/test_js.c \
 		tests/host/js_host_stubs.c \
 		kernel/js/js_core.c kernel/js/js_compile.c kernel/js/js_vm.c
-	$(CC) -std=c11 -Wall -Wextra -Wno-incompatible-library-redeclaration -O2 \
+	$(CC) $(HOST_CFLAGS_REDECL) \
 		-DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 \
 		-Itests/host/include -Iboot/include -Ikernel/include \
 		-o $(BUILD)/tests/test_random tests/host/test_random.c \
 		kernel/random.c kernel/net/crypto.c
-	$(CC) -std=c11 -Wall -Wextra -O2 -DPEAK_HOST_TEST \
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
 		-o $(BUILD)/tests/test_libpeak tests/host/test_libpeak.c \
 		kernel/user/libpeak.c
-	$(CC) -std=c11 -Wall -Wextra -O2 -DPEAK_HOST_TEST \
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
 		-o $(BUILD)/tests/test_shell_split tests/host/test_shell_split.c \
 		kernel/shell_split.c
-	$(CC) -std=c11 -Wall -Wextra -O2 -DPEAK_HOST_TEST \
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
 		-o $(BUILD)/tests/test_console_scroll tests/host/test_console_scroll.c \
 		kernel/console_scroll.c
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
+		-o $(BUILD)/tests/test_peakdisk tests/host/test_peakdisk.c
 	$(BUILD)/tests/test_phase7
 	$(BUILD)/tests/test_gfx
 	$(BUILD)/tests/test_boot
@@ -281,6 +286,7 @@ test-host:
 	$(BUILD)/tests/test_libpeak
 	$(BUILD)/tests/test_shell_split
 	$(BUILD)/tests/test_console_scroll
+	$(BUILD)/tests/test_peakdisk
 
 smoke:
 	./scripts/smoke-cli.sh
@@ -295,6 +301,10 @@ smoke-bios: iso
 smoke-uefi: iso
 	chmod +x scripts/smoke-qemu.sh
 	PEAK_FIRMWARE=uefi ./scripts/smoke-qemu.sh
+
+smoke-peakfs: iso
+	chmod +x scripts/smoke-peakfs.sh
+	./scripts/smoke-peakfs.sh
 
 purity:
 	chmod +x scripts/purity-check.sh

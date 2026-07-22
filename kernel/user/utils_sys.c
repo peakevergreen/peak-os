@@ -17,6 +17,7 @@
 #include "sched.h"
 #include "rtc.h"
 #include "cap.h"
+#include "peakdisk.h"
 
 int upwd_main(int argc, char **argv) {
     (void)argc;
@@ -448,6 +449,25 @@ int upolicy_main(int argc, char **argv) {
         if (len && buf[len - 1] != '\n')
             console_putc('\n');
     }
+    return 0;
+}
+
+int udisksave_main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    if (!peakdisk_available()) {
+        console_write("disksave: no block device\n");
+        return 1;
+    }
+    if (privacy_persist_profile() <= 0) {
+        console_write("disksave: enable with `privacy persist workspace` first\n");
+        return 1;
+    }
+    if (peakdisk_save() != 0) {
+        console_write("disksave: failed\n");
+        return 1;
+    }
+    console_write("disksave: ok\n");
     return 0;
 }
 

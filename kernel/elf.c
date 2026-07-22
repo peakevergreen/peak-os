@@ -129,6 +129,7 @@ extern int uaudit_main(int argc, char **argv);
 extern int umemory_main(int argc, char **argv);
 extern int upolicy_main(int argc, char **argv);
 extern int uprivacy_main(int argc, char **argv);
+extern int udisksave_main(int argc, char **argv);
 extern int ugui_main(int argc, char **argv);
 extern int uuname_main(int argc, char **argv);
 extern int utrue_main(int argc, char **argv);
@@ -194,6 +195,7 @@ static const struct builtin builtins[] = {
     { "/bin/memory", umemory_main },
     { "/bin/policy", upolicy_main },
     { "/bin/privacy", uprivacy_main },
+    { "/bin/disksave", udisksave_main },
     { "/bin/gui", ugui_main },
     { "/bin/uname", uuname_main },
     { "/bin/true", utrue_main },

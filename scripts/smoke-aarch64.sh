@@ -10,7 +10,7 @@ if [[ ! -f "$KERNEL" ]]; then
 fi
 
 LOG=$(mktemp)
-TIMEOUT_SEC=${PEAK_SMOKE_TIMEOUT:-20}
+TIMEOUT_SEC=${PEAK_SMOKE_TIMEOUT:-45}
 DTB=third_party/rpi-firmware/bcm2710-rpi-3-b.dtb
 
 run_raspi3b() {
@@ -71,7 +71,9 @@ set -e
 echo "---- serial log (tail) ----"
 tail -n 80 "$LOG" || true
 
-if grep -qE 'Pk|peak-rpi:|PeakOS|mmu on|Boot complete|rpi: soc' "$LOG"; then
+# Reject bare "Pk" — too short to prove boot. Prefer shell/boot-complete markers.
+BOOT_RE='PeakOS booting|peak-rpi:|Boot complete|peak:/|mmu on|rpi: soc'
+if grep -qE "$BOOT_RE" "$LOG"; then
   echo "smoke-aarch64: saw boot markers"
   rm -f "$LOG"
   exit 0
@@ -85,7 +87,7 @@ if [[ "$RUN" == "run_raspi3b" ]]; then
   run_timed run_virt >"$LOG" 2>&1
   set -e
   tail -n 40 "$LOG" || true
-  if grep -qE 'Pk|peak-rpi:|PeakOS|mmu on|Boot complete|rpi: soc' "$LOG"; then
+  if grep -qE "$BOOT_RE" "$LOG"; then
     echo "smoke-aarch64: saw boot markers (virt)"
     rm -f "$LOG"
     exit 0

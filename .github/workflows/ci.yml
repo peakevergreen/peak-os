@@ -23,10 +23,11 @@ jobs:
       - name: Doctor + ISO
         run: |
           export PATH="/usr/lib/llvm-*/bin:$PATH"
-          make ARCH=x86_64 doctor || make doctor
+          make ARCH=x86_64 doctor
           make iso
           test -f build/peak-os.iso
           test -f build/x86_64/boot/peak-bios.bin || test -f build/boot/peak-bios.bin
+          test -f build/x86_64/boot/BOOTX64.EFI || test -f build/x86_64/boot/BOOTX64.efi
           test -f build/x86_64/kernel.elf
           ls -la build/peak-os.iso build/x86_64/kernel.elf
       - uses: actions/upload-artifact@v4
@@ -35,6 +36,8 @@ jobs:
           path: |
             build/peak-os.iso
             build/x86_64/kernel.elf
+            build/x86_64/boot/BOOTX64.EFI
+            build/x86_64/boot/peak-bios.bin
           retention-days: 7
 
   build-rpi:
@@ -85,22 +88,37 @@ jobs:
         run: |
           export PATH="/usr/lib/llvm-*/bin:$PATH"
           # Restore nested layout if artifact flattened
-          mkdir -p build/x86_64
+          mkdir -p build/x86_64/boot
           if [ -f build/kernel.elf ] && [ ! -f build/x86_64/kernel.elf ]; then
             mv build/kernel.elf build/x86_64/kernel.elf
+          fi
+          if [ -f build/BOOTX64.EFI ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
+            mv build/BOOTX64.EFI build/x86_64/boot/BOOTX64.EFI
+          fi
+          if [ -f build/BOOTX64.efi ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
+            mv build/BOOTX64.efi build/x86_64/boot/BOOTX64.EFI
+          fi
+          if [ -f build/peak-bios.bin ] && [ ! -f build/x86_64/boot/peak-bios.bin ]; then
+            mv build/peak-bios.bin build/x86_64/boot/peak-bios.bin
           fi
           make test-host
           chmod +x scripts/purity-check.sh
           ./scripts/purity-check.sh
           test -f docs/security-model.md
+          test -f docs/privacy.md
+          test -f docs/csprng.md
+          test -f docs/verified-boot.md
           chmod +x scripts/fuzz-elf-smoke.sh
-          ./scripts/fuzz-elf-smoke.sh || true
-          if [ -f build/x86_64/kernel.elf ]; then
-            llvm-readelf -lW build/x86_64/kernel.elf | tee /tmp/phdrs.txt
-            if grep ' RWE ' /tmp/phdrs.txt; then echo "RWX PHDR forbidden"; exit 1; fi
-            chmod +x scripts/check-kernel-size.sh
-            ./scripts/check-kernel-size.sh build/x86_64/kernel.elf
-          fi
+          ./scripts/fuzz-elf-smoke.sh
+          test -f build/x86_64/kernel.elf
+          llvm-readelf -lW build/x86_64/kernel.elf | tee /tmp/phdrs.txt
+          if grep ' RWE ' /tmp/phdrs.txt; then echo "RWX PHDR forbidden"; exit 1; fi
+          chmod +x scripts/check-kernel-size.sh
+          ./scripts/check-kernel-size.sh build/x86_64/kernel.elf
+          python3 scripts/mkmanifest.py
+          test -f build/SHA256SUMS
+          chmod +x scripts/smoke-cli.sh
+          PEAK_SKIP_ISO=1 PEAK_SKIP_HOST_TESTS=1 ./scripts/smoke-cli.sh
 
   smoke-bios:
     name: QEMU BIOS smoke
@@ -121,6 +139,70 @@ jobs:
         run: |
           chmod +x scripts/smoke-qemu.sh
           PEAK_FIRMWARE=bios TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
+
+  smoke-uefi:
+    name: QEMU UEFI smoke
+    runs-on: ubuntu-22.04
+    needs: [build-iso]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU + OVMF
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 ovmf make
+      - name: Download ISO
+        uses: actions/download-artifact@v4
+        with:
+          name: peak-os-iso
+          path: build/
+      - name: Restore nested artifacts
+        run: |
+          mkdir -p build/x86_64/boot
+          if [ -f build/kernel.elf ] && [ ! -f build/x86_64/kernel.elf ]; then
+            mv build/kernel.elf build/x86_64/kernel.elf
+          fi
+          if [ -f build/BOOTX64.EFI ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
+            mv build/BOOTX64.EFI build/x86_64/boot/BOOTX64.EFI
+          fi
+          if [ -f build/BOOTX64.efi ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
+            mv build/BOOTX64.efi build/x86_64/boot/BOOTX64.EFI
+          fi
+      - name: Smoke UEFI
+        run: |
+          chmod +x scripts/smoke-qemu.sh
+          OVMF_CODE=/usr/share/OVMF/OVMF_CODE.fd \
+            PEAK_FIRMWARE=uefi TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
+
+  smoke-peakfs:
+    name: QEMU PeakFS roundtrip
+    runs-on: ubuntu-22.04
+    needs: [build-iso]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 clang lld llvm xorriso make
+      - name: Download ISO
+        uses: actions/download-artifact@v4
+        with:
+          name: peak-os-iso
+          path: build/
+      - name: PeakFS smoke
+        run: |
+          export PATH="/usr/lib/llvm-*/bin:$PATH"
+          mkdir -p build/x86_64/boot
+          if [ -f build/kernel.elf ] && [ ! -f build/x86_64/kernel.elf ]; then
+            mv build/kernel.elf build/x86_64/kernel.elf
+          fi
+          if [ -f build/BOOTX64.EFI ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
+            mv build/BOOTX64.EFI build/x86_64/boot/BOOTX64.EFI
+          fi
+          if [ -f build/peak-bios.bin ] && [ ! -f build/x86_64/boot/peak-bios.bin ]; then
+            mv build/peak-bios.bin build/x86_64/boot/peak-bios.bin
+          fi
+          chmod +x scripts/smoke-peakfs.sh
+          TIMEOUT_SEC=90 ./scripts/smoke-peakfs.sh
 
   smoke-aarch64:
     name: QEMU aarch64 smoke

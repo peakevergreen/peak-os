@@ -28,6 +28,8 @@
 #include "sound.h"
 #include "power.h"
 #include "peakdisk.h"
+#include "cap.h"
+#include "blobstore.h"
 #include "blobstore.h"
 #include "peakvec.h"
 #include "clipboard.h"
@@ -254,7 +256,28 @@ void kernel_entry(struct peak_bootinfo *info) {
     }
     status_ok("Boot complete");
 
+    if ((info->flags & PEAK_BOOT_FLAG_SMOKE_PERSIST) && peakdisk_available()) {
+        size_t mlen = 0;
+        char mbuf[8];
+        /* Marker under /home so workspace persist profile exports it. */
+        if (vfs_read_file("/home/dev/workspace/.peak_smoke_ok", mbuf, sizeof(mbuf) - 1,
+                          &mlen) == 0 &&
+            mlen > 0) {
+            serial_write_str("peakdisk: smoke restore ok\n");
+        } else {
+            privacy_set_persist_profile(1);
+            if (vfs_write_file("/home/dev/workspace/.peak_smoke_ok", "1", 1) == 0 &&
+                peakdisk_save() == 0)
+                serial_write_str("peakdisk: smoke save ok\n");
+            else
+                serial_write_str("peakdisk: smoke save failed\n");
+        }
+    }
+
     if (g_have_fb) {
+        /* Boot status lines leave cells to the right of short banner rows.
+         * Clear so green [ ok ] remnants do not sit beside the wordmark. */
+        console_clear();
         console_boot_logo();
         console_printf("\n  display %lux%lu  ui scale %ux\n\n",
                        (unsigned long)fb_get()->width,

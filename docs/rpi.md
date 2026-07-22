@@ -6,7 +6,7 @@ Flash-and-boot support for Raspberry Pi ARM64 boards. Primary physical gate: **R
 
 | Family | SoC | Notes |
 |--------|-----|--------|
-| Pi 3B / 3B+ / 3A+, Zero 2 W, CM3 / CM3+ | BCM2837 | Primary hardware gate; polled DWC2 HID is implemented; USB LAN is not |
+| Pi 3B / 3B+ / 3A+, Zero 2 W, CM3 / CM3+ | BCM2837 | Primary hardware gate; DWC2 hub+HID (enum/split/hotplug) in tree; USB LAN is not |
 | Pi 4B / 400, CM4 / CM4S | BCM2711 | Core platform support; PCIe/VL805 xHCI and GENET are staged |
 | Pi 5 / 500 / 500+, CM5 | BCM2712 + RP1 | Core platform support; RP1 PCIe, USB, and Ethernet are staged |
 
@@ -78,7 +78,7 @@ PeakOS kernel and Peak-authored drivers remain open source.
 | UART / timer / MMU | yes | yes (GIC timer ack) | MMU yes; SoC MMIO above 4 GiB not mapped yet |
 | Software FB desktop | yes, mailbox FB | yes, mailbox FB | deferred until high MMIO mapped |
 | SD PeakFS partition | implemented; silicon sign-off pending | implemented; unverified | deferred (SDHCI base >4 GiB) |
-| USB HID | partial: DWC2 boot protocol, polled; silicon sign-off pending | unavailable: PCIe/xHCI rings missing | unavailable: RP1 + high MMIO unmapped |
+| USB HID | hub+HID enum/split/hotplug; silicon sign-off pending | unavailable: PCIe/xHCI rings missing | unavailable: RP1 + high MMIO unmapped |
 | Ethernet | unavailable: USB LAN stub | unavailable: GENET rings/PHY missing | unavailable: RP1 GEM stub |
 | Wi-Fi | unavailable: SDIO/firmware loading stub | unavailable: SDIO/firmware loading stub | unavailable: SDIO/firmware loading stub |
 | Audio | unavailable: beep is a no-op | unavailable: beep is a no-op | unavailable: beep is a no-op |
@@ -87,7 +87,7 @@ PeakOS kernel and Peak-authored drivers remain open source.
 
 Boot page tables identity-map 0–4 GiB only. BCM2712 peripheral windows sit above 4 GiB, so Pi 5 platform init skips GPIO/SDHCI/USB/net until those ranges are mapped (`platform_mmio_mapped()` is 0). Pi 4/5 PCIe discovery and xHCI controller reset remain diagnostic staging only. Stub Ethernet and Wi-Fi implementations are not registered as ready network devices.
 
-QEMU `-M raspi3b` reaches the `peak>` shell with mailbox FB and DWC2 host init. Use real Pi 3 silicon for HDMI + USB keyboard/mouse acceptance ([scripts/pi3-hw-checklist.md](../scripts/pi3-hw-checklist.md)).
+QEMU `-M raspi3b` is expected to reach boot markers (`Boot complete` / `peak:/`) with mailbox FB and DWC2 host init; CI `smoke-aarch64` enforces those markers (not bare `Pk`). Use real Pi 3 silicon for HDMI + USB keyboard/mouse acceptance ([scripts/pi3-hw-checklist.md](../scripts/pi3-hw-checklist.md)).
 
 aarch64 userspace ELF execution is intentionally gated until a real `eret` entry path exists in `kernel/elf.c`; ring-3 binaries are not launched on Pi builds yet.
 

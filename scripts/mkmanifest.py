@@ -13,6 +13,8 @@ BUILD = ROOT / "build"
 CANDIDATES = [
     "x86_64/kernel.elf",
     "kernel.elf",
+    "x86_64/boot/peak-bios.bin",
+    "x86_64/boot/BOOTX64.EFI",
     "boot/peak-bios.bin",
     "boot/BOOTX64.EFI",
     "peak-os.iso",

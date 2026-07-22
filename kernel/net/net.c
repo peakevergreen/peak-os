@@ -693,6 +693,7 @@ int net_init(void) {
     local_dns = boot_net.dns;
     if (net_dhcp_try(boot_net.dhcp_timeout_ticks) != 0) {
         serial_write_str("net: address configuration failed\n");
+        net_up = 0;
         return -1;
     }
     /* Prime ARP for gateway when known */
