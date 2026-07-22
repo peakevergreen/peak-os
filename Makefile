@@ -91,6 +91,9 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/window.c \
 	kernel/gui/surface.c \
 	kernel/gui/desktop.c \
+	kernel/gui/desktop_damage.c \
+	kernel/gui/desktop_windows.c \
+	kernel/gui/desktop_compose.c \
 	kernel/gui/game.c \
 	kernel/gui/browser.c \
 	kernel/gui/monitor.c
@@ -105,7 +108,7 @@ CFLAGS  := -target x86_64-unknown-none-elf \
            -mno-red-zone -mcmodel=kernel \
            -Wall -Wextra -Werror -std=c11 -O2 -g \
            -MMD -MP \
-           -Ikernel/include -Iboot/include
+           -Ikernel/include -Ikernel/gui -Iboot/include
 ASFLAGS := -target x86_64-unknown-none-elf -c
 LDFLAGS := -m elf_x86_64 -nostdlib -static -z max-page-size=0x1000 \
            -T kernel/arch/x86_64/linker.ld
@@ -154,7 +157,7 @@ CFLAGS  := -target aarch64-unknown-none-elf \
            -fno-PIC -fno-PIE \
            -Wall -Wextra -Werror -std=c11 -O2 -g \
            -MMD -MP \
-           -Ikernel/include -Iboot/include -Ikernel/platform/rpi \
+           -Ikernel/include -Ikernel/gui -Iboot/include -Ikernel/platform/rpi \
            -DPEAK_ELF_MACHINE=183
 # Boot shim must not use NEON before CPACR is set — compile without SIMD.
 BOOT_SHIM_CFLAGS := $(CFLAGS) -mgeneral-regs-only
