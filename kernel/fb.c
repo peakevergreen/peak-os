@@ -1,5 +1,6 @@
 #include "fb.h"
 #include "display.h"
+#include "font_render.h"
 #include "pmm.h"
 #include "vmm.h"
 #include "util.h"
@@ -123,6 +124,8 @@ uint32_t fb_recommend_scale(void) {
 void fb_set_ui_scale(uint32_t scale) {
     if (scale < 1) scale = 1;
     if (scale > 4) scale = 4;
+    if (scale != g_scale)
+        font_render_invalidate();
     g_scale = scale;
 }
 
@@ -386,39 +389,8 @@ void fb_draw_char(uint32_t x, uint32_t y, char c, uint32_t fg, uint32_t bg) {
     uint32_t s = g_scale;
     uint32_t cw = fb_cell_w();
     uint32_t ch = fb_cell_h();
-    fill_span(x, y, cw, ch, bg);
-
-    const uint8_t *glyph = font8x16[(uint8_t)c];
-    uint32_t gh = fb_char_h();
-
-    /* Render ink as contiguous horizontal spans per glyph row (faster than per-pixel). */
-    for (uint32_t row = 0; row < 16; row++) {
-        uint8_t bits = glyph[row];
-        uint32_t col = 0;
-        while (col < 8) {
-            while (col < 8 && !(bits & (0x80 >> col)))
-                col++;
-            if (col >= 8)
-                break;
-            uint32_t start = col;
-            while (col < 8 && (bits & (0x80 >> col)))
-                col++;
-            uint32_t run = col - start;
-            uint32_t px = x + start * s;
-            uint32_t py = y + row * s;
-            uint32_t rw = run * s;
-            uint32_t rh = s;
-            if (s <= 2) {
-                /* shadow */
-                uint32_t hx = px + 1;
-                uint32_t hy = py + 1;
-                if (hx + rw <= x + cw && hy + rh <= y + gh)
-                    fill_span(hx, hy, rw, rh, fb_rgb(0, 0, 0));
-            }
-            fill_span(px, py, rw, rh, fg);
-        }
-    }
-    (void)gh;
+    font_render_cell_bg(x, y, cw, ch, bg, fill_span);
+    font_render_glyph(c, x, y, fg, s, cw, ch, fill_span);
 }
 
 void fb_draw_string(uint32_t x, uint32_t y, const char *s, uint32_t fg, uint32_t bg) {
