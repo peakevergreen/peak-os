@@ -92,6 +92,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/http.c \
 	kernel/random.c \
 	kernel/cap.c \
+	kernel/privacy.c \
 	kernel/stackchk.c \
 	kernel/user/libpeak.c \
 	kernel/user/ubin.c \

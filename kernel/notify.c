@@ -18,6 +18,10 @@ static struct toast toasts[NOTIFY_MAX];
 static int toast_dirty;
 
 void notify_init(void) {
+    notify_clear();
+}
+
+void notify_clear(void) {
     memset(toasts, 0, sizeof(toasts));
     toast_dirty = 0;
 }

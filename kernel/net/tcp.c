@@ -1,6 +1,7 @@
 #include "net_internal.h"
 #include "peak_errno.h"
 #include "cap.h"
+#include "privacy.h"
 #include "timer.h"
 #include "util.h"
 

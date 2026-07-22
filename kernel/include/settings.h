@@ -3,7 +3,7 @@
 
 #include "types.h"
 
-/* OS preferences (display + general). Persisted under /etc/peak/. */
+/* Display preferences persisted under /etc/peak/display (see settings.c). */
 
 void settings_init(void);
 void settings_persist(void);

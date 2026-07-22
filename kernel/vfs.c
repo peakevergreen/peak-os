@@ -3,6 +3,7 @@
 #include "heap.h"
 #include "util.h"
 #include "console.h"
+#include "privacy.h"
 
 static struct vfs_node nodes[VFS_MAX_NODES];
 static int node_count;
@@ -254,7 +255,6 @@ static int peakfs_path_allowed(const char *path) {
             (path[i + 2] == '/' || path[i + 2] == '\0'))
             return 0;
     }
-    extern int privacy_persist_profile(void);
     int profile = privacy_persist_profile();
     if (profile <= 0)
         return 0; /* private / ephemeral */

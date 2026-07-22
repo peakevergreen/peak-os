@@ -29,6 +29,7 @@
 #include "power.h"
 #include "peakdisk.h"
 #include "cap.h"
+#include "privacy.h"
 #include "blobstore.h"
 #include "blobstore.h"
 #include "peakvec.h"
@@ -38,7 +39,6 @@
 #include "surface.h"
 #include "js.h"
 #include "random.h"
-#include "cap.h"
 #include "ubin.h"
 
 static int g_have_fb;

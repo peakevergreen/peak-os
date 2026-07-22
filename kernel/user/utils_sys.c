@@ -12,6 +12,7 @@
 #include "gui.h"
 #include "rtc.h"
 #include "cap.h"
+#include "privacy.h"
 #include "peakdisk.h"
 
 int upwd_main(int argc, char **argv) {
@@ -410,6 +411,11 @@ int uprivacy_main(int argc, char **argv) {
         console_printf("persist profile: %s\n", argv[2]);
         return 0;
     }
+    if (argc >= 2 && !strcmp(argv[1], "clear-session")) {
+        privacy_clear_session();
+        console_write("session cleared (net grants, clipboard, toasts)\n");
+        return 0;
+    }
     if (argc >= 2 && !strcmp(argv[1], "net-allow")) {
         privacy_grant_net_client(0);
         console_write("outbound network granted for this session\n");
@@ -424,7 +430,7 @@ int uprivacy_main(int argc, char **argv) {
     console_printf("persist=%d kill=%d net_client=%d localhost_listen=%d\n",
                    privacy_persist_profile(), privacy_net_kill_switch(),
                    privacy_net_client_allowed(), privacy_listeners_localhost_only());
-    console_write("usage: privacy [persist private|workspace|full|net-allow|kill-switch [on|off]]\n");
+    console_write("usage: privacy [persist private|workspace|full|clear-session|net-allow|kill-switch [on|off]]\n");
     return 0;
 }
 
