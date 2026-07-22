@@ -1,3 +1,4 @@
+/* /bin text utilities: cat, head, tail, wc, grep, hexdump, strings, echo, clear. */
 #include "libpeak.h"
 #include "vfs.h"
 #include "shell.h"

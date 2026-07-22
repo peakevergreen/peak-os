@@ -94,6 +94,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/stackchk.c \
 	kernel/user/libpeak.c \
 	kernel/user/ubin.c \
+	kernel/user/ubin_registry.c \
 	kernel/user/utils_file.c \
 	kernel/user/utils_text.c \
 	kernel/user/utils_sys.c \
@@ -278,6 +279,7 @@ HOST_TEST_BINS := \
 	$(HOST_TEST_DIR)/test_random \
 	$(HOST_TEST_DIR)/test_tls \
 	$(HOST_TEST_DIR)/test_libpeak \
+	$(HOST_TEST_DIR)/test_ubin_registry \
 	$(HOST_TEST_DIR)/test_shell_split \
 	$(HOST_TEST_DIR)/test_console_scroll \
 	$(HOST_TEST_DIR)/test_peakdisk \
@@ -295,6 +297,7 @@ test-host:
 	$(HOST_TEST_DIR)/test_random
 	$(HOST_TEST_DIR)/test_tls
 	$(HOST_TEST_DIR)/test_libpeak
+	$(HOST_TEST_DIR)/test_ubin_registry
 	$(HOST_TEST_DIR)/test_shell_split
 	$(HOST_TEST_DIR)/test_console_scroll
 	$(HOST_TEST_DIR)/test_peakdisk
@@ -333,6 +336,9 @@ $(HOST_TEST_DIR)/test_tls: tests/host/test_tls.c kernel/net/tls_util.c kernel/ra
 
 $(HOST_TEST_DIR)/test_libpeak: tests/host/test_libpeak.c kernel/user/libpeak.c | $(HOST_TEST_DIR)
 	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
+
+$(HOST_TEST_DIR)/test_ubin_registry: tests/host/test_ubin_registry.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -o $@ $<
 
 $(HOST_TEST_DIR)/test_shell_split: tests/host/test_shell_split.c kernel/shell_split.c | $(HOST_TEST_DIR)
 	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^

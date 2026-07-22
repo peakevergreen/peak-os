@@ -1,3 +1,4 @@
+/* /bin Peak JS CLI: js -e 'code' | js file.js */
 #include "libpeak.h"
 #include "js.h"
 #include "heap.h"

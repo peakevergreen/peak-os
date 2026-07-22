@@ -1,3 +1,4 @@
+/* /bin container staging: ctr build/run/ps/logs; ctrd ping helper. */
 #include "libpeak.h"
 #include "ctr.h"
 #include "vfs.h"

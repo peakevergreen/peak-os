@@ -1,4 +1,5 @@
 #include "elf.h"
+#include "ubin.h"
 #include "vfs.h"
 #include "heap.h"
 #include "vmm.h"
@@ -83,142 +84,6 @@ void proc_finish_exit(int code) {
         : "memory"
     );
 #endif
-}
-
-extern int ush_main(int argc, char **argv);
-extern int uls_main(int argc, char **argv);
-extern int ucat_main(int argc, char **argv);
-extern int uedit_main(int argc, char **argv);
-extern int upeak_main(int argc, char **argv);
-extern int upwd_main(int argc, char **argv);
-extern int ucd_main(int argc, char **argv);
-extern int umkdir_main(int argc, char **argv);
-extern int utouch_main(int argc, char **argv);
-extern int urm_main(int argc, char **argv);
-extern int ucp_main(int argc, char **argv);
-extern int umv_main(int argc, char **argv);
-extern int uln_main(int argc, char **argv);
-extern int ustat_main(int argc, char **argv);
-extern int udu_main(int argc, char **argv);
-extern int udf_main(int argc, char **argv);
-extern int utruncate_main(int argc, char **argv);
-extern int uhead_main(int argc, char **argv);
-extern int utail_main(int argc, char **argv);
-extern int uwc_main(int argc, char **argv);
-extern int ugrep_main(int argc, char **argv);
-extern int uhexdump_main(int argc, char **argv);
-extern int ustrings_main(int argc, char **argv);
-extern int uecho_main(int argc, char **argv);
-extern int uclear_main(int argc, char **argv);
-extern int utree_main(int argc, char **argv);
-extern int ufind_main(int argc, char **argv);
-extern int udate_main(int argc, char **argv);
-extern int ufree_main(int argc, char **argv);
-extern int uenv_main(int argc, char **argv);
-extern int uexport_main(int argc, char **argv);
-extern int uwhich_main(int argc, char **argv);
-extern int useq_main(int argc, char **argv);
-extern int usleep_main(int argc, char **argv);
-extern int utheme_main(int argc, char **argv);
-extern int uwallpaper_main(int argc, char **argv);
-extern int uscale_main(int argc, char **argv);
-extern int uhelp_main(int argc, char **argv);
-extern int uman_main(int argc, char **argv);
-extern int uask_main(int argc, char **argv);
-extern int uaudit_main(int argc, char **argv);
-extern int umemory_main(int argc, char **argv);
-extern int upolicy_main(int argc, char **argv);
-extern int uprivacy_main(int argc, char **argv);
-extern int udisksave_main(int argc, char **argv);
-extern int ugui_main(int argc, char **argv);
-extern int uuname_main(int argc, char **argv);
-extern int utrue_main(int argc, char **argv);
-extern int ufalse_main(int argc, char **argv);
-extern int ureboot_main(int argc, char **argv);
-extern int uctr_main(int argc, char **argv);
-extern int uctrd_main(int argc, char **argv);
-extern int uifconfig_main(int argc, char **argv);
-extern int uping_main(int argc, char **argv);
-extern int uwget_main(int argc, char **argv);
-extern int utop_main(int argc, char **argv);
-extern int usysmon_main(int argc, char **argv);
-extern int ups_main(int argc, char **argv);
-extern int ujs_main(int argc, char **argv);
-
-struct builtin {
-    const char *path;
-    int (*main)(int, char **);
-};
-
-static const struct builtin builtins[] = {
-    { "/bin/sh", ush_main },
-    { "/bin/ls", uls_main },
-    { "/bin/cat", ucat_main },
-    { "/bin/edit", uedit_main },
-    { "/bin/peak", upeak_main },
-    { "/bin/pwd", upwd_main },
-    { "/bin/cd", ucd_main },
-    { "/bin/mkdir", umkdir_main },
-    { "/bin/touch", utouch_main },
-    { "/bin/rm", urm_main },
-    { "/bin/cp", ucp_main },
-    { "/bin/mv", umv_main },
-    { "/bin/ln", uln_main },
-    { "/bin/stat", ustat_main },
-    { "/bin/du", udu_main },
-    { "/bin/df", udf_main },
-    { "/bin/truncate", utruncate_main },
-    { "/bin/head", uhead_main },
-    { "/bin/tail", utail_main },
-    { "/bin/wc", uwc_main },
-    { "/bin/grep", ugrep_main },
-    { "/bin/hexdump", uhexdump_main },
-    { "/bin/strings", ustrings_main },
-    { "/bin/echo", uecho_main },
-    { "/bin/clear", uclear_main },
-    { "/bin/tree", utree_main },
-    { "/bin/find", ufind_main },
-    { "/bin/date", udate_main },
-    { "/bin/free", ufree_main },
-    { "/bin/env", uenv_main },
-    { "/bin/export", uexport_main },
-    { "/bin/which", uwhich_main },
-    { "/bin/seq", useq_main },
-    { "/bin/sleep", usleep_main },
-    { "/bin/theme", utheme_main },
-    { "/bin/wallpaper", uwallpaper_main },
-    { "/bin/scale", uscale_main },
-    { "/bin/help", uhelp_main },
-    { "/bin/man", uman_main },
-    { "/bin/ask", uask_main },
-    { "/bin/audit", uaudit_main },
-    { "/bin/memory", umemory_main },
-    { "/bin/policy", upolicy_main },
-    { "/bin/privacy", uprivacy_main },
-    { "/bin/disksave", udisksave_main },
-    { "/bin/gui", ugui_main },
-    { "/bin/uname", uuname_main },
-    { "/bin/true", utrue_main },
-    { "/bin/false", ufalse_main },
-    { "/bin/reboot", ureboot_main },
-    { "/bin/ctr", uctr_main },
-    { "/bin/ctrd", uctrd_main },
-    { "/bin/ifconfig", uifconfig_main },
-    { "/bin/ping", uping_main },
-    { "/bin/wget", uwget_main },
-    { "/bin/top", utop_main },
-    { "/bin/sysmon", usysmon_main },
-    { "/bin/ps", ups_main },
-    { "/bin/js", ujs_main },
-    { NULL, NULL }
-};
-
-static int run_builtin(const char *path, int argc, char **argv) {
-    for (int i = 0; builtins[i].path; i++) {
-        if (!strcmp(path, builtins[i].path))
-            return builtins[i].main(argc, argv);
-    }
-    return -999;
 }
 
 int elf_load(const uint8_t *file, size_t len, struct elf_image *out) {
@@ -420,7 +285,7 @@ static int exec_elf(const char *path) {
 }
 
 int proc_exec(const char *path, int argc, char **argv) {
-    int br = run_builtin(path, argc, argv);
+    int br = ubin_run(path, argc, argv);
     if (br != -999)
         return br;
     return exec_elf(path);
