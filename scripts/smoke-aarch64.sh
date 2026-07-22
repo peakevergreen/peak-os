@@ -32,6 +32,32 @@ run_virt() {
     -device loader,addr=0x80000,cpu-num=0
 }
 
+# timeout(1) cannot execute shell functions — run them in an exported bash -c.
+run_timed() {
+  local fn=$1
+  # KERNEL/DTB must be visible inside the timeout subshell.
+  local wrapper="KERNEL=$(printf %q "$KERNEL"); DTB=$(printf %q "$DTB"); "
+  wrapper+="$(declare -f run_raspi3b); $(declare -f run_virt); $fn"
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$TIMEOUT_SEC" bash -c "$wrapper"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$TIMEOUT_SEC" bash -c "$wrapper"
+  else
+    bash -c "$wrapper" &
+    local qpid=$!
+    (
+      sleep "$TIMEOUT_SEC"
+      kill "$qpid" 2>/dev/null || true
+      sleep 1
+      kill -9 "$qpid" 2>/dev/null || true
+    ) &
+    local wpid=$!
+    wait "$qpid" 2>/dev/null || true
+    kill "$wpid" 2>/dev/null || true
+    wait "$wpid" 2>/dev/null || true
+  fi
+}
+
 set +e
 if qemu-system-aarch64 -machine help 2>/dev/null | grep -q raspi3b; then
   RUN=run_raspi3b
@@ -39,24 +65,7 @@ else
   RUN=run_virt
 fi
 
-if command -v timeout >/dev/null 2>&1; then
-  timeout "$TIMEOUT_SEC" $RUN >"$LOG" 2>&1
-elif command -v gtimeout >/dev/null 2>&1; then
-  gtimeout "$TIMEOUT_SEC" $RUN >"$LOG" 2>&1
-else
-  $RUN >"$LOG" 2>&1 &
-  qpid=$!
-  (
-    sleep "$TIMEOUT_SEC"
-    kill "$qpid" 2>/dev/null || true
-    sleep 1
-    kill -9 "$qpid" 2>/dev/null || true
-  ) &
-  wpid=$!
-  wait "$qpid" 2>/dev/null || true
-  kill "$wpid" 2>/dev/null || true
-  wait "$wpid" 2>/dev/null || true
-fi
+run_timed "$RUN" >"$LOG" 2>&1
 set -e
 
 echo "---- serial log (tail) ----"
@@ -73,15 +82,7 @@ if [[ "$RUN" == "run_raspi3b" ]]; then
   echo "note: raspi3b quiet — trying virt loader path"
   : >"$LOG"
   set +e
-  if command -v timeout >/dev/null 2>&1; then
-    timeout "$TIMEOUT_SEC" run_virt >"$LOG" 2>&1
-  else
-    run_virt >"$LOG" 2>&1 &
-    qpid=$!
-    sleep "$TIMEOUT_SEC"
-    kill -9 "$qpid" 2>/dev/null || true
-    wait "$qpid" 2>/dev/null || true
-  fi
+  run_timed run_virt >"$LOG" 2>&1
   set -e
   tail -n 40 "$LOG" || true
   if grep -qE 'Pk|peak-rpi:|PeakOS|mmu on|Boot complete|rpi: soc' "$LOG"; then
