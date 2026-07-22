@@ -208,6 +208,8 @@ KERNEL_ARCH_SRCS := \
 	kernel/platform/rpi/gpu.c \
 	kernel/drivers/usb/usb_core.c \
 	kernel/drivers/usb/dwc2.c \
+	kernel/drivers/usb/dwc2_hub.c \
+	kernel/drivers/usb/dwc2_hid.c \
 	kernel/drivers/usb/xhci.c \
 	kernel/drivers/net/usb_lan.c \
 	kernel/drivers/net/genet.c \
