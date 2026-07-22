@@ -4,7 +4,6 @@
 #include "heap.h"
 #include "util.h"
 #include "cap.h"
-#include "serial.h"
 
 #define PEAKVEC_MAGIC "PEAKVEC1"
 #define PEAKVEC_MAX_ENTRIES 4096u
@@ -309,10 +308,8 @@ void peakvec_init(void) {
     if (ensure_capacity(64) != 0)
         return;
     ready = 1;
-    if (load_from_vfs() == 0) {
-        serial_write_str("peakvec: restored\n");
+    if (load_from_vfs() == 0)
         return;
-    }
     /* Fresh index: prefer blobstore so it can grow beyond heap snapshots. */
     if (blobstore_available()) {
         size_t initial = sizeof(struct peakvec_hdr) +
@@ -320,11 +317,9 @@ void peakvec_init(void) {
         if (blobstore_create(&blob_id, initial) == 0) {
             use_blob = 1;
             (void)persist_blob();
-            serial_write_str("peakvec: ready (blob)\n");
             return;
         }
     }
-    serial_write_str("peakvec: ready (vfs)\n");
 }
 
 int peakvec_upsert(const char *ns, const char *key,

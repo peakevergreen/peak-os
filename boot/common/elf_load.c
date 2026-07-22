@@ -17,6 +17,7 @@
 #define PEAK_ELF_MACHINE EM_X86_64
 #endif
 #define PT_LOAD 1
+#define PF_X 1
 #define PF_W 2
 
 struct elf64_ehdr {
@@ -50,6 +51,9 @@ struct elf64_phdr {
 static int phdr_ok(const struct elf64_phdr *ph, size_t img_size) {
     if (ph->p_type != PT_LOAD)
         return 1;
+    /* Reject W+X — same policy as kernel user ELF loader. */
+    if ((ph->p_flags & PF_W) && (ph->p_flags & PF_X))
+        return 0;
     if (ph->p_memsz < ph->p_filesz)
         return 0;
     if (ph->p_offset > img_size || ph->p_filesz > img_size - ph->p_offset)

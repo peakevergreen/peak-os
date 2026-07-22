@@ -41,6 +41,7 @@ enum peak_net_mode {
 #define PEAK_BOOT_FLAG_ENTROPY_OK    (1u << 2) /* trusted firmware/HW seed */
 #define PEAK_BOOT_FLAG_ENTROPY_WEAK  (1u << 3) /* supplemental-only seed */
 #define PEAK_BOOT_FLAG_KASLR_SLIDE   (1u << 4)
+#define PEAK_BOOT_FLAG_SMOKE_PERSIST (1u << 5) /* CI PeakFS save/restore hook */
 
 struct peak_mmap_entry {
     peak_u64 base;

@@ -12,8 +12,7 @@ Manual + automated gates for Phase S.
 
 ## Boot / entropy
 
-- [ ] Serial shows `cpu-sec:` feature line (no seeds)
-- [ ] Serial shows `Entropy (crypto ready)` or clear degraded status
+- [ ] Serial shows `Entropy (crypto ready)` or `Entropy (degraded)` status (no seed material)
 - [ ] TLS handshake fails with `crypto RNG not ready` when degraded (release)
 
 ## Isolation

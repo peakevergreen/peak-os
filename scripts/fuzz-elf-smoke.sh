@@ -3,11 +3,18 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+export PATH="/opt/homebrew/opt/llvm/bin:/usr/local/opt/llvm/bin:${PATH:-}"
+
 make test-host >/dev/null
-# Mutate a tiny ELF-like buffer and ensure loader rejects without crashing host.
-python3 - <<'PY'
-import struct, subprocess, tempfile, os, random
-# Rely on test_boot already covering reject paths; this is a placeholder gate.
-print("fuzz-elf-smoke: host ELF reject paths covered by test_boot")
-PY
-echo "ok: fuzz-elf-smoke"
+BIN=""
+for c in build/x86_64/tests/test_boot build/tests/test_boot; do
+  if [[ -x "$c" ]]; then BIN="$c"; break; fi
+done
+if [[ -z "$BIN" ]]; then
+  echo "FAIL: test_boot binary missing"
+  exit 1
+fi
+SEED="${PEAK_FUZZ_SEED:-42}"
+ITERS="${PEAK_FUZZ_ITERS:-200}"
+"$BIN" --fuzz "$ITERS" --seed "$SEED"
+echo "ok: fuzz-elf-smoke ($ITERS mutations)"

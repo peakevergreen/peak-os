@@ -1,15 +1,9 @@
 #include "blockdev.h"
-#include "serial.h"
 
 static const struct blockdev_ops *g_bd;
 
 void blockdev_register(const struct blockdev_ops *ops) {
     g_bd = ops;
-    if (ops && ops->name) {
-        serial_write_str("blockdev: ");
-        serial_write_str(ops->name);
-        serial_write_str("\n");
-    }
 }
 
 const struct blockdev_ops *blockdev_get(void) {

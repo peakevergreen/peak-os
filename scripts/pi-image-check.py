@@ -141,7 +141,7 @@ def main() -> int:
     if sums.exists():
         ok("SHA256SUMS present")
     else:
-        print("WARN: SHA256SUMS missing")
+        bad("SHA256SUMS missing")
 
     if fail:
         print("pi-image-check FAILED")

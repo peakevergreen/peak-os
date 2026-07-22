@@ -117,6 +117,8 @@ void bios_main32(uint32_t drive) {
     info->magic = PEAK_BOOT_MAGIC;
     info->version = PEAK_BOOT_VERSION;
     info->flags = PEAK_BOOT_FLAG_HAS_FB;
+    if (conf.smoke_persist)
+        info->flags |= PEAK_BOOT_FLAG_SMOKE_PERSIST;
     info->dtb_phys = 0;
     info->dtb_size = 0;
     info->hhdm_offset = PEAK_HHDM_OFFSET;

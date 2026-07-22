@@ -28,6 +28,8 @@
 #include "sound.h"
 #include "power.h"
 #include "peakdisk.h"
+#include "cap.h"
+#include "blobstore.h"
 #include "blobstore.h"
 #include "peakvec.h"
 #include "clipboard.h"
@@ -205,11 +207,21 @@ void kernel_entry(struct peak_bootinfo *info) {
 
     net_set_boot_config(&info->net);
     if (net_init() != 0) {
-        serial_write_str("net: unavailable\n");
         status_fail("Network");
     } else {
+        struct net_info ni;
+        char msg[72];
+        char ipb[32];
         const struct netdev_ops *nd = netdev_get();
-        status_ok(nd && nd->name ? nd->name : "Network");
+        const char *name = (nd && nd->name) ? nd->name : "Network";
+        net_get_info(&ni);
+        if (ni.up && ni.addr_mode && ni.ip) {
+            net_format_ip(ni.ip, ipb, sizeof(ipb));
+            snprintf(msg, sizeof(msg), "%s (%s %s)", name, ni.addr_mode, ipb);
+            status_ok(msg);
+        } else {
+            status_ok(name);
+        }
     }
 
     theme_init();
@@ -234,6 +246,8 @@ void kernel_entry(struct peak_bootinfo *info) {
             status_ok("Disk (PeakFS restore)");
         else
             status_ok("Disk (empty — use Save disk)");
+    } else {
+        status_ok("Disk (none)");
     }
     peakvec_init();
     status_ok("PeakVec");
@@ -254,7 +268,28 @@ void kernel_entry(struct peak_bootinfo *info) {
     }
     status_ok("Boot complete");
 
+    if ((info->flags & PEAK_BOOT_FLAG_SMOKE_PERSIST) && peakdisk_available()) {
+        size_t mlen = 0;
+        char mbuf[8];
+        /* Marker under /home so workspace persist profile exports it. */
+        if (vfs_read_file("/home/dev/workspace/.peak_smoke_ok", mbuf, sizeof(mbuf) - 1,
+                          &mlen) == 0 &&
+            mlen > 0) {
+            serial_write_str("peakdisk: smoke restore ok\n");
+        } else {
+            privacy_set_persist_profile(1);
+            if (vfs_write_file("/home/dev/workspace/.peak_smoke_ok", "1", 1) == 0 &&
+                peakdisk_save() == 0)
+                serial_write_str("peakdisk: smoke save ok\n");
+            else
+                serial_write_str("peakdisk: smoke save failed\n");
+        }
+    }
+
     if (g_have_fb) {
+        /* Boot status lines leave cells to the right of short banner rows.
+         * Clear so green [ ok ] remnants do not sit beside the wordmark. */
+        console_clear();
         console_boot_logo();
         console_printf("\n  display %lux%lu  ui scale %ux\n\n",
                        (unsigned long)fb_get()->width,

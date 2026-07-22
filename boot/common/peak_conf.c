@@ -167,6 +167,10 @@ void peak_conf_parse(const char *text, size_t len, struct peak_loader_conf *out)
             uint32_t t = 0;
             if (parse_u32(value, &t) == 0 && t > 0 && t < 100000)
                 out->net.dhcp_timeout_ticks = t;
+        } else if (key_eq(key, kl, "smoke_persist")) {
+            uint32_t v = 0;
+            if (parse_u32(value, &v) == 0 && v != 0)
+                out->smoke_persist = 1;
         }
     }
 }

@@ -1,12 +1,10 @@
 #include "js_internal.h"
-#include "serial.h"
 #include "timer.h"
 
 static int g_inited;
 
 void js_runtime_init(void) {
     g_inited = 1;
-    serial_write_str("js: Peak bytecode runtime ready\n");
 }
 
 const char *js_last_error(struct js_runtime *rt) {

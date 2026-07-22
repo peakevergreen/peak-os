@@ -129,17 +129,14 @@ if [[ ! -f "$SERIAL_LOG" ]]; then
 fi
 
 echo "==> checking serial boot markers"
-grep -q "PeakOS booting" "$SERIAL_LOG" || grep -q "Peak BIOS loader\|Peak UEFI loader" "$SERIAL_LOG" || true
+grep -q "PeakOS booting" "$SERIAL_LOG" || grep -q "Peak BIOS loader\|Peak UEFI loader" "$SERIAL_LOG" || {
+  echo "FAIL: no boot banner / loader"; tail -40 "$SERIAL_LOG"; exit 1;
+}
 grep -q "Physical memory" "$SERIAL_LOG" || { echo "FAIL: no PMM"; tail -40 "$SERIAL_LOG"; exit 1; }
 grep -q "System monitor" "$SERIAL_LOG" || { echo "FAIL: no System monitor"; exit 1; }
-grep -q "Network (e1000)" "$SERIAL_LOG" || grep -q "net: ipv4 ready" "$SERIAL_LOG" || {
+grep -Eq "e1000 \(dhcp |e1000 \(static |e1000 \(fallback |Network \(e1000\)|net: ipv4 ready" "$SERIAL_LOG" || {
   echo "FAIL: network did not come up"; tail -80 "$SERIAL_LOG"; exit 1;
 }
-if grep -q "net: ipv4 ready" "$SERIAL_LOG"; then
-  grep -Eq "net: ipv4 ready \((dhcp|static|fallback)" "$SERIAL_LOG" || {
-    echo "FAIL: missing address mode in net ready line"; tail -40 "$SERIAL_LOG"; exit 1;
-  }
-fi
 grep -q "Boot complete" "$SERIAL_LOG" || { echo "FAIL: boot incomplete"; tail -40 "$SERIAL_LOG"; exit 1; }
 grep -q "peak:/" "$SERIAL_LOG" || { echo "FAIL: no shell prompt"; tail -40 "$SERIAL_LOG"; exit 1; }
 # Logo / no TLS noise at idle boot

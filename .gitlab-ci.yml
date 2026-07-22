@@ -43,6 +43,8 @@ build-rpi:
     - make ARCH=aarch64 PLATFORM=rpi pi-image-check
     - test -f build/peak-os-rpi-arm64.img
     - test -f build/aarch64/kernel8.img
+    - chmod +x scripts/check-kernel-size.sh
+    - ./scripts/check-kernel-size.sh build/aarch64/kernel.elf
   artifacts:
     paths:
       - build/peak-os-rpi-arm64.img
@@ -69,14 +71,15 @@ host-tests:
     - test -f docs/verified-boot.md
     - chmod +x scripts/fuzz-elf-smoke.sh
     - ./scripts/fuzz-elf-smoke.sh
-    - |
-      if [ -f build/x86_64/kernel.elf ]; then
-        llvm-readelf -lW build/x86_64/kernel.elf | tee /tmp/phdrs.txt
-        if grep ' RWE ' /tmp/phdrs.txt; then echo "RWX PHDR forbidden"; exit 1; fi
-        chmod +x scripts/check-kernel-size.sh
-        ./scripts/check-kernel-size.sh build/x86_64/kernel.elf
-      fi
-    - python3 scripts/mkmanifest.py || true
+    - test -f build/x86_64/kernel.elf
+    - llvm-readelf -lW build/x86_64/kernel.elf | tee /tmp/phdrs.txt
+    - if grep ' RWE ' /tmp/phdrs.txt; then echo "RWX PHDR forbidden"; exit 1; fi
+    - chmod +x scripts/check-kernel-size.sh
+    - ./scripts/check-kernel-size.sh build/x86_64/kernel.elf
+    - python3 scripts/mkmanifest.py
+    - test -f build/SHA256SUMS
+    - chmod +x scripts/smoke-cli.sh
+    - PEAK_SKIP_ISO=1 PEAK_SKIP_HOST_TESTS=1 ./scripts/smoke-cli.sh
 
 smoke-bios:
   stage: test
@@ -89,6 +92,32 @@ smoke-bios:
   script:
     - chmod +x scripts/smoke-qemu.sh
     - PEAK_FIRMWARE=bios TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
+
+smoke-uefi:
+  stage: test
+  image: debian:bookworm-slim
+  needs:
+    - build-iso
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq qemu-system-x86 ovmf make
+  script:
+    - chmod +x scripts/smoke-qemu.sh
+    - OVMF_CODE=/usr/share/OVMF/OVMF_CODE.fd
+      PEAK_FIRMWARE=uefi TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
+
+smoke-peakfs:
+  stage: test
+  image: debian:bookworm-slim
+  needs:
+    - build-iso
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq qemu-system-x86 clang lld llvm xorriso make
+  script:
+    - export PATH="$(dirname $(command -v clang)):$PATH"
+    - chmod +x scripts/smoke-peakfs.sh
+    - TIMEOUT_SEC=90 ./scripts/smoke-peakfs.sh
 
 smoke-aarch64:
   stage: test

@@ -17,7 +17,7 @@
 - `BOOTX64.EFI`
 - `peak-os.iso` / `peak-os-rpi-arm64.img`
 
-CI publishes the sums. Detached Ed25519 signatures are the next wire-up (`*.sig` beside each artifact).
+CI runs `mkmanifest.py` after the x86 ISO build and requires `build/SHA256SUMS` (Pi images also write sums via `mkpiimg.py`). Detached Ed25519 signatures are the next wire-up (`*.sig` beside each artifact).
 
 ## Loader verify (software)
 

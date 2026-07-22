@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 # Smoke checks that do not require a live QEMU session.
+# PEAK_SKIP_ISO=1 skips rebuild when build/peak-os.iso already exists (CI).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 export PATH="/opt/homebrew/opt/llvm/bin:/usr/local/opt/llvm/bin:$PATH"
 
-echo "==> build iso"
-make iso
+if [[ "${PEAK_SKIP_ISO:-}" == "1" ]]; then
+  echo "==> skip iso rebuild (PEAK_SKIP_ISO=1)"
+  test -f build/peak-os.iso
+else
+  echo "==> build iso"
+  make iso
+fi
 
 echo "==> scripts present"
 test -f docs/CLI.md
@@ -39,17 +45,22 @@ echo "==> boot logo + status compaction"
 grep -q console_boot_logo kernel/console.c
 grep -q 'cols - used - tag_len - 1' kernel/console.c
 
-echo "==> phase7/host unit tests"
-make test-host
+if [[ "${PEAK_SKIP_HOST_TESTS:-}" != "1" ]]; then
+  echo "==> phase7/host unit tests"
+  make test-host
+else
+  echo "==> skip host tests (PEAK_SKIP_HOST_TESTS=1)"
+fi
 
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c
 grep -q 'agent_approve_write' kernel/agent.c
 grep -q 'hlt_if_enabled' kernel/net/net.c
-grep -q 'ata_flush' kernel/peakdisk.c
+grep -q 'blockdev_flush' kernel/peakdisk.c
 grep -q 'peak_bootinfo' kernel/boot.c
 grep -q 'net_attempt_stats_reset' kernel/gui/desktop.c
+grep -q 'PeakBrowser/1' kernel/net/net.c
 ! grep -q 'COM2\|COM3\|0x2F8\|0x3E8' kernel/agent.c kernel/user/ubin.c
 ! grep -rq 'limine\.h\|LIMINE_' kernel boot --include='*.c' --include='*.h' --include='*.S' --include='*.ld'
 

@@ -2,6 +2,11 @@
 
 Primary physical gate for Peak OS ARM64. Use a freshly built image from a clean checkout.
 
+Code prerequisites (landed in-tree for this gate):
+- [x] DWC2 hub enum + split xfer + hotplug poll (`kernel/drivers/usb/dwc2.c`)
+- [x] PeakDisk atomic publish (payload then header) + SDHCI CMD13 flush
+- [x] QEMU aarch64 smoke markers + PeakFS x86 roundtrip smoke
+
 ## Prepare
 
 - [ ] `make ARCH=aarch64 doctor`
@@ -22,7 +27,7 @@ Primary physical gate for Peak OS ARM64. Use a freshly built image from a clean 
 ## Persistence + power
 
 - [ ] Writable PeakFS survives reboot (save disk → reboot → data present)
-- [ ] Clean reboot/shutdown does not corrupt PeakFS magic (`PEAKFS01` at partition start)
+- [ ] Clean reboot/shutdown does not corrupt PeakFS envelope (`PEAKDSK1`/`PEAKDSK2` at partition LBA1; image also has `PEAKFS01` at partition start from `mkpiimg`)
 
 ## Headless
 
@@ -32,3 +37,8 @@ Primary physical gate for Peak OS ARM64. Use a freshly built image from a clean 
 ## Optional same image
 
 - [ ] Zero 2 W / Pi 4 / Pi 5: UART + FB + SD at minimum; HID/Ethernet/Wi-Fi per [docs/rpi.md](../docs/rpi.md) matrix
+
+## QEMU pre-check (not a silicon substitute)
+
+- [ ] `make ARCH=aarch64 smoke-aarch64` reaches `Boot complete` / `peak:/`
+- [ ] `make smoke-peakfs` (x86 IDE) two-pass save/restore
