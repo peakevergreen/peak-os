@@ -35,6 +35,10 @@ void vmm_set_kernel_phys_base(uint64_t phys) {
 }
 
 void vmm_enable_nx(void) {
+#ifdef PEAK_HOST_TEST
+    nx_enabled = 1;
+    return;
+#endif
 #if defined(__x86_64__)
     uint32_t a, b, c, d;
     __asm__ volatile ("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(0x80000001u), "c"(0));
@@ -89,6 +93,10 @@ uint64_t arch_virt_to_phys(void *virt) {
 }
 
 uint64_t vmm_current_cr3(void) {
+#ifdef PEAK_HOST_TEST
+    extern uint64_t vmm_host_test_cr3;
+    return vmm_host_test_cr3;
+#endif
     uint64_t cr3;
 #if defined(__aarch64__)
     __asm__ volatile ("mrs %0, ttbr1_el1" : "=r"(cr3));
@@ -99,6 +107,10 @@ uint64_t vmm_current_cr3(void) {
 }
 
 void vmm_invlpg(uint64_t vaddr) {
+#ifdef PEAK_HOST_TEST
+    (void)vaddr;
+    return;
+#endif
 #if defined(__x86_64__)
     __asm__ volatile ("invlpg (%0)" : : "r"(vaddr) : "memory");
 #else
@@ -186,9 +198,11 @@ uint64_t vmm_create_address_space(void) {
         return 0;
     uint64_t *pml4 = (uint64_t *)vmm_phys_to_virt((uint64_t)p);
     memset(pml4, 0, 4096);
+#ifndef PEAK_HOST_TEST
     uint64_t *cur = (uint64_t *)vmm_phys_to_virt(vmm_current_cr3());
     for (int i = 256; i < 512; i++)
         pml4[i] = cur[i];
+#endif
     return (uint64_t)p;
 }
 
@@ -244,7 +258,9 @@ int vmm_query(uint64_t cr3_phys, uint64_t vaddr, uint64_t *paddr_out, uint32_t *
         if (!nx_enabled || !(*pte & PTE_NX))
             f |= VMM_EXEC;
 #else
-        f |= VMM_USER | VMM_WRITE;
+        f |= VMM_USER;
+        if (!(*pte & (1ULL << 7)))
+            f |= VMM_WRITE;
         if (!(*pte & PTE_UXN))
             f |= VMM_EXEC;
 #endif
@@ -271,6 +287,10 @@ int vmm_protect_range(uint64_t cr3_phys, uint64_t vaddr, size_t len, uint32_t fl
 }
 
 void vmm_switch(uint64_t cr3_phys) {
+#ifdef PEAK_HOST_TEST
+    (void)cr3_phys;
+    return;
+#endif
 #if defined(__aarch64__)
     __asm__ volatile ("msr ttbr0_el1, %0" : : "r"(cr3_phys) : "memory");
     __asm__ volatile ("msr ttbr1_el1, %0" : : "r"(cr3_phys) : "memory");

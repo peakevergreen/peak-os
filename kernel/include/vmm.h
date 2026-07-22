@@ -40,6 +40,12 @@ uint64_t vmm_kernel_cr3(void);
 uint64_t vmm_current_cr3(void);
 void vmm_invlpg(uint64_t vaddr);
 
+#ifdef PEAK_HOST_TEST
+void vmm_host_test_set_cr3(uint64_t cr3_phys);
+int access_ok(const void *user_ptr, size_t len);
+int access_ok_write(const void *user_ptr, size_t len);
+#endif
+
 /* User <-> kernel copy helpers (validate user range against current CR3). */
 int copy_from_user(void *kdst, const void *user_src, size_t len);
 int copy_to_user(void *user_dst, const void *ksrc, size_t len);

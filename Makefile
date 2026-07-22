@@ -290,7 +290,8 @@ HOST_TEST_BINS := \
 	$(HOST_TEST_DIR)/test_wallpaper_cache \
 	$(HOST_TEST_DIR)/test_peakdisk \
 	$(HOST_TEST_DIR)/test_peakvec \
-	$(HOST_TEST_DIR)/test_guiproto
+	$(HOST_TEST_DIR)/test_guiproto \
+	$(HOST_TEST_DIR)/test_vmm_usercopy
 
 test: test-host
 # Compile host tests in parallel; run them sequentially for deterministic output.
@@ -312,6 +313,7 @@ test-host:
 	$(HOST_TEST_DIR)/test_peakdisk
 	$(HOST_TEST_DIR)/test_peakvec
 	$(HOST_TEST_DIR)/test_guiproto
+	$(HOST_TEST_DIR)/test_vmm_usercopy
 
 $(HOST_TEST_DIR):
 	@mkdir -p $@
@@ -374,6 +376,11 @@ $(HOST_TEST_DIR)/test_guiproto: tests/host/test_guiproto.c tests/host/guiproto_h
 		kernel/gui/guiproto.c kernel/gui/surface.c | $(HOST_TEST_DIR)
 	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
 		-Itests/host/include -Ikernel/include -Ikernel/gui -o $@ $^
+
+$(HOST_TEST_DIR)/test_vmm_usercopy: tests/host/test_vmm_usercopy.c tests/host/vmm_host_stubs.c \
+		kernel/vmm.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
+		-Itests/host/include -Ikernel/include -o $@ $^
 
 smoke:
 	./scripts/smoke-cli.sh
