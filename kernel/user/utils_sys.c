@@ -148,9 +148,9 @@ static int find_cb(const char *path, struct vfs_node *node, void *ud) {
 }
 
 int ufind_main(int argc, char **argv) {
-    if (argc < 3) {
+    if (peak_wants_help(argc, argv) || argc < 3) {
         peak_usage("find", "<dir> -name <name>");
-        return 1;
+        return argc < 3 ? 1 : 0;
     }
     const char *dir = argv[1];
     const char *name = NULL;
@@ -209,9 +209,9 @@ int uexport_main(int argc, char **argv) {
 }
 
 int uwhich_main(int argc, char **argv) {
-    if (argc < 2) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("which", "<cmd>");
-        return 1;
+        return argc < 2 ? 1 : 0;
     }
     char path[VFS_PATH_MAX];
     snprintf(path, sizeof(path), "/bin/%s", argv[1]);
@@ -225,9 +225,9 @@ int uwhich_main(int argc, char **argv) {
 }
 
 int useq_main(int argc, char **argv) {
-    if (argc < 2) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("seq", "[start] <end>");
-        return 1;
+        return argc < 2 ? 1 : 0;
     }
     int start = 1, end;
     if (argc == 2) {
@@ -242,9 +242,9 @@ int useq_main(int argc, char **argv) {
 }
 
 int usleep_main(int argc, char **argv) {
-    if (argc < 2) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("sleep", "<seconds>");
-        return 1;
+        return argc < 2 ? 1 : 0;
     }
     int sec = peak_atoi(argv[1]);
     if (sec < 0)
@@ -256,6 +256,10 @@ int usleep_main(int argc, char **argv) {
 }
 
 int utheme_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("theme", "[list|next|set <name>]");
+        return 0;
+    }
     if (argc >= 2 && !strcmp(argv[1], "list")) {
         char buf[256];
         theme_list(buf, sizeof(buf));
@@ -283,6 +287,10 @@ int utheme_main(int argc, char **argv) {
 }
 
 int uwallpaper_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("wallpaper", "[list|none|next|set <path>]");
+        return 0;
+    }
     if (argc >= 2 && !strcmp(argv[1], "list")) {
         console_write("none\n");
         console_write("/usr/share/peak/wallpapers/evergreen.ppm");
@@ -329,6 +337,10 @@ int uwallpaper_main(int argc, char **argv) {
 }
 
 int uscale_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("scale", "[1-4]");
+        return 0;
+    }
     if (argc < 2) {
         console_printf("ui scale: %u\n", fb_ui_scale());
         return 0;
@@ -356,9 +368,9 @@ int uhelp_main(int argc, char **argv) {
 }
 
 int uman_main(int argc, char **argv) {
-    if (argc < 2) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("man", "<cmd>");
-        return 1;
+        return argc < 2 ? 1 : 0;
     }
     shell_help_cmd(argv[1]);
     return 0;
@@ -367,16 +379,16 @@ int uman_main(int argc, char **argv) {
 int upeak_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
-    console_write("Peak OS 0.2.0-ai — AI-first workstation\n");
+    console_write("Peak OS 0.2.0-ai — research workstation\n");
     console_write("Commands: help, theme, ask, gui, ctr\n");
     console_write("Agent: in-guest mock planner (ask)\n");
     return 0;
 }
 
 int uask_main(int argc, char **argv) {
-    if (argc < 2) {
-        peak_usage("ask", "<prompt...>");
-        return 1;
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("ask", "<prompt...>  (quotes: ask \"create fib.c\")");
+        return argc < 2 ? 1 : 0;
     }
     char buf[512];
     size_t o = 0;
@@ -480,10 +492,10 @@ int ugui_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
     if (shell_mode() == MODE_GUI) {
-        console_write("Already in desktop. Esc returns to CLI.\n");
+        console_write("Already in desktop. Ctrl+Alt+Esc returns to CLI.\n");
         return 0;
     }
-    console_write("Entering desktop... (Esc returns to CLI)\n");
+    console_write("Entering desktop... (Ctrl+Alt+Esc returns to CLI)\n");
     shell_set_mode(MODE_GUI);
     fb_set_ui_scale(settings_gui_scale());
     desktop_run();
@@ -550,9 +562,9 @@ int uifconfig_main(int argc, char **argv) {
 }
 
 int uping_main(int argc, char **argv) {
-    if (argc < 2) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("ping", "<host>");
-        return 1;
+        return argc < 2 ? 1 : 0;
     }
     if (!net_ready()) {
         peak_perror("ping", "network down");
@@ -584,9 +596,9 @@ int uwget_main(int argc, char **argv) {
     /* Explicit user command = network consent for this session. */
     extern void privacy_grant_net_client(int remember);
     privacy_grant_net_client(0);
-    if (argc < 2) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("wget", "<url>");
-        return 1;
+        return argc < 2 ? 1 : 0;
     }
     if (!net_ready()) {
         peak_perror("wget", "network down");

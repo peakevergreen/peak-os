@@ -19,6 +19,13 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
 - CLI boot scroll stays on the front framebuffer (does not wipe via empty backbuffer)
+- CLI line-edit clears trailing glyphs on shrink; `gui` hints use Ctrl+Alt+Esc
+
+### CLI /bin builtins
+
+- Quote-aware argv split (`ask "…"`, `js -e '…'`); help table synced with registry
+- `-h` / `--help` gap-fill on text/sys utils; docs/CLI.md inventory refresh
+- Host tests: `test_libpeak`, `test_shell_split`, `test_console_scroll`
 
 ### Agent and PeakVec
 

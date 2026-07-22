@@ -41,6 +41,10 @@ int ucat_main(int argc, char **argv) {
 }
 
 int uhead_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("head", "[-n N] <path>");
+        return 0;
+    }
     int n = 10;
     const char *path = NULL;
     for (int i = 1; i < argc; i++) {
@@ -72,6 +76,10 @@ int uhead_main(int argc, char **argv) {
 }
 
 int utail_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("tail", "[-n N] <path>");
+        return 0;
+    }
     int n = 10;
     const char *path = NULL;
     for (int i = 1; i < argc; i++) {
@@ -112,9 +120,9 @@ int utail_main(int argc, char **argv) {
 }
 
 int uwc_main(int argc, char **argv) {
-    if (argc < 2) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("wc", "<path>");
-        return 1;
+        return argc < 2 ? 1 : 0;
     }
     char abs[VFS_PATH_MAX];
     if (shell_resolve_path(argv[1], abs, sizeof(abs)))
@@ -181,9 +189,9 @@ int ugrep_main(int argc, char **argv) {
 }
 
 int uhexdump_main(int argc, char **argv) {
-    if (argc < 2) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("hexdump", "<path>");
-        return 1;
+        return argc < 2 ? 1 : 0;
     }
     char abs[VFS_PATH_MAX];
     if (shell_resolve_path(argv[1], abs, sizeof(abs)))
@@ -211,9 +219,9 @@ int uhexdump_main(int argc, char **argv) {
 }
 
 int ustrings_main(int argc, char **argv) {
-    if (argc < 2) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("strings", "<path>");
-        return 1;
+        return argc < 2 ? 1 : 0;
     }
     char abs[VFS_PATH_MAX];
     if (shell_resolve_path(argv[1], abs, sizeof(abs)))
