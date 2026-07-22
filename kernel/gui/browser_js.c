@@ -1,3 +1,12 @@
+/*
+ * DOM ↔ JS bridge for browser tabs.
+ *
+ * browser_js_install_dom() wires document/querySelector, __dom_* natives, console.log,
+ * location, and the small bootstrapping helpers ($, textContent, on, …).
+ *
+ * Web APIs (fetch, storage, AbortController) are partial stubs installed separately
+ * by webapi_install() — see webapi.h and webapi_stubs.c.
+ */
 #include "browser_js.h"
 #include "../js/js_internal.h"
 #include "util.h"
@@ -263,7 +272,7 @@ int browser_js_install_dom(struct browser_js_host *h) {
     install_fn(rt, &document, "createElement", nat_create_element, h);
     js_obj_set(rt, rt->global, "document", document);
 
-    /* Helpers as globals for simpler demo scripts (Peak DOM bridge). */
+    /* Peak DOM bridge helpers (not Web API stubs — those live in webapi_stubs.c). */
     js_rt_set_global_fn(rt, "__dom_appendChild", nat_append_child, h);
     js_rt_set_global_fn(rt, "__dom_setText", nat_set_text, h);
     js_rt_set_global_fn(rt, "__dom_getText", nat_get_text, h);
