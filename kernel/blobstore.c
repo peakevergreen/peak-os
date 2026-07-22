@@ -2,7 +2,6 @@
 #include "blockdev.h"
 #include "heap.h"
 #include "util.h"
-#include "serial.h"
 #include "cap.h"
 
 #define BLOB_MAGIC "PEAKBLOB"
@@ -168,14 +167,11 @@ void blobstore_init(void) {
     memset(&super, 0, sizeof(super));
     lru_tick = 0;
     ready = 0;
-    if (!blockdev_present()) {
-        serial_write_str("blobstore: no block device\n");
+    if (!blockdev_present())
         return;
-    }
     if (read_meta() != 0)
         format_new();
     ready = 1;
-    serial_write_str("blobstore: ready\n");
 }
 
 int blobstore_available(void) {

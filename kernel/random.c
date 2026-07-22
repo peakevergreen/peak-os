@@ -88,23 +88,8 @@ void cpu_sec_features_probe(struct cpu_sec_features *out) {
 }
 
 void cpu_sec_features_report(void) {
-    char line[96];
-    /* Non-secret feature bits only. */
-    serial_write_str("cpu-sec:");
-    if (g_feat.nx)
-        serial_write_str(" nx");
-    if (g_feat.rdrand)
-        serial_write_str(" rdrand");
-    if (g_feat.rdseed)
-        serial_write_str(" rdseed");
-    if (g_feat.smep)
-        serial_write_str(" smep");
-    if (g_feat.smap)
-        serial_write_str(" smap");
-    if (g_feat.umip)
-        serial_write_str(" umip");
-    serial_write_str("\n");
-    (void)line;
+    /* Probe only — boot status covers entropy; avoid serial chatter. */
+    (void)g_feat;
 }
 
 static void pool_absorb(const uint8_t *data, size_t len) {
@@ -294,7 +279,6 @@ void random_init(const struct peak_bootinfo *info) {
         serial_write_str("rng: DEV-INSECURE — crypto allowed with weak entropy\n");
     } else {
         status_flags |= RANDOM_FLAG_WEAK;
-        serial_write_str("rng: degraded — crypto keygen blocked until entropy ok\n");
     }
 }
 

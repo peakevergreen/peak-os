@@ -708,13 +708,6 @@ int net_init(void) {
                 ;
         }
     }
-    char ipb[32];
-    net_format_ip(local_ip, ipb, sizeof(ipb));
-    serial_write_str("net: ipv4 ready (");
-    serial_write_str(addr_mode);
-    serial_write_str(" ");
-    serial_write_str(ipb);
-    serial_write_str(")\n");
     return 0;
 }
 

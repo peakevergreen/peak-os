@@ -210,7 +210,6 @@ int e1000_init(void) {
     mmio_write(E1000_REG_CTRL, mmio_read(E1000_REG_CTRL) | (1u << 6)); /* SLU */
 
     ready = 1;
-    serial_write_str("e1000: up\n");
     return 0;
 }
 

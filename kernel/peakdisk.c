@@ -50,10 +50,6 @@ static int read_payload_streamed(uint8_t *data, uint32_t len) {
 }
 
 void peakdisk_init(void) {
-    if (blockdev_present())
-        serial_write_str("peakdisk: block device present\n");
-    else
-        serial_write_str("peakdisk: no block device\n");
 }
 
 int peakdisk_available(void) {

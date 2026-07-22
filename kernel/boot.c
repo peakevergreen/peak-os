@@ -207,11 +207,21 @@ void kernel_entry(struct peak_bootinfo *info) {
 
     net_set_boot_config(&info->net);
     if (net_init() != 0) {
-        serial_write_str("net: unavailable\n");
         status_fail("Network");
     } else {
+        struct net_info ni;
+        char msg[72];
+        char ipb[32];
         const struct netdev_ops *nd = netdev_get();
-        status_ok(nd && nd->name ? nd->name : "Network");
+        const char *name = (nd && nd->name) ? nd->name : "Network";
+        net_get_info(&ni);
+        if (ni.up && ni.addr_mode && ni.ip) {
+            net_format_ip(ni.ip, ipb, sizeof(ipb));
+            snprintf(msg, sizeof(msg), "%s (%s %s)", name, ni.addr_mode, ipb);
+            status_ok(msg);
+        } else {
+            status_ok(name);
+        }
     }
 
     theme_init();
@@ -236,6 +246,8 @@ void kernel_entry(struct peak_bootinfo *info) {
             status_ok("Disk (PeakFS restore)");
         else
             status_ok("Disk (empty — use Save disk)");
+    } else {
+        status_ok("Disk (none)");
     }
     peakvec_init();
     status_ok("PeakVec");

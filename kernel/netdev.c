@@ -1,16 +1,9 @@
 #include "netdev.h"
-#include "serial.h"
 
 static const struct netdev_ops *g_nd;
 
 void netdev_register(const struct netdev_ops *ops) {
     g_nd = ops;
-    if (ops) {
-        serial_write_str("netdev: registered ");
-        if (ops->name)
-            serial_write_str(ops->name);
-        serial_write_str("\n");
-    }
 }
 
 const struct netdev_ops *netdev_get(void) {

@@ -14,6 +14,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - CI honesty: hard-fail fuzz/manifest/doctor; require BOOTX64 + kernel.elf PHDR; tighten aarch64 smoke markers; clear `net_up` on DHCP fail
 - CI gates: UEFI smoke, smoke-cli static gate, host `-Werror`, real ELF fuzz, PeakFS QEMU roundtrip (`smoke_persist`)
 - PeakDisk atomic publish (payload→header) + SDHCI CMD13 flush; DWC2 hub enum/split/hotplug; `/bin/disksave`
+- Quieter boot: status lines only (net IP folded into `e1000 (dhcp …)`; no chatter for JS/PeakVec/disk absence)
 
 ### Desktop / Commercial GFX
 
