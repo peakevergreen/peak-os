@@ -47,6 +47,7 @@ static int theme_idx;
 void theme_apply_console(void) {
     const struct peak_theme *t = theme_get();
     console_set_color(t->fg, t->bg);
+    /* Theme palette changes do not invalidate wallpaper ARGB cache. */
 }
 
 void theme_init(void) {

@@ -23,10 +23,14 @@ static uint32_t *wp_cache;
 static uint32_t wp_cw, wp_ch;
 static int wp_cache_ok;
 static int wp_cache_heap;
+static const uint8_t *wp_cache_rgb;
+static uint32_t wp_cache_src_w, wp_cache_src_h;
 
 static void wp_cache_invalidate(void) {
     wp_cache_ok = 0;
     wp_cw = wp_ch = 0;
+    wp_cache_rgb = NULL;
+    wp_cache_src_w = wp_cache_src_h = 0;
     if (wp_cache_heap && wp_cache) {
         kfree(wp_cache);
         wp_cache = NULL;
@@ -106,6 +110,9 @@ static int load_from_vfs(const char *path) {
 static void wp_cache_rebuild(uint32_t w, uint32_t h) {
     if (!wallpaper_enabled() || w == 0 || h == 0)
         return;
+    if (wp_cache_ok && wp_cw == w && wp_ch == h &&
+        wp_cache_rgb == wp_rgb && wp_cache_src_w == wp_w && wp_cache_src_h == wp_h)
+        return;
     if (w <= WP_CACHE_FALLBACK_W && h <= WP_CACHE_FALLBACK_H) {
         if (wp_cache_heap && wp_cache)
             kfree(wp_cache);
@@ -137,6 +144,9 @@ static void wp_cache_rebuild(uint32_t w, uint32_t h) {
     }
     wp_cw = w;
     wp_ch = h;
+    wp_cache_rgb = wp_rgb;
+    wp_cache_src_w = wp_w;
+    wp_cache_src_h = wp_h;
     wp_cache_ok = 1;
 }
 
