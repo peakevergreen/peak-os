@@ -7,10 +7,11 @@ Peak-authored, interpreter-only JavaScript for in-guest Browser tabs. No QuickJS
 | Piece | Location |
 |-------|----------|
 | Bytecode VM + GC | `kernel/js/` |
-| DOM / HTML parser | `kernel/gui/dom.c` |
-| CSS tokenize + layout | `kernel/gui/css.c` |
+| DOM / HTML parser | `kernel/gui/dom_core.c`, `dom_parse.c` |
+| CSS tokenize + layout | `kernel/gui/css_parse.c`, `css_layout.c` |
 | DOM ↔ JS bridge | `kernel/gui/browser_js.c` |
-| Web APIs (`fetch`, storage) | `kernel/gui/webapi.c` |
+| Web API stubs (`fetch`, storage, AbortController) | `kernel/gui/webapi_stubs.c` |
+| Tab storage + classic `<script src>` | `kernel/gui/webapi.c` |
 | CLI | `/bin/js` (`js -e`, script file) |
 
 Per-tab budgets: instruction count, object heap, timers. Scripts never run from IRQ, network locks, or timer ISR — only from `browser_tick()` / explicit eval on the desktop loop.
@@ -29,7 +30,8 @@ Progressively pass representative site fixtures. Full Chromium-level standards c
 
 ## Isolation (current → next)
 
-- **Now:** VM instruction/object/timer budgets; `browser_tick()` only from the desktop loop (never IRQ/network locks); destroy runtime on navigate/tab close; `fetch` gated by same-origin/CORS.
+- **Now:** VM instruction/object/timer budgets; `browser_tick()` only from the desktop loop (never IRQ/network locks); destroy runtime on navigate/tab close.
+- **Web API stubs** (`webapi_stubs.c`): `fetch` is GET-only with same-origin/CORS gating (not a full `Response`); `localStorage`/`sessionStorage` are in-memory per-tab maps (not disk); `AbortController` is a non-functional shell (no abort wiring). DOM bridge stays in `browser_js.c`.
 - **Monitor:** overview shows `js tabs / objs / timers / gc`.
 - **Next:** ring-3 process isolation with validated DOM/network syscalls once userspace process support is sufficient.
 

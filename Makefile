@@ -75,6 +75,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/browser_js.c \
 	kernel/gui/browser_parse.c \
 	kernel/gui/webapi.c \
+	kernel/gui/webapi_stubs.c \
 	kernel/net/dhcp_util.c \
 	kernel/net/http_util.c \
 	kernel/net/crypto.c \

@@ -4,14 +4,24 @@
 #include "js.h"
 #include "dom.h"
 
-/* Install fetch, storage, AbortController stubs on a tab runtime. */
+/*
+ * Browser Web API layer (partial stubs — see kernel/gui/webapi_stubs.c).
+ *
+ * webapi_install() exposes quarantined stubs only:
+ *   fetch            GET-only, same-origin/CORS; not a full Response API
+ *   localStorage     in-memory per-tab map; not persistent disk storage
+ *   sessionStorage   same as localStorage but cleared on tab teardown
+ *   AbortController  constructor shell; abort() unimplemented, signal never fires
+ *
+ * DOM ↔ JS bridge lives in browser_js.c (document, __dom_* helpers).
+ * Classic <script src> loading is handled here, not in the stub layer.
+ */
+
 int webapi_install(struct js_runtime *rt, const char *page_url);
 
-/* Per-tab / private-tab storage isolation. */
 void webapi_set_tab(int tab_id, int private_tab);
 void webapi_clear_tab(int tab_id);
 
-/* Fetch classic external <script src> in document order and eval. */
 int webapi_load_classic_scripts(struct js_runtime *rt, struct dom_document *doc,
                                 const char *page_url);
 
