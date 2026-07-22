@@ -30,7 +30,7 @@ Obscurity ("no designed attacks exist yet") is never counted as a control.
 |----------|----------|
 | Malicious / buggy ring-3 process | Yes |
 | Malicious browser JS / page content | Yes |
-| Network eavesdropper / MITM | Yes (TLS + TOFU / pins) |
+| Network eavesdropper / MITM | Yes (TLS + TOFU / pins; no X.509 chain validation) |
 | Layout-guessing exploit after a memory bug | Yes (containment + MTD) |
 | Compromised agent prompt / tool abuse | Yes (path policy + approval) |
 | Unsigned / tampered boot image | Planned (Phase S8; not shipped) |
@@ -81,6 +81,17 @@ Still open (not claimed done):
 - Session lock is convenience idle UI, not authentication
 
 Already addressed earlier in the privacy-first program (see [CHANGELOG.md](../CHANGELOG.md)): CSPRNG + TLS fail-closed, NX/W^X, user-copy / SMEP-SMAP where applicable, capabilities + audit, sandboxed agent/browser/ctr policies, encrypted PeakFS modes, ASLR/KASLR/canaries. Remaining work is listed under Security in [ROADMAP.md](ROADMAP.md).
+
+### TLS trust scope (honest)
+
+The in-guest TLS 1.2 client verifies server certificates with **explicit SHA-256
+pins** and/or **trust-on-first-use** per SNI host (`/etc/peak/tls-tofu`), plus
+optional leaf hostname matching when parsing succeeds. **Full X.509 chain
+validation is intentionally out of scope** — there is no embedded CA store, no
+path building, and no CRL/OCSP. That is a deliberate trade-off for a small
+freestanding stack: TOFU detects certificate swaps for known hosts; pins cover
+known-good digests; neither replaces WebPKI or enterprise PKI policy.
+
 ## Degraded entropy
 
 If boot cannot gather trusted entropy:

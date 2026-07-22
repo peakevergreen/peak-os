@@ -1,5 +1,6 @@
 #include "tls.h"
 #include "crypto.h"
+#include "tls_util.h"
 #include "net.h"
 #include "timer.h"
 #include "util.h"
@@ -517,15 +518,6 @@ int tls_hostname_matched(void) {
 #define TOFU_PATH "/etc/peak/tls-tofu"
 #define TOFU_MAX  8192
 
-static void hex_encode(const uint8_t *in, size_t n, char *out) {
-    static const char hx[] = "0123456789abcdef";
-    for (size_t i = 0; i < n; i++) {
-        out[i * 2] = hx[in[i] >> 4];
-        out[i * 2 + 1] = hx[in[i] & 0xF];
-    }
-    out[n * 2] = '\0';
-}
-
 /* 1 = match, 0 = unknown host, -1 = MISMATCH (possible MITM). */
 static int tofu_check(const char *host, const char *hexdigest) {
     static char buf[TOFU_MAX];
@@ -535,21 +527,7 @@ static int tofu_check(const char *host, const char *hexdigest) {
     if (vfs_read_file(TOFU_PATH, buf, sizeof(buf) - 1, &n) != 0 || n == 0)
         return 0;
     buf[n] = '\0';
-    size_t hlen = strlen(host);
-    const char *p = buf;
-    while (*p) {
-        const char *nl = strchr(p, '\n');
-        size_t linelen = nl ? (size_t)(nl - p) : strlen(p);
-        if (linelen > hlen + 1 && !strncmp(p, host, hlen) && p[hlen] == ':') {
-            if (linelen - hlen - 1 == 64 && !strncmp(p + hlen + 1, hexdigest, 64))
-                return 1;
-            return -1;
-        }
-        if (!nl)
-            break;
-        p = nl + 1;
-    }
-    return 0;
+    return tls_tofu_check_store(buf, host, hexdigest);
 }
 
 static void tofu_remember(const char *host, const char *hexdigest) {
@@ -573,34 +551,6 @@ static void tofu_remember(const char *host, const char *hexdigest) {
     vfs_write_file(TOFU_PATH, buf, o);
 }
 
-static int ci_eq(const char *a, const char *b) {
-    if (!a || !b)
-        return 0;
-    while (*a && *b) {
-        char ca = *a++, cb = *b++;
-        if (ca >= 'A' && ca <= 'Z')
-            ca = (char)(ca - 'A' + 'a');
-        if (cb >= 'A' && cb <= 'Z')
-            cb = (char)(cb - 'A' + 'a');
-        if (ca != cb)
-            return 0;
-    }
-    return *a == *b;
-}
-
-/* One leading wildcard label: *.example.com matches foo.example.com */
-static int hostname_matches_sni(const char *pattern, const char *host) {
-    if (!pattern || !host || !host[0])
-        return 0;
-    if (pattern[0] == '*' && pattern[1] == '.') {
-        const char *dot = strchr(host, '.');
-        if (!dot)
-            return 0;
-        return ci_eq(pattern + 1, dot);
-    }
-    return ci_eq(pattern, host);
-}
-
 static int x509_names_match_sni(const uint8_t *cert, size_t cert_len, const char *sni_host) {
     int found_name = 0;
     int matched = 0;
@@ -619,7 +569,7 @@ static int x509_names_match_sni(const uint8_t *cert, size_t cert_len, const char
             memcpy(name, cert + j, vlen);
             name[vlen] = '\0';
             found_name = 1;
-            if (hostname_matches_sni(name, sni_host))
+            if (tls_hostname_matches_sni(name, sni_host))
                 matched = 1;
         }
         if (cert[i] == 0x82 && i + 2 < cert_len) {
@@ -628,7 +578,7 @@ static int x509_names_match_sni(const uint8_t *cert, size_t cert_len, const char
                 char name[128];
                 memcpy(name, cert + i + 2, vlen);
                 name[vlen] = '\0';
-                if (strchr(name, '.') && hostname_matches_sni(name, sni_host)) {
+                if (strchr(name, '.') && tls_hostname_matches_sni(name, sni_host)) {
                     found_name = 1;
                     matched = 1;
                 }
@@ -697,7 +647,7 @@ static int verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sn
     }
     if (!trusted) {
         char hexd[65];
-        hex_encode(digest, 32, hexd);
+        tls_hex_encode(digest, 32, hexd);
         int t = tofu_check(sni_host, hexd);
         if (t == 1)
             trusted = 1;

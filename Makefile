@@ -69,6 +69,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/dhcp_util.c \
 	kernel/net/http_util.c \
 	kernel/net/crypto.c \
+	kernel/net/tls_util.c \
 	kernel/net/tls.c \
 	kernel/net/net.c \
 	kernel/net/arp.c \
@@ -253,6 +254,7 @@ HOST_TEST_BINS := \
 	$(HOST_TEST_DIR)/test_lan \
 	$(HOST_TEST_DIR)/test_js \
 	$(HOST_TEST_DIR)/test_random \
+	$(HOST_TEST_DIR)/test_tls \
 	$(HOST_TEST_DIR)/test_libpeak \
 	$(HOST_TEST_DIR)/test_shell_split \
 	$(HOST_TEST_DIR)/test_console_scroll \
@@ -268,6 +270,7 @@ test-host:
 	$(HOST_TEST_DIR)/test_lan
 	$(HOST_TEST_DIR)/test_js
 	$(HOST_TEST_DIR)/test_random
+	$(HOST_TEST_DIR)/test_tls
 	$(HOST_TEST_DIR)/test_libpeak
 	$(HOST_TEST_DIR)/test_shell_split
 	$(HOST_TEST_DIR)/test_console_scroll
@@ -296,6 +299,11 @@ $(HOST_TEST_DIR)/test_js: tests/host/test_js.c tests/host/js_host_stubs.c \
 
 $(HOST_TEST_DIR)/test_random: tests/host/test_random.c kernel/random.c kernel/net/crypto.c | $(HOST_TEST_DIR)
 	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 \
+		-Itests/host/include -Iboot/include -Ikernel/include -o $@ $^
+
+$(HOST_TEST_DIR)/test_tls: tests/host/test_tls.c kernel/net/tls_util.c kernel/random.c \
+		kernel/net/crypto.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
 		-Itests/host/include -Iboot/include -Ikernel/include -o $@ $^
 
 $(HOST_TEST_DIR)/test_libpeak: tests/host/test_libpeak.c kernel/user/libpeak.c | $(HOST_TEST_DIR)
