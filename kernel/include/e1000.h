@@ -3,6 +3,8 @@
 
 #include "types.h"
 
+/* Driver owns DMA rings/buffers; send/recv copy through caller-provided memory. */
+
 int  e1000_init(void);
 int  e1000_send(const void *data, uint16_t len);
 /* Non-blocking: copy one RX frame into buf, return length or -1 if empty */
