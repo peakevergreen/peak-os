@@ -1,5 +1,7 @@
 #include "desktop_internal.h"
+#include "gui.h"
 #include "fb.h"
+#include "theme.h"
 #include "shell.h"
 #include "settings.h"
 #include "util.h"
@@ -280,4 +282,54 @@ void desktop_close_win(int idx) {
         focus = best;
     }
     dirty_bits |= DIRTY_FULL;
+}
+
+static void draw_win_chrome(struct win *w, int focused) {
+    window_draw_frame(w->x, w->y, w->w, w->h, desktop_app_title(w->kind),
+                      focused ? desktop_color_bg() : desktop_color_surface());
+    uint32_t by = w->y + desktop_u(6);
+    uint32_t bs = desktop_u(14);
+    uint32_t gap = desktop_u(4);
+    uint32_t bx = w->x + w->w - desktop_u(22);
+    fb_fill_rect(bx, by, bs, bs, theme_get()->danger);
+    bx -= bs + gap;
+    fb_fill_rect(bx, by, bs, bs, desktop_color_accent());
+    bx -= bs + gap;
+    fb_fill_rect(bx, by, bs, bs, desktop_color_dim());
+    fb_fill_rect(bx + desktop_u(2), by + bs / 2, bs - desktop_u(4), desktop_u(2), desktop_color_fg());
+
+    if (!w->maximized) {
+        uint32_t g = resize_grip();
+        uint32_t gx = w->x + w->w - g;
+        uint32_t gy = w->y + w->h - g;
+        uint32_t accent = focused ? desktop_color_accent() : desktop_color_dim();
+        for (uint32_t i = 0; i < 3; i++) {
+            uint32_t o = desktop_u(3) + i * desktop_u(3);
+            fb_fill_rect(gx + o, gy + g - desktop_u(3), g - o - desktop_u(2), desktop_u(2), accent);
+            fb_fill_rect(gx + g - desktop_u(3), gy + o, desktop_u(2), g - o - desktop_u(2), accent);
+        }
+    }
+}
+
+void desktop_draw_win_content(int i) {
+    struct win *w = &wins[i];
+    draw_win_chrome(w, i == focus);
+    if (w->kind == APP_TERM)
+        desktop_terminal_draw(w);
+    else if (w->kind == APP_FILES)
+        desktop_files_draw(w);
+    else if (w->kind == APP_SETTINGS)
+        desktop_settings_draw(w);
+    else if (w->kind == APP_AGENT)
+        desktop_agent_draw(w);
+    else if (w->kind == APP_GAME) {
+        game_draw(w->x + desktop_u(4), w->y + desktop_title_h() + desktop_u(2),
+                  w->w - desktop_u(8), w->h - desktop_title_h() - desktop_u(6));
+    } else if (w->kind == APP_BROWSER) {
+        browser_draw(w->x + desktop_u(4), w->y + desktop_title_h() + desktop_u(2),
+                     w->w - desktop_u(8), w->h - desktop_title_h() - desktop_u(6));
+    } else if (w->kind == APP_MONITOR) {
+        monitor_draw(w->x + desktop_u(4), w->y + desktop_title_h() + desktop_u(2),
+                     w->w - desktop_u(8), w->h - desktop_title_h() - desktop_u(6));
+    }
 }

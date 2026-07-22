@@ -127,8 +127,27 @@ void desktop_draw_clock_area(void);
 
 void desktop_term_reset_slot(int slot);
 void desktop_term_activate(int slot);
-void desktop_app_opened(enum app_kind k);
 int desktop_active_term_index(void);
+void desktop_terminal_init(void);
+void desktop_terminal_draw(struct win *w);
+int desktop_terminal_key(int key);
+void desktop_terminal_wheel(int wheel);
+
+void desktop_files_init(void);
+void desktop_files_draw(struct win *w);
+int desktop_files_key(int key);
+void desktop_files_wheel(int wheel);
+int desktop_files_click(struct win *w, int32_t mx, int32_t my, int dbl);
+
+void desktop_settings_draw(struct win *w);
+int desktop_settings_click(struct win *w, int32_t mx, int32_t my);
+
+void desktop_agent_init(void);
+void desktop_app_opened(enum app_kind k);
+void desktop_agent_draw(struct win *w);
+int desktop_agent_key(int key);
+int desktop_agent_click(void);
+
 void desktop_compose_reset_cursor_cache(void);
 
 extern int menu_open;
