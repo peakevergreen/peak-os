@@ -6,6 +6,21 @@
 static struct vfs_node nodes[VFS_MAX_NODES];
 static int node_count;
 static struct vfs_node *root;
+/* First-character child buckets: nodes[i] -> heads[i][ch & 31]. */
+static struct vfs_node *child_bucket[VFS_MAX_NODES][32];
+
+static int node_index(struct vfs_node *n) {
+    if (!n)
+        return -1;
+    intptr_t d = (intptr_t)(n - nodes);
+    if (d < 0 || d >= VFS_MAX_NODES)
+        return -1;
+    return (int)d;
+}
+
+static unsigned name_bucket(const char *name) {
+    return (unsigned)(unsigned char)name[0] & 31u;
+}
 
 static struct vfs_node *alloc_node(const char *name, enum vfs_type type) {
     struct vfs_node *n = NULL;
@@ -35,10 +50,17 @@ static void add_child(struct vfs_node *parent, struct vfs_node *child) {
     child->parent = parent;
     child->sibling = parent->child;
     parent->child = child;
+    int pi = node_index(parent);
+    if (pi >= 0) {
+        unsigned b = name_bucket(child->name);
+        /* Prepend keeps this child at the front of the sibling chain. */
+        child_bucket[pi][b] = child;
+    }
 }
 
 void vfs_init(void) {
     memset(nodes, 0, sizeof(nodes));
+    memset(child_bucket, 0, sizeof(child_bucket));
     node_count = 0;
     root = alloc_node("", VFS_DIR);
 }
@@ -48,9 +70,27 @@ struct vfs_node *vfs_root(void) {
 }
 
 static struct vfs_node *find_child(struct vfs_node *dir, const char *name) {
-    for (struct vfs_node *c = dir->child; c; c = c->sibling) {
+    if (!dir || !name)
+        return NULL;
+    int di = node_index(dir);
+    unsigned b = name_bucket(name);
+    struct vfs_node *start = dir->child;
+    if (di >= 0 && child_bucket[di][b])
+        start = child_bucket[di][b];
+    for (struct vfs_node *c = start; c; c = c->sibling) {
+        if (((unsigned)(unsigned char)c->name[0] & 31u) != b)
+            continue;
         if (!strcmp(c->name, name))
             return c;
+    }
+    /* If we started mid-chain from a stale bucket head, scan from the real head. */
+    if (start != dir->child) {
+        for (struct vfs_node *c = dir->child; c && c != start; c = c->sibling) {
+            if (((unsigned)(unsigned char)c->name[0] & 31u) != b)
+                continue;
+            if (!strcmp(c->name, name))
+                return c;
+        }
     }
     return NULL;
 }
@@ -81,8 +121,9 @@ struct vfs_node *vfs_lookup(const char *path) {
 }
 
 struct vfs_node *vfs_mkdir(const char *path) {
-    if (vfs_lookup(path))
-        return vfs_lookup(path);
+    struct vfs_node *existing = vfs_lookup(path);
+    if (existing)
+        return existing;
     /* recursively create */
     char build[VFS_PATH_MAX];
     build[0] = '\0';
