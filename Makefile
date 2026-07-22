@@ -43,6 +43,8 @@ KERNEL_COMMON_SRCS := \
 	kernel/keyboard.c \
 	kernel/mouse.c \
 	kernel/shell.c \
+	kernel/shell_dispatch.c \
+	kernel/shell_builtins.c \
 	kernel/shell_split.c \
 	kernel/theme.c \
 	kernel/wallpaper.c \
