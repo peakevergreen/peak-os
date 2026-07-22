@@ -105,20 +105,39 @@ void peakvec_embed_text(const char *text, int16_t out[PEAKVEC_DIM]) {
     }
 }
 
-static int32_t cosine_milli(const int16_t *a, const int16_t *b) {
-    int64_t dot = 0, na = 0, nb = 0;
-    for (int i = 0; i < PEAKVEC_DIM; i++) {
-        dot += (int64_t)a[i] * b[i];
-        na += (int64_t)a[i] * a[i];
-        nb += (int64_t)b[i] * b[i];
-    }
-    if (na == 0 || nb == 0)
+static uint64_t isqrt_u64(uint64_t x) {
+    if (x == 0)
         return 0;
-    /* score = dot / sqrt(na*nb) * 1000 — use integer approx */
-    uint64_t prod = (uint64_t)na * (uint64_t)nb;
-    uint64_t root = 1;
-    while (root * root < prod && root < 0x1000000ull)
-        root++;
+    uint64_t lo = 1, hi = x < 0x1000000ull ? x : 0x1000000ull;
+    if (hi * hi < x && hi < 0xffffffffull) {
+        /* Clamp search for large products; cosine uses scaled norms. */
+        hi = 0x1000000ull;
+    }
+    while (lo < hi) {
+        uint64_t mid = lo + ((hi - lo + 1) >> 1);
+        if (mid > 0xffffffffull / mid || mid * mid > x)
+            hi = mid - 1;
+        else
+            lo = mid;
+    }
+    return lo;
+}
+
+/* Cosine with precomputed query self-norm (avoids recompute per corpus entry). */
+static int32_t cosine_milli_qn(const int16_t *query, int64_t qnorm,
+                               const int16_t *vec) {
+    if (qnorm == 0)
+        return 0;
+    int64_t dot = 0, vn = 0;
+    for (int i = 0; i < PEAKVEC_DIM; i++) {
+        int64_t qi = query[i];
+        int64_t vi = vec[i];
+        dot += qi * vi;
+        vn += vi * vi;
+    }
+    if (vn == 0)
+        return 0;
+    uint64_t root = isqrt_u64((uint64_t)qnorm * (uint64_t)vn);
     if (root == 0)
         return 0;
     return (int32_t)((dot * 1000) / (int64_t)root);
@@ -370,11 +389,8 @@ int peakvec_delete(const char *ns, const char *key) {
         return -1;
     for (uint32_t i = 0; i < count; i++) {
         if (entries[i].in_use && !strcmp(entries[i].key, key)) {
-            entries[i].in_use = 0;
-            /* compact */
-            if (i + 1 < count)
-                memmove(&entries[i], &entries[i + 1],
-                        (count - i - 1) * sizeof(struct peakvec_entry));
+            /* Swap-remove to avoid O(n) memmove on every delete. */
+            entries[i] = entries[count - 1];
             count--;
             (void)persist_blob();
             return 0;
@@ -395,11 +411,17 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
         hits[i].meta[0] = '\0';
         hits[i].score_milli = -1000000;
     }
+    int64_t qnorm = 0;
+    for (int i = 0; i < PEAKVEC_DIM; i++)
+        qnorm += (int64_t)query[i] * query[i];
     int found = 0;
+    int32_t worst = -1000000;
     for (uint32_t i = 0; i < count; i++) {
         if (!entries[i].in_use)
             continue;
-        int32_t sc = cosine_milli(query, entries[i].vec);
+        int32_t sc = cosine_milli_qn(query, qnorm, entries[i].vec);
+        if (found >= topk && sc <= worst)
+            continue;
         /* insert into topk */
         int place = topk;
         for (int k = 0; k < topk; k++) {
@@ -417,6 +439,7 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
         hits[place].score_milli = sc;
         if (found < topk)
             found++;
+        worst = hits[topk - 1].score_milli;
     }
     return found;
 }
