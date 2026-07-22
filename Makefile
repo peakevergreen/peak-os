@@ -27,6 +27,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/serial.c \
 	kernel/fb.c \
 	kernel/display.c \
+	kernel/display_clip.c \
 	kernel/console.c \
 	kernel/pmm.c \
 	kernel/heap.c \
@@ -284,6 +285,7 @@ HOST_TEST_BINS := \
 	$(HOST_TEST_DIR)/test_ubin_registry \
 	$(HOST_TEST_DIR)/test_shell_split \
 	$(HOST_TEST_DIR)/test_console_scroll \
+	$(HOST_TEST_DIR)/test_display_present \
 	$(HOST_TEST_DIR)/test_peakdisk \
 	$(HOST_TEST_DIR)/test_peakvec
 
@@ -302,6 +304,7 @@ test-host:
 	$(HOST_TEST_DIR)/test_ubin_registry
 	$(HOST_TEST_DIR)/test_shell_split
 	$(HOST_TEST_DIR)/test_console_scroll
+	$(HOST_TEST_DIR)/test_display_present
 	$(HOST_TEST_DIR)/test_peakdisk
 	$(HOST_TEST_DIR)/test_peakvec
 
@@ -346,6 +349,9 @@ $(HOST_TEST_DIR)/test_shell_split: tests/host/test_shell_split.c kernel/shell_sp
 	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
 
 $(HOST_TEST_DIR)/test_console_scroll: tests/host/test_console_scroll.c kernel/console_scroll.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
+
+$(HOST_TEST_DIR)/test_display_present: tests/host/test_display_present.c kernel/display_clip.c | $(HOST_TEST_DIR)
 	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
 
 $(HOST_TEST_DIR)/test_peakdisk: tests/host/test_peakdisk.c | $(HOST_TEST_DIR)

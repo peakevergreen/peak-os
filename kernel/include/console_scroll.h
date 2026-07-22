@@ -17,4 +17,7 @@
  */
 int console_scroll_plan(uint32_t fb_height, uint32_t glyph_h, uint32_t *copy_rows);
 
+/* Bytes copied when scrolling the CLI front buffer (pitch * copy_rows). */
+uint64_t console_scroll_bytes(uint32_t pitch, uint32_t copy_rows);
+
 #endif
