@@ -36,6 +36,9 @@ KERNEL_COMMON_SRCS := \
 	kernel/elf.c \
 	kernel/syscall.c \
 	kernel/agent.c \
+	kernel/agent_policy.c \
+	kernel/agent_tools.c \
+	kernel/agent_planner.c \
 	kernel/timer.c \
 	kernel/keyboard.c \
 	kernel/mouse.c \
@@ -89,6 +92,9 @@ KERNEL_COMMON_SRCS := \
 	kernel/user/utils_file.c \
 	kernel/user/utils_text.c \
 	kernel/user/utils_sys.c \
+	kernel/user/utils_agent.c \
+	kernel/user/utils_net.c \
+	kernel/user/utils_monitor.c \
 	kernel/user/utils_ctr.c \
 	kernel/user/utils_js.c \
 	kernel/gui/font.c \
