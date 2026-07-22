@@ -239,54 +239,71 @@ endif
 
 HOST_CFLAGS := -std=c11 -Wall -Wextra -Werror -O2
 HOST_CFLAGS_REDECL := $(HOST_CFLAGS) -Wno-incompatible-library-redeclaration
+HOST_TEST_DIR := $(BUILD)/tests
+HOST_TEST_JOBS ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+HOST_TEST_BINS := \
+	$(HOST_TEST_DIR)/test_phase7 \
+	$(HOST_TEST_DIR)/test_gfx \
+	$(HOST_TEST_DIR)/test_boot \
+	$(HOST_TEST_DIR)/test_lan \
+	$(HOST_TEST_DIR)/test_js \
+	$(HOST_TEST_DIR)/test_random \
+	$(HOST_TEST_DIR)/test_libpeak \
+	$(HOST_TEST_DIR)/test_shell_split \
+	$(HOST_TEST_DIR)/test_console_scroll \
+	$(HOST_TEST_DIR)/test_peakdisk
 
 test: test-host
+# Compile host tests in parallel; run them sequentially for deterministic output.
 test-host:
-	@mkdir -p $(BUILD)/tests
-	$(CC) $(HOST_CFLAGS) \
-		-o $(BUILD)/tests/test_phase7 tests/host/test_phase7.c
-	$(CC) $(HOST_CFLAGS) \
-		-o $(BUILD)/tests/test_gfx tests/host/test_gfx.c
-	$(CC) $(HOST_CFLAGS) -Iboot/include \
-		-o $(BUILD)/tests/test_boot tests/host/test_boot.c \
-		boot/common/elf_load.c boot/common/util.c
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
-		-Iboot/include \
-		-o $(BUILD)/tests/test_lan tests/host/test_lan.c \
-		kernel/net/dhcp_util.c kernel/net/http_util.c \
-		boot/common/peak_conf.c boot/common/util.c
-	$(CC) $(HOST_CFLAGS_REDECL) \
-		-DPEAK_HOST_TEST \
-		-Itests/host/include -Ikernel/include -Ikernel/js \
-		-o $(BUILD)/tests/test_js tests/host/test_js.c \
-		tests/host/js_host_stubs.c \
-		kernel/js/js_core.c kernel/js/js_compile.c kernel/js/js_vm.c
-	$(CC) $(HOST_CFLAGS_REDECL) \
-		-DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 \
-		-Itests/host/include -Iboot/include -Ikernel/include \
-		-o $(BUILD)/tests/test_random tests/host/test_random.c \
-		kernel/random.c kernel/net/crypto.c
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
-		-o $(BUILD)/tests/test_libpeak tests/host/test_libpeak.c \
-		kernel/user/libpeak.c
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
-		-o $(BUILD)/tests/test_shell_split tests/host/test_shell_split.c \
-		kernel/shell_split.c
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
-		-o $(BUILD)/tests/test_console_scroll tests/host/test_console_scroll.c \
-		kernel/console_scroll.c
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST \
-		-o $(BUILD)/tests/test_peakdisk tests/host/test_peakdisk.c
-	$(BUILD)/tests/test_phase7
-	$(BUILD)/tests/test_gfx
-	$(BUILD)/tests/test_boot
-	$(BUILD)/tests/test_lan
-	$(BUILD)/tests/test_js
-	$(BUILD)/tests/test_random
-	$(BUILD)/tests/test_libpeak
-	$(BUILD)/tests/test_shell_split
-	$(BUILD)/tests/test_console_scroll
-	$(BUILD)/tests/test_peakdisk
+	@$(MAKE) -j$(HOST_TEST_JOBS) $(HOST_TEST_BINS)
+	$(HOST_TEST_DIR)/test_phase7
+	$(HOST_TEST_DIR)/test_gfx
+	$(HOST_TEST_DIR)/test_boot
+	$(HOST_TEST_DIR)/test_lan
+	$(HOST_TEST_DIR)/test_js
+	$(HOST_TEST_DIR)/test_random
+	$(HOST_TEST_DIR)/test_libpeak
+	$(HOST_TEST_DIR)/test_shell_split
+	$(HOST_TEST_DIR)/test_console_scroll
+	$(HOST_TEST_DIR)/test_peakdisk
+
+$(HOST_TEST_DIR):
+	@mkdir -p $@
+
+$(HOST_TEST_DIR)/test_phase7: tests/host/test_phase7.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -o $@ $<
+
+$(HOST_TEST_DIR)/test_gfx: tests/host/test_gfx.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -o $@ $<
+
+$(HOST_TEST_DIR)/test_boot: tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -Iboot/include -o $@ $^
+
+$(HOST_TEST_DIR)/test_lan: tests/host/test_lan.c kernel/net/dhcp_util.c kernel/net/http_util.c \
+		boot/common/peak_conf.c boot/common/util.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -Iboot/include -o $@ $^
+
+$(HOST_TEST_DIR)/test_js: tests/host/test_js.c tests/host/js_host_stubs.c \
+		kernel/js/js_core.c kernel/js/js_compile.c kernel/js/js_vm.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
+		-Itests/host/include -Ikernel/include -Ikernel/js -o $@ $^
+
+$(HOST_TEST_DIR)/test_random: tests/host/test_random.c kernel/random.c kernel/net/crypto.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 \
+		-Itests/host/include -Iboot/include -Ikernel/include -o $@ $^
+
+$(HOST_TEST_DIR)/test_libpeak: tests/host/test_libpeak.c kernel/user/libpeak.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
+
+$(HOST_TEST_DIR)/test_shell_split: tests/host/test_shell_split.c kernel/shell_split.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
+
+$(HOST_TEST_DIR)/test_console_scroll: tests/host/test_console_scroll.c kernel/console_scroll.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
+
+$(HOST_TEST_DIR)/test_peakdisk: tests/host/test_peakdisk.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $<
 
 smoke:
 	./scripts/smoke-cli.sh
