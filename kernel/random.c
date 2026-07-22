@@ -276,7 +276,8 @@ void random_init(const struct peak_bootinfo *info) {
         status_flags |= RANDOM_READY_CRYPTO;
     else if (PEAK_DEV_INSECURE_RNG) {
         status_flags |= RANDOM_READY_CRYPTO | RANDOM_FLAG_WEAK;
-        serial_write_str("rng: DEV-INSECURE — crypto allowed with weak entropy\n");
+        serial_log(SERIAL_LOG_WARN,
+                   "rng: DEV-INSECURE — crypto allowed with weak entropy\n");
     } else {
         status_flags |= RANDOM_FLAG_WEAK;
     }
