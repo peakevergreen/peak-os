@@ -68,8 +68,10 @@ KERNEL_COMMON_SRCS := \
 	kernel/js/js_codegen.c \
 	kernel/js/js_parse.c \
 	kernel/js/js_vm.c \
-	kernel/gui/dom.c \
-	kernel/gui/css.c \
+	kernel/gui/dom_core.c \
+	kernel/gui/dom_parse.c \
+	kernel/gui/css_parse.c \
+	kernel/gui/css_layout.c \
 	kernel/gui/browser_js.c \
 	kernel/gui/browser_parse.c \
 	kernel/gui/webapi.c \
