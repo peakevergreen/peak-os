@@ -15,11 +15,21 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - name: Cache apt archives
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-iso-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install toolchain
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq clang lld llvm xorriso make python3 \
-            ca-certificates qemu-system-x86 ripgrep
+          sudo mkdir -p /var/cache/apt/archives
+          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
+            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
+          fi
+          chmod +x scripts/ci-install-deps.sh
+          ./scripts/ci-install-deps.sh iso
+          mkdir -p "$HOME/apt-archives"
+          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Doctor + ISO
         run: |
           export PATH="/usr/lib/llvm-*/bin:$PATH"
@@ -35,9 +45,7 @@ jobs:
           name: peak-os-iso
           path: |
             build/peak-os.iso
-            build/x86_64/kernel.elf
-            build/x86_64/boot/BOOTX64.EFI
-            build/x86_64/boot/peak-bios.bin
+            build/x86_64/
           retention-days: 7
 
   build-rpi:
@@ -45,11 +53,21 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - name: Cache apt archives
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-rpi-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install toolchain
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq clang lld llvm make python3 \
-            ca-certificates curl qemu-system-arm ripgrep
+          sudo mkdir -p /var/cache/apt/archives
+          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
+            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
+          fi
+          chmod +x scripts/ci-install-deps.sh
+          ./scripts/ci-install-deps.sh rpi
+          mkdir -p "$HOME/apt-archives"
+          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Doctor + pi-image
         run: |
           export PATH="/usr/lib/llvm-*/bin:$PATH"
@@ -65,7 +83,7 @@ jobs:
           name: peak-os-rpi-img
           path: |
             build/peak-os-rpi-arm64.img
-            build/aarch64/kernel8.img
+            build/aarch64/
             build/SHA256SUMS
           retention-days: 7
 
@@ -75,10 +93,21 @@ jobs:
     needs: [build-iso]
     steps:
       - uses: actions/checkout@v4
+      - name: Cache apt archives
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-host-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install tools
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq clang make python3 llvm xorriso ripgrep
+          sudo mkdir -p /var/cache/apt/archives
+          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
+            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
+          fi
+          chmod +x scripts/ci-install-deps.sh
+          ./scripts/ci-install-deps.sh host
+          mkdir -p "$HOME/apt-archives"
+          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download ISO artifact
         uses: actions/download-artifact@v4
         with:
@@ -87,20 +116,7 @@ jobs:
       - name: Tests
         run: |
           export PATH="/usr/lib/llvm-*/bin:$PATH"
-          # Restore nested layout if artifact flattened
-          mkdir -p build/x86_64/boot
-          if [ -f build/kernel.elf ] && [ ! -f build/x86_64/kernel.elf ]; then
-            mv build/kernel.elf build/x86_64/kernel.elf
-          fi
-          if [ -f build/BOOTX64.EFI ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
-            mv build/BOOTX64.EFI build/x86_64/boot/BOOTX64.EFI
-          fi
-          if [ -f build/BOOTX64.efi ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
-            mv build/BOOTX64.efi build/x86_64/boot/BOOTX64.EFI
-          fi
-          if [ -f build/peak-bios.bin ] && [ ! -f build/x86_64/boot/peak-bios.bin ]; then
-            mv build/peak-bios.bin build/x86_64/boot/peak-bios.bin
-          fi
+          test -f build/x86_64/kernel.elf
           make test-host
           chmod +x scripts/purity-check.sh
           ./scripts/purity-check.sh
@@ -110,7 +126,6 @@ jobs:
           test -f docs/verified-boot.md
           chmod +x scripts/fuzz-elf-smoke.sh
           ./scripts/fuzz-elf-smoke.sh
-          test -f build/x86_64/kernel.elf
           llvm-readelf -lW build/x86_64/kernel.elf | tee /tmp/phdrs.txt
           if grep ' RWE ' /tmp/phdrs.txt; then echo "RWX PHDR forbidden"; exit 1; fi
           chmod +x scripts/check-kernel-size.sh
@@ -126,10 +141,21 @@ jobs:
     needs: [build-iso]
     steps:
       - uses: actions/checkout@v4
+      - name: Cache apt archives
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-smoke-x86-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install QEMU
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 make
+          sudo mkdir -p /var/cache/apt/archives
+          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
+            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
+          fi
+          chmod +x scripts/ci-install-deps.sh
+          ./scripts/ci-install-deps.sh smoke-x86
+          mkdir -p "$HOME/apt-archives"
+          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download ISO
         uses: actions/download-artifact@v4
         with:
@@ -146,29 +172,29 @@ jobs:
     needs: [build-iso]
     steps:
       - uses: actions/checkout@v4
+      - name: Cache apt archives
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-smoke-uefi-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install QEMU + OVMF
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 ovmf make
+          sudo mkdir -p /var/cache/apt/archives
+          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
+            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
+          fi
+          chmod +x scripts/ci-install-deps.sh
+          ./scripts/ci-install-deps.sh smoke-uefi
+          mkdir -p "$HOME/apt-archives"
+          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download ISO
         uses: actions/download-artifact@v4
         with:
           name: peak-os-iso
           path: build/
-      - name: Restore nested artifacts
-        run: |
-          mkdir -p build/x86_64/boot
-          if [ -f build/kernel.elf ] && [ ! -f build/x86_64/kernel.elf ]; then
-            mv build/kernel.elf build/x86_64/kernel.elf
-          fi
-          if [ -f build/BOOTX64.EFI ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
-            mv build/BOOTX64.EFI build/x86_64/boot/BOOTX64.EFI
-          fi
-          if [ -f build/BOOTX64.efi ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
-            mv build/BOOTX64.efi build/x86_64/boot/BOOTX64.EFI
-          fi
       - name: Smoke UEFI
         run: |
+          test -f build/x86_64/kernel.elf || test -f build/peak-os.iso
           chmod +x scripts/smoke-qemu.sh
           OVMF_CODE=/usr/share/OVMF/OVMF_CODE.fd \
             PEAK_FIRMWARE=uefi TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
@@ -179,10 +205,21 @@ jobs:
     needs: [build-iso]
     steps:
       - uses: actions/checkout@v4
+      - name: Cache apt archives
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-smoke-peakfs-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install tools
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 clang lld llvm xorriso make
+          sudo mkdir -p /var/cache/apt/archives
+          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
+            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
+          fi
+          chmod +x scripts/ci-install-deps.sh
+          ./scripts/ci-install-deps.sh smoke-peakfs
+          mkdir -p "$HOME/apt-archives"
+          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download ISO
         uses: actions/download-artifact@v4
         with:
@@ -191,16 +228,7 @@ jobs:
       - name: PeakFS smoke
         run: |
           export PATH="/usr/lib/llvm-*/bin:$PATH"
-          mkdir -p build/x86_64/boot
-          if [ -f build/kernel.elf ] && [ ! -f build/x86_64/kernel.elf ]; then
-            mv build/kernel.elf build/x86_64/kernel.elf
-          fi
-          if [ -f build/BOOTX64.EFI ] && [ ! -f build/x86_64/boot/BOOTX64.EFI ]; then
-            mv build/BOOTX64.EFI build/x86_64/boot/BOOTX64.EFI
-          fi
-          if [ -f build/peak-bios.bin ] && [ ! -f build/x86_64/boot/peak-bios.bin ]; then
-            mv build/peak-bios.bin build/x86_64/boot/peak-bios.bin
-          fi
+          test -f build/x86_64/kernel.elf
           chmod +x scripts/smoke-peakfs.sh
           TIMEOUT_SEC=90 ./scripts/smoke-peakfs.sh
 
@@ -210,10 +238,21 @@ jobs:
     needs: [build-rpi]
     steps:
       - uses: actions/checkout@v4
+      - name: Cache apt archives
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-smoke-aarch64-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install QEMU
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-arm
+          sudo mkdir -p /var/cache/apt/archives
+          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
+            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
+          fi
+          chmod +x scripts/ci-install-deps.sh
+          ./scripts/ci-install-deps.sh smoke-aarch64
+          mkdir -p "$HOME/apt-archives"
+          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download Pi artifacts
         uses: actions/download-artifact@v4
         with:
@@ -221,9 +260,6 @@ jobs:
           path: build/
       - name: Smoke
         run: |
-          mkdir -p build/aarch64
-          if [ -f build/kernel8.img ] && [ ! -f build/aarch64/kernel8.img ]; then
-            mv build/kernel8.img build/aarch64/kernel8.img
-          fi
+          test -f build/aarch64/kernel8.img
           chmod +x scripts/smoke-aarch64.sh
           ./scripts/smoke-aarch64.sh
