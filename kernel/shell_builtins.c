@@ -162,6 +162,7 @@ static const struct help_entry help_table[] = {
     { "memory", "meta", "project memory" },
     { "policy", "meta", "agent policy" },
     { "privacy", "meta", "persist / net-allow / kill-switch" },
+    { "disksave", "meta", "save workspace to block device" },
     { "gui", "meta", "enter desktop (Ctrl+Alt+Esc leaves)" },
     { "ctr", "net", "stage Dockerfile subset; serve static HTTP (not OCI)" },
     { "ctrd", "net", "ping Peak ctr staging helper" },
@@ -179,7 +180,7 @@ void shell_help_topics(void) {
     console_write("  text  cat head tail wc grep hexdump strings echo edit clear\n");
     console_write("  sys   date free top sysmon ps env which seq sleep theme wallpaper scale\n");
     console_write("        uname true false sh reboot help man js\n");
-    console_write("  meta  peak ask audit memory policy privacy gui\n");
+    console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
     console_write("  net   ctr ctrd ifconfig ping wget\n");
     console_write("Try: man <cmd>   theme list   gui   ask \"...\"   js -e '1+1'\n");
 }

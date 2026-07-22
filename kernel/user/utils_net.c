@@ -1,4 +1,6 @@
+/* /bin network utilities: ifconfig, ping, wget. */
 #include "libpeak.h"
+#include "cap.h"
 #include "shell.h"
 #include "console.h"
 #include "net.h"
@@ -59,7 +61,6 @@ int uping_main(int argc, char **argv) {
 }
 
 int uwget_main(int argc, char **argv) {
-    extern void privacy_grant_net_client(int remember);
     privacy_grant_net_client(0);
     if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("wget", "<url>");

@@ -39,18 +39,9 @@
 #include "js.h"
 #include "random.h"
 #include "cap.h"
+#include "ubin.h"
 
 static int g_have_fb;
-
-/* Packed name list (avoids pointer tables in .rodata on aarch64). */
-static const char g_peak_bins_blob[] =
-    "sh\0ls\0cat\0edit\0peak\0pwd\0cd\0mkdir\0touch\0rm\0"
-    "cp\0mv\0ln\0stat\0du\0df\0truncate\0head\0tail\0wc\0"
-    "grep\0hexdump\0strings\0echo\0clear\0tree\0find\0date\0"
-    "free\0env\0export\0which\0seq\0sleep\0theme\0wallpaper\0scale\0"
-    "help\0man\0ask\0audit\0memory\0policy\0privacy\0gui\0uname\0"
-    "true\0false\0reboot\0ctr\0ctrd\0"
-    "ping\0ifconfig\0wget\0top\0sysmon\0ps\0js\0";
 
 static void hang(void) {
     for (;;)
@@ -153,19 +144,7 @@ void kernel_entry(struct peak_bootinfo *info) {
     vfs_seed_defaults();
     status_ok("Virtual filesystem");
 
-    for (const char *n = g_peak_bins_blob; *n; ) {
-        char path[64];
-        char *p = path;
-        const char *pfx = "/bin/";
-        while (*pfx)
-            *p++ = *pfx++;
-        while (*n && p < path + sizeof(path) - 1)
-            *p++ = *n++;
-        *p = '\0';
-        if (*n == '\0')
-            n++; /* advance past NUL to next name or end */
-        (void)vfs_write_file(path, "PEAKBUILTIN", 11);
-    }
+    ubin_seed_vfs();
     status_ok("Core utilities");
 
     arch_fpu_init();

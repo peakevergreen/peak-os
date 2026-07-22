@@ -1,3 +1,4 @@
+/* /bin file utilities: mkdir, touch, rm, cp, mv, ln, stat, du, df, truncate. */
 #include "libpeak.h"
 #include "vfs.h"
 #include "shell.h"
