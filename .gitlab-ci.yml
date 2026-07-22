@@ -1,17 +1,21 @@
 # Peak OS CI — x86 ISO + aarch64 Pi image on every push/MR
-# Requires: clang, lld, xorriso, make, python3, qemu-system-aarch64
+# Shared install profiles: scripts/ci-install-deps.sh (keep in sync with GitHub Actions)
 
 stages:
   - build
   - test
 
+.build_apt: &build_apt
+  before_script:
+    - chmod +x scripts/ci-install-deps.sh
+    - ./scripts/ci-install-deps.sh $CI_DEPS_PROFILE
+
 build-iso:
   stage: build
   image: debian:bookworm-slim
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq clang lld llvm xorriso make python3 ca-certificates
-      qemu-system-x86 ripgrep
+  variables:
+    CI_DEPS_PROFILE: iso
+  <<: *build_apt
   script:
     - export PATH="$(dirname $(command -v clang)):$PATH"
     - make ARCH=x86_64 doctor
@@ -24,18 +28,15 @@ build-iso:
   artifacts:
     paths:
       - build/peak-os.iso
-      - build/x86_64/kernel.elf
-      - build/x86_64/boot/peak-bios.bin
-      - build/x86_64/boot/BOOTX64.EFI
+      - build/x86_64/
     expire_in: 1 week
 
 build-rpi:
   stage: build
   image: debian:bookworm-slim
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq clang lld llvm make python3 ca-certificates curl
-      qemu-system-arm ripgrep
+  variables:
+    CI_DEPS_PROFILE: rpi
+  <<: *build_apt
   script:
     - export PATH="$(dirname $(command -v clang)):$PATH"
     - make ARCH=aarch64 PLATFORM=rpi doctor
@@ -48,7 +49,7 @@ build-rpi:
   artifacts:
     paths:
       - build/peak-os-rpi-arm64.img
-      - build/aarch64/kernel8.img
+      - build/aarch64/
       - build/SHA256SUMS
     expire_in: 1 week
     when: on_success
@@ -58,10 +59,11 @@ host-tests:
   image: debian:bookworm-slim
   needs:
     - build-iso
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq clang make python3 llvm xorriso ripgrep
+  variables:
+    CI_DEPS_PROFILE: host
+  <<: *build_apt
   script:
+    - test -f build/x86_64/kernel.elf
     - make test-host
     - chmod +x scripts/purity-check.sh
     - ./scripts/purity-check.sh
@@ -71,7 +73,6 @@ host-tests:
     - test -f docs/verified-boot.md
     - chmod +x scripts/fuzz-elf-smoke.sh
     - ./scripts/fuzz-elf-smoke.sh
-    - test -f build/x86_64/kernel.elf
     - llvm-readelf -lW build/x86_64/kernel.elf | tee /tmp/phdrs.txt
     - if grep ' RWE ' /tmp/phdrs.txt; then echo "RWX PHDR forbidden"; exit 1; fi
     - chmod +x scripts/check-kernel-size.sh
@@ -86,9 +87,9 @@ smoke-bios:
   image: debian:bookworm-slim
   needs:
     - build-iso
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq qemu-system-x86 make
+  variables:
+    CI_DEPS_PROFILE: smoke-x86
+  <<: *build_apt
   script:
     - chmod +x scripts/smoke-qemu.sh
     - PEAK_FIRMWARE=bios TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
@@ -98,9 +99,9 @@ smoke-uefi:
   image: debian:bookworm-slim
   needs:
     - build-iso
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq qemu-system-x86 ovmf make
+  variables:
+    CI_DEPS_PROFILE: smoke-uefi
+  <<: *build_apt
   script:
     - chmod +x scripts/smoke-qemu.sh
     - OVMF_CODE=/usr/share/OVMF/OVMF_CODE.fd
@@ -111,11 +112,12 @@ smoke-peakfs:
   image: debian:bookworm-slim
   needs:
     - build-iso
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq qemu-system-x86 clang lld llvm xorriso make
+  variables:
+    CI_DEPS_PROFILE: smoke-peakfs
+  <<: *build_apt
   script:
     - export PATH="$(dirname $(command -v clang)):$PATH"
+    - test -f build/x86_64/kernel.elf
     - chmod +x scripts/smoke-peakfs.sh
     - TIMEOUT_SEC=90 ./scripts/smoke-peakfs.sh
 
@@ -124,9 +126,10 @@ smoke-aarch64:
   image: debian:bookworm-slim
   needs:
     - build-rpi
-  before_script:
-    - apt-get update -qq
-    - apt-get install -y -qq qemu-system-arm
+  variables:
+    CI_DEPS_PROFILE: smoke-aarch64
+  <<: *build_apt
   script:
+    - test -f build/aarch64/kernel8.img
     - chmod +x scripts/smoke-aarch64.sh
     - ./scripts/smoke-aarch64.sh
