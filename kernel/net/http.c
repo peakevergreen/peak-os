@@ -2,6 +2,7 @@
 #include "net_internal.h"
 #include "tls.h"
 #include "cap.h"
+#include "privacy.h"
 #include "timer.h"
 #include "util.h"
 

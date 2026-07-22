@@ -10,6 +10,10 @@ static uint64_t set_tick;
 static uint64_t ttl_ticks = 3000; /* ~30s at 100Hz */
 
 void clipboard_init(void) {
+    clipboard_clear();
+}
+
+void clipboard_clear(void) {
     memzero_explicit(buf, sizeof(buf));
     len = 0;
     set_tick = 0;

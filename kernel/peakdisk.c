@@ -7,6 +7,7 @@
 #include "serial.h"
 #include "sched.h"
 #include "cap.h"
+#include "privacy.h"
 #include "crypto.h"
 #include "random.h"
 

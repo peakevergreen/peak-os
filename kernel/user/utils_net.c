@@ -1,6 +1,7 @@
 /* /bin network utilities: ifconfig, ping, wget. */
 #include "libpeak.h"
 #include "cap.h"
+#include "privacy.h"
 #include "shell.h"
 #include "console.h"
 #include "net.h"

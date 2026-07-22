@@ -1,6 +1,7 @@
 #include "ctr.h"
 #include "http_util.h"
 #include "net.h"
+#include "privacy.h"
 #include "vfs.h"
 #include "util.h"
 
@@ -449,8 +450,6 @@ int ctr_run(const char *image, const char *name, const char *port,
     if (!image || !name || !port)
         return -1;
     /* Explicit ctr run = localhost listen consent (not LAN). */
-    extern void privacy_grant_net_listen(int lan, int remember);
-    extern void privacy_set_listeners_localhost_only(int on);
     privacy_set_listeners_localhost_only(1);
     privacy_grant_net_listen(0, 0);
 

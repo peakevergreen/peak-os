@@ -1,5 +1,6 @@
 #include "browser.h"
 #include "browser_internal.h"
+#include "privacy.h"
 #include "browser_js.h"
 #include "webapi.h"
 #include "ctr.h"
@@ -266,7 +267,6 @@ void browser_reset(void) {
 }
 
 void browser_go(const char *url) {
-    extern void privacy_grant_net_client(int remember);
     privacy_grant_net_client(0);
     struct br_tab *t = cur();
     char norm[BR_URL_MAX];
