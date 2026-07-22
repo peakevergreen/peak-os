@@ -31,4 +31,7 @@ void shell_env_list(void);
 void shell_help_topics(void);
 void shell_help_cmd(const char *cmd);
 
+/* Default env + cwd; called from shell_init(). */
+void shell_builtins_init(void);
+
 #endif
