@@ -3,6 +3,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source=scripts/smoke-common.sh
+source "$ROOT/scripts/smoke-common.sh"
 export PATH="/opt/homebrew/opt/llvm/bin:/usr/local/opt/llvm/bin:/opt/homebrew/bin:${PATH:-}"
 
 DISK="${DISK:-build/peak-smoke-persist.img}"
@@ -49,26 +51,14 @@ run_once() {
     -netdev user,id=n0 \
     >/dev/null 2>&1 &
   local qpid=$!
-  local deadline=$((SECONDS + TIMEOUT_SEC))
-  local ok=0
-  while (( SECONDS < deadline )); do
-    if [[ -f "$log" ]] && grep -q "$want" "$log" 2>/dev/null; then
-      ok=1
-      break
-    fi
-    if ! kill -0 "$qpid" 2>/dev/null; then
-      break
-    fi
-    sleep 0.5
-  done
-  sleep 2
-  kill "$qpid" 2>/dev/null || true
-  wait "$qpid" 2>/dev/null || true
-  if [[ "$ok" != "1" ]]; then
+  if ! smoke_wait_serial "$log" "$want" "$qpid" "$TIMEOUT_SEC"; then
+    smoke_qemu_kill "$qpid"
     echo "FAIL: did not see '$want' in $log"
     tail -60 "$log" || true
     exit 1
   fi
+  sleep 2
+  smoke_qemu_kill "$qpid"
   echo "ok: $want"
 }
 
