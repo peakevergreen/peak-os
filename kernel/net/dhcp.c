@@ -114,7 +114,8 @@ int net_dhcp_try(uint32_t timeout_ticks) {
         if (boot_net.mode == PEAK_NET_DHCP_ONLY)
             return PEAK_EDHCP;
         net_apply_static_fallback("fallback");
-        serial_write_str("net: DHCP discover send failed; using fallback\n");
+        serial_log_once(SERIAL_LOG_INFO, "dhcp.discover_fail",
+                          "net: DHCP discover send failed; using fallback\n");
         return 0;
     }
 
@@ -130,7 +131,8 @@ int net_dhcp_try(uint32_t timeout_ticks) {
         if (boot_net.mode == PEAK_NET_DHCP_ONLY)
             return PEAK_EDHCP;
         net_apply_static_fallback("fallback");
-        serial_write_str("net: DHCP timeout; using fallback\n");
+        serial_log_once(SERIAL_LOG_INFO, "dhcp.timeout",
+                          "net: DHCP timeout; using fallback\n");
         return 0;
     }
 
@@ -157,7 +159,8 @@ int net_dhcp_try(uint32_t timeout_ticks) {
         if (boot_net.mode == PEAK_NET_DHCP_ONLY)
             return PEAK_EDHCP;
         net_apply_static_fallback("fallback");
-        serial_write_str("net: DHCP ACK missing; using fallback\n");
+        serial_log_once(SERIAL_LOG_INFO, "dhcp.no_ack",
+                          "net: DHCP ACK missing; using fallback\n");
         return 0;
     }
 

@@ -387,14 +387,10 @@ static int register_hub(uint8_t addr, uint8_t speed, uint8_t *cfg, int cfg_len) 
         i += dlen;
     }
 
-    serial_write_str("usb: hub @");
-    char b[8];
-    itoa_u(addr, b, 10);
-    serial_write_str(b);
-    serial_write_str(" ports=");
-    itoa_u(nports, b, 10);
-    serial_write_str(b);
-    serial_write_str("\n");
+    char hub_msg[48];
+    snprintf(hub_msg, sizeof(hub_msg), "usb: hub @%u ports=%u\n",
+             (unsigned)addr, (unsigned)nports);
+    serial_log(SERIAL_LOG_DEBUG, hub_msg);
 
     for (uint8_t p = 1; p <= nports; p++) {
         (void)hub_set_port_feature(h, p, HUB_PORT_POWER);
@@ -500,7 +496,8 @@ static void hub_poll_ports(void) {
                 clear_hid_for_addr(child);
                 h->port_child[p - 1] = 0;
                 h->port_seen[p - 1] = 0;
-                serial_write_str("usb: hub port disconnect\n");
+                serial_log_rl(SERIAL_LOG_DEBUG, 100,
+                              "usb: hub port disconnect\n");
                 (void)hub_clear_port_feature(h, p, HUB_C_PORT_CONNECTION);
             } else if (connected && !child) {
                 (void)hub_clear_port_feature(h, p, HUB_C_PORT_CONNECTION);
@@ -519,7 +516,8 @@ static void hub_poll_ports(void) {
                 if (enum_device_ex(h->addr, p, child_speed, &naddr) == 0) {
                     h->port_child[p - 1] = naddr;
                     h->port_seen[p - 1] = 1;
-                    serial_write_str("usb: hub port hotplug\n");
+                    serial_log_rl(SERIAL_LOG_DEBUG, 100,
+                                  "usb: hub port hotplug\n");
                 }
             }
         }
@@ -533,7 +531,7 @@ int dwc2_init(void) {
     next_addr = 1;
     memset(hubs, 0, sizeof(hubs));
     if (!base) {
-        serial_write_str("dwc2: no base\n");
+        serial_log(SERIAL_LOG_WARN, "dwc2: no base\n");
         return -1;
     }
     dwc = (volatile uint32_t *)(uintptr_t)base;
@@ -552,12 +550,12 @@ int dwc2_init(void) {
     dwc_write(DWC2_HPRT0, hprt);
     dwc_write(DWC2_GINTSTS, 0xffffffffu);
     dwc_ok = 1;
-    serial_write_str("dwc2: host init\n");
+    serial_log(SERIAL_LOG_DEBUG, "dwc2: host init\n");
 
     for (int i = 0; i < 10; i++) {
         hprt = dwc_read(DWC2_HPRT0);
         if (hprt & 1u) {
-            serial_write_str("dwc2: device connected\n");
+            serial_log(SERIAL_LOG_DEBUG, "dwc2: device connected\n");
             hprt |= (1u << 8);
             dwc_write(DWC2_HPRT0, hprt);
             delay_spin(500000);
