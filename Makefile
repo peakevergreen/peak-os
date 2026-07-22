@@ -275,7 +275,8 @@ HOST_TEST_BINS := \
 	$(HOST_TEST_DIR)/test_libpeak \
 	$(HOST_TEST_DIR)/test_shell_split \
 	$(HOST_TEST_DIR)/test_console_scroll \
-	$(HOST_TEST_DIR)/test_peakdisk
+	$(HOST_TEST_DIR)/test_peakdisk \
+	$(HOST_TEST_DIR)/test_peakvec
 
 test: test-host
 # Compile host tests in parallel; run them sequentially for deterministic output.
@@ -292,6 +293,7 @@ test-host:
 	$(HOST_TEST_DIR)/test_shell_split
 	$(HOST_TEST_DIR)/test_console_scroll
 	$(HOST_TEST_DIR)/test_peakdisk
+	$(HOST_TEST_DIR)/test_peakvec
 
 $(HOST_TEST_DIR):
 	@mkdir -p $@
@@ -335,6 +337,11 @@ $(HOST_TEST_DIR)/test_console_scroll: tests/host/test_console_scroll.c kernel/co
 
 $(HOST_TEST_DIR)/test_peakdisk: tests/host/test_peakdisk.c | $(HOST_TEST_DIR)
 	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $<
+
+$(HOST_TEST_DIR)/test_peakvec: tests/host/test_peakvec.c tests/host/peakvec_host_stubs.c \
+		kernel/peakvec.c | $(HOST_TEST_DIR)
+	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
+		-Itests/host/include -Ikernel/include -o $@ $^
 
 smoke:
 	./scripts/smoke-cli.sh

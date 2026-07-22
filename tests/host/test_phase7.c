@@ -278,49 +278,7 @@ int main(void) {
     expect(tcp_flags_syn_ack(0x12), "syn+ack");
     expect(!tcp_flags_syn_ack(0x02), "syn alone");
 
-    /* PeakVec hashed embed + cosine (mirrors kernel/peakvec.c) */
-    {
-        enum { DIM = 64 };
-        int16_t a[DIM], b[DIM], z[DIM];
-        /* Local mirror of peakvec_embed_text (unigram hash). */
-        #define EMBED(text, out) do { \
-            int32_t acc[DIM]; memset(acc, 0, sizeof(acc)); \
-            for (const char *_p = (text); *_p; _p++) { \
-                unsigned char c = (unsigned char)*_p; \
-                if (c >= 'A' && c <= 'Z') c = (unsigned char)(c - 'A' + 'a'); \
-                if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) continue; \
-                uint32_t h = 5381u; \
-                for (const char *_q = _p; *_q; _q++) { \
-                    unsigned char d = (unsigned char)*_q; \
-                    if (d >= 'A' && d <= 'Z') d = (unsigned char)(d - 'A' + 'a'); \
-                    if (!((d >= 'a' && d <= 'z') || (d >= '0' && d <= '9'))) break; \
-                    h = ((h << 5) + h) + d; \
-                } \
-                acc[h % DIM] += 3; \
-            } \
-            int64_t sumsq = 0; for (int _i = 0; _i < DIM; _i++) sumsq += (int64_t)acc[_i]*acc[_i]; \
-            uint64_t root = 1; while (root * root < (uint64_t)sumsq) root++; \
-            if (!root) root = 1; \
-            for (int _i = 0; _i < DIM; _i++) { \
-                int64_t v = ((int64_t)acc[_i] * 10000) / (int64_t)root; \
-                if (v > 32767) v = 32767; if (v < -32768) v = -32768; \
-                (out)[_i] = (int16_t)v; \
-            } \
-        } while (0)
-        EMBED("create fibonacci helper", a);
-        EMBED("create fibonacci helper", b);
-        EMBED("unrelated gardening tips", z);
-        int64_t dot_ab = 0, dot_az = 0, na = 0, nb = 0;
-        for (int i = 0; i < DIM; i++) {
-            dot_ab += (int64_t)a[i] * b[i];
-            dot_az += (int64_t)a[i] * z[i];
-            na += (int64_t)a[i] * a[i];
-            nb += (int64_t)b[i] * b[i];
-        }
-        expect(dot_ab > 0 && na > 0 && nb > 0, "identical goals embed similarly");
-        expect(dot_ab >= dot_az, "related goal scores >= unrelated");
-        #undef EMBED
-    }
+    /* PeakVec embed/query: see tests/host/test_peakvec.c (links kernel/peakvec.c). */
 
     /* Agent intent keywords (mirrors classify_intent) */
     {
