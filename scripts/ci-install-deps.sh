@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared apt install profiles for GitHub Actions + GitLab CI.
 # Usage: ./scripts/ci-install-deps.sh <profile>
-# Profiles: iso | rpi | host | smoke-x86 | smoke-uefi | smoke-peakfs | smoke-aarch64
+# Profiles: iso | rpi | host | smoke-qemu | smoke-peakfs | smoke-aarch64
 set -euo pipefail
 
 PROFILE="${1:?usage: ci-install-deps.sh <profile>}"
@@ -30,10 +30,7 @@ case "$PROFILE" in
   host)
     apt_install clang make python3 llvm xorriso ripgrep
     ;;
-  smoke-x86)
-    apt_install qemu-system-x86 make
-    ;;
-  smoke-uefi)
+  smoke-qemu)
     apt_install qemu-system-x86 ovmf make
     ;;
   smoke-peakfs)

@@ -135,8 +135,8 @@ jobs:
           chmod +x scripts/smoke-cli.sh
           PEAK_SKIP_ISO=1 PEAK_SKIP_HOST_TESTS=1 ./scripts/smoke-cli.sh
 
-  smoke-bios:
-    name: QEMU BIOS smoke
+  smoke-qemu:
+    name: QEMU BIOS + UEFI smoke
     runs-on: ubuntu-22.04
     needs: [build-iso]
     steps:
@@ -145,38 +145,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/apt-archives
-          key: apt-smoke-x86-${{ hashFiles('scripts/ci-install-deps.sh') }}
-      - name: Install QEMU
-        run: |
-          sudo mkdir -p /var/cache/apt/archives
-          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
-            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
-          fi
-          chmod +x scripts/ci-install-deps.sh
-          ./scripts/ci-install-deps.sh smoke-x86
-          mkdir -p "$HOME/apt-archives"
-          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
-      - name: Download ISO
-        uses: actions/download-artifact@v4
-        with:
-          name: peak-os-iso
-          path: build/
-      - name: Smoke
-        run: |
-          chmod +x scripts/smoke-qemu.sh
-          PEAK_FIRMWARE=bios TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
-
-  smoke-uefi:
-    name: QEMU UEFI smoke
-    runs-on: ubuntu-22.04
-    needs: [build-iso]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Cache apt archives
-        uses: actions/cache@v4
-        with:
-          path: ~/apt-archives
-          key: apt-smoke-uefi-${{ hashFiles('scripts/ci-install-deps.sh') }}
+          key: apt-smoke-qemu-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install QEMU + OVMF
         run: |
           sudo mkdir -p /var/cache/apt/archives
@@ -184,7 +153,7 @@ jobs:
             sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
           fi
           chmod +x scripts/ci-install-deps.sh
-          ./scripts/ci-install-deps.sh smoke-uefi
+          ./scripts/ci-install-deps.sh smoke-qemu
           mkdir -p "$HOME/apt-archives"
           sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download ISO
@@ -192,12 +161,11 @@ jobs:
         with:
           name: peak-os-iso
           path: build/
-      - name: Smoke UEFI
+      - name: Smoke BIOS + UEFI
         run: |
-          test -f build/x86_64/kernel.elf || test -f build/peak-os.iso
-          chmod +x scripts/smoke-qemu.sh
+          chmod +x scripts/smoke-qemu.sh scripts/smoke-common.sh
           OVMF_CODE=/usr/share/OVMF/OVMF_CODE.fd \
-            PEAK_FIRMWARE=uefi TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
+            PEAK_FIRMWARE=both TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
 
   smoke-peakfs:
     name: QEMU PeakFS roundtrip
