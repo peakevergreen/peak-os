@@ -1,0 +1,6 @@
+/* Peak JS conformance fixture — basic language */
+var sum = 0;
+for (var i = 0; i < 5; i = i + 1) {
+  sum = sum + i;
+}
+sum; /* expect 10 */

@@ -3,6 +3,7 @@
 #include "gui.h"
 #include "serial.h"
 #include "shell.h"
+#include "theme.h"
 #include "util.h"
 #include <stdarg.h>
 
@@ -12,12 +13,17 @@ static uint32_t fg_color, bg_color;
 
 void console_init(void) {
     struct framebuffer *fb = fb_get();
-    cols = (uint32_t)(fb->width / 8);
-    rows = (uint32_t)(fb->height / 16);
+    uint32_t cw = fb_cell_w();
+    uint32_t ch = fb_cell_h();
+    cols = cw ? (uint32_t)(fb->width / cw) : 1;
+    rows = ch ? (uint32_t)(fb->height / ch) : 1;
+    if (cols < 1) cols = 1;
+    if (rows < 1) rows = 1;
     cursor_row = 0;
     cursor_col = 0;
-    fg_color = fb_rgb(0xE8, 0xEC, 0xF0);
-    bg_color = fb_rgb(0x0B, 0x1A, 0x12);
+    const struct peak_theme *t = theme_get();
+    fg_color = t->fg;
+    bg_color = t->bg;
     console_clear();
 }
 
@@ -39,14 +45,23 @@ void console_get_cursor(uint32_t *row, uint32_t *col) {
 
 static void scroll(void) {
     struct framebuffer *fb = fb_get();
+    uint32_t glyph_h = fb_cell_h();
+    uint32_t h = (uint32_t)fb->height;
+    if (glyph_h == 0 || h <= glyph_h)
+        return;
+
+    /*
+     * CLI draws glyphs to the *front* buffer (not in a compose frame).
+     * Scrolling the compositor back buffer and presenting it would wipe
+     * the visible boot log with a stale/empty back — keep CLI on front.
+     */
     uint32_t line_bytes = (uint32_t)fb->pitch;
-    uint32_t glyph_h = 16;
-    for (uint32_t y = 0; y < fb->height - glyph_h; y++) {
+    for (uint32_t y = 0; y < h - glyph_h; y++) {
         uint8_t *dst = fb->addr + y * fb->pitch;
         uint8_t *src = fb->addr + (y + glyph_h) * fb->pitch;
         memcpy(dst, src, line_bytes);
     }
-    fb_fill_rect(0, (uint32_t)(fb->height - glyph_h), (uint32_t)fb->width, glyph_h, bg_color);
+    fb_fill_rect(0, h - glyph_h, (uint32_t)fb->width, glyph_h, bg_color);
     if (cursor_row > 0)
         cursor_row--;
 }
@@ -57,6 +72,8 @@ void console_putc(char c) {
         gui_term_putc(c);
         return;
     }
+    uint32_t cw = fb_cell_w();
+    uint32_t ch = fb_cell_h();
     if (c == '\n') {
         cursor_col = 0;
         cursor_row++;
@@ -78,7 +95,7 @@ void console_putc(char c) {
         }
         return;
     }
-    fb_draw_char(cursor_col * 8, cursor_row * 16, c, fg_color, bg_color);
+    fb_draw_char(cursor_col * cw, cursor_row * ch, c, fg_color, bg_color);
     cursor_col++;
     if (cursor_col >= cols) {
         cursor_col = 0;
@@ -93,6 +110,8 @@ void console_backspace(void) {
         gui_term_putc('\b');
         return;
     }
+    uint32_t cw = fb_cell_w();
+    uint32_t ch = fb_cell_h();
     if (cursor_col > 0) {
         cursor_col--;
     } else if (cursor_row > 0) {
@@ -101,12 +120,77 @@ void console_backspace(void) {
     } else {
         return;
     }
-    fb_draw_char(cursor_col * 8, cursor_row * 16, ' ', fg_color, bg_color);
+    fb_draw_char(cursor_col * cw, cursor_row * ch, ' ', fg_color, bg_color);
 }
 
 void console_write(const char *s) {
     while (*s)
         console_putc(*s++);
+}
+
+/* Gentoo brand: purple brackets + green ok (classic emerge/OpenRC feel). */
+static uint32_t gentoo_purple(void) { return fb_rgb(0x88, 0x66, 0xCC); }
+static uint32_t gentoo_green(void)  { return fb_rgb(0x39, 0xB5, 0x4A); }
+static uint32_t gentoo_bad(void)    { return fb_rgb(0xCC, 0x33, 0x33); }
+
+static void console_write_fg(uint32_t fg, const char *s) {
+    uint32_t old = fg_color;
+    fg_color = fg;
+    console_write(s);
+    fg_color = old;
+}
+
+static void console_status(const char *msg, int ok) {
+    if (!msg)
+        msg = "";
+    /* " * msg" then pad so "[ ok ]" ends at cols-1 without auto-wrap + newline. */
+    console_write(" ");
+    console_write_fg(gentoo_green(), "*");
+    console_write(" ");
+    console_write(msg);
+
+    size_t msg_len = strlen(msg);
+    size_t used = 3 + msg_len; /* space + * + space + msg */
+    size_t tag_len = 6;         /* "[ ok ]" / "[ !! ]" */
+    uint32_t pad = 1;
+    if (cols > used + tag_len)
+        pad = (uint32_t)(cols - used - tag_len - 1);
+
+    for (uint32_t i = 0; i < pad; i++)
+        console_putc(' ');
+
+    uint32_t br = gentoo_purple();
+    uint32_t mid = ok ? gentoo_green() : gentoo_bad();
+    console_write_fg(br, "[");
+    console_write_fg(mid, ok ? " ok " : " !! ");
+    console_write_fg(br, "]");
+    console_putc('\n');
+}
+
+void console_boot_logo(void) {
+    static const char *lines[] = {
+        " ____  _____    _    _  __     ___  ____",
+        "|  _ \\| ____|  / \\  | |/ /    / _ \\/ ___|",
+        "| |_) |  _|   / _ \\ | ' /    | | | \\___ \\",
+        "|  __/| |___ / ___ \\| . \\    | |_| |___) |",
+        "|_|   |_____/_/   \\_\\_|\\_\\    \\___/|____/",
+        NULL
+    };
+    console_write("\n");
+    for (int i = 0; lines[i]; i++) {
+        console_write("  ");
+        console_write(lines[i]);
+        console_write("\n");
+    }
+    console_write("\n");
+}
+
+void console_status_ok(const char *msg) {
+    console_status(msg, 1);
+}
+
+void console_status_fail(const char *msg) {
+    console_status(msg, 0);
 }
 
 void console_printf(const char *fmt, ...) {

@@ -1,33 +1,53 @@
-# Peak OS Roadmap — AI-first developer OS (from-scratch)
+# Peak OS roadmap — what’s next
 
-Direction: stay on the from-scratch kernel. Agents, tools, and project context become **system primitives**.
+Direction: stay on the from-scratch kernel. Agents, tools, and project context are **system primitives**. Inference stays an **in-guest** planner (no host LLM bridge by default).
 
-Inference (early): **host-bridged** — guest speaks Peak Agent Protocol over a second serial port (COM2) to a Mac-side proxy that calls LLM APIs. In-guest HTTPS comes later.
+Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [ARCHITECTURE.md](../ARCHITECTURE.md).
 
-## Phases
+## Near term
 
-| Phase | Goal | Status |
-|-------|------|--------|
-| 0 | Freeze MVP (`v0.1.0-mvp`), architecture + roadmap docs | this tree |
-| 1 | Heap, VMM, scheduler, VFS ramdisk, ELF + syscalls, userspace `sh` | in progress |
-| 2 | `/home/dev/workspace`, `ls`/`cat`/`edit`, desktop → userspace shell | planned |
-| 3 | `peak-agent`, tools, audit log, `ask` (mock planner) | planned |
-| 4 | Host proxy + agent.policy over serial bridge | planned |
-| 5 | GUI agent panel, project memory, CI/onboarding | planned |
+### Raspberry Pi
+
+- Complete **Pi 3** HDMI / USB HID / PeakFS persist acceptance from a clean checkout — [scripts/pi3-hw-checklist.md](../scripts/pi3-hw-checklist.md), [rpi.md](rpi.md)
+- Finish **USB LAN / GENET / RP1 GEM** datapaths and **SDIO Wi‑Fi** association
+- Pi 5 high MMIO / peri bring-up when mapped; xHCI rings still absent
+- Enable aarch64 **userspace ELF** (`eret` entry) when ready
+
+### Security (Phase S remainder)
+
+- **S8:** verified boot, signed releases, A/B rollback — [verified-boot.md](verified-boot.md)
+- **S9:** release acceptance beyond CI smoke (signed artifacts, continuous fuzz corpus)
+
+### Browser / JS
+
+- Full **ring-3** script isolation (validated DOM/net handles)
+- ES modules / `async`/`await` depth + more public-site fixtures
+
+### Userspace & networking
+
+- Deeper ring-3 `/bin/sh` ELF workload + per-process fds
+- **virtio-net** (replace e1000) + richer socket API
+
+### Agent / storage
+
+- Optional opt-in remote LLM over TLS (**never** default)
+- PeakVec ANN when corpora grow
+- VFS large-file back-end on blobstore (beyond PeakVec)
+
+### Desktop GFX (only if needed)
+
+Software FB compositor is in tree; stress bar: [scripts/gui-stress-checklist.md](../scripts/gui-stress-checklist.md). Defer unless Monitor/`compose_us` shows a new bottleneck:
+
+- Hardware cursor plane
+- Triple-buffer on x86
+- Occlusion culling / Wayland / multi-monitor / GPU accel
 
 ## North star
 
 ```
-userspace shell ──► peak-agent ──► tools (fs/exec)
-                       │
-                       ▼
-                 host proxy (Mac) ──► LLM API / Ollama
+userspace shell ──► peak-agent (local) ──► tools (fs/exec)
 ```
 
 Primitives: **workspace**, **agent** (capability bits), **action log**, **session memory** under `/var/peak/`.
 
-## Non-goals (near term)
-
-Linux ABI, full POSIX, package managers, in-kernel LLM weights, GPU drivers.
-
-See also: [ARCHITECTURE.md](../ARCHITECTURE.md), [docs/agent-protocol.md](agent-protocol.md).
+See also: [security-model.md](security-model.md), [agent-protocol.md](agent-protocol.md), [browser-js.md](browser-js.md), [rpi.md](rpi.md).

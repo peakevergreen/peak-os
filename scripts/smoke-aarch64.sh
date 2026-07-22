@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Headless aarch64 serial smoke.
+# Prefer QEMU raspi3b (Pi load address + PL011); fall back to virt + virt UART.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+KERNEL=build/aarch64/kernel8.img
+if [[ ! -f "$KERNEL" ]]; then
+  make ARCH=aarch64 kernel8
+fi
+
+LOG=$(mktemp)
+TIMEOUT_SEC=${PEAK_SMOKE_TIMEOUT:-20}
+DTB=third_party/rpi-firmware/bcm2710-rpi-3-b.dtb
+
+run_raspi3b() {
+  local args=(-machine raspi3b -cpu cortex-a53 -m 1024 -nographic -kernel "$KERNEL")
+  if [[ -f "$DTB" ]]; then
+    args+=(-dtb "$DTB")
+  fi
+  qemu-system-aarch64 "${args[@]}"
+}
+
+run_virt() {
+  # Load at Pi phys address; set PC; UART is pl011 at 0x09000000 (kernel detects "virt")
+  qemu-system-aarch64 \
+    -machine virt,gic-version=3 \
+    -cpu cortex-a72 \
+    -m 1024 \
+    -nographic \
+    -device loader,file="$KERNEL",addr=0x80000 \
+    -device loader,addr=0x80000,cpu-num=0
+}
+
+set +e
+if qemu-system-aarch64 -machine help 2>/dev/null | grep -q raspi3b; then
+  RUN=run_raspi3b
+else
+  RUN=run_virt
+fi
+
+if command -v timeout >/dev/null 2>&1; then
+  timeout "$TIMEOUT_SEC" $RUN >"$LOG" 2>&1
+elif command -v gtimeout >/dev/null 2>&1; then
+  gtimeout "$TIMEOUT_SEC" $RUN >"$LOG" 2>&1
+else
+  $RUN >"$LOG" 2>&1 &
+  qpid=$!
+  (
+    sleep "$TIMEOUT_SEC"
+    kill "$qpid" 2>/dev/null || true
+    sleep 1
+    kill -9 "$qpid" 2>/dev/null || true
+  ) &
+  wpid=$!
+  wait "$qpid" 2>/dev/null || true
+  kill "$wpid" 2>/dev/null || true
+  wait "$wpid" 2>/dev/null || true
+fi
+set -e
+
+echo "---- serial log (tail) ----"
+tail -n 80 "$LOG" || true
+
+if grep -qE 'Pk|peak-rpi:|PeakOS|mmu on|Boot complete|rpi: soc' "$LOG"; then
+  echo "smoke-aarch64: saw boot markers"
+  rm -f "$LOG"
+  exit 0
+fi
+
+# If raspi3b silent, try virt once
+if [[ "$RUN" == "run_raspi3b" ]]; then
+  echo "note: raspi3b quiet — trying virt loader path"
+  : >"$LOG"
+  set +e
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$TIMEOUT_SEC" run_virt >"$LOG" 2>&1
+  else
+    run_virt >"$LOG" 2>&1 &
+    qpid=$!
+    sleep "$TIMEOUT_SEC"
+    kill -9 "$qpid" 2>/dev/null || true
+    wait "$qpid" 2>/dev/null || true
+  fi
+  set -e
+  tail -n 40 "$LOG" || true
+  if grep -qE 'Pk|peak-rpi:|PeakOS|mmu on|Boot complete|rpi: soc' "$LOG"; then
+    echo "smoke-aarch64: saw boot markers (virt)"
+    rm -f "$LOG"
+    exit 0
+  fi
+fi
+
+echo "smoke-aarch64 FAILED (no boot markers)"
+rm -f "$LOG"
+exit 1

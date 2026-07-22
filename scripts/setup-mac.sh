@@ -12,30 +12,17 @@ fi
 echo "==> Installing qemu, xorriso, llvm, lld, nasm, make"
 brew install qemu xorriso llvm lld nasm make
 
+echo "==> aarch64 Raspberry Pi builds use the same LLVM (clang -target aarch64-unknown-none-elf)"
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if [[ ! -d third_party/limine/.git ]]; then
-  echo "==> Fetching Limine binary release"
-  mkdir -p third_party
+# Remove any leftover Limine vendor tree from older checkouts
+if [[ -d third_party/limine ]]; then
+  echo "==> Removing legacy third_party/limine"
   rm -rf third_party/limine
-  git clone https://github.com/limine-bootloader/limine.git \
-    --branch=v8.6.1-binary --depth=1 third_party/limine
 fi
 
-echo "==> Building Limine host tool"
-make -C third_party/limine
-
-if command -v vagrant >/dev/null 2>&1; then
-  echo "==> Vagrant found — installing vagrant-qemu plugin (optional)"
-  vagrant plugin install vagrant-qemu || true
-else
-  echo "==> Vagrant not installed (optional)."
-  echo "    brew install --cask vagrant"
-  echo "    then: vagrant plugin install vagrant-qemu"
-fi
-
-# Ensure LLVM tools are preferred when Homebrew llvm is keg-only
 if [[ -d /opt/homebrew/opt/llvm/bin ]]; then
   echo ""
   echo "Add LLVM to your PATH for this session:"
@@ -44,6 +31,13 @@ fi
 
 echo ""
 echo "Setup complete. Next:"
+echo "  make doctor"
 echo "  make iso"
 echo "  ./scripts/run-qemu.sh"
-echo "  # or: ./scripts/vagrant-up.sh"
+echo "  PEAK_FIRMWARE=uefi ./scripts/run-qemu.sh"
+echo ""
+echo "Raspberry Pi (ARM64):"
+echo "  make doctor ARCH=aarch64 PLATFORM=rpi"
+echo "  make ARCH=aarch64 pi-image"
+echo "  make ARCH=aarch64 pi-image-check"
+echo "  make ARCH=aarch64 flash-pi DEVICE=/dev/diskN"

@@ -1,6 +1,8 @@
 #include "idt.h"
+#include "irq.h"
 #include "pic.h"
 #include "serial.h"
+#include "syscall.h"
 #include "util.h"
 
 struct idt_entry {
@@ -14,7 +16,6 @@ struct idt_entry {
 } __attribute__((packed));
 
 static struct idt_entry idt[256];
-static irq_handler_t irq_handlers[16];
 
 extern void isr0(void);  extern void isr1(void);  extern void isr2(void);
 extern void isr3(void);  extern void isr4(void);  extern void isr5(void);
@@ -33,11 +34,12 @@ extern void irq6(void);  extern void irq7(void);  extern void irq8(void);
 extern void irq9(void);  extern void irq10(void); extern void irq11(void);
 extern void irq12(void); extern void irq13(void); extern void irq14(void);
 extern void irq15(void);
+extern void isr128(void);
 
 static void idt_set(uint8_t vec, void *isr, uint8_t flags) {
     uint64_t addr = (uint64_t)isr;
     idt[vec].offset_low  = (uint16_t)(addr & 0xFFFF);
-    idt[vec].selector    = 0x28; /* Limine 64-bit code segment */
+    idt[vec].selector    = 0x08; /* Peak kernel code (gdt_init) */
     idt[vec].ist         = 0;
     idt[vec].type_attr   = flags;
     idt[vec].offset_mid  = (uint16_t)((addr >> 16) & 0xFFFF);
@@ -45,23 +47,30 @@ static void idt_set(uint8_t vec, void *isr, uint8_t flags) {
     idt[vec].zero        = 0;
 }
 
-void irq_install(uint8_t irq, irq_handler_t handler) {
-    if (irq < 16)
-        irq_handlers[irq] = handler;
-}
-
 void isr_dispatch(struct interrupt_frame *frame) {
+    if (frame->int_no == 128) {
+        syscall_handler(frame);
+        return;
+    }
     if (frame->int_no >= 32 && frame->int_no <= 47) {
         uint8_t irq = (uint8_t)(frame->int_no - 32);
-        if (irq_handlers[irq])
-            irq_handlers[irq](frame);
+        irq_dispatch(irq);
         pic_eoi(irq);
         return;
     }
     /* CPU exceptions — log and halt for MVP */
+    char buf[24];
     serial_write_str("Exception: ");
-    char buf[16];
     itoa_u(frame->int_no, buf, 10);
+    serial_write_str(buf);
+    serial_write_str(" err=0x");
+    itoa_u(frame->err_code, buf, 16);
+    serial_write_str(buf);
+    serial_write_str(" rip=0x");
+    itoa_u(frame->rip, buf, 16);
+    serial_write_str(buf);
+    serial_write_str(" rsp=0x");
+    itoa_u(frame->rsp, buf, 16);
     serial_write_str(buf);
     serial_write_str("\n");
     for (;;)
@@ -70,7 +79,6 @@ void isr_dispatch(struct interrupt_frame *frame) {
 
 void idt_init(void) {
     memset(idt, 0, sizeof(idt));
-    memset(irq_handlers, 0, sizeof(irq_handlers));
 
     idt_set(0,  isr0,  0x8E); idt_set(1,  isr1,  0x8E);
     idt_set(2,  isr2,  0x8E); idt_set(3,  isr3,  0x8E);
@@ -97,6 +105,9 @@ void idt_init(void) {
     idt_set(42, irq10, 0x8E); idt_set(43, irq11, 0x8E);
     idt_set(44, irq12, 0x8E); idt_set(45, irq13, 0x8E);
     idt_set(46, irq14, 0x8E); idt_set(47, irq15, 0x8E);
+
+    /* syscall int 0x80 — DPL 3 so userspace may invoke */
+    idt_set(128, isr128, 0xEE);
 
     lidt(idt, sizeof(idt) - 1);
 }

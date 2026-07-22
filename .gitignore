@@ -1,6 +1,25 @@
-third_party/limine/
 build/
 .vagrant/
 *.iso
-*.elf
 .DS_Store
+third_party/
+__pycache__/
+*.pyc
+.python-version
+
+# Secrets / local env
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# IDE / tooling
+.idea/
+.vscode/
+*.swp
+*~
+compile_commands.json
+.clangd/
+.cache/

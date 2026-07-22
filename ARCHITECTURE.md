@@ -1,40 +1,67 @@
-# Peak OS Architecture (v0.1.0-mvp baseline)
+# Peak OS architecture
 
-Peak OS is a from-scratch **x86_64** hobby kernel aimed at becoming an **AI-first developer OS**. This document describes the frozen MVP baseline.
+Freestanding kernel with Peak-authored boot on **x86_64** and **aarch64 (Raspberry Pi)**.
 
-## Boot path
+## Boot
 
-```
-QEMU (ISO) → Limine → kernel_entry (boot.c)
-  → serial + framebuffer
-  → PMM (Limine memmap + HHDM)
-  → console
-  → PIC / IDT / timer / keyboard / mouse
-  → in-kernel shell (CLI) or desktop (gui)
-```
+### x86_64
 
-- Bootloader: Limine (BIOS/UEFI hybrid ISO)
-- Kernel link address: `0xffffffff80000000` ([linker.ld](linker.ld))
-- Limine requests: framebuffer, HHDM, memmap, stack size ([kernel/boot.c](kernel/boot.c))
+1. **BIOS:** El Torito `boot/peak-bios.bin` → E820 + VBE + ISO9660 kernel load → long mode → `kernel_entry(BootInfo)`.
+2. **UEFI:** `EFI/BOOT/BOOTX64.EFI` → GOP + file load → ExitBootServices → same kernel entry.
 
-## CLI
+### aarch64 (Raspberry Pi)
 
-- Framebuffer text console mirrored to COM1 serial ([kernel/console.c](kernel/console.c), [kernel/serial.c](kernel/serial.c))
-- Interactive shell with builtins: `help`, `clear`, `echo`, `uname`, `uptime`, `mem`, `gui`, `reboot` ([kernel/shell.c](kernel/shell.c))
-- PS/2 keyboard via IRQ1 ([kernel/keyboard.c](kernel/keyboard.c))
+1. VideoCore firmware loads FAT `kernel8.img` + DTB (`config.txt`).
+2. `boot/rpi` shim: EL2→EL1 if needed, 4K MMU + HHDM, mailbox/SimpleFB, BootInfo v4 (`dtb_phys`).
+3. `kernel_entry(BootInfo)` — secondary CPUs parked (uniprocessor v1).
 
-## Desktop
+### BootInfo
 
-- Software compositor on Limine framebuffer ([kernel/gui/desktop.c](kernel/gui/desktop.c))
-- Taskbar + clock, mouse cursor, draggable Terminal window
-- Esc returns to fullscreen CLI
+Canonical ABI: `boot/include/peak_boot.h` (single definition). Kernel code includes
+`kernel/include/peak_boot.h`, which is a thin wrapper that `#include`s the boot header
+so the layout cannot drift.
 
-## Host launch
+`peak_bootinfo` v4: magic/version, HHDM, framebuffer, mmap, kernel/stack, optional `dtb_phys` / `dtb_size`, `peak_net_config`, boot entropy seed + quality flags, optional KASLR slide pages. `rsdp_phys` unused on Pi.
 
-- [scripts/setup-mac.sh](scripts/setup-mac.sh) — brew deps + Limine
-- [scripts/run-qemu.sh](scripts/run-qemu.sh) — primary runner
-- [scripts/vagrant-up.sh](scripts/vagrant-up.sh) / [Vagrantfile](Vagrantfile) — QEMU provider wrapper
+Higher-half kernel at `0xffffffff80000000`; HHDM at `0xffff800000000000`.
 
-## Explicit MVP limits
+Linker scripts: `kernel/arch/{x86_64,aarch64}/linker.ld` (Makefile `-T`). Root `linker.ld` is a deprecated stub only.
 
-No VFS, heap allocator beyond PMM pages, processes, ELF userspace, networking, or agent runtime at the tagged MVP. Those land in the AI-first roadmap ([docs/ROADMAP.md](docs/ROADMAP.md)).
+## HAL
+
+| Layer | Role |
+|-------|------|
+| `kernel/arch/{x86_64,aarch64}/` | CPU, IRQ, timer, FPU, context switch |
+| `kernel/platform/{pc,rpi}/` | Board bring-up, power, DMA cache ops |
+| `blockdev` / `netdev` / `irq` | Storage, NIC, interrupt registration |
+
+x86 leaf sources (`gdt`, `idt`, `pic`, `ata`, FPU/RTC/sound, `isr.S`, `context.S`) live
+under `kernel/arch/x86_64/`. Port I/O helpers are in `kernel/include/x86_io.h` (pulled in
+by `util.h` on x86 only). Prefer new CPU-specific code under `kernel/arch/<triple>/`.
+
+Empty placeholders `kernel/drivers/gpio/` and `kernel/drivers/sound/` await future
+platform leaf drivers; GPIO/sound for Pi currently live under `kernel/platform/rpi/`.
+
+Portable subsystems: `fb_*`, keyboard/mouse queues, `timer_ticks`, net above L2, VFS/PeakFS, GUI/JS.
+
+## Kernel
+
+Framebuffer console (soft-fail if no FB), PMM/VMM/heap (PMM to 16 GiB), VFS + streamed PeakFS persist (ATA on PC, SDHCI partition on Pi), blobstore (block-backed objects + LRU cache), PeakVec, syscalls (`int 0x80` / `svc`), ELF builtins, scheduler, peak-agent, multi-window desktop.
+
+## I/O (Pi)
+
+- **BCM2837:** BCM local IRQs, PL011 UART, DWC2 USB + HID, SDHCI, mailbox FB, USB LAN when present.
+- **BCM2711:** GIC, GENET, PCIe → VL805 xHCI, SDHCI.
+- **BCM2712:** GIC, PCIe → RP1 (USB/Ethernet/GPIO).
+
+Wi-Fi: SDIO + runtime firmware (binary exception). DMA drivers use explicit cache maintenance on BCM.
+
+## Serial
+
+**COM1** (x86) or PL011/UART (Pi) for diagnostics. No host agent/ssh serial bridges. Release builds must not print seeds, canaries, or passphrases.
+
+## Security / privacy
+
+Kerckhoffs + capability least-privilege + Moving Target Defense. Local-first, no telemetry. See [docs/security-model.md](docs/security-model.md) and [docs/privacy.md](docs/privacy.md).
+
+See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/rpi.md](docs/rpi.md), [docs/from-scratch.md](docs/from-scratch.md).

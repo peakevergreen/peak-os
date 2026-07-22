@@ -1,0 +1,21 @@
+# Peak OS Raspberry Pi boot configuration
+arm_64bit=1
+kernel=kernel8.img
+disable_overscan=1
+hdmi_force_hotplug=1
+hdmi_group=1
+hdmi_mode=16
+# Safe-mode fallback if EDID fails: uncomment next lines
+# hdmi_safe=1
+
+# Serial console on GPIO UART
+enable_uart=1
+core_freq_min=250
+
+[pi3]
+dtoverlay=
+[pi4]
+dtoverlay=
+[pi5]
+# Prefer kernel8.img (4K pages); firmware falls back from kernel_2712.img
+kernel=kernel8.img

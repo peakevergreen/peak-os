@@ -1,24 +1,22 @@
 #include "timer.h"
-#include "idt.h"
-#include "pic.h"
-#include "util.h"
+#include "arch.h"
+#include "sched.h"
+#include "random.h"
 
 static volatile uint64_t ticks;
+static volatile uint64_t irq_count;
 
-static void timer_irq(struct interrupt_frame *frame) {
-    (void)frame;
+static void timer_tick(void) {
     ticks++;
+    irq_count++;
+    random_mix_irq(ticks ^ (ticks << 17));
+    sched_on_timer();
 }
 
 void timer_init(uint32_t hz) {
     ticks = 0;
-    irq_install(0, timer_irq);
-
-    uint32_t divisor = 1193182 / hz;
-    outb(0x43, 0x36);
-    outb(0x40, (uint8_t)(divisor & 0xFF));
-    outb(0x40, (uint8_t)((divisor >> 8) & 0xFF));
-    pic_unmask(0);
+    irq_count = 0;
+    arch_timer_init(hz, timer_tick);
 }
 
 uint64_t timer_ticks(void) {
@@ -27,4 +25,8 @@ uint64_t timer_ticks(void) {
 
 uint64_t timer_uptime_secs(void) {
     return ticks / 100;
+}
+
+uint64_t timer_irq_count(void) {
+    return irq_count;
 }

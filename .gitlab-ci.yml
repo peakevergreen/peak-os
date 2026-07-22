@@ -1,0 +1,103 @@
+# Peak OS CI — x86 ISO + aarch64 Pi image on every push/MR
+# Requires: clang, lld, xorriso, make, python3, qemu-system-aarch64
+
+stages:
+  - build
+  - test
+
+build-iso:
+  stage: build
+  image: debian:bookworm-slim
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq clang lld llvm xorriso make python3 ca-certificates
+      qemu-system-x86 ripgrep
+  script:
+    - export PATH="$(dirname $(command -v clang)):$PATH"
+    - make ARCH=x86_64 doctor
+    - make iso
+    - test -f build/peak-os.iso
+    - test -f build/x86_64/boot/peak-bios.bin
+    - test -f build/x86_64/boot/BOOTX64.EFI || test -f build/x86_64/boot/BOOTX64.efi
+    - test -f build/x86_64/kernel.elf
+    - ls -la build/peak-os.iso build/x86_64/kernel.elf
+  artifacts:
+    paths:
+      - build/peak-os.iso
+      - build/x86_64/kernel.elf
+      - build/x86_64/boot/peak-bios.bin
+      - build/x86_64/boot/BOOTX64.EFI
+    expire_in: 1 week
+
+build-rpi:
+  stage: build
+  image: debian:bookworm-slim
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq clang lld llvm make python3 ca-certificates curl
+      qemu-system-arm ripgrep
+  script:
+    - export PATH="$(dirname $(command -v clang)):$PATH"
+    - make ARCH=aarch64 PLATFORM=rpi doctor
+    - make ARCH=aarch64 PLATFORM=rpi pi-image
+    - make ARCH=aarch64 PLATFORM=rpi pi-image-check
+    - test -f build/peak-os-rpi-arm64.img
+    - test -f build/aarch64/kernel8.img
+  artifacts:
+    paths:
+      - build/peak-os-rpi-arm64.img
+      - build/aarch64/kernel8.img
+      - build/SHA256SUMS
+    expire_in: 1 week
+    when: on_success
+
+host-tests:
+  stage: test
+  image: debian:bookworm-slim
+  needs:
+    - build-iso
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq clang make python3 llvm xorriso ripgrep
+  script:
+    - make test-host
+    - chmod +x scripts/purity-check.sh
+    - ./scripts/purity-check.sh
+    - test -f docs/security-model.md
+    - test -f docs/privacy.md
+    - test -f docs/csprng.md
+    - test -f docs/verified-boot.md
+    - chmod +x scripts/fuzz-elf-smoke.sh
+    - ./scripts/fuzz-elf-smoke.sh
+    - |
+      if [ -f build/x86_64/kernel.elf ]; then
+        llvm-readelf -lW build/x86_64/kernel.elf | tee /tmp/phdrs.txt
+        if grep ' RWE ' /tmp/phdrs.txt; then echo "RWX PHDR forbidden"; exit 1; fi
+        chmod +x scripts/check-kernel-size.sh
+        ./scripts/check-kernel-size.sh build/x86_64/kernel.elf
+      fi
+    - python3 scripts/mkmanifest.py || true
+
+smoke-bios:
+  stage: test
+  image: debian:bookworm-slim
+  needs:
+    - build-iso
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq qemu-system-x86 make
+  script:
+    - chmod +x scripts/smoke-qemu.sh
+    - PEAK_FIRMWARE=bios TIMEOUT_SEC=90 ./scripts/smoke-qemu.sh
+
+smoke-aarch64:
+  stage: test
+  image: debian:bookworm-slim
+  needs:
+    - build-rpi
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq qemu-system-arm
+  script:
+    - chmod +x scripts/smoke-aarch64.sh
+    - ./scripts/smoke-aarch64.sh

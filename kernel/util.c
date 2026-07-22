@@ -1,4 +1,5 @@
 #include "util.h"
+#include "stdarg.h"
 
 void *memset(void *dst, int c, size_t n) {
     uint8_t *d = dst;
@@ -12,6 +13,19 @@ void *memcpy(void *dst, const void *src, size_t n) {
     const uint8_t *s = src;
     for (size_t i = 0; i < n; i++)
         d[i] = s[i];
+    return dst;
+}
+
+void *memmove(void *dst, const void *src, size_t n) {
+    uint8_t *d = dst;
+    const uint8_t *s = src;
+    if (d < s) {
+        for (size_t i = 0; i < n; i++)
+            d[i] = s[i];
+    } else if (d > s) {
+        for (size_t i = n; i > 0; i--)
+            d[i - 1] = s[i - 1];
+    }
     return dst;
 }
 
@@ -47,6 +61,87 @@ int strncmp(const char *a, const char *b, size_t n) {
     return 0;
 }
 
+char *strchr(const char *s, int c) {
+    for (; *s; s++)
+        if ((unsigned char)*s == (unsigned char)c)
+            return (char *)s;
+    return c == 0 ? (char *)s : NULL;
+}
+
+char *strstr(const char *haystack, const char *needle) {
+    if (!haystack || !needle)
+        return NULL;
+    if (!needle[0])
+        return (char *)haystack;
+    size_t nlen = strlen(needle);
+    for (const char *p = haystack; *p; p++) {
+        if (strncmp(p, needle, nlen) == 0)
+            return (char *)p;
+    }
+    return NULL;
+}
+
+int snprintf(char *buf, size_t size, const char *fmt, ...) {
+    if (!buf || size == 0)
+        return 0;
+    va_list ap;
+    va_start(ap, fmt);
+    size_t o = 0;
+    for (const char *p = fmt; *p && o + 1 < size; p++) {
+        if (*p != '%') {
+            buf[o++] = *p;
+            continue;
+        }
+        p++;
+        /* Optional zero-pad width, e.g. %02u. */
+        int pad_zero = 0;
+        int width = 0;
+        if (*p == '0') {
+            pad_zero = 1;
+            p++;
+        }
+        while (*p >= '0' && *p <= '9') {
+            width = width * 10 + (*p - '0');
+            p++;
+        }
+        if (*p == 's') {
+            const char *s = va_arg(ap, const char *);
+            if (!s)
+                s = "(null)";
+            while (*s && o + 1 < size)
+                buf[o++] = *s++;
+        } else if (*p == 'd' || *p == 'u') {
+            uint64_t v = (*p == 'd') ? (uint64_t)(int64_t)va_arg(ap, int)
+                                     : (uint64_t)va_arg(ap, unsigned);
+            char tmp[24];
+            itoa_u(v, tmp, 10);
+            int len = 0;
+            while (tmp[len])
+                len++;
+            for (int w = len; w < width && o + 1 < size; w++)
+                buf[o++] = pad_zero ? '0' : ' ';
+            for (char *t = tmp; *t && o + 1 < size; t++)
+                buf[o++] = *t;
+        } else if (*p == 'l' && *(p + 1) == 'u') {
+            p++;
+            uint64_t v = va_arg(ap, uint64_t);
+            char tmp[24];
+            itoa_u(v, tmp, 10);
+            for (char *t = tmp; *t && o + 1 < size; t++)
+                buf[o++] = *t;
+        } else if (*p == '%') {
+            buf[o++] = '%';
+        } else {
+            buf[o++] = '%';
+            if (o + 1 < size)
+                buf[o++] = *p;
+        }
+    }
+    buf[o] = '\0';
+    va_end(ap);
+    return (int)o;
+}
+
 void itoa_u(uint64_t val, char *buf, int base) {
     if (base < 2 || base > 16) {
         buf[0] = '\0';
@@ -71,6 +166,7 @@ void itoa_u(uint64_t val, char *buf, int base) {
 }
 
 void reboot(void) {
+#if defined(__x86_64__)
     /* Pulse reset via keyboard controller */
     uint8_t good = 0x02;
     while (good & 0x02)
@@ -82,6 +178,10 @@ void reboot(void) {
         uint64_t base;
     } __attribute__((packed)) null_idtr = { 0, 0 };
     __asm__ volatile ("lidt %0; int $0" : : "m"(null_idtr));
+#else
+    extern void platform_reboot(void);
+    platform_reboot();
+#endif
     for (;;)
         hlt();
 }
