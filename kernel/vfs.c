@@ -1,4 +1,5 @@
 #include "vfs.h"
+#include "peak_errno.h"
 #include "heap.h"
 #include "util.h"
 #include "console.h"
@@ -198,10 +199,10 @@ struct vfs_node *vfs_create_file(const char *path) {
 int vfs_write_file(const char *path, const void *data, size_t len) {
     struct vfs_node *f = vfs_create_file(path);
     if (!f || f->type != VFS_FILE)
-        return -1;
+        return PEAK_EINVAL;
     uint8_t *buf = (uint8_t *)kmalloc(len ? len : 1);
     if (!buf)
-        return -1;
+        return PEAK_ENOMEM;
     if (f->data)
         kfree(f->data);
     memcpy(buf, data, len);
@@ -214,7 +215,7 @@ int vfs_write_file(const char *path, const void *data, size_t len) {
 int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len) {
     struct vfs_node *f = vfs_lookup(path);
     if (!f || f->type != VFS_FILE)
-        return -1;
+        return PEAK_ENOENT;
     size_t n = f->size < buf_len ? f->size : buf_len;
     memcpy(buf, f->data, n);
     if (out_len)
@@ -225,7 +226,7 @@ int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len) 
 int vfs_list(const char *path, char *out, size_t out_len) {
     struct vfs_node *d = vfs_lookup(path);
     if (!d || d->type != VFS_DIR)
-        return -1;
+        return PEAK_ENOTDIR;
     size_t o = 0;
     for (struct vfs_node *c = d->child; c; c = c->sibling) {
         size_t l = strlen(c->name);
@@ -292,19 +293,19 @@ static void peakfs_clear_persist(void) {
 int vfs_load_ramdisk(const void *blob, size_t len) {
     const uint8_t *p = blob;
     if (len < 12 || memcmp(p, "PEAKFS1", 7) != 0)
-        return -1;
+        return PEAK_EIO;
     uint32_t count;
     memcpy(&count, p + 8, 4);
     size_t off = 12;
     /* Validate all entries before mutating. */
     for (uint32_t i = 0; i < count; i++) {
         if (off + 2 > len)
-            return -1;
+            return PEAK_EIO;
         uint16_t nlen;
         memcpy(&nlen, p + off, 2);
         off += 2;
         if (nlen == 0 || nlen >= VFS_PATH_MAX || off + nlen + 4 > len)
-            return -1;
+            return PEAK_EINVAL;
         char path[VFS_PATH_MAX];
         memcpy(path, p + off, nlen);
         path[nlen] = '\0';
@@ -313,15 +314,15 @@ int vfs_load_ramdisk(const void *blob, size_t len) {
         memcpy(&dlen, p + off, 4);
         off += 4;
         if (off + dlen > len)
-            return -1;
+            return PEAK_EIO;
         int is_dir = (nlen > 0 && path[nlen - 1] == '/');
         if (is_dir) {
             if (dlen != 0)
-                return -1;
+                return PEAK_EINVAL;
             path[nlen - 1] = '\0';
         }
         if (!peakfs_path_allowed(path))
-            return -1;
+            return PEAK_EACCES;
         off += dlen;
     }
     /* Replace persisted namespaces rather than overlaying. */
@@ -341,10 +342,10 @@ int vfs_load_ramdisk(const void *blob, size_t len) {
         if (nlen > 0 && path[nlen - 1] == '/') {
             path[nlen - 1] = '\0';
             if (!vfs_mkdir(path))
-                return -1;
+                return PEAK_EIO;
         } else {
             if (vfs_write_file(path, p + off, dlen) != 0)
-                return -1;
+                return PEAK_EIO;
         }
         off += dlen;
     }
@@ -575,12 +576,12 @@ void vfs_seed_defaults(void) {
 
 int vfs_normalize(const char *path, char *out, size_t out_len) {
     if (!path || !out || out_len < 2)
-        return -1;
+        return PEAK_EINVAL;
     char parts[32][VFS_NAME_MAX];
     int depth = 0;
     size_t i = 0;
     if (path[0] != '/')
-        return -1;
+        return PEAK_EINVAL;
     i = 1;
     while (path[i] && depth < 32) {
         while (path[i] == '/')
@@ -610,11 +611,11 @@ int vfs_normalize(const char *path, char *out, size_t out_len) {
     size_t o = 0;
     for (int p = 0; p < depth; p++) {
         if (o + 1 >= out_len)
-            return -1;
+            return PEAK_ENOSPC;
         out[o++] = '/';
         for (size_t k = 0; parts[p][k]; k++) {
             if (o + 1 >= out_len)
-                return -1;
+                return PEAK_ENOSPC;
             out[o++] = parts[p][k];
         }
     }
@@ -649,7 +650,7 @@ static void node_path(struct vfs_node *n, char *out, size_t out_len) {
 int vfs_stat(const char *path, struct vfs_stat *st) {
     struct vfs_node *n = vfs_lookup(path);
     if (!n || !st)
-        return -1;
+        return PEAK_ENOENT;
     st->type = n->type;
     st->size = n->size;
     st->refs = n->refs;
@@ -686,7 +687,7 @@ static void unlink_from_parent(struct vfs_node *n) {
 int vfs_unlink(const char *path) {
     struct vfs_node *n = vfs_lookup(path);
     if (!n || n->type != VFS_FILE || n == root)
-        return -1;
+        return PEAK_EINVAL;
     unlink_from_parent(n);
     /* Count sharers of this data pointer */
     int sharers = 0;
@@ -719,9 +720,9 @@ int vfs_unlink(const char *path) {
 int vfs_rmdir(const char *path) {
     struct vfs_node *n = vfs_lookup(path);
     if (!n || n->type != VFS_DIR || n == root)
-        return -1;
+        return PEAK_EINVAL;
     if (n->child)
-        return -1;
+        return PEAK_EBUSY;
     unlink_from_parent(n);
     n->type = 0;
     n->name[0] = '\0';
@@ -734,14 +735,14 @@ int vfs_rmdir(const char *path) {
 int vfs_remove_tree(const char *path) {
     struct vfs_node *n = vfs_lookup(path);
     if (!n || n == root)
-        return -1;
+        return PEAK_EINVAL;
     if (n->type == VFS_FILE)
         return vfs_unlink(path);
     while (n->child) {
         char cp[VFS_PATH_MAX];
         node_path(n->child, cp, sizeof(cp));
         if (vfs_remove_tree(cp) != 0)
-            return -1;
+            return PEAK_EIO;
     }
     return vfs_rmdir(path);
 }
@@ -749,25 +750,25 @@ int vfs_remove_tree(const char *path) {
 int vfs_rename(const char *oldp, const char *newp) {
     struct vfs_node *n = vfs_lookup(oldp);
     if (!n || n == root)
-        return -1;
+        return PEAK_ENOENT;
     if (vfs_lookup(newp))
-        return -1;
+        return PEAK_EEXIST;
     char parent[VFS_PATH_MAX];
     size_t len = strlen(newp);
     if (len >= VFS_PATH_MAX)
-        return -1;
+        return PEAK_EINVAL;
     memcpy(parent, newp, len + 1);
     int last = -1;
     for (size_t i = 0; parent[i]; i++)
         if (parent[i] == '/')
             last = (int)i;
     if (last < 0)
-        return -1;
+        return PEAK_EINVAL;
     parent[last] = '\0';
     const char *leaf = newp + last + 1;
     struct vfs_node *dir = (last == 0) ? root : vfs_lookup(parent);
     if (!dir || dir->type != VFS_DIR)
-        return -1;
+        return PEAK_ENOTDIR;
     unlink_from_parent(n);
     size_t j = 0;
     for (; leaf[j] && j + 1 < VFS_NAME_MAX; j++)
@@ -780,7 +781,7 @@ int vfs_rename(const char *oldp, const char *newp) {
 int vfs_copy_file(const char *src, const char *dst) {
     struct vfs_node *s = vfs_lookup(src);
     if (!s || s->type != VFS_FILE)
-        return -1;
+        return PEAK_ENOENT;
     return vfs_write_file(dst, s->data ? s->data : (const uint8_t *)"", s->size);
 }
 
@@ -788,7 +789,7 @@ static int copy_tree_rec(struct vfs_node *src, const char *dst_path) {
     if (src->type == VFS_FILE)
         return vfs_write_file(dst_path, src->data ? src->data : (const uint8_t *)"", src->size);
     if (!vfs_mkdir(dst_path))
-        return -1;
+        return PEAK_EIO;
     for (struct vfs_node *c = src->child; c; c = c->sibling) {
         char child[VFS_PATH_MAX];
         size_t o = 0;
@@ -797,13 +798,13 @@ static int copy_tree_rec(struct vfs_node *src, const char *dst_path) {
             o++;
         }
         if (o + 1 >= VFS_PATH_MAX)
-            return -1;
+            return PEAK_ENOSPC;
         child[o++] = '/';
         for (size_t k = 0; c->name[k] && o + 1 < VFS_PATH_MAX; k++)
             child[o++] = c->name[k];
         child[o] = '\0';
         if (copy_tree_rec(c, child) != 0)
-            return -1;
+            return PEAK_EIO;
     }
     return 0;
 }
@@ -811,16 +812,16 @@ static int copy_tree_rec(struct vfs_node *src, const char *dst_path) {
 int vfs_copy_tree(const char *src, const char *dst) {
     struct vfs_node *s = vfs_lookup(src);
     if (!s)
-        return -1;
+        return PEAK_ENOENT;
     return copy_tree_rec(s, dst);
 }
 
 int vfs_link(const char *target, const char *linkname) {
     struct vfs_node *t = vfs_lookup(target);
     if (!t || t->type != VFS_FILE)
-        return -1;
+        return PEAK_ENOENT;
     if (vfs_lookup(linkname))
-        return -1;
+        return PEAK_EEXIST;
     char parent[VFS_PATH_MAX];
     size_t len = strlen(linkname);
     memcpy(parent, linkname, len + 1);
@@ -829,15 +830,15 @@ int vfs_link(const char *target, const char *linkname) {
         if (parent[i] == '/')
             last = (int)i;
     if (last < 0)
-        return -1;
+        return PEAK_EINVAL;
     parent[last] = '\0';
     const char *leaf = linkname + last + 1;
     struct vfs_node *dir = (last == 0) ? root : vfs_lookup(parent);
     if (!dir || dir->type != VFS_DIR)
-        return -1;
+        return PEAK_ENOTDIR;
     struct vfs_node *link = alloc_node(leaf, VFS_FILE);
     if (!link)
-        return -1;
+        return PEAK_ENOMEM;
     link->data = t->data;
     link->size = t->size;
     link->capacity = t->capacity;

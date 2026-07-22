@@ -1,4 +1,5 @@
 #include "net_internal.h"
+#include "peak_errno.h"
 #include "cap.h"
 #include "timer.h"
 #include "util.h"
@@ -32,13 +33,13 @@ int net_tcp_alloc_slot(void) {
 
 int net_tcp_send_seg_slot(int slot, uint8_t flags, const void *data, uint16_t dlen) {
     if (slot < 0 || slot >= NET_TCP_MAX)
-        return -1;
+        return PEAK_EINVAL;
     struct tcp_conn *c = &tcps[slot];
     uint8_t seg[1500];
     uint16_t hdr = 20;
     uint16_t total = (uint16_t)(hdr + dlen);
     if (total > sizeof(seg))
-        return -1;
+        return PEAK_ENOBUFS;
     memset(seg, 0, hdr);
     seg[0] = (uint8_t)(c->local_port >> 8);
     seg[1] = (uint8_t)(c->local_port & 0xFF);
@@ -156,9 +157,9 @@ void net_handle_tcp(uint32_t src, const uint8_t *pkt, uint16_t len) {
 int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
     attempt_stats.tcp++;
     if (!net_ready())
-        return -1;
+        return PEAK_ENETDOWN;
     if (!privacy_net_client_allowed())
-        return -1;
+        return PEAK_EACCES;
     int slot = -1;
     for (int i = 0; i < NET_TCP_MAX; i++) {
         if (tcps[i].state == TCP_CLOSED) {
@@ -184,18 +185,18 @@ int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
     tcp_got_fin = 0;
     tcp_state = TCP_SYN_SENT;
     if (net_tcp_send_seg(TCP_SYN, NULL, 0) != 0)
-        return -1;
+        return PEAK_EIO;
     uint64_t start = timer_ticks();
     while (timer_ticks() - start < timeout_ticks) {
         net_poll();
         if (tcp_state == TCP_ESTABLISHED)
             return 0;
         if (tcp_state == TCP_CLOSED)
-            return -1;
+            return PEAK_ENOTCONN;
         hlt_if_enabled();
     }
     tcp_state = TCP_CLOSED;
-    return -1;
+    return PEAK_ETIMEOUT;
 }
 
 int net_tcp_active_count(void) {
@@ -208,11 +209,11 @@ int net_tcp_active_count(void) {
 
 int net_tcp_listen(uint16_t port) {
     if (!port)
-        return -1;
+        return PEAK_EINVAL;
     /* LAN expose requires CAP_NET_LAN; localhost-only is the default. */
     int want_lan = !privacy_listeners_localhost_only();
     if (!privacy_net_listen_allowed(want_lan))
-        return -1;
+        return PEAK_EACCES;
     int existing = net_tcp_find_listener(port);
     if (existing >= 0)
         return existing;
@@ -223,7 +224,7 @@ int net_tcp_listen(uint16_t port) {
             return i;
         }
     }
-    return -1;
+    return PEAK_EBUSY;
 }
 
 void net_tcp_unlisten(uint16_t port) {
@@ -246,7 +247,7 @@ int net_tcp_listening(uint16_t port) {
 
 int net_tcp_accept(int listen_id) {
     if (listen_id < 0 || listen_id >= NET_LISTEN_MAX || !listens[listen_id].used)
-        return -1;
+        return PEAK_EINVAL;
     uint16_t port = listens[listen_id].port;
     for (int i = 0; i < NET_TCP_MAX; i++) {
         if (tcps[i].is_server && !tcps[i].accepted &&
@@ -256,19 +257,19 @@ int net_tcp_accept(int listen_id) {
             return i;
         }
     }
-    return -1;
+    return PEAK_EAGAIN;
 }
 
 int net_tcp_fd_send(int fd, const void *data, size_t len) {
     if (fd < 0 || fd >= NET_TCP_MAX)
-        return -1;
+        return PEAK_EINVAL;
     if (tcps[fd].state != TCP_ESTABLISHED)
-        return -1;
+        return PEAK_ENOTCONN;
     const uint8_t *p = data;
     while (len) {
         uint16_t chunk = len > TCP_MSS ? TCP_MSS : (uint16_t)len;
         if (net_tcp_send_seg_slot(fd, TCP_PSH | TCP_ACK, p, chunk) != 0)
-            return -1;
+            return PEAK_EIO;
         p += chunk;
         len -= chunk;
         net_poll();
@@ -281,16 +282,16 @@ int net_tcp_fd_recv(int fd, void *buf, size_t cap, size_t *out_len,
     if (out_len)
         *out_len = 0;
     if (fd < 0 || fd >= NET_TCP_MAX)
-        return -1;
+        return PEAK_EINVAL;
     uint64_t start = timer_ticks();
     while (tcps[fd].rx_len == 0) {
         net_poll();
         if (tcps[fd].got_fin && tcps[fd].rx_len == 0)
-            return -1;
+            return PEAK_ENOTCONN;
         if (tcps[fd].state == TCP_CLOSED)
-            return -1;
+            return PEAK_ENOTCONN;
         if (timer_ticks() - start > timeout_ticks)
-            return -1;
+            return PEAK_ETIMEOUT;
         hlt_if_enabled();
     }
     size_t n = tcps[fd].rx_len < cap ? tcps[fd].rx_len : cap;
@@ -321,12 +322,12 @@ void net_tcp_fd_close(int fd) {
 
 int net_tcp_send(const void *data, size_t len) {
     if (tcp_state != TCP_ESTABLISHED)
-        return -1;
+        return PEAK_ENOTCONN;
     const uint8_t *p = data;
     while (len) {
         uint16_t chunk = len > TCP_MSS ? TCP_MSS : (uint16_t)len;
         if (net_tcp_send_seg(TCP_PSH | TCP_ACK, p, chunk) != 0)
-            return -1;
+            return PEAK_EIO;
         p += chunk;
         len -= chunk;
         net_poll();
@@ -341,11 +342,11 @@ int net_tcp_recv(void *buf, size_t cap, size_t *out_len, uint32_t timeout_ticks)
     while (tcp_rx_len == 0) {
         net_poll();
         if (tcp_got_fin && tcp_rx_len == 0)
-            return -1;
+            return PEAK_ENOTCONN;
         if (tcp_state == TCP_CLOSED)
-            return -1;
+            return PEAK_ENOTCONN;
         if (timer_ticks() - start > timeout_ticks)
-            return -1;
+            return PEAK_ETIMEOUT;
         hlt_if_enabled();
     }
     size_t n = tcp_rx_len < cap ? tcp_rx_len : cap;

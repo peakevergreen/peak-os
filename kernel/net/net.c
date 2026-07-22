@@ -1,5 +1,6 @@
 #include "net.h"
 #include "net_internal.h"
+#include "peak_errno.h"
 #include "netdev.h"
 #include "timer.h"
 #include "util.h"
@@ -138,7 +139,7 @@ uint16_t net_tcp_checksum(uint32_t src, uint32_t dst, const void *tcp, size_t tc
 int net_eth_send(uint16_t ethertype, const uint8_t dst[6], const void *payload, uint16_t plen) {
     uint8_t frame[1518];
     if (plen + 14 > sizeof(frame))
-        return -1;
+        return PEAK_ENOBUFS;
     for (int i = 0; i < 6; i++) {
         frame[i] = dst[i];
         frame[6 + i] = local_mac[i];
@@ -152,11 +153,11 @@ int net_eth_send(uint16_t ethertype, const uint8_t dst[6], const void *payload, 
 int net_ip_send(uint32_t dst_ip, uint8_t proto, const void *payload, uint16_t plen) {
     uint8_t dmac[6];
     if (net_resolve_next_hop_mac(dst_ip, dmac, 200) != 0)
-        return -1;
+        return PEAK_ENETUNREACH;
     uint8_t pkt[1500];
     uint16_t total = (uint16_t)(20 + plen);
     if (total > sizeof(pkt))
-        return -1;
+        return PEAK_ENOBUFS;
     memset(pkt, 0, 20);
     pkt[0] = 0x45;
     pkt[2] = (uint8_t)(total >> 8);
@@ -187,7 +188,7 @@ int net_udp_send(uint32_t dst_ip, uint16_t sport, uint16_t dport,
     uint8_t pkt[512];
     uint16_t total = (uint16_t)(8 + dlen);
     if (total > sizeof(pkt))
-        return -1;
+        return PEAK_ENOBUFS;
     pkt[0] = (uint8_t)(sport >> 8);
     pkt[1] = (uint8_t)(sport & 0xFF);
     pkt[2] = (uint8_t)(dport >> 8);
@@ -280,7 +281,7 @@ int net_init(void) {
     net_lock_ready = 1;
     if (netdev_init() != 0) {
         net_up = 0;
-        return -1;
+        return PEAK_EIO;
     }
     netdev_get_mac(local_mac);
     net_up = 1;
@@ -295,7 +296,7 @@ int net_init(void) {
     if (net_dhcp_try(boot_net.dhcp_timeout_ticks) != 0) {
         serial_write_str("net: address configuration failed\n");
         net_up = 0;
-        return -1;
+        return PEAK_EDHCP;
     }
     /* Prime ARP for gateway when known */
     if (local_gw) {

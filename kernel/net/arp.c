@@ -1,4 +1,5 @@
 #include "net_internal.h"
+#include "peak_errno.h"
 #include "netdev.h"
 #include "timer.h"
 #include "util.h"
@@ -85,7 +86,7 @@ int net_resolve_next_hop_mac(uint32_t dst_ip, uint8_t mac[6], uint32_t timeout_t
             return 0;
         hlt();
     }
-    return -1;
+    return PEAK_ETIMEOUT;
 }
 
 void net_handle_arp(const uint8_t *pkt, uint16_t len) {

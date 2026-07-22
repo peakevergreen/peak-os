@@ -1,4 +1,5 @@
 #include "net_internal.h"
+#include "peak_errno.h"
 #include "dhcp_util.h"
 #include "serial.h"
 #include "timer.h"
@@ -111,7 +112,7 @@ int net_dhcp_try(uint32_t timeout_ticks) {
     if (dhcp_send_msg(1 /* DISCOVER */, 0, 0) != 0) {
         dhcp_active = 0;
         if (boot_net.mode == PEAK_NET_DHCP_ONLY)
-            return -1;
+            return PEAK_EDHCP;
         net_apply_static_fallback("fallback");
         serial_write_str("net: DHCP discover send failed; using fallback\n");
         return 0;
@@ -127,7 +128,7 @@ int net_dhcp_try(uint32_t timeout_ticks) {
     if (!dhcp_have_offer) {
         dhcp_active = 0;
         if (boot_net.mode == PEAK_NET_DHCP_ONLY)
-            return -1;
+            return PEAK_EDHCP;
         net_apply_static_fallback("fallback");
         serial_write_str("net: DHCP timeout; using fallback\n");
         return 0;
@@ -140,7 +141,7 @@ int net_dhcp_try(uint32_t timeout_ticks) {
     if (dhcp_send_msg(3 /* REQUEST */, yi, sid) != 0) {
         dhcp_active = 0;
         if (boot_net.mode == PEAK_NET_DHCP_ONLY)
-            return -1;
+            return PEAK_EDHCP;
         net_apply_static_fallback("fallback");
         return 0;
     }
@@ -154,7 +155,7 @@ int net_dhcp_try(uint32_t timeout_ticks) {
     dhcp_active = 0;
     if (!dhcp_have_ack) {
         if (boot_net.mode == PEAK_NET_DHCP_ONLY)
-            return -1;
+            return PEAK_EDHCP;
         net_apply_static_fallback("fallback");
         serial_write_str("net: DHCP ACK missing; using fallback\n");
         return 0;
