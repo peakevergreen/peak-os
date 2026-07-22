@@ -32,6 +32,21 @@ static volatile int need_resched;
 static uint64_t ctx_switches;
 static struct spinlock sched_lock;
 static int zombie_stacks_freed;
+static uint32_t ready_mask;
+
+static int task_slot(const struct task *t) {
+    return (int)(t - tasks);
+}
+
+static void ready_mark(int i) {
+    if (i >= 0 && i < MAX_TASKS)
+        ready_mask |= (1u << i);
+}
+
+static void ready_unmark(int i) {
+    if (i >= 0 && i < MAX_TASKS)
+        ready_mask &= ~(1u << i);
+}
 
 static void reap_task_stack(struct task *t) {
     if (!t || !t->kstack_base)
@@ -61,6 +76,7 @@ void sched_init(void) {
     current->spawned_at = timer_ticks();
     need_resched = 0;
     ctx_switches = 0;
+    ready_mask = 0;
 }
 
 struct task *sched_current(void) {
@@ -167,43 +183,51 @@ int sched_spawn_kthread(const char *name, void (*entry)(void)) {
 #endif
     t->rsp = sp;
     t->state = TASK_READY;
+    ready_mark(task_slot(t));
     spin_unlock(&sched_lock);
     return t->pid;
 }
 
 static struct task *pick_next(void) {
-    /* Round-robin: start after current */
-    int start = 0;
-    for (int i = 0; i < MAX_TASKS; i++) {
-        if (&tasks[i] == current) {
-            start = i + 1;
-            break;
-        }
-    }
-    for (int k = 0; k < MAX_TASKS; k++) {
-        int i = (start + k) % MAX_TASKS;
-        if (tasks[i].state == TASK_READY)
-            return &tasks[i];
-    }
-    if (current && current->state == TASK_RUNNING)
+    uint32_t mask = ready_mask;
+    if (!mask) {
+        if (current && current->state == TASK_RUNNING)
+            return current;
+        if (tasks[0].state == TASK_READY || tasks[0].state == TASK_RUNNING)
+            return &tasks[0];
         return current;
-    /* Prefer idle (slot 0) */
-    if (tasks[0].state == TASK_READY || tasks[0].state == TASK_RUNNING)
-        return &tasks[0];
-    return current;
+    }
+
+    int start = 0;
+    if (current) {
+        start = task_slot(current) + 1;
+        if (start >= MAX_TASKS)
+            start = 0;
+    }
+
+    uint32_t tail = start ? mask >> start : mask;
+    if (tail) {
+        int i = start + __builtin_ctz(tail);
+        return &tasks[i];
+    }
+    int i = __builtin_ctz(mask);
+    return &tasks[i];
 }
 
 void sched_yield(void) {
     spin_lock(&sched_lock);
     struct task *prev = current;
-    if (prev && prev->state == TASK_RUNNING)
+    if (prev && prev->state == TASK_RUNNING) {
         prev->state = TASK_READY;
+        ready_mark(task_slot(prev));
+    }
     /* BLOCKED / ZOMBIE stay as-is — never forced READY here. */
 
     struct task *next = pick_next();
     if (!next || next == prev) {
         if (prev && prev->state == TASK_READY)
             prev->state = TASK_RUNNING;
+        ready_unmark(task_slot(prev));
         /* If prev is BLOCKED and nothing else is READY, fall through to idle. */
         if (prev && (prev->state == TASK_BLOCKED || prev->state == TASK_ZOMBIE) &&
             tasks[0].state != TASK_UNUSED) {
@@ -211,6 +235,7 @@ void sched_yield(void) {
             if (next != prev) {
                 current = next;
                 next->state = TASK_RUNNING;
+                ready_unmark(task_slot(next));
                 ctx_switches++;
                 spin_unlock(&sched_lock);
                 switch_to(prev, next);
@@ -223,6 +248,7 @@ void sched_yield(void) {
 
     current = next;
     next->state = TASK_RUNNING;
+    ready_unmark(task_slot(next));
     ctx_switches++;
     spin_unlock(&sched_lock);
 
@@ -233,6 +259,7 @@ void sched_yield(void) {
 void sched_exit(void) {
     spin_lock(&sched_lock);
     if (current) {
+        ready_unmark(task_slot(current));
         current->state = TASK_ZOMBIE;
         current->entry = NULL;
         /* Stack freed when the slot is reused (or via explicit reap). */
@@ -249,6 +276,7 @@ void sched_wake_sleepers(void) {
             now >= tasks[i].wake_tick) {
             tasks[i].wake_tick = 0;
             tasks[i].state = TASK_READY;
+            ready_mark(i);
         }
     }
 }
@@ -258,6 +286,7 @@ void sched_sleep_ticks(uint64_t ticks) {
         return;
     spin_lock(&sched_lock);
     if (current) {
+        ready_unmark(task_slot(current));
         current->wake_tick = timer_ticks() + ticks;
         current->state = TASK_BLOCKED;
     }
@@ -283,12 +312,9 @@ void sched_maybe_preempt(void) {
     if (!need_resched)
         return;
     need_resched = 0;
-    /* Only preempt if another READY task exists */
-    int others = 0;
-    for (int i = 0; i < MAX_TASKS; i++) {
-        if (&tasks[i] != current && tasks[i].state == TASK_READY)
-            others++;
-    }
+    uint32_t others = ready_mask;
+    if (current)
+        others &= ~(1u << (unsigned)task_slot(current));
     if (others)
         sched_yield();
 }
