@@ -22,9 +22,9 @@ test ! -e limine.conf
 test ! -e scripts/peak-host-proxy.py
 test ! -e scripts/peak-ssh
 
-echo "==> builtin count in elf.c"
-count=$(grep -c '"/bin/' kernel/elf.c || true)
-echo "    registered paths: $count"
+echo "==> builtin count in ubin registry"
+count=$(grep -c '^UBIN_CMD' kernel/user/ubin_cmds.def || true)
+echo "    registered commands: $count"
 test "$count" -ge 25
 
 echo "==> theme names"
