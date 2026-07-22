@@ -264,6 +264,7 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
     log_append(log, log_cap, msg);
 
     int copies = 0;
+    int from_quarantined = 0;
     char expose_port[16] = "";
     const char *p = df;
     while (*p) {
@@ -286,12 +287,16 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
             lp += 4;
             char base[64];
             if (parse_word(&lp, base, sizeof(base)) == 0) {
-                snprintf(msg, sizeof(msg), "FROM %s (stub - no pull)", base);
+                from_quarantined = 1;
+                snprintf(msg, sizeof(msg),
+                         "QUARANTINE FROM %s: no registry pull (COPY-only build)", base);
                 log_append(log, log_cap, msg);
                 if (str_has(base, "nginx")) {
                     char html[CTR_PATH_MAX];
                     snprintf(html, sizeof(html), "%s/usr/share/nginx/html", rootfs);
                     vfs_mkdir(html);
+                    log_append(log, log_cap,
+                               "note: mkdir html path only (base image not fetched)");
                 }
             }
             continue;
@@ -347,6 +352,9 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
 
     snprintf(msg, sizeof(msg), "ok - %d COPY step(s), image %s", copies, tag);
     log_append(log, log_cap, msg);
+    if (from_quarantined)
+        log_append(log, log_cap,
+                   "warning: FROM is quarantined — no image was pulled from a registry");
     return 0;
 }
 

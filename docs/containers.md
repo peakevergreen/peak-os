@@ -60,8 +60,15 @@ curl http://<guest-ip>:8080/style.css
 
 Supported:
 
-- `FROM <base>` — logged as stub; `nginx` bases seed `/usr/share/nginx/html`
 - `COPY <src> <dest>` — copy a single file from build context into image rootfs
+
+Quarantined (logged, never pulls):
+
+- `FROM <base>` — **does not fetch** a base image from any registry. Peak ctr is
+  COPY-only. For demo Dockerfiles that mention `nginx`, ctr may mkdir
+  `/usr/share/nginx/html` locally so COPY targets exist — that is path scaffolding,
+  not an image pull. Build logs emit `QUARANTINE FROM …` and a final warning when
+  a Dockerfile used FROM.
 
 Ignored (logged): `WORKDIR`, `CMD`, `EXPOSE`, `ENV`, `RUN`, `ENTRYPOINT`.
 

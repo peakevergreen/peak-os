@@ -10,6 +10,9 @@ The agent runs **entirely in-guest**. There is no host serial bridge.
 
 ## Tools (guest-executed)
 
+Tool catalog and handlers live in `kernel/agent_tools.c`; policy in
+`kernel/agent_policy.c`; planner in `kernel/agent_planner.c`.
+
 | Tool | Status | Notes |
 |------|--------|-------|
 | `fs.read` | implemented | Allowlisted paths; content capped |
