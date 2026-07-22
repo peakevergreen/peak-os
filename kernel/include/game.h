@@ -3,6 +3,7 @@
 
 #include "types.h"
 
+/* Peak Runner mini-game — side-scrolling terrain with loot and animals. */
 void game_reset(void);
 void game_input(char c); /* A/D move, W/Space jump, R reset */
 void game_tick(void);

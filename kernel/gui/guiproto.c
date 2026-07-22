@@ -2,6 +2,11 @@
 #include "heap.h"
 #include "util.h"
 
+/*
+ * Userspace GUI protocol — window table and surface attach/damage ops.
+ * Ring-3 clients send struct gui_msg via SYS_peakgui; desktop composes surfaces.
+ */
+
 #define GUI_MAX_WINS 16
 
 static struct {
@@ -12,6 +17,21 @@ static struct {
     int has_damage;
     uint32_t dx, dy, dw, dh;
 } wins[GUI_MAX_WINS];
+
+static void copy_title(char *dst, size_t dst_sz, const char *src) {
+    size_t n = 0;
+    for (; src[n] && n + 1 < dst_sz; n++)
+        dst[n] = src[n];
+    dst[n] = '\0';
+}
+
+static void mark_full_damage(int i) {
+    wins[i].has_damage = 1;
+    wins[i].dx = wins[i].x;
+    wins[i].dy = wins[i].y;
+    wins[i].dw = wins[i].w;
+    wins[i].dh = wins[i].h;
+}
 
 void guiproto_init(void) {
     for (int i = 0; i < GUI_MAX_WINS; i++) {
@@ -79,10 +99,7 @@ int guiproto_dispatch(const struct gui_msg *msg) {
                 wins[i].y = msg->y;
                 wins[i].w = msg->w ? msg->w : 200;
                 wins[i].h = msg->h ? msg->h : 120;
-                size_t n = 0;
-                for (; msg->title[n] && n + 1 < sizeof(wins[i].title); n++)
-                    wins[i].title[n] = msg->title[n];
-                wins[i].title[n] = '\0';
+                copy_title(wins[i].title, sizeof(wins[i].title), msg->title);
                 /* Surface allocated on ATTACH — CREATE alone is geometry only. */
                 return i;
             }
@@ -108,11 +125,7 @@ int guiproto_dispatch(const struct gui_msg *msg) {
         wins[msg->win_id].h = ah;
         if (surface_ensure(&wins[msg->win_id].surf, aw, ah) != 0)
             return -1;
-        wins[msg->win_id].has_damage = 1;
-        wins[msg->win_id].dx = wins[msg->win_id].x;
-        wins[msg->win_id].dy = wins[msg->win_id].y;
-        wins[msg->win_id].dw = aw;
-        wins[msg->win_id].dh = ah;
+        mark_full_damage((int)msg->win_id);
         return 0;
     }
     case GUI_OP_MOVE:
@@ -124,21 +137,15 @@ int guiproto_dispatch(const struct gui_msg *msg) {
             wins[msg->win_id].w = msg->w;
         if (msg->h)
             wins[msg->win_id].h = msg->h;
-        wins[msg->win_id].has_damage = 1;
-        wins[msg->win_id].dx = wins[msg->win_id].x;
-        wins[msg->win_id].dy = wins[msg->win_id].y;
-        wins[msg->win_id].dw = wins[msg->win_id].w;
-        wins[msg->win_id].dh = wins[msg->win_id].h;
+        mark_full_damage((int)msg->win_id);
         return 0;
     case GUI_OP_DAMAGE:
     case GUI_OP_SET_TITLE:
         if (msg->win_id >= GUI_MAX_WINS || !wins[msg->win_id].used)
             return -1;
         if (msg->op == GUI_OP_SET_TITLE) {
-            size_t n = 0;
-            for (; msg->title[n] && n + 1 < sizeof(wins[msg->win_id].title); n++)
-                wins[msg->win_id].title[n] = msg->title[n];
-            wins[msg->win_id].title[n] = '\0';
+            copy_title(wins[msg->win_id].title, sizeof(wins[msg->win_id].title),
+                       msg->title);
         } else {
             wins[msg->win_id].has_damage = 1;
             wins[msg->win_id].dx = msg->w ? msg->x : wins[msg->win_id].x;
