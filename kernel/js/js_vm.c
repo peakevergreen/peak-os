@@ -110,6 +110,20 @@ static int do_call(struct js_runtime *rt, int argc) {
     return 0;
 }
 
+/* VM execution budgets (see js_rt_set_budgets):
+ * - ins_budget / ins_used: one increment per opcode dispatched in this run.
+ *   Trips with "instruction budget exceeded" and sets rt->aborted.
+ * - max_objs / obj_count: enforced in js_obj_new(); allocation failure sets
+ *   "object budget exceeded" and rt->aborted. GC may reclaim objects but never
+ *   raises the cap; when obj_count exceeds 75% of max_objs we collect periodically. */
+static int vm_fail_obj_budget(struct js_runtime *rt) {
+    if (rt->err[0])
+        return -1;
+    snprintf(rt->err, sizeof(rt->err), "object budget exceeded");
+    rt->aborted = 1;
+    return -1;
+}
+
 int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
     int stop_at;
     if (entry_ip != (uint32_t)-1) {
@@ -131,11 +145,14 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
     }
 
     while (rt->fp > stop_at) {
-        if (rt->ins_used++ >= rt->ins_budget) {
+        /* Count each opcode fetch/dispatch against the instruction budget. */
+        if (rt->ins_used >= rt->ins_budget) {
             snprintf(rt->err, sizeof(rt->err), "instruction budget exceeded");
             rt->aborted = 1;
             return -1;
         }
+        rt->ins_used++;
+        /* Periodic GC when approaching the object cap (does not relax max_objs). */
         if ((rt->ins_used & 0x3FFF) == 0 && rt->obj_count > rt->max_objs * 3 / 4)
             js_gc(rt);
 
@@ -409,6 +426,8 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
         }
         case OP_NEW_OBJ: {
             struct js_object *o = js_obj_new(rt, 0);
+            if (!o)
+                return vm_fail_obj_budget(rt);
             struct js_value v;
             v.type = JT_OBJ;
             v.u.o = o;
@@ -418,6 +437,8 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
         }
         case OP_NEW_ARR: {
             struct js_object *o = js_obj_new(rt, 1);
+            if (!o)
+                return vm_fail_obj_budget(rt);
             struct js_value v;
             v.type = JT_ARR;
             v.u.o = o;

@@ -39,8 +39,13 @@ struct js_string *js_str_new(struct js_runtime *rt, const char *s, size_t len) {
 }
 
 struct js_object *js_obj_new(struct js_runtime *rt, int is_array) {
-    if (!rt || rt->obj_count >= rt->max_objs)
+    if (!rt)
         return NULL;
+    if (rt->obj_count >= rt->max_objs) {
+        snprintf(rt->err, sizeof(rt->err), "object budget exceeded");
+        rt->aborted = 1;
+        return NULL;
+    }
     if (rt->obj_count >= rt->obj_cap) {
         uint32_t nc = rt->obj_cap ? rt->obj_cap * 2 : 128;
         if (nc > rt->max_objs)
@@ -248,6 +253,8 @@ void js_rt_destroy(struct js_runtime *rt) {
     kfree(rt);
 }
 
+/* ins_budget: max VM dispatch steps per js_eval/js_vm_run (0 = keep current).
+ * max_objs: hard cap on live heap objects tracked by js_obj_new (0 = keep current). */
 void js_rt_set_budgets(struct js_runtime *rt, uint32_t ins_budget, uint32_t max_objs) {
     if (!rt)
         return;
