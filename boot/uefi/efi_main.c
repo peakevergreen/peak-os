@@ -1,6 +1,7 @@
 #include "efi.h"
 #include "boot_util.h"
 #include "boot_elf.h"
+#include "boot_load_ctx.h"
 #include "boot_paging.h"
 #include "peak_boot.h"
 #include "peak_conf.h"
@@ -9,23 +10,7 @@ static efi_system_table *ST;
 static efi_boot_services *BS;
 static efi_handle IH;
 
-static uint64_t pt_next, pt_end;
-static uint64_t g_pml4;
-
-static uint64_t alloc_pages(size_t n) {
-    uint64_t need = (uint64_t)n * BOOT_PAGE_SIZE;
-    if (pt_next + need > pt_end)
-        return 0;
-    uint64_t p = pt_next;
-    pt_next += need;
-    boot_memset((void *)(uintptr_t)p, 0, (size_t)need);
-    return p;
-}
-
-static int map_page_cb(uint64_t virt, uint64_t phys, int writable) {
-    struct boot_page_allocator a = { .alloc_pages = alloc_pages };
-    return boot_map_page(g_pml4, virt, phys, writable, &a);
-}
+static struct boot_load_ctx load_ctx;
 
 static uint32_t mask_size(uint32_t mask) {
     uint32_t n = 0;
@@ -258,8 +243,7 @@ efi_status efi_main(efi_handle image_handle, efi_system_table *system_table) {
         boot_serial_write_str("uefi: arena alloc failed\n");
         return EFI_LOAD_ERROR;
     }
-    pt_next = arena;
-    pt_end = arena + (uint64_t)arena_pages * 0x1000ULL;
+    boot_load_ctx_init(&load_ctx, arena, (uint64_t)arena_pages * 0x1000ULL);
 
     uint64_t bootinfo_phys = 0;
     if (BS->allocate_pages(EFI_ALLOCATE_ANY_PAGES, EFI_MEMORY_LOADER_DATA, 1,
@@ -273,15 +257,14 @@ efi_status efi_main(efi_handle image_handle, efi_system_table *system_table) {
                            &stack_phys) != EFI_SUCCESS)
         return EFI_LOAD_ERROR;
 
-    struct boot_page_allocator a = { .alloc_pages = alloc_pages };
-    if (boot_paging_init(&a, 0x100000000ULL, &g_pml4) != 0) {
+    if (boot_load_ctx_paging_init(&load_ctx, 0x100000000ULL) != 0) {
         boot_serial_write_str("uefi: paging init failed\n");
         return EFI_LOAD_ERROR;
     }
 
     struct boot_elf_image img = { .data = kdata, .size = (size_t)ksize };
     struct boot_loaded_kernel k;
-    if (boot_elf_load(&img, alloc_pages, map_page_cb, &k) != 0) {
+    if (boot_load_ctx_elf_load(&load_ctx, &img, &k) != 0) {
         boot_serial_write_str("uefi: ELF load failed\n");
         return EFI_LOAD_ERROR;
     }
@@ -404,7 +387,7 @@ efi_status efi_main(efi_handle image_handle, efi_system_table *system_table) {
         }
     }
 
-    boot_paging_activate(g_pml4);
+    boot_paging_activate(boot_load_ctx_pml4(&load_ctx));
     boot_serial_write_str("uefi: entering kernel\n");
 
     struct peak_bootinfo *info_v =

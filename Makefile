@@ -247,6 +247,7 @@ BIOS_C_SRCS := \
 	boot/common/util.c \
 	boot/common/elf_load.c \
 	boot/common/paging.c \
+	boot/common/load_ctx.c \
 	boot/common/peak_conf.c
 
 BIOS_S_SRCS := boot/bios/entry.S boot/bios/lm_enter.S
@@ -257,7 +258,8 @@ UEFI_SRCS := \
 	boot/uefi/efi_main.c \
 	boot/common/util.c \
 	boot/common/elf_load.c \
-	boot/common/paging.c
+	boot/common/paging.c \
+	boot/common/load_ctx.c
 UEFI_OBJS := $(patsubst %.c,$(BUILD)/uefi/%.o,$(notdir $(UEFI_SRCS)))
 
 .PHONY: all iso kernel bootloaders run clean test test-host smoke smoke-qemu \
@@ -510,16 +512,20 @@ $(BUILD)/uefi/paging.o: boot/common/paging.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UEFI_CFLAGS) -c $< -o $@
 
+$(BUILD)/uefi/load_ctx.o: boot/common/load_ctx.c
+	@mkdir -p $(dir $@)
+	$(CC) $(UEFI_CFLAGS) -c $< -o $@
+
 $(BUILD)/uefi/peak_conf.o: boot/common/peak_conf.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UEFI_CFLAGS) -c $< -o $@
 
 $(UEFI_EFI): $(BUILD)/uefi/efi_main.o $(BUILD)/uefi/util.o $(BUILD)/uefi/elf_load.o \
-             $(BUILD)/uefi/paging.o $(BUILD)/uefi/peak_conf.o
+             $(BUILD)/uefi/paging.o $(BUILD)/uefi/load_ctx.o $(BUILD)/uefi/peak_conf.o
 	@mkdir -p $(dir $@)
 	$(LLDLINK) /subsystem:efi_application /entry:efi_main /out:$@ \
 		$(BUILD)/uefi/efi_main.o $(BUILD)/uefi/util.o \
-		$(BUILD)/uefi/elf_load.o $(BUILD)/uefi/paging.o \
+		$(BUILD)/uefi/elf_load.o $(BUILD)/uefi/paging.o $(BUILD)/uefi/load_ctx.o \
 		$(BUILD)/uefi/peak_conf.o
 
 $(ESP_IMG): $(UEFI_EFI) $(KERNEL_ELF) boot/peak.conf scripts/mkesp.py
