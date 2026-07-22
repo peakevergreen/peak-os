@@ -1,6 +1,16 @@
 #ifndef PEAK_TYPES_H
 #define PEAK_TYPES_H
 
+#ifdef PEAK_HOST_TEST
+#include <stdint.h>
+#include <stddef.h>
+#ifndef NULL
+#define NULL ((void *)0)
+#endif
+#define true  1
+#define false 0
+typedef int bool;
+#else
 typedef unsigned char      uint8_t;
 typedef unsigned short     uint16_t;
 typedef unsigned int       uint32_t;
@@ -18,5 +28,6 @@ typedef int64_t            intptr_t;
 #define true  1
 #define false 0
 typedef int bool;
+#endif
 
 #endif
