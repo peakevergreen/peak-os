@@ -43,4 +43,9 @@ void cpu_sec_features_report(void);
 /* Sensitive wipe (best-effort; compiler barrier). */
 void memzero_explicit(void *p, size_t n);
 
+#ifdef PEAK_HOST_TEST
+/* Force crypto domain unavailable (host tests only). */
+void random_host_test_clear_crypto_ready(void);
+#endif
+
 #endif

@@ -62,8 +62,11 @@ ctr build … && ctr run -p 8080 …
 ```
 
 Browser: open a tab, type a URL, press Enter (no unsolicited TLS on `gui`).
-Local JS demo: `peak://demo` (no network). HTTPS trust is pin or TOFU plus
-hostname match when the leaf certificate can be parsed (`tls_hostname_matched`).
+Local JS demo: `peak://demo` (no network). HTTPS trust is **explicit SHA-256
+pins** or **trust-on-first-use** (`/etc/peak/tls-tofu`) plus hostname match when
+the leaf certificate can be parsed (`tls_hostname_matched`). There is **no X.509
+chain validation** (no CA store, no path building, no CRL/OCSP) — by design for
+this minimal in-guest client; TOFU/pins provide continuity, not WebPKI assurance.
 
 ## Stack
 
@@ -79,8 +82,9 @@ hostname match when the leaf certificate can be parsed (`tls_hostname_matched`).
 
 - Small connection table (`NET_TCP_MAX`)
 - Weak RNG (timer-based) — not for real security
-- Certificate verification is pins + trust-on-first-use (`/etc/peak/tls-tofu`);
-  no X.509 chain validation. A changed cert for a known host fails closed —
+- **Certificate trust is pins + TOFU only** (`/etc/peak/tls-tofu`); **full X.509
+  chain validation is intentionally out of scope** (no CA bundle, no path
+  validation). A changed cert for a known host fails closed —
   `rm /etc/peak/tls-tofu` to re-trust after a legitimate rotation
 - Bridged mode is platform-specific (macOS vmnet); Linux tap/bridge is not wired yet
 

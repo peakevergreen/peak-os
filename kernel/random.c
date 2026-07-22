@@ -286,6 +286,12 @@ uint32_t random_status_flags(void) {
     return status_flags;
 }
 
+#ifdef PEAK_HOST_TEST
+void random_host_test_clear_crypto_ready(void) {
+    status_flags &= ~RANDOM_READY_CRYPTO;
+}
+#endif
+
 int random_ready(enum random_domain domain) {
     if (!inited)
         return 0;
