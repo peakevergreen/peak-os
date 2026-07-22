@@ -109,6 +109,53 @@ static void expect(int cond, const char *msg) {
     }
 }
 
+#define SURF_MAX_DAMAGE 8
+struct surface_rect { uint32_t x, y, w, h; };
+
+static void surf_clear_test(int *count, int *overflow) {
+    *count = 0;
+    *overflow = 0;
+}
+
+static void surf_add_test(struct surface_rect *d, int *count, int *overflow,
+                          uint32_t sw, uint32_t sh,
+                          uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    if (!w || !h || *overflow)
+        return;
+    if (x >= sw || y >= sh)
+        return;
+    if (x + w > sw)
+        w = sw - x;
+    if (y + h > sh)
+        h = sh - y;
+    if (!w || !h)
+        return;
+    for (int si = 0; si < *count; si++) {
+        struct surface_rect *r = &d[si];
+        uint32_t x2 = x + w, y2 = y + h;
+        uint32_t rx2 = r->x + r->w, ry2 = r->y + r->h;
+        if (x >= r->x && y >= r->y && x2 <= rx2 && y2 <= ry2)
+            return;
+        if (r->x >= x && r->y >= y && rx2 <= x2 && ry2 <= y2) {
+            r->x = x;
+            r->y = y;
+            r->w = w;
+            r->h = h;
+            return;
+        }
+    }
+    if (*count >= SURF_MAX_DAMAGE) {
+        *overflow = 1;
+        *count = 0;
+        return;
+    }
+    d[*count].x = x;
+    d[*count].y = y;
+    d[*count].w = w;
+    d[*count].h = h;
+    (*count)++;
+}
+
 int main(void) {
     uint32_t bx, by, bw, bh;
 
@@ -140,6 +187,22 @@ int main(void) {
     fill_u32_row(row, 63, 0x11223344u);
     expect(row[0] == 0x11223344u && row[62] == 0x11223344u, "span fill odd width");
     expect(row[63] == 0, "span fill does not overrun");
+
+    /* --- surface rect damage (mirrors surface.c) --- */
+    struct surface_rect surf_dmg[SURF_MAX_DAMAGE];
+    int surf_count = 0, surf_overflow = 0;
+    uint32_t surf_w = 640, surf_h = 480;
+
+    surf_clear_test(&surf_count, &surf_overflow);
+    surf_add_test(surf_dmg, &surf_count, &surf_overflow, surf_w, surf_h, 10, 10, 20, 20);
+    surf_add_test(surf_dmg, &surf_count, &surf_overflow, surf_w, surf_h, 12, 12, 5, 5);
+    expect(surf_count == 1, "surface contained rect skipped");
+    surf_add_test(surf_dmg, &surf_count, &surf_overflow, surf_w, surf_h, 50, 50, 10, 10);
+    expect(surf_count == 2, "surface disjoint rect added");
+    for (int i = 0; i < SURF_MAX_DAMAGE + 2; i++)
+        surf_add_test(surf_dmg, &surf_count, &surf_overflow, surf_w, surf_h,
+                      (uint32_t)(i * 10), 0, 5, 5);
+    expect(surf_overflow == 1, "surface overflow flag");
 
     if (fails) {
         printf("%d failure(s)\n", fails);

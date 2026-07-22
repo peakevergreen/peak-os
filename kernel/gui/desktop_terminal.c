@@ -21,6 +21,73 @@ struct term_state {
 static struct term_state terms[MAX_WINS];
 static int active_term;
 
+static void term_mark_cell_surf_dirty(int slot, struct term_state *t) {
+    if (slot < 0 || slot >= MAX_WINS || !wins[slot].open)
+        return;
+    struct win *w = &wins[slot];
+    uint32_t cw = fb_cell_w();
+    uint32_t ch = fb_cell_h();
+    uint32_t th = desktop_title_h();
+    uint32_t tx = desktop_u(12);
+    uint32_t ty = th + desktop_u(8);
+    uint32_t area_h = w->h > th + desktop_u(16) ? w->h - th - desktop_u(16) : ch;
+    uint32_t vis = area_h / ch;
+    if (vis > TERM_VIEW)
+        vis = TERM_VIEW;
+    if (vis < 1)
+        vis = 1;
+    int start = (int)t->row - (int)vis + 1 - t->scroll;
+    if (start < 0)
+        start = 0;
+    int dirty_vis = (int)t->dirty_row - start;
+    if (dirty_vis < 0 || dirty_vis >= (int)vis) {
+        desktop_mark_win_surf_dirty(slot);
+        return;
+    }
+    uint32_t c0 = t->dirty_col;
+    uint32_t c1 = t->prev_caret_col;
+    uint32_t c2 = t->caret_col < TERM_COLS ? t->caret_col : t->col;
+    if (c1 > c0)
+        c0 = c1;
+    if (c2 > c0)
+        c0 = c2;
+    uint32_t cmin = t->dirty_col;
+    if (t->prev_caret_col < cmin)
+        cmin = t->prev_caret_col;
+    if (c2 < cmin)
+        cmin = c2;
+    uint32_t rx = tx + cmin * cw;
+    uint32_t ry = ty + (uint32_t)dirty_vis * ch;
+    uint32_t rw = (c0 - cmin + 2) * cw;
+    if (rx + rw > w->w)
+        rw = w->w > rx ? w->w - rx : cw;
+    desktop_mark_win_surf_dirty_rect(slot, rx, ry, rw, ch);
+}
+
+static void term_mark_surf_dirty(int slot, struct term_state *t) {
+    if (t->full_redraw || t->cell_dirty == 0 || t->scroll != 0 || t->sel_a >= 0)
+        desktop_mark_win_surf_dirty(slot);
+    else
+        term_mark_cell_surf_dirty(slot, t);
+}
+
+static void term_mark_active_surf_dirty(void) {
+    int slot = active_term;
+    if (slot < 0 || slot >= MAX_WINS || !wins[slot].open ||
+        wins[slot].kind != APP_TERM) {
+        for (int i = 0; i < MAX_WINS; i++) {
+            if (wins[i].open && wins[i].kind == APP_TERM) {
+                slot = i;
+                break;
+            }
+        }
+    }
+    if (slot >= 0 && slot < MAX_WINS)
+        term_mark_surf_dirty(slot, &terms[slot]);
+    else
+        desktop_mark_focus_surf_dirty();
+}
+
 static struct term_state *term_active(void) {
     if (active_term >= 0 && active_term < MAX_WINS &&
         wins[active_term].open && wins[active_term].kind == APP_TERM)
@@ -66,7 +133,7 @@ void gui_term_reset(void) {
     t->full_redraw = 1;
     t->cell_dirty = 0;
     dirty_bits |= DIRTY_TERM;
-    desktop_mark_focus_surf_dirty();
+    term_mark_active_surf_dirty();
 }
 
 void gui_term_set_edit(const char *prompt, const char *text, uint32_t caret,
@@ -106,7 +173,7 @@ void gui_term_set_edit(const char *prompt, const char *text, uint32_t caret,
     }
     t->full_redraw = 1;
     dirty_bits |= DIRTY_TERM;
-    desktop_mark_focus_surf_dirty();
+    term_mark_active_surf_dirty();
 }
 
 int desktop_active_term_index(void) {
@@ -131,7 +198,7 @@ void gui_term_putc(char c) {
             term_scroll_up_buf(t);
         t->full_redraw = 1;
         dirty_bits |= DIRTY_TERM;
-        desktop_mark_focus_surf_dirty();
+        term_mark_active_surf_dirty();
         return;
     }
     if (c == '\b') {
@@ -144,7 +211,7 @@ void gui_term_putc(char c) {
             t->prev_caret_col = t->col + 1;
         }
         dirty_bits |= DIRTY_TERM;
-        desktop_mark_focus_surf_dirty();
+        term_mark_active_surf_dirty();
         return;
     }
     if (c < 32)
@@ -163,7 +230,7 @@ void gui_term_putc(char c) {
     t->lines[t->row][t->col] = '\0';
     t->cell_dirty = 1;
     dirty_bits |= DIRTY_TERM;
-    desktop_mark_focus_surf_dirty();
+    term_mark_active_surf_dirty();
 }
 
 void desktop_terminal_init(void) {
@@ -252,17 +319,17 @@ int desktop_terminal_key(int key) {
         tt->scroll++;
         tt->full_redraw = 1;
         dirty_bits |= DIRTY_TERM;
-        desktop_mark_focus_surf_dirty();
+        term_mark_active_surf_dirty();
     } else if (key == KEY_DOWN) {
         if (tt->scroll > 0)
             tt->scroll--;
         tt->full_redraw = 1;
         dirty_bits |= DIRTY_TERM;
-        desktop_mark_focus_surf_dirty();
+        term_mark_active_surf_dirty();
     } else {
         shell_feed_key(key);
         dirty_bits |= DIRTY_TERM;
-        desktop_mark_focus_surf_dirty();
+        term_mark_active_surf_dirty();
     }
     return 1;
 }
@@ -274,5 +341,5 @@ void desktop_terminal_wheel(int wheel) {
         tt->scroll = 0;
     tt->full_redraw = 1;
     dirty_bits |= DIRTY_TERM;
-    desktop_mark_focus_surf_dirty();
+    term_mark_active_surf_dirty();
 }

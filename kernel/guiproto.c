@@ -145,7 +145,11 @@ int guiproto_dispatch(const struct gui_msg *msg) {
             wins[msg->win_id].dy = msg->h ? msg->y : wins[msg->win_id].y;
             wins[msg->win_id].dw = msg->w ? msg->w : wins[msg->win_id].w;
             wins[msg->win_id].dh = msg->h ? msg->h : wins[msg->win_id].h;
-            surface_mark_dirty(&wins[msg->win_id].surf);
+            if (msg->w && msg->h)
+                surface_mark_dirty_rect(&wins[msg->win_id].surf,
+                                        msg->x, msg->y, msg->w, msg->h);
+            else
+                surface_mark_dirty(&wins[msg->win_id].surf);
         }
         return 0;
     default:
