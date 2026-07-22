@@ -6,7 +6,7 @@ PeakVec is a Peak-authored, in-guest vector index for session/workspace context.
 
 - **Local-only by default.** Embeddings are hashed n-grams (`peakvec_embed_text`) — no model weights, no network.
 - **Slim kernel, large data on disk.** Index pages through the [blobstore](#blobstore) LRU cache (128 KiB). Total size scales with the block device.
-- **Brute-force cosine** over int16 vectors (`PEAKVEC_DIM=64`). ANN (HNSW/IVF) is deferred until corpora need it.
+- **Brute-force cosine** over int16 vectors (`PEAKVEC_DIM=64`). ANN (HNSW/IVF) is deferred until corpora need it — revisit when a namespace regularly exceeds ~512 live entries or query latency shows up in Monitor/sysmon.
 - **Capability-gated:** `CAP_VEC` (shell default includes it); agent namespace also accepts `CAP_AGENT`.
 
 ## Blobstore
