@@ -42,6 +42,64 @@ static struct blob_super super;
 static struct cache_page cache[BLOBSTORE_CACHE_PAGES];
 static uint32_t lru_tick;
 static int ready;
+/* Open-addressed map: global_page -> cache slot (0xFF = empty). */
+#define CACHE_HASH_SIZE 64u
+static uint8_t cache_hash[CACHE_HASH_SIZE];
+
+static uint32_t cache_hash_slot(uint32_t global_page) {
+    return global_page & (CACHE_HASH_SIZE - 1u);
+}
+
+static void cache_hash_clear(void) {
+    memset(cache_hash, 0xFF, sizeof(cache_hash));
+}
+
+static void cache_hash_insert(uint32_t global_page, uint32_t idx) {
+    uint32_t h = cache_hash_slot(global_page);
+    for (uint32_t n = 0; n < CACHE_HASH_SIZE; n++) {
+        uint32_t s = (h + n) & (CACHE_HASH_SIZE - 1u);
+        if (cache_hash[s] == 0xFF) {
+            cache_hash[s] = (uint8_t)idx;
+            return;
+        }
+    }
+}
+
+static void cache_hash_remove(uint32_t global_page, uint32_t idx) {
+    uint32_t h = cache_hash_slot(global_page);
+    for (uint32_t n = 0; n < CACHE_HASH_SIZE; n++) {
+        uint32_t s = (h + n) & (CACHE_HASH_SIZE - 1u);
+        if (cache_hash[s] == 0xFF)
+            return;
+        if (cache_hash[s] == (uint8_t)idx) {
+            cache_hash[s] = 0xFF;
+            /* Linear probe deletion: reinsert following cluster. */
+            uint32_t next = (s + 1) & (CACHE_HASH_SIZE - 1u);
+            while (cache_hash[next] != 0xFF) {
+                uint8_t re = cache_hash[next];
+                cache_hash[next] = 0xFF;
+                if (re < BLOBSTORE_CACHE_PAGES && cache[re].valid)
+                    cache_hash_insert(cache[re].global_page, re);
+                next = (next + 1) & (CACHE_HASH_SIZE - 1u);
+            }
+            return;
+        }
+    }
+}
+
+static int cache_hash_find(uint32_t global_page) {
+    uint32_t h = cache_hash_slot(global_page);
+    for (uint32_t n = 0; n < CACHE_HASH_SIZE; n++) {
+        uint32_t s = (h + n) & (CACHE_HASH_SIZE - 1u);
+        uint8_t idx = cache_hash[s];
+        if (idx == 0xFF)
+            return -1;
+        if (idx < BLOBSTORE_CACHE_PAGES && cache[idx].valid &&
+            cache[idx].global_page == global_page)
+            return (int)idx;
+    }
+    return -1;
+}
 
 static uint64_t page_to_lba(uint32_t page) {
     return (uint64_t)BLOB_DATA_LBA +
@@ -117,29 +175,36 @@ static int flush_page(struct cache_page *cp) {
 
 static struct cache_page *cache_evict(void) {
     struct cache_page *victim = &cache[0];
+    uint32_t victim_i = 0;
     for (uint32_t i = 1; i < BLOBSTORE_CACHE_PAGES; i++) {
         if (!cache[i].valid) {
             victim = &cache[i];
+            victim_i = i;
             break;
         }
-        if (cache[i].lru < victim->lru)
+        if (cache[i].lru < victim->lru) {
             victim = &cache[i];
+            victim_i = i;
+        }
     }
-    if (victim->valid && victim->dirty)
-        (void)flush_page(victim);
+    if (victim->valid) {
+        if (victim->dirty)
+            (void)flush_page(victim);
+        cache_hash_remove(victim->global_page, victim_i);
+    }
     victim->valid = 0;
     victim->dirty = 0;
     return victim;
 }
 
 static struct cache_page *cache_get(uint32_t global_page, int for_write) {
-    for (uint32_t i = 0; i < BLOBSTORE_CACHE_PAGES; i++) {
-        if (cache[i].valid && cache[i].global_page == global_page) {
-            cache[i].lru = ++lru_tick;
-            return &cache[i];
-        }
+    int hit = cache_hash_find(global_page);
+    if (hit >= 0) {
+        cache[hit].lru = ++lru_tick;
+        return &cache[hit];
     }
     struct cache_page *cp = cache_evict();
+    uint32_t idx = (uint32_t)(cp - cache);
     cp->global_page = global_page;
     uint32_t secs = BLOBSTORE_PAGE_SIZE / BLOCKDEV_SECTOR_SIZE;
     if (blockdev_read(page_to_lba(global_page), secs, cp->data) != 0) {
@@ -150,6 +215,7 @@ static struct cache_page *cache_get(uint32_t global_page, int for_write) {
     cp->valid = 1;
     cp->dirty = 0;
     cp->lru = ++lru_tick;
+    cache_hash_insert(global_page, idx);
     return cp;
 }
 
@@ -162,6 +228,7 @@ static struct blob_obj *find_obj(uint32_t id) {
 }
 
 void blobstore_init(void) {
+    cache_hash_clear();
     memset(objects, 0, sizeof(objects));
     memset(cache, 0, sizeof(cache));
     memset(&super, 0, sizeof(super));
