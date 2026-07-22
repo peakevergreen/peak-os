@@ -148,9 +148,9 @@ struct js_runtime {
     struct js_string **strs;
     uint32_t heap_str_count;
     uint32_t heap_str_cap;
-    uint32_t ins_budget;
-    uint32_t ins_used;
-    uint32_t max_objs;
+    uint32_t ins_budget; /* max opcode dispatches per eval/run */
+    uint32_t ins_used;   /* consumed this eval/run */
+    uint32_t max_objs;   /* hard cap on js_obj_new allocations */
     uint32_t gc_runs;
     char err[JS_ERR_MAX];
     struct js_timer timers[JS_TIMER_MAX];

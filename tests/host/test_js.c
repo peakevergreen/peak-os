@@ -67,7 +67,7 @@ int main(void) {
     js_rt_set_budgets(rt, JS_INS_BUDGET_DEFAULT, 8);
     rc = js_eval(rt, "var a=[]; for(var i=0;i<100;i=i+1){a[i]={};} 1", "<objs>", out,
                  sizeof(out));
-    expect(rc != 0 || out[0], "object budget exercised");
+    expect(rc != 0, "object budget trips");
     js_rt_set_budgets(rt, JS_INS_BUDGET_DEFAULT, JS_HEAP_OBJS_DEFAULT);
 
     js_rt_destroy(rt);

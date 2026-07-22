@@ -61,6 +61,9 @@ KERNEL_COMMON_SRCS := \
 	kernel/fdt.c \
 	kernel/js/js_core.c \
 	kernel/js/js_compile.c \
+	kernel/js/js_lex.c \
+	kernel/js/js_codegen.c \
+	kernel/js/js_parse.c \
 	kernel/js/js_vm.c \
 	kernel/gui/dom.c \
 	kernel/gui/css.c \
@@ -301,7 +304,8 @@ $(HOST_TEST_DIR)/test_lan: tests/host/test_lan.c kernel/net/dhcp_util.c kernel/n
 	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -Iboot/include -o $@ $^
 
 $(HOST_TEST_DIR)/test_js: tests/host/test_js.c tests/host/js_host_stubs.c \
-		kernel/js/js_core.c kernel/js/js_compile.c kernel/js/js_vm.c | $(HOST_TEST_DIR)
+		kernel/js/js_core.c kernel/js/js_compile.c kernel/js/js_lex.c \
+		kernel/js/js_codegen.c kernel/js/js_parse.c kernel/js/js_vm.c | $(HOST_TEST_DIR)
 	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
 		-Itests/host/include -Ikernel/include -Ikernel/js -o $@ $^
 
