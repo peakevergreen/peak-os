@@ -25,7 +25,7 @@ so the layout cannot drift.
 
 Higher-half kernel at `0xffffffff80000000`; HHDM at `0xffff800000000000`.
 
-Linker scripts: `kernel/arch/{x86_64,aarch64}/linker.ld` (Makefile `-T`). Root `linker.ld` is a deprecated stub only.
+Linker scripts: `kernel/arch/{x86_64,aarch64}/linker.ld` (Makefile `-T`). There is no root `linker.ld`; do not invent one.
 
 ## HAL
 
@@ -39,8 +39,9 @@ x86 leaf sources (`gdt`, `idt`, `pic`, `ata`, FPU/RTC/sound, `isr.S`, `context.S
 under `kernel/arch/x86_64/`. Port I/O helpers are in `kernel/include/x86_io.h` (pulled in
 by `util.h` on x86 only). Prefer new CPU-specific code under `kernel/arch/<triple>/`.
 
-Empty placeholders `kernel/drivers/gpio/` and `kernel/drivers/sound/` await future
-platform leaf drivers; GPIO/sound for Pi currently live under `kernel/platform/rpi/`.
+Placeholders `kernel/drivers/gpio/` and `kernel/drivers/sound/` hold README notes only;
+real GPIO/sound for Pi live under `kernel/platform/rpi/`, and x86 sound under
+`kernel/arch/x86_64/sound.c`.
 
 Portable subsystems: `fb_*`, keyboard/mouse queues, `timer_ticks`, net above L2, VFS/PeakFS, GUI/JS.
 
