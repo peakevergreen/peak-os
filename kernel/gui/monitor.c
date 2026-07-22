@@ -8,11 +8,23 @@
 #include "theme.h"
 #include "util.h"
 
+/*
+ * System Monitor desktop pane — overview, task list, and network tabs.
+ * Polls sysmon on tick; large history buffers live in static storage.
+ */
+
+enum monitor_page {
+    MON_PAGE_OVERVIEW = 0,
+    MON_PAGE_TASKS    = 1,
+    MON_PAGE_NET      = 2,
+    MON_PAGE_COUNT    = 3,
+};
+
 static int needs_redraw = 1;
-static int page; /* 0 overview, 1 processes, 2 network */
+static int page; /* MON_PAGE_* */
 static int paused;
 
-/* Keep large series/task buffers off the 8KB kernel stack. */
+/* History / task scratch — keep off the 8KB kernel stack. */
 static struct sysmon_sample g_hist[SYSMON_HISTORY];
 static uint32_t g_series_a[SYSMON_HISTORY];
 static uint32_t g_series_b[SYSMON_HISTORY];
@@ -21,7 +33,8 @@ static struct task g_tasks[MAX_TASKS];
 
 void monitor_reset(void) {
     needs_redraw = 1;
-    page = 0;
+    page = MON_PAGE_OVERVIEW;
+    paused = 0;
 }
 
 void monitor_clear_redraw(void) {
@@ -40,20 +53,20 @@ void monitor_input(char c) {
         sysmon_reset_history();
         needs_redraw = 1;
     } else if (c == '1') {
-        page = 0;
+        page = MON_PAGE_OVERVIEW;
         needs_redraw = 1;
     } else if (c == '2') {
-        page = 1;
+        page = MON_PAGE_TASKS;
         needs_redraw = 1;
     } else if (c == '3') {
-        page = 2;
+        page = MON_PAGE_NET;
         needs_redraw = 1;
     } else if (c == '[' || c == 'h' || c == 'H') {
-        if (page > 0)
+        if (page > MON_PAGE_OVERVIEW)
             page--;
         needs_redraw = 1;
     } else if (c == ']' || c == 'l' || c == 'L') {
-        if (page < 2)
+        if (page < MON_PAGE_NET)
             page++;
         needs_redraw = 1;
     }
@@ -177,7 +190,7 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
     row += ch + U(8);
 
-    if (page == 0) {
+    if (page == MON_PAGE_OVERVIEW) {
         char mb[24], tb[24], pk[24];
 
         sysmon_format_bytes(s->mem_used_pages * 4096ull, mb, sizeof(mb));
@@ -244,7 +257,7 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         if (row + graph_h < foot)
             draw_spark(text_x, row, graph_w, graph_h, g_series_c, hn, t->title, surface);
 
-    } else if (page == 1) {
+    } else if (page == MON_PAGE_TASKS) {
         fb_draw_string_fit(text_x, row, inner_w, "PID  STATE   TICKS   NAME", dim, bg);
         row += ch + U(4);
         int n = sched_list_tasks(g_tasks, MAX_TASKS);

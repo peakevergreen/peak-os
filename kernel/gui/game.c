@@ -175,6 +175,8 @@ static void spawn_ahead(void) {
     }
 }
 
+/* --- Input / simulation --- */
+
 void game_reset(void) {
     cam_x = 0;
     player_x = 80;
@@ -338,6 +340,8 @@ int game_wants_redraw(void) {
 void game_clear_redraw(void) {
     needs_redraw = 0;
 }
+
+/* --- Rendering --- */
 
 static uint32_t blend(uint32_t a, uint32_t b, int u256) {
     int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
