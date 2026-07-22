@@ -71,6 +71,11 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/crypto.c \
 	kernel/net/tls.c \
 	kernel/net/net.c \
+	kernel/net/arp.c \
+	kernel/net/dhcp.c \
+	kernel/net/dns.c \
+	kernel/net/tcp.c \
+	kernel/net/http.c \
 	kernel/random.c \
 	kernel/cap.c \
 	kernel/stackchk.c \
