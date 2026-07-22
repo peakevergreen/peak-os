@@ -2,6 +2,17 @@
 
 Peak ships a deep `/bin` utility pack as kernel builtins (not separate ELF binaries yet).
 
+## Quoting
+
+The shell splits on spaces and supports `"double"` and `'single'` quotes (quotes are stripped). Example:
+
+```
+ask "create fib.c"
+js -e '1+2*3'
+```
+
+Unclosed quotes treat the remainder of the line as one argument. Max 16 argv slots; no pipes or redirection yet.
+
 ## Navigation
 | Command | Notes |
 |---------|-------|
@@ -28,7 +39,7 @@ Peak ships a deep `/bin` utility pack as kernel builtins (not separate ELF binar
 ## Text
 | Command | Notes |
 |---------|-------|
-| `cat` `head` `tail` `wc` | file viewers |
+| `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N`) |
 | `grep <pat> <file>` | substring match |
 | `hexdump` `strings` | binary helpers |
 | `echo` `clear` `edit` | misc |
@@ -41,7 +52,19 @@ Peak ships a deep `/bin` utility pack as kernel builtins (not separate ELF binar
 | `scale [1-4]` | UI glyph scale |
 | `date` `free` `env` `export` `which` `seq` `sleep` | |
 | `top` `sysmon` | live system monitor (sparklines; `q` quit, `-n` once) |
-| `help` `man <cmd>` | categorized help |
+| `ps` | list kernel tasks/threads |
+| `true` `false` `sh` | exit status helpers; nested `ush>` loop |
+| `js -e 'code'` / `js file.js` | Peak JS CLI — [browser-js.md](browser-js.md) |
+| `help` `man <cmd>` | categorized help (`-h` / `--help` on most utils) |
 | `ask` `audit` `memory` `policy` `peak` `gui` | agent + desktop |
+| `privacy` | `persist` / `net-allow` / `kill-switch` — [privacy.md](privacy.md) |
+
+`gui` enters the desktop; **Ctrl+Alt+Esc** returns to CLI.
+
+## Network / containers
+| Command | Notes |
+|---------|-------|
+| `ifconfig` `ping` `wget` | IPv4 + HTTP — [network.md](network.md) |
+| `ctr` `ctrd` | Dockerfile staging / static HTTP (not OCI) — [containers.md](containers.md) |
 
 Prompt shows cwd: `peak:/home/dev/workspace> `

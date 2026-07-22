@@ -1,4 +1,5 @@
 #include "console.h"
+#include "console_scroll.h"
 #include "fb.h"
 #include "gui.h"
 #include "serial.h"
@@ -47,16 +48,18 @@ static void scroll(void) {
     struct framebuffer *fb = fb_get();
     uint32_t glyph_h = fb_cell_h();
     uint32_t h = (uint32_t)fb->height;
-    if (glyph_h == 0 || h <= glyph_h)
+    uint32_t copy_rows = 0;
+    if (!console_scroll_plan(h, glyph_h, &copy_rows))
         return;
 
     /*
      * CLI draws glyphs to the *front* buffer (not in a compose frame).
      * Scrolling the compositor back buffer and presenting it would wipe
      * the visible boot log with a stale/empty back — keep CLI on front.
+     * Invariant: scroll copies via fb->addr (front), never fb backbuffer.
      */
     uint32_t line_bytes = (uint32_t)fb->pitch;
-    for (uint32_t y = 0; y < h - glyph_h; y++) {
+    for (uint32_t y = 0; y < copy_rows; y++) {
         uint8_t *dst = fb->addr + y * fb->pitch;
         uint8_t *src = fb->addr + (y + glyph_h) * fb->pitch;
         memcpy(dst, src, line_bytes);

@@ -1,7 +1,13 @@
 #ifndef PEAK_LIBPEAK_H
 #define PEAK_LIBPEAK_H
 
+#ifdef PEAK_HOST_TEST
+/* Do not pull kernel/include/stdint.h — compile host tests without -Ikernel/include. */
+#include <stdint.h>
+#include <stddef.h>
+#else
 #include "types.h"
+#endif
 
 void peak_puts(const char *s);
 void peak_perror(const char *tool, const char *msg);

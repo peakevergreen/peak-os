@@ -107,15 +107,17 @@ Peak loaders hand a versioned **BootInfo** (memory map, framebuffer, HHDM, optio
 | Command | What it does |
 |---------|----------------|
 | `help` / `man <cmd>` | Categorized CLI help |
-| `pwd` `cd` `ls -l` `mkdir` `rm` `cp` `grep` … | `/bin` utility pack |
+| `pwd` `cd` `ls -l` `mkdir` `rm` `cp` `grep` … | `/bin` utility pack ([docs/CLI.md](docs/CLI.md); quotes supported) |
 | `theme list` / `theme set amber` | Shared CLI + GUI themes |
 | `scale 1..4` | UI glyph/chrome scale (default 3) |
-| `ask create fib.c` | peak-agent (in-guest planner) |
-| `gui` | Multi-window desktop (software FB + damage presents) |
+| `ask "create fib.c"` | peak-agent (in-guest planner) |
+| `js -e '1+2'` | Peak JS CLI |
+| `privacy` | Persist profile / net-allow / kill-switch |
+| `gui` | Multi-window desktop (Ctrl+Alt+Esc leaves) |
 | `ctr build` / `ctr run` | In-guest demos |
 | Browser (GUI) | Tabs; `http(s)://` via in-guest stack |
 | `ifconfig` / `ping` / `wget` | IPv4 + TLS tools |
-| `top` / `sysmon` | Live system monitor (incl. compose/present timing) |
+| `top` / `sysmon` / `ps` | Live system monitor + task list |
 
 Desktop stress checklist: [scripts/gui-stress-checklist.md](scripts/gui-stress-checklist.md).
 

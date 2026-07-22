@@ -37,4 +37,6 @@ Agent memory, net grants, and browser storage are session-scoped unless the user
 Settings → Privacy: profile, clear session, clipboard TTL, TOFU revoke, audit view.  
 Settings → Network: kill switch, outbound, listener scope, active ports.
 
+CLI: `privacy persist private|workspace|full`, `privacy net-allow`, `privacy kill-switch [on|off]` (same posture as Settings). See [CLI.md](CLI.md).
+
 See [security-model.md](security-model.md).

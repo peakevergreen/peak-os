@@ -40,11 +40,13 @@ KERNEL_COMMON_SRCS := \
 	kernel/keyboard.c \
 	kernel/mouse.c \
 	kernel/shell.c \
+	kernel/shell_split.c \
 	kernel/theme.c \
 	kernel/wallpaper.c \
 	kernel/settings.c \
 	kernel/sync.c \
 	kernel/util.c \
+	kernel/console_scroll.c \
 	kernel/ctr.c \
 	kernel/sysmon.c \
 	kernel/clipboard.c \
@@ -261,12 +263,24 @@ test-host:
 		-Itests/host/include -Iboot/include -Ikernel/include \
 		-o $(BUILD)/tests/test_random tests/host/test_random.c \
 		kernel/random.c kernel/net/crypto.c
+	$(CC) -std=c11 -Wall -Wextra -O2 -DPEAK_HOST_TEST \
+		-o $(BUILD)/tests/test_libpeak tests/host/test_libpeak.c \
+		kernel/user/libpeak.c
+	$(CC) -std=c11 -Wall -Wextra -O2 -DPEAK_HOST_TEST \
+		-o $(BUILD)/tests/test_shell_split tests/host/test_shell_split.c \
+		kernel/shell_split.c
+	$(CC) -std=c11 -Wall -Wextra -O2 -DPEAK_HOST_TEST \
+		-o $(BUILD)/tests/test_console_scroll tests/host/test_console_scroll.c \
+		kernel/console_scroll.c
 	$(BUILD)/tests/test_phase7
 	$(BUILD)/tests/test_gfx
 	$(BUILD)/tests/test_boot
 	$(BUILD)/tests/test_lan
 	$(BUILD)/tests/test_js
 	$(BUILD)/tests/test_random
+	$(BUILD)/tests/test_libpeak
+	$(BUILD)/tests/test_shell_split
+	$(BUILD)/tests/test_console_scroll
 
 smoke:
 	./scripts/smoke-cli.sh

@@ -1,3 +1,27 @@
+#ifdef PEAK_HOST_TEST
+#include "../include/libpeak.h"
+#include <string.h>
+#include <stdio.h>
+
+void peak_puts(const char *s) {
+    fputs(s, stdout);
+}
+
+void peak_perror(const char *tool, const char *msg) {
+    fputs(tool, stdout);
+    fputs(": ", stdout);
+    fputs(msg, stdout);
+    fputs("\n", stdout);
+}
+
+void peak_usage(const char *tool, const char *usage) {
+    fputs("usage: ", stdout);
+    fputs(tool, stdout);
+    fputs(" ", stdout);
+    fputs(usage, stdout);
+    fputs("\n", stdout);
+}
+#else
 #include "libpeak.h"
 #include "console.h"
 #include "util.h"
@@ -20,6 +44,7 @@ void peak_usage(const char *tool, const char *usage) {
     console_write(usage);
     console_write("\n");
 }
+#endif
 
 int peak_atoi(const char *s) {
     int v = 0;

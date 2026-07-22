@@ -30,6 +30,11 @@ echo "==> cell metrics"
 grep -q fb_cell_h kernel/fb.c
 grep -q fb_cell_h kernel/console.c
 
+echo "==> CLI front-buffer scroll invariant"
+grep -q 'console_scroll_plan' kernel/console.c
+grep -q 'fb->addr' kernel/console.c
+grep -q 'keep CLI on front' kernel/console.c
+
 echo "==> boot logo + status compaction"
 grep -q console_boot_logo kernel/console.c
 grep -q 'cols - used - tag_len - 1' kernel/console.c

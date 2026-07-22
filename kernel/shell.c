@@ -1,4 +1,5 @@
 #include "shell.h"
+#include "shell_split.h"
 #include "console.h"
 #include "fb.h"
 #include "gui.h"
@@ -18,6 +19,7 @@ static int sel_anchor; /* -1 = no selection; else selection is [min(anchor,caret
 static char clipboard[256];
 static char cwd[VFS_PATH_MAX] = "/home/dev/workspace";
 static char prompt_buf[VFS_PATH_MAX + 16];
+static uint32_t edit_paint_len; /* last MODE_CLI painted prompt+line width */
 
 #define ENV_MAX 32
 #define ENV_KEY 32
@@ -137,6 +139,7 @@ static void print_prompt(void) {
     line_len = 0;
     sel_anchor = -1;
     line[0] = '\0';
+    edit_paint_len = (uint32_t)strlen(prompt_buf);
     if (mode == MODE_GUI)
         gui_term_set_edit(prompt_buf, line, caret, -1, -1);
     else
@@ -158,11 +161,20 @@ static void refresh_edit_display(void) {
         gui_term_set_edit(prompt_buf, line, caret, a, b);
         return;
     }
-    /* CLI: crude rewrite of current input */
+    /* CLI: rewrite line; pad spaces to clear leftovers when the line shrinks */
+    line[line_len] = '\0';
+    uint32_t cur = (uint32_t)strlen(prompt_buf) + line_len;
     console_putc('\r');
     console_write(prompt_buf);
     console_write(line);
-    console_write(" \b");
+    if (edit_paint_len > cur) {
+        for (uint32_t i = 0; i < edit_paint_len - cur; i++)
+            console_putc(' ');
+        console_putc('\r');
+        console_write(prompt_buf);
+        console_write(line);
+    }
+    edit_paint_len = cur;
 }
 
 static int sel_lo(void) {
@@ -271,17 +283,21 @@ static const struct help_entry help_table[] = {
     { "wallpaper", "sys", "set desktop wallpaper (PPM)" },
     { "scale", "sys", "UI scale 1..4" },
     { "uname", "sys", "system name" },
+    { "true", "sys", "exit 0" },
+    { "false", "sys", "exit 1" },
+    { "sh", "sys", "nested shell loop" },
     { "reboot", "sys", "reboot guest" },
     { "help", "sys", "this help" },
     { "man", "sys", "command help" },
     { "peak", "meta", "Peak meta info" },
-    { "ask", "meta", "peak-agent prompt" },
+    { "ask", "meta", "peak-agent prompt (quotes ok)" },
     { "audit", "meta", "show audit log" },
     { "memory", "meta", "project memory" },
     { "policy", "meta", "agent policy" },
-    { "gui", "meta", "enter desktop" },
-    { "ctr", "net", "build/run Dockerfiles in-guest (Peak Container Runtime)" },
-    { "ctrd", "net", "ping Peak Container Runtime" },
+    { "privacy", "meta", "persist / net-allow / kill-switch" },
+    { "gui", "meta", "enter desktop (Ctrl+Alt+Esc leaves)" },
+    { "ctr", "net", "stage Dockerfile subset; serve static HTTP (not OCI)" },
+    { "ctrd", "net", "ping Peak ctr staging helper" },
     { "ifconfig", "net", "show e1000 IPv4 config" },
     { "ping", "net", "DNS + TCP reachability probe" },
     { "wget", "net", "HTTP GET via in-guest TCP stack" },
@@ -294,10 +310,11 @@ void shell_help_topics(void) {
     console_write("  nav   pwd cd ls tree find\n");
     console_write("  file  mkdir touch rm cp mv ln stat du df truncate\n");
     console_write("  text  cat head tail wc grep hexdump strings echo edit clear\n");
-    console_write("  sys   date free top sysmon env which seq sleep theme scale uname reboot help man sh js\n");
-    console_write("  meta  peak ask audit memory policy gui\n");
+    console_write("  sys   date free top sysmon ps env which seq sleep theme wallpaper scale\n");
+    console_write("        uname true false sh reboot help man js\n");
+    console_write("  meta  peak ask audit memory policy privacy gui\n");
     console_write("  net   ctr ctrd ifconfig ping wget\n");
-    console_write("Try: man <cmd>   theme list   gui   wget http://example.com/\n");
+    console_write("Try: man <cmd>   theme list   gui   ask \"...\"   js -e '1+1'\n");
 }
 
 void shell_help_cmd(const char *cmd) {
@@ -309,24 +326,6 @@ void shell_help_cmd(const char *cmd) {
         }
     }
     console_write("unknown command — try help\n");
-}
-
-static int split_args(char *cmd, char **argv, int max) {
-    int argc = 0;
-    char *p = cmd;
-    while (*p && argc < max - 1) {
-        while (*p == ' ')
-            p++;
-        if (!*p)
-            break;
-        argv[argc++] = p;
-        while (*p && *p != ' ')
-            p++;
-        if (*p)
-            *p++ = '\0';
-    }
-    argv[argc] = NULL;
-    return argc;
 }
 
 void shell_execute(const char *cmd_in) {
@@ -355,7 +354,7 @@ void shell_execute(const char *cmd_in) {
     }
 
     char *argv[16];
-    int argc = split_args(cmd, argv, 16);
+    int argc = shell_split_args(cmd, argv, 16);
     if (argc < 1)
         return;
 
