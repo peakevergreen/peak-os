@@ -33,7 +33,7 @@ int web_store_set(struct web_store *s, const char *key, const char *val);
 void webapi_install_fn(struct js_runtime *rt, struct js_value *obj, const char *name,
                        js_native_fn fn, void *ud);
 
-/* Stub installers — partial / non-spec implementations quarantined in webapi_stubs.c. */
+/* Stub installers — partial / fail-closed; AbortController installer is a no-op. */
 void webapi_install_fetch_stub(struct js_runtime *rt);
 void webapi_install_storage_stubs(struct js_runtime *rt);
 void webapi_install_abort_controller_stub(struct js_runtime *rt);

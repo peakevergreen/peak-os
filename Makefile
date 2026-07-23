@@ -298,7 +298,7 @@ $(HOST_TEST_DIR)/test_$(1): $(2) | $(HOST_TEST_DIR)
 endef
 
 HOST_TEST_NAMES := \
-	phase7 gfx boot lan http_tcp js random tls libpeak ubin_registry \
+	phase7 gfx boot lan http_tcp js webapi random tls libpeak ubin_registry \
 	shell_split console_scroll display_present wallpaper_cache \
 	peakdisk peakvec guiproto vmm_usercopy blobstore heap_pmm
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
@@ -327,6 +327,11 @@ $(eval $(call HOST_TEST_RULE,js,tests/host/test_js.c tests/host/js_host_stubs.c 
 	kernel/js/js_core.c kernel/js/js_compile.c kernel/js/js_lex.c \
 	kernel/js/js_codegen.c kernel/js/js_parse.c kernel/js/js_vm.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/js))
+$(eval $(call HOST_TEST_RULE,webapi,tests/host/test_webapi.c tests/host/js_host_stubs.c \
+	tests/host/webapi_host_stubs.c kernel/gui/webapi.c kernel/gui/webapi_stubs.c \
+	kernel/net/http_util.c kernel/js/js_core.c kernel/js/js_compile.c \
+	kernel/js/js_lex.c kernel/js/js_codegen.c kernel/js/js_parse.c kernel/js/js_vm.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/js -Ikernel/gui))
 $(eval $(call HOST_TEST_RULE,random,tests/host/test_random.c kernel/random.c kernel/net/crypto.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 $(HOST_TEST_INC_HOST_BOOT_KERNEL)))
 $(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c tests/host/tls_host_stubs.c \

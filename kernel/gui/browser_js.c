@@ -4,8 +4,8 @@
  * browser_js_install_dom() wires document/querySelector, __dom_* natives, console.log,
  * location, and the small bootstrapping helpers ($, textContent, on, …).
  *
- * Web APIs (fetch, storage, AbortController) are partial stubs installed separately
- * by webapi_install() — see webapi.h and webapi_stubs.c.
+ * Web APIs (fetch, storage; AbortController not installed) are partial stubs
+ * installed separately by webapi_install() — see webapi.h and webapi_stubs.c.
  */
 #include "browser_js.h"
 #include "../js/js_internal.h"
