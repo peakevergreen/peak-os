@@ -1,4 +1,5 @@
 #include "vfs.h"
+#include "vfs_path_util.h"
 #include "peak_errno.h"
 #include "heap.h"
 #include "util.h"
@@ -246,33 +247,7 @@ int vfs_list(const char *path, char *out, size_t out_len) {
 /* Persistable PeakFS trees — restore replaces these namespaces.
  * Profile: 0=private (none), 1=workspace (/home), 2=full. */
 static int peakfs_path_allowed(const char *path) {
-    if (!path || path[0] != '/')
-        return 0;
-    /* Reject ".." components and empty segments. */
-    for (size_t i = 0; path[i]; i++) {
-        if (path[i] == '.' && path[i + 1] == '.' &&
-            (i == 0 || path[i - 1] == '/') &&
-            (path[i + 2] == '/' || path[i + 2] == '\0'))
-            return 0;
-    }
-    int profile = privacy_persist_profile();
-    if (profile <= 0)
-        return 0; /* private / ephemeral */
-    if (profile == 1) {
-        size_t pl = 5; /* "/home" */
-        return strncmp(path, "/home", pl) == 0 &&
-               (path[pl] == '\0' || path[pl] == '/');
-    }
-    static const char *const prefixes[] = {
-        "/home", "/etc/peak", "/var/peak", NULL
-    };
-    for (int i = 0; prefixes[i]; i++) {
-        size_t pl = strlen(prefixes[i]);
-        if (strncmp(path, prefixes[i], pl) == 0 &&
-            (path[pl] == '\0' || path[pl] == '/'))
-            return 1;
-    }
-    return 0;
+    return peakfs_path_allowed_for_profile(path, privacy_persist_profile());
 }
 
 static void peakfs_clear_persist(void) {
