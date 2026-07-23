@@ -3,7 +3,6 @@
 #include "util.h"
 
 #define DNS_CACHE_SLOTS 16
-#define DNS_CACHE_TTL_TICKS 600u /* short positive cache; ~same order as DHCP timeout scale */
 
 struct dns_cache_ent {
     char     host[128];
@@ -75,7 +74,7 @@ static void dns_cache_store(const char *host, uint32_t ip) {
         dns_cache[slot].host[n] = norm[n];
     dns_cache[slot].host[n] = '\0';
     dns_cache[slot].ip = ip;
-    dns_cache[slot].expires = now + DNS_CACHE_TTL_TICKS;
+    dns_cache[slot].expires = now + NET_DNS_CACHE_TTL_TICKS;
     dns_cache[slot].in_use = 1;
 }
 
@@ -197,7 +196,7 @@ uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
     net_udp_send(local_dns, dns_sport, 53, q, (uint16_t)o);
 
     uint64_t start = timer_ticks();
-    while (timer_ticks() - start < timeout_ticks) {
+    while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (dns_done) {
             dns_cache_store(hostname, dns_answer_ip);

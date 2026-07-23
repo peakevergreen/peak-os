@@ -2,6 +2,7 @@
 #define PEAK_NET_INTERNAL_H
 
 #include "net.h"
+#include "arp_util.h"
 #include "dhcp_util.h"
 #include "tcp_util.h"
 #include "sync.h"
@@ -12,6 +13,22 @@
 #define NET_MASK_DEFAULT 0xFFFFFF00  /* 255.255.255.0 */
 #define NET_GW_DEFAULT   0x0A000202  /* 10.0.2.2 */
 #define NET_DNS_DEFAULT  0x0A000203  /* 10.0.2.3 */
+
+/*
+ * Networking timeouts. The kernel timer is 100 Hz (timer_init in boot.c),
+ * so each tick is ~10 ms. Prefer these named budgets over bare literals.
+ */
+#define NET_TIMER_HZ                100u
+#define NET_DHCP_TIMEOUT_DEFAULT    300u  /* 3s DISCOVER / REQUEST wait */
+#define NET_DNS_CACHE_TTL_TICKS     600u  /* 6s positive A-cache */
+#define NET_DNS_RESOLVE_TICKS       300u  /* 3s A-query (http / ping) */
+#define NET_ARP_RESOLVE_TICKS       200u  /* 2s next-hop MAC resolve */
+#define NET_ARP_GW_PRIME_ITERS       50u  /* post-DHCP gateway ARP prime */
+#define NET_TCP_CONNECT_HTTP_TICKS  500u  /* 5s plaintext HTTP connect */
+#define NET_TCP_RECV_SLICE_TICKS    100u  /* 1s per recv poll slice */
+#define NET_HTTP_IDLE_TCP_TICKS     800u  /* 8s stall without TCP progress */
+#define NET_HTTP_IDLE_TLS_TICKS    1200u  /* 12s stall without TLS progress */
+#define NET_TLS_HANDSHAKE_TICKS    1200u  /* 12s TLS connect / handshake */
 
 #define ETH_IP   0x0800
 #define ETH_ARP  0x0806
@@ -29,14 +46,6 @@
 #define TCP_ACK 0x10
 
 #define TCP_MSS 1400
-
-#define ARP_CACHE_MAX 16
-
-struct arp_entry {
-    int valid;
-    uint32_t ip;
-    uint8_t mac[6];
-};
 
 enum {
     TCP_CLOSED = 0,
@@ -125,6 +134,11 @@ static inline uint32_t htonl(uint32_t x) { return bswap32(x); }
 
 void net_lock_acquire(void);
 void net_lock_release(void);
+
+/* True once start..now spans at least timeout_ticks (100 Hz). */
+int net_timed_out(uint64_t start, uint32_t timeout_ticks);
+/* Poll the NIC once, then HLT if IRQs are enabled (shared busy-wait quantum). */
+void net_poll_idle(void);
 
 int net_eth_send(uint16_t ethertype, const uint8_t dst[6], const void *payload, uint16_t plen);
 int net_ip_send(uint32_t dst_ip, uint8_t proto, const void *payload, uint16_t plen);

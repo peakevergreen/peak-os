@@ -14,7 +14,7 @@ struct peak_net_config boot_net = {
     .mask = NET_MASK_DEFAULT,
     .gw = NET_GW_DEFAULT,
     .dns = NET_DNS_DEFAULT,
-    .dhcp_timeout_ticks = 300,
+    .dhcp_timeout_ticks = NET_DHCP_TIMEOUT_DEFAULT,
 };
 const char *addr_mode = "static";
 
@@ -68,7 +68,7 @@ void net_set_boot_config(const struct peak_net_config *cfg) {
     if (!boot_net.dns)
         boot_net.dns = NET_DNS_DEFAULT;
     if (!boot_net.dhcp_timeout_ticks)
-        boot_net.dhcp_timeout_ticks = 300;
+        boot_net.dhcp_timeout_ticks = NET_DHCP_TIMEOUT_DEFAULT;
 }
 
 void net_attempt_stats_get(struct net_attempt_stats *out) {
@@ -94,6 +94,15 @@ void net_lock_release(void) {
         spin_unlock(&net_lock);
 }
 
+int net_timed_out(uint64_t start, uint32_t timeout_ticks) {
+    return (timer_ticks() - start) >= timeout_ticks;
+}
+
+void net_poll_idle(void) {
+    net_poll();
+    hlt_if_enabled();
+}
+
 void net_format_ip(uint32_t ip, char *buf, size_t cap) {
     snprintf(buf, cap, "%u.%u.%u.%u",
              (unsigned)((ip >> 24) & 0xFF), (unsigned)((ip >> 16) & 0xFF),
@@ -116,7 +125,7 @@ int net_eth_send(uint16_t ethertype, const uint8_t dst[6], const void *payload, 
 
 int net_ip_send(uint32_t dst_ip, uint8_t proto, const void *payload, uint16_t plen) {
     uint8_t dmac[6];
-    if (net_resolve_next_hop_mac(dst_ip, dmac, 200) != 0)
+    if (net_resolve_next_hop_mac(dst_ip, dmac, NET_ARP_RESOLVE_TICKS) != 0)
         return PEAK_ENETUNREACH;
     uint8_t pkt[1500];
     uint16_t total = (uint16_t)(20 + plen);
@@ -265,13 +274,11 @@ int net_init(void) {
     /* Prime ARP for gateway when known */
     if (local_gw) {
         net_arp_request(local_gw);
-        for (int i = 0; i < 50; i++) {
-            net_poll();
+        for (uint32_t i = 0; i < NET_ARP_GW_PRIME_ITERS; i++) {
             uint8_t mac[6];
+            net_poll_idle();
             if (net_arp_cache_get(local_gw, mac) == 0)
                 break;
-            for (volatile int j = 0; j < 10000; j++)
-                ;
         }
     }
     return 0;

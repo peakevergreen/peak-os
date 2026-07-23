@@ -84,6 +84,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/dhcp_util.c \
 	kernel/net/http_util.c \
 	kernel/net/tcp_util.c \
+	kernel/net/arp_util.c \
 	kernel/net/crypto.c \
 	kernel/net/tls_util.c \
 	kernel/net/tls.c \
@@ -314,7 +315,7 @@ $(eval $(call HOST_TEST_RULE,gfx,tests/host/test_gfx.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,boot,tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c,\
 	$(HOST_CFLAGS) $(HOST_TEST_INC_BOOT)))
 $(eval $(call HOST_TEST_RULE,lan,tests/host/test_lan.c kernel/net/dhcp_util.c kernel/net/http_util.c \
-	boot/common/peak_conf.c boot/common/util.c,\
+	kernel/net/arp_util.c boot/common/peak_conf.c boot/common/util.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_BOOT)))
 $(eval $(call HOST_TEST_RULE,http_tcp,tests/host/test_http_tcp.c kernel/net/http_util.c \
 	kernel/net/tcp_util.c,\
