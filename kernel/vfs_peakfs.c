@@ -3,12 +3,43 @@
 #include "peak_errno.h"
 #include "util.h"
 #include "privacy.h"
+#include "heap.h"
+
+/* Keep in sync with AGENT_AUDIT_PATH in agent_internal.h */
+#define PEAKFS_AUDIT_PATH "/var/peak/audit.log"
+#define PEAKFS_AUDIT_PRESERVE_MAX (64u * 1024u)
 
 static int peakfs_path_allowed(const char *path) {
     return peakfs_path_allowed_for_profile(path, privacy_persist_profile());
 }
 
 static void peakfs_clear_persist(void) {
+    /*
+     * PeakFS restore replaces persist namespaces. Preserve audit.log across the
+     * clear so a workspace-only (or empty) restore cannot wipe the audit trail;
+     * a full-profile blob that includes audit.log still overwrites after load.
+     */
+    char *audit_save = NULL;
+    size_t audit_n = 0;
+    {
+        struct vfs_stat st;
+        if (vfs_stat(PEAKFS_AUDIT_PATH, &st) == 0 && st.type == VFS_FILE && st.size > 0) {
+            size_t cap = st.size;
+            if (cap > PEAKFS_AUDIT_PRESERVE_MAX)
+                cap = PEAKFS_AUDIT_PRESERVE_MAX;
+            audit_save = (char *)kmalloc(cap);
+            if (audit_save) {
+                size_t got = 0;
+                if (vfs_read_file(PEAKFS_AUDIT_PATH, audit_save, cap, &got) == 0 && got > 0)
+                    audit_n = got;
+                else {
+                    kfree(audit_save);
+                    audit_save = NULL;
+                }
+            }
+        }
+    }
+
     if (vfs_lookup("/home"))
         vfs_remove_tree("/home");
     if (vfs_lookup("/etc/peak"))
@@ -18,6 +49,13 @@ static void peakfs_clear_persist(void) {
     vfs_mkdir("/home");
     vfs_mkdir("/etc/peak");
     vfs_mkdir("/var/peak");
+
+    if (audit_save && audit_n) {
+        vfs_write_file(PEAKFS_AUDIT_PATH, audit_save, audit_n);
+        kfree(audit_save);
+    } else if (audit_save) {
+        kfree(audit_save);
+    }
 }
 
 /* Peak ramdisk: magic "PEAKFS1\0", u32 count, then entries:

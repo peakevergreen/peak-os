@@ -4,7 +4,7 @@ Manual + automated gates for Phase S.
 
 ## Automated
 
-- [ ] `make test-host` (includes `test_random`)
+- [ ] `make test-host` (includes `test_random`, `test_agent_policy`)
 - [ ] `./scripts/purity-check.sh`
 - [ ] Docs present: `docs/security-model.md`, `privacy.md`, `csprng.md`, `verified-boot.md`
 - [ ] `python3 scripts/mkmanifest.py` after `make iso`
@@ -37,8 +37,8 @@ Manual + automated gates for Phase S.
 ## Persist
 
 - [ ] PEAKDSK2 encrypted save when crypto RNG ready (experimental header key)
-- [ ] Agent audit not wiped across PeakFS restore
-- [ ] Agent cannot write `/var/peak/audit.log`
+- [ ] Agent audit not wiped across PeakFS restore (PeakFS clear preserves `audit.log`; host covers append/tail truncate)
+- [ ] Agent cannot write `/var/peak/audit.log` (host: `test_agent_policy` deny-audit)
 
 ## Negative smoke
 
