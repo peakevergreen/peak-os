@@ -1,8 +1,8 @@
 /*
  * Quarantined Web API stubs for browser tabs.
  *
- * These are intentionally partial — not full browser implementations.
- * Scripts must not assume spec-complete fetch, persistent storage, or abort.
+ * Intentionally partial — unsupported surfaces fail closed with clear errors
+ * rather than silent no-ops that imply spec support.
  */
 #include "webapi_internal.h"
 #include "webapi.h"
@@ -10,6 +10,30 @@
 #include "net.h"
 #include "heap.h"
 #include "util.h"
+
+static int stub_fail(struct js_runtime *rt, void *ret, const char *msg) {
+    if (ret)
+        js_val_set_undefined(ret);
+    if (rt && msg)
+        snprintf(rt->err, sizeof(rt->err), "%s", msg);
+    return -1;
+}
+
+static int method_is_get(struct js_runtime *rt, const struct js_value *v) {
+    char buf[16];
+    js_val_to_cstring(rt, v, buf, sizeof(buf));
+    if (!buf[0])
+        return 1;
+    const char *g = "GET";
+    for (size_t i = 0; g[i]; i++) {
+        char c = buf[i];
+        if (c >= 'a' && c <= 'z')
+            c = (char)(c - 'a' + 'A');
+        if (c != g[i])
+            return 0;
+    }
+    return buf[3] == '\0';
+}
 
 /* --- fetch (STUB: GET-only, same-origin/CORS, no .json()/streams/abort) --- */
 
@@ -58,13 +82,37 @@ static int cors_ok(const char *page_url, const char *req_url, const char *hdrs) 
     return 0;
 }
 
+static int stub_fetch_check_init(struct js_runtime *rt, const struct js_value *init,
+                                 void *ret) {
+    struct js_value v;
+    if (js_val_get_prop(rt, init, "method", &v) == 0 && !js_val_is_undefined(&v)) {
+        if (!method_is_get(rt, &v))
+            return stub_fail(rt, ret, "fetch: only GET supported");
+    }
+    if (js_val_get_prop(rt, init, "signal", &v) == 0 && !js_val_is_undefined(&v))
+        return stub_fail(rt, ret, "fetch: AbortSignal unsupported");
+    if (js_val_get_prop(rt, init, "body", &v) == 0 && !js_val_is_undefined(&v) &&
+        !js_val_is_null(&v))
+        return stub_fail(rt, ret, "fetch: request body unsupported");
+    return 0;
+}
+
 static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
     (void)ud;
     js_val_set_undefined(ret);
     if (!rt || argc < 1)
-        return 0;
+        return stub_fail(rt, ret, "fetch: URL required");
+
+    struct js_value *args = argv;
+    if (argc >= 2 && !js_val_is_undefined(&args[1])) {
+        if (!js_val_is_object(&args[1]))
+            return stub_fail(rt, ret, "fetch: init must be object");
+        if (stub_fetch_check_init(rt, &args[1], ret) != 0)
+            return -1;
+    }
+
     char url[320];
-    js_val_to_cstring(rt, &((struct js_value *)argv)[0], url, sizeof(url));
+    js_val_to_cstring(rt, &args[0], url, sizeof(url));
     char abs[320];
     if (http_resolve_url(g_web_page_url, url, abs, sizeof(abs)) != 0)
         snprintf(abs, sizeof(abs), "%s", url);
@@ -74,7 +122,7 @@ static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, vo
     if (!body || !hdrs) {
         kfree(body);
         kfree(hdrs);
-        return 0;
+        return stub_fail(rt, ret, "fetch: out of memory");
     }
     int st = 0;
     struct net_http_request req;
@@ -132,10 +180,11 @@ static int stub_storage_set(struct js_runtime *rt, int argc, void *argv, void *r
     char key[48], val[WEB_STORE_VAL];
     js_val_set_undefined(ret);
     if (argc < 2)
-        return 0;
+        return stub_fail(rt, ret, "storage.setItem: key and value required");
     js_val_to_cstring(rt, &((struct js_value *)argv)[0], key, sizeof(key));
     js_val_to_cstring(rt, &((struct js_value *)argv)[1], val, sizeof(val));
-    web_store_set(web_store_for((const char *)ud), key, val);
+    if (web_store_set(web_store_for((const char *)ud), key, val) != 0)
+        return stub_fail(rt, ret, "storage.setItem: quota exceeded");
     return 0;
 }
 
@@ -151,22 +200,10 @@ void webapi_install_storage_stubs(struct js_runtime *rt) {
     js_obj_set(rt, rt->global, "sessionStorage", ss);
 }
 
-/* --- AbortController (STUB: shell only; abort/signal not wired to fetch) --- */
-
-static int stub_abort_ctor(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
-    (void)argc;
-    (void)argv;
-    (void)ud;
-    js_val_new_object(rt, ret);
-    struct js_value sig;
-    js_val_new_object(rt, &sig);
-    struct js_value aborted;
-    js_val_set_bool(&aborted, 0); /* STUB: never transitions to true */
-    js_val_set_prop(rt, &sig, "aborted", &aborted);
-    js_val_set_prop(rt, (struct js_value *)ret, "signal", &sig);
-    return 0;
-}
-
+/*
+ * AbortController is unsupported. Do not install a fake shell (signal.aborted
+ * stuck false, no abort wiring) — absence fails closed for feature detection.
+ */
 void webapi_install_abort_controller_stub(struct js_runtime *rt) {
-    js_rt_set_global_fn(rt, "AbortController", stub_abort_ctor, NULL);
+    (void)rt;
 }
