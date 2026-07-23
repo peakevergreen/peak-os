@@ -127,6 +127,21 @@ void desktop_draw_desktop_bg(void);
 void desktop_clock_rect(uint32_t *x, uint32_t *y, uint32_t *w, uint32_t *h);
 void desktop_draw_clock_area(void);
 
+uint32_t desktop_taskbar_btn_w(void);
+void desktop_login(void);
+void desktop_menu_click(int32_t mx, int32_t my);
+int desktop_ctx_menu_click(int32_t mx, int32_t my);
+void desktop_menus_open_ctx(int32_t mx, int32_t my);
+int desktop_menus_toggle_start(int32_t mx, int32_t my, uint32_t taskbar_y, uint32_t taskbar_h);
+int desktop_menus_close_popups(void);
+
+void desktop_overlays_idle_lock(uint64_t last_input_tick);
+int desktop_overlays_block_input(int key);
+void desktop_alttab_advance(void);
+void desktop_alttab_commit_if_open(void);
+int desktop_overlays_close_popups(void);
+int desktop_help_click_dismiss(void);
+
 void desktop_term_reset_slot(int slot);
 void desktop_term_activate(int slot);
 int desktop_active_term_index(void);
@@ -161,5 +176,6 @@ extern int alttab_sel;
 extern int help_open;
 extern int session_lock;
 extern int power_confirm;
+extern int desktop_should_exit;
 
 #endif
