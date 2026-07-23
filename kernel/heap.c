@@ -193,6 +193,11 @@ void kfree(void *ptr) {
         return;
     spin_lock(&heap_lock);
     struct heap_block *b = ((struct heap_block *)ptr) - 1;
+    if (b->free) {
+        /* Double-free: leave heap unchanged. */
+        spin_unlock(&heap_lock);
+        return;
+    }
     size_t total = b->size + sizeof(*b);
     if (total > PAGE_SIZE) {
         if (blocks == b) {
