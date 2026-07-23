@@ -34,6 +34,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/vmm.c \
 	kernel/vfs.c \
 	kernel/vfs_path_util.c \
+	kernel/vfs_peakfs.c \
 	kernel/sched.c \
 	kernel/elf.c \
 	kernel/syscall.c \
