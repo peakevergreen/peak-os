@@ -1,4 +1,5 @@
 #include "agent_internal.h"
+#include "heap.h"
 #include "vfs.h"
 #include "util.h"
 
@@ -147,13 +148,54 @@ int agent_policy_path_allowed(const char *path) {
 void agent_audit_append(const char *line) {
     char existing[2048];
     size_t n = 0;
-    vfs_read_file(AGENT_AUDIT_PATH, existing, sizeof(existing) - 1, &n);
-    existing[n] = '\0';
-    size_t add = strlen(line);
+    size_t add = line ? strlen(line) : 0;
+    if (!add)
+        return;
+
+    /*
+     * Working set is 2 KiB. Always retain the *tail* of the on-disk log so a
+     * truncated read of an oversized file cannot rewrite and wipe recent events.
+     */
+    struct vfs_stat st;
+    size_t file_sz = 0;
+    if (vfs_stat(AGENT_AUDIT_PATH, &st) == 0 && st.type == VFS_FILE)
+        file_sz = st.size;
+
+    if (file_sz == 0) {
+        existing[0] = '\0';
+    } else if (file_sz < sizeof(existing)) {
+        if (vfs_read_file(AGENT_AUDIT_PATH, existing, sizeof(existing) - 1, &n) != 0)
+            n = 0;
+        existing[n] = '\0';
+    } else {
+        char *full = (char *)kmalloc(file_sz + 1);
+        if (!full) {
+            existing[0] = '\0';
+            n = 0;
+        } else {
+            size_t got = 0;
+            if (vfs_read_file(AGENT_AUDIT_PATH, full, file_sz, &got) != 0)
+                got = 0;
+            size_t keep = sizeof(existing) / 2;
+            if (got > keep) {
+                memcpy(existing, full + (got - keep), keep);
+                n = keep;
+            } else {
+                memcpy(existing, full, got);
+                n = got;
+            }
+            existing[n] = '\0';
+            kfree(full);
+        }
+    }
+
     if (n + add + 2 >= sizeof(existing)) {
         size_t keep = sizeof(existing) / 2;
-        if (n > keep)
-            memmove(existing, existing + (n - keep), keep + 1), n = keep;
+        if (n > keep) {
+            memmove(existing, existing + (n - keep), keep);
+            n = keep;
+            existing[n] = '\0';
+        }
     }
     if (n + add + 2 < sizeof(existing)) {
         memcpy(existing + n, line, add);

@@ -7,7 +7,7 @@
 
 static char last_summary[256];
 static int pending;
-static int audit_wiped_once;
+static int audit_boot_logged;
 
 static int write_wait;
 static char write_path[VFS_PATH_MAX];
@@ -38,9 +38,10 @@ void agent_init(void) {
     write_wait = 0;
     write_approved = 0;
     agent_policy_reload();
-    if (!audit_wiped_once) {
+    /* Append-only boot marker — never truncate/wipe audit.log on init. */
+    if (!audit_boot_logged) {
         agent_audit_append("session|boot|start|ok");
-        audit_wiped_once = 1;
+        audit_boot_logged = 1;
     }
     {
         char tmp[8];
