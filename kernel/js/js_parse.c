@@ -60,6 +60,31 @@ static int scope_find(const char *name, int *depth_out) {
 static int parse_stmt(struct js_compiler *c);
 static int parse_expr(struct js_compiler *c);
 
+/* Compact lexer checkpoint for assignment / arrow lookahead (avoids 256B memcpy). */
+struct lex_save {
+    const char *p;
+    enum js_tok tok;
+    double num;
+    int line;
+    char text[48];
+};
+
+static void lex_checkpoint(struct js_compiler *c, struct lex_save *s) {
+    s->p = c->p;
+    s->tok = c->tok;
+    s->num = c->num;
+    s->line = c->line;
+    snprintf(s->text, sizeof(s->text), "%s", c->text);
+}
+
+static void lex_restore(struct js_compiler *c, const struct lex_save *s) {
+    c->p = s->p;
+    c->tok = s->tok;
+    c->num = s->num;
+    c->line = s->line;
+    snprintf(c->text, sizeof(c->text), "%s", s->text);
+}
+
 static int expect(struct js_compiler *c, enum js_tok t, const char *msg) {
     if (c->tok != t) {
         js_lex_error(c, msg);
@@ -114,34 +139,8 @@ static int parse_primary(struct js_compiler *c) {
         char name[48];
         snprintf(name, sizeof(name), "%s", c->text);
         js_lex_next(c);
-        /* arrow: ident => expr */
+        /* Single-arg arrow without (): not supported — error without emitting. */
         if (c->tok == T_ARROW) {
-            js_lex_next(c);
-            uint32_t make_at = js_emit_here(c);
-            if (js_emit_op(c, OP_MAKE_FUNC) || js_emit_u16(c, 0) || js_emit_u8(c, 1) ||
-                js_emit_u8(c, 1))
-                return -1;
-            uint32_t body = js_emit_here(c);
-            scope_push(1);
-            scope_add(name);
-            if (parse_expr(c))
-                return -1;
-            js_emit_op(c, OP_RET);
-            int locals = scopes[scope_sp - 1].n;
-            scope_pop();
-            /* patch make_func offsets: rewrite last MAKE_FUNC */
-            c->rt->code[make_at + 1] = (uint8_t)(body & 0xFF);
-            c->rt->code[make_at + 2] = (uint8_t)(body >> 8);
-            c->rt->code[make_at + 3] = 1;
-            c->rt->code[make_at + 4] = (uint8_t)locals;
-            /* jump over body */
-            uint32_t j = js_emit_here(c);
-            js_emit_op(c, OP_JMP);
-            js_emit_i16(c, 0);
-            /* actually body is already emitted after MAKE_FUNC which is wrong.
-             * Simpler approach: don't support single-arg arrow without parens for now.
-             * Revert: treat as identifier load. */
-            (void)j;
             js_lex_error(c, "arrow without () not supported; use (x)=>");
             return -1;
         }
@@ -202,12 +201,8 @@ static int parse_primary(struct js_compiler *c) {
         if (c->tok == T_IDENT) {
             char params[8][48];
             int np = 0;
-            const char *save_p = c->p;
-            enum js_tok save_tok = c->tok;
-            char save_text[256];
-            memcpy(save_text, c->text, sizeof(save_text));
-            double save_num = c->num;
-            int save_line = c->line;
+            struct lex_save save;
+            lex_checkpoint(c, &save);
             while (c->tok == T_IDENT && np < 8) {
                 snprintf(params[np++], sizeof(params[0]), "%s", c->text);
                 js_lex_next(c);
@@ -254,11 +249,7 @@ static int parse_primary(struct js_compiler *c) {
                 }
             }
             /* restore and parse as grouped expr */
-            c->p = save_p;
-            c->tok = save_tok;
-            memcpy(c->text, save_text, sizeof(c->text));
-            c->num = save_num;
-            c->line = save_line;
+            lex_restore(c, &save);
         }
         if (parse_expr(c))
             return -1;
@@ -523,22 +514,35 @@ static int parse_expr(struct js_compiler *c) {
 }
 
 static int parse_assignment(struct js_compiler *c) {
-    /* Detect ident = expr or ident.prop = expr */
+    /* Detect ident = expr or ident = ident + 1 (INC_LOCAL peephole). */
     if (c->tok == T_IDENT) {
         char name[48];
         snprintf(name, sizeof(name), "%s", c->text);
-        const char *save_p = c->p;
-        enum js_tok save_tok = c->tok;
-        char save_text[256];
-        memcpy(save_text, c->text, sizeof(save_text));
-        int save_line = c->line;
+        struct lex_save save;
+        lex_checkpoint(c, &save);
         js_lex_next(c);
         if (c->tok == T_EQ) {
             js_lex_next(c);
-            if (parse_assignment(c))
-                return -1;
             int depth = 0;
             int loc = scope_find(name, &depth);
+            /* Hot path: local `i = i + 1` → OP_INC_LOCAL (one dispatch). */
+            if (loc >= 0 && depth == 0 && c->tok == T_IDENT && !strcmp(c->text, name)) {
+                struct lex_save save2;
+                lex_checkpoint(c, &save2);
+                js_lex_next(c);
+                if (c->tok == T_PLUS) {
+                    js_lex_next(c);
+                    if (c->tok == T_NUM && c->num == 1.0) {
+                        js_lex_next(c);
+                        js_emit_op(c, OP_INC_LOCAL);
+                        js_emit_u16(c, (uint16_t)loc);
+                        return 0;
+                    }
+                }
+                lex_restore(c, &save2);
+            }
+            if (parse_assignment(c))
+                return -1;
             if (loc >= 0 && depth == 0) {
                 js_emit_op(c, OP_SET_LOCAL);
                 js_emit_u16(c, (uint16_t)loc);
@@ -549,11 +553,7 @@ static int parse_assignment(struct js_compiler *c) {
             }
             return 0;
         }
-        /* restore */
-        c->p = save_p;
-        c->tok = save_tok;
-        memcpy(c->text, save_text, sizeof(c->text));
-        c->line = save_line;
+        lex_restore(c, &save);
     }
     return parse_or(c);
 }
@@ -636,8 +636,8 @@ static int parse_stmt(struct js_compiler *c) {
         js_emit_i16(c, 0);
         uint32_t else_ip = js_emit_here(c);
         js_emit_patch_i16(c, jf + 1, (int16_t)(else_ip - (jf + 3)));
-        js_emit_op(c, OP_POP); /* for false branch falling through — actually JMP_IFN leaves value */
-        /* fix: JMP_IFN should not leave value. VM pops on jump. */
+        /* False path: discard the condition value left by JMP_IFN. */
+        js_emit_op(c, OP_POP);
         if (c->tok == T_ELSE) {
             js_lex_next(c);
             if (parse_stmt(c))

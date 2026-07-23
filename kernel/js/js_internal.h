@@ -139,8 +139,10 @@ struct js_runtime {
     uint32_t code_len;
     uint32_t code_cap;
     char **strtab;
+    struct js_string **str_imm; /* cached JT_STR for strtab[i]; GC-rooted */
     uint32_t str_count;
     uint32_t str_cap;
+    struct js_string *typeof_str[6]; /* pinned typeof() result strings */
     struct js_object *global;
     struct js_object **objs;
     uint32_t obj_count;
@@ -168,6 +170,8 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip);
 
 /* value/object helpers */
 struct js_string *js_str_new(struct js_runtime *rt, const char *s, size_t len);
+/* Interned heap string for strtab[id]; allocates once per id per eval. */
+struct js_string *js_str_from_tab(struct js_runtime *rt, uint16_t id);
 struct js_object *js_obj_new(struct js_runtime *rt, int is_array);
 int js_obj_set(struct js_runtime *rt, struct js_object *o, const char *key,
                struct js_value v);

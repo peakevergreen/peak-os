@@ -56,6 +56,32 @@ int main(void) {
     eval_eq(rt, "var e; try{throw 1}catch(x){e=x;} e", "1");
     eval_eq(rt, "class C{} typeof C", "\"function\"");
 
+    /* Hot-path regressions: string reuse, INC_LOCAL, lazy call env */
+    eval_eq(rt, "var t='ab'+'cd'; t", "\"abcd\"");
+    eval_eq(rt, "typeof typeof 1", "\"string\"");
+    eval_eq(rt,
+            "function loop(){var n=0; for(var i=0;i<20;i=i+1){n=n+i;} return n;} loop()",
+            "190");
+    {
+        uint32_t objs = 0, ins = 0, timers = 0, gc = 0;
+        char out[64];
+        /* Repeated string literal must not grow heap_str unboundedly (str_imm reuse). */
+        expect(js_eval(rt, "var s='hi'; s+s+s+s+s", "<str>", out, sizeof(out)) == 0,
+               "str reuse eval");
+        expect(strcmp(out, "\"hihihihihi\"") == 0, "str reuse result");
+        js_rt_stats(rt, &objs, &ins, &timers, &gc);
+        expect(ins > 0 && ins < 64, "str reuse modest ins");
+        /* Function-local i=i+1 uses INC_LOCAL — fewer dispatches than GET/PUSH/ADD/SET. */
+        expect(js_eval(rt,
+                       "function f(){var i=0; while(i<50){i=i+1;} return i;} f()",
+                       "<inc>", out, sizeof(out)) == 0,
+               "inc_local eval");
+        expect(strcmp(out, "50") == 0, "inc_local result");
+        js_rt_stats(rt, &objs, &ins, &timers, &gc);
+        /* 50 iterations: cond+inc body; budget sanity (pre-INC was much higher). */
+        expect(ins > 50 && ins < 900, "inc_local dispatch bound");
+    }
+
     /* Budgets: runaway loop must fail */
     js_rt_set_budgets(rt, 1000, 256);
     char out[64];
