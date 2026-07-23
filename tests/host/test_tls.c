@@ -1,14 +1,21 @@
 /*
- * Host tests for TLS trust helpers (tls_util.c) and release fail-closed RNG.
+ * Host tests for TLS trust helpers (tls_util.c), tls_trust fail-closed paths,
+ * and release crypto RNG fail-closed.
  */
 #include "types.h"
 #include "peak_boot.h"
 #include "random.h"
 #include "crypto.h"
+#include "tls.h"
 #include "../../kernel/include/tls_util.h"
+#include "../../kernel/net/tls_internal.h"
 
 #include <stdio.h>
 #include <string.h>
+
+void tls_host_reset_trust(void);
+void tls_host_seed_tofu(const char *store);
+const char *tls_host_tofu_store(void);
 
 static int fails;
 
@@ -22,7 +29,28 @@ static void expect(int cond, const char *msg) {
 uint64_t timer_ticks(void) { return 100; }
 void serial_write_str(const char *s) { (void)s; }
 
-int main(void) {
+/* Minimal Certificate handshake message (no parseable X.509 names). */
+static size_t build_cert_msg(uint8_t *out, size_t cap, uint8_t fill, size_t leaf_len) {
+    size_t body = 3 + 3 + leaf_len; /* list_len + cert_len + leaf */
+    size_t total = 4 + body;
+    if (total > cap || leaf_len > 200)
+        return 0;
+    out[0] = HS_CERTIFICATE;
+    out[1] = (uint8_t)((body >> 16) & 0xFF);
+    out[2] = (uint8_t)((body >> 8) & 0xFF);
+    out[3] = (uint8_t)(body & 0xFF);
+    size_t list_len = 3 + leaf_len;
+    out[4] = (uint8_t)((list_len >> 16) & 0xFF);
+    out[5] = (uint8_t)((list_len >> 8) & 0xFF);
+    out[6] = (uint8_t)(list_len & 0xFF);
+    out[7] = (uint8_t)((leaf_len >> 16) & 0xFF);
+    out[8] = (uint8_t)((leaf_len >> 8) & 0xFF);
+    out[9] = (uint8_t)(leaf_len & 0xFF);
+    memset(out + 10, fill, leaf_len);
+    return total;
+}
+
+static void test_util_helpers(void) {
     char hex[65];
     uint8_t digest[32];
     memset(digest, 0x42, sizeof(digest));
@@ -38,6 +66,8 @@ int main(void) {
     expect(tls_hostname_matches_sni("*.example.com", "foo.example.com"), "wildcard");
     expect(!tls_hostname_matches_sni("*.example.com", "foo.bar.com"), "wildcard miss");
     expect(!tls_hostname_matches_sni("*.example.com", "example.com"), "wildcard needs label");
+    expect(!tls_hostname_matches_sni(NULL, "example.com"), "null pattern");
+    expect(!tls_hostname_matches_sni("example.com", ""), "empty host");
 
     const char *hex64_a =
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -52,8 +82,114 @@ int main(void) {
     expect(tls_tofu_check_store(store, "example.com", hex64_a) == 1, "tofu match");
     expect(tls_tofu_check_store(store, "example.com", hex64_c) == -1, "tofu mismatch");
     expect(tls_tofu_check_store(store, "unknown.test", hex64_d) == 0, "tofu unknown");
+    expect(tls_tofu_check_store(NULL, "example.com", hex64_a) == 0, "tofu null store");
+    expect(tls_tofu_check_store(store, "", hex64_a) == 0, "tofu empty host");
+}
 
-    /* Release build: weak boot entropy alone must not unlock crypto. */
+static void test_pin_and_tofu_fail_closed(void) {
+    uint8_t cert_a[128], cert_b[128];
+    size_t len_a = build_cert_msg(cert_a, sizeof(cert_a), 0x11, 16);
+    size_t len_b = build_cert_msg(cert_b, sizeof(cert_b), 0x22, 16);
+    expect(len_a > 0 && len_b > 0, "cert fixtures built");
+
+    uint8_t dig_a[32], dig_b[32], dig_bad[32];
+    sha256(cert_a, len_a, dig_a);
+    sha256(cert_b, len_b, dig_b);
+    memset(dig_bad, 0xFF, sizeof(dig_bad));
+    char hex_a[65], hex_b[65];
+    tls_hex_encode(dig_a, 32, hex_a);
+    tls_hex_encode(dig_b, 32, hex_b);
+
+    /* Good pin: digest match trusts without TOFU. */
+    tls_host_reset_trust();
+    expect(tls_trust_pin_sha256(dig_a) == 0, "pin register");
+    expect(tls_verify_cert_chain(cert_a, len_a, "pin.example") == 1, "good pin accepts");
+    expect(hostname_parse_skipped == 1, "no names → parse skipped");
+    expect(tls_host_tofu_store()[0] == '\0', "pin path skips tofu write");
+
+    /* Bad pin alone does not grant trust; empty TOFU falls through to first contact. */
+    tls_host_reset_trust();
+    expect(tls_trust_pin_sha256(dig_bad) == 0, "bad pin register");
+    expect(tls_verify_cert_chain(cert_a, len_a, "first.example") == 1, "bad pin → tofu first contact");
+    expect(strstr(tls_host_tofu_store(), "first.example:") != NULL, "tofu remembered after pin miss");
+
+    /* Bad pin + TOFU conflict → fail closed. */
+    tls_host_reset_trust();
+    expect(tls_trust_pin_sha256(dig_bad) == 0, "bad pin for conflict");
+    char conflict[160];
+    snprintf(conflict, sizeof(conflict), "known.example:%s\n", hex_b);
+    tls_host_seed_tofu(conflict);
+    expect(tls_verify_cert_chain(cert_a, len_a, "known.example") == 0, "bad pin + tofu conflict rejects");
+    expect(cert_fail_reason != NULL, "conflict sets fail reason");
+    expect(strstr(cert_fail_reason, "changed") != NULL, "conflict reason mentions change");
+
+    /* TOFU conflict without pins → fail closed. */
+    tls_host_reset_trust();
+    snprintf(conflict, sizeof(conflict), "swap.example:%s\n", hex_a);
+    tls_host_seed_tofu(conflict);
+    expect(tls_verify_cert_chain(cert_b, len_b, "swap.example") == 0, "tofu conflict rejects");
+    expect(tls_tofu_check_store(tls_host_tofu_store(), "swap.example", hex_b) == -1,
+           "store still mismatches");
+
+    /* Matching TOFU accepts. */
+    tls_host_reset_trust();
+    snprintf(conflict, sizeof(conflict), "ok.example:%s\n", hex_a);
+    tls_host_seed_tofu(conflict);
+    expect(tls_verify_cert_chain(cert_a, len_a, "ok.example") == 1, "tofu match accepts");
+
+    /* Pin helpers reject null / overflow. */
+    tls_host_reset_trust();
+    expect(tls_trust_pin_sha256(NULL) != 0, "null pin rejected");
+    for (int i = 0; i < TLS_PIN_MAX; i++)
+        expect(tls_trust_pin_sha256(dig_a) == 0, "fill pin slots");
+    expect(tls_trust_pin_sha256(dig_b) != 0, "pin overflow rejected");
+}
+
+static void test_truncated_cert_records(void) {
+    uint8_t msg[64];
+
+    tls_host_reset_trust();
+    expect(tls_verify_cert_chain(NULL, 20, "h") == 0, "null cert rejects");
+    expect(cert_fail_reason != NULL && strstr(cert_fail_reason, "Malformed"),
+           "null cert malformed reason");
+
+    tls_host_reset_trust();
+    memset(msg, 0, sizeof(msg));
+    expect(tls_verify_cert_chain(msg, 9, "h") == 0, "short buffer rejects");
+
+    /* Pin the on-wire digest so trust succeeds, then leaf lengths are inconsistent. */
+    tls_host_reset_trust();
+    size_t n = build_cert_msg(msg, sizeof(msg), 0xAA, 8);
+    expect(n > 0, "trunc fixture base");
+    /* Inflate leaf length past end of buffer. */
+    msg[7] = 0;
+    msg[8] = 0;
+    msg[9] = 40;
+    uint8_t dig[32];
+    sha256(msg, n, dig);
+    expect(tls_trust_pin_sha256(dig) == 0, "pin trunc fixture");
+    expect(tls_verify_cert_chain(msg, n, "trunc.example") == 0, "truncated leaf rejects");
+    expect(cert_fail_reason != NULL && strstr(cert_fail_reason, "Malformed"),
+           "truncated leaf malformed reason");
+
+    /* list_len claims more bytes than remain. */
+    tls_host_reset_trust();
+    n = build_cert_msg(msg, sizeof(msg), 0xCC, 8);
+    msg[4] = 0;
+    msg[5] = 0;
+    msg[6] = 50;
+    sha256(msg, n, dig);
+    expect(tls_trust_pin_sha256(dig) == 0, "pin list trunc fixture");
+    expect(tls_verify_cert_chain(msg, n, "list.trunc") == 0, "truncated list rejects");
+
+    tls_host_reset_trust();
+    n = build_cert_msg(msg, sizeof(msg), 0xBB, 8);
+    msg[0] = HS_SERVER_HELLO;
+    expect(tls_verify_cert_chain(msg, n, "h") == 0, "non-certificate type rejects");
+}
+
+static void test_rng_fail_closed(void) {
+    uint8_t digest[32];
     struct peak_bootinfo info;
     memset(&info, 0, sizeof(info));
     info.magic = PEAK_BOOT_MAGIC;
@@ -71,6 +207,13 @@ int main(void) {
     memset(digest, 0xEE, sizeof(digest));
     expect(crypto_random(digest, sizeof(digest)) != 0, "release crypto_random fail-closed");
     expect(digest[0] == 0 && digest[31] == 0, "release crypto_random scrub");
+}
+
+int main(void) {
+    test_util_helpers();
+    test_pin_and_tofu_fail_closed();
+    test_truncated_cert_records();
+    test_rng_fail_closed();
 
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
