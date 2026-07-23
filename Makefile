@@ -277,113 +277,68 @@ HOST_CFLAGS := -std=c11 -Wall -Wextra -Werror -O2
 HOST_CFLAGS_REDECL := $(HOST_CFLAGS) -Wno-incompatible-library-redeclaration
 HOST_TEST_DIR := $(BUILD)/tests
 HOST_TEST_JOBS ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-HOST_TEST_BINS := \
-	$(HOST_TEST_DIR)/test_phase7 \
-	$(HOST_TEST_DIR)/test_gfx \
-	$(HOST_TEST_DIR)/test_boot \
-	$(HOST_TEST_DIR)/test_lan \
-	$(HOST_TEST_DIR)/test_js \
-	$(HOST_TEST_DIR)/test_random \
-	$(HOST_TEST_DIR)/test_tls \
-	$(HOST_TEST_DIR)/test_libpeak \
-	$(HOST_TEST_DIR)/test_ubin_registry \
-	$(HOST_TEST_DIR)/test_shell_split \
-	$(HOST_TEST_DIR)/test_console_scroll \
-	$(HOST_TEST_DIR)/test_display_present \
-	$(HOST_TEST_DIR)/test_wallpaper_cache \
-	$(HOST_TEST_DIR)/test_peakdisk \
-	$(HOST_TEST_DIR)/test_peakvec \
-	$(HOST_TEST_DIR)/test_guiproto \
-	$(HOST_TEST_DIR)/test_vmm_usercopy
+HOST_TEST_INC_KERNEL := -Itests/host/include -Ikernel/include
+HOST_TEST_INC_BOOT := -Iboot/include
+HOST_TEST_INC_HOST_BOOT_KERNEL := -Itests/host/include -Iboot/include -Ikernel/include
+
+# $(1) = test name suffix (e.g. phase7), $(2) = sources, $(3) = cflags
+define HOST_TEST_RULE
+$(HOST_TEST_DIR)/test_$(1): $(2) | $(HOST_TEST_DIR)
+	$$(CC) $(3) -o $$@ $$^
+endef
+
+HOST_TEST_NAMES := \
+	phase7 gfx boot lan js random tls libpeak ubin_registry \
+	shell_split console_scroll display_present wallpaper_cache \
+	peakdisk peakvec guiproto vmm_usercopy
+HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
 
 test: test-host
 # Compile host tests in parallel; run them sequentially for deterministic output.
 test-host:
 	@$(MAKE) -j$(HOST_TEST_JOBS) $(HOST_TEST_BINS)
-	$(HOST_TEST_DIR)/test_phase7
-	$(HOST_TEST_DIR)/test_gfx
-	$(HOST_TEST_DIR)/test_boot
-	$(HOST_TEST_DIR)/test_lan
-	$(HOST_TEST_DIR)/test_js
-	$(HOST_TEST_DIR)/test_random
-	$(HOST_TEST_DIR)/test_tls
-	$(HOST_TEST_DIR)/test_libpeak
-	$(HOST_TEST_DIR)/test_ubin_registry
-	$(HOST_TEST_DIR)/test_shell_split
-	$(HOST_TEST_DIR)/test_console_scroll
-	$(HOST_TEST_DIR)/test_display_present
-	$(HOST_TEST_DIR)/test_wallpaper_cache
-	$(HOST_TEST_DIR)/test_peakdisk
-	$(HOST_TEST_DIR)/test_peakvec
-	$(HOST_TEST_DIR)/test_guiproto
-	$(HOST_TEST_DIR)/test_vmm_usercopy
+	@for t in $(HOST_TEST_BINS); do $$t || exit 1; done
 
 $(HOST_TEST_DIR):
 	@mkdir -p $@
 
-$(HOST_TEST_DIR)/test_phase7: tests/host/test_phase7.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -o $@ $<
-
-$(HOST_TEST_DIR)/test_gfx: tests/host/test_gfx.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -o $@ $<
-
-$(HOST_TEST_DIR)/test_boot: tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -Iboot/include -o $@ $^
-
-$(HOST_TEST_DIR)/test_lan: tests/host/test_lan.c kernel/net/dhcp_util.c kernel/net/http_util.c \
-		boot/common/peak_conf.c boot/common/util.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -Iboot/include -o $@ $^
-
-$(HOST_TEST_DIR)/test_js: tests/host/test_js.c tests/host/js_host_stubs.c \
-		kernel/js/js_core.c kernel/js/js_compile.c kernel/js/js_lex.c \
-		kernel/js/js_codegen.c kernel/js/js_parse.c kernel/js/js_vm.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
-		-Itests/host/include -Ikernel/include -Ikernel/js -o $@ $^
-
-$(HOST_TEST_DIR)/test_random: tests/host/test_random.c kernel/random.c kernel/net/crypto.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 \
-		-Itests/host/include -Iboot/include -Ikernel/include -o $@ $^
-
-$(HOST_TEST_DIR)/test_tls: tests/host/test_tls.c kernel/net/tls_util.c kernel/random.c \
-		kernel/net/crypto.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
-		-Itests/host/include -Iboot/include -Ikernel/include -o $@ $^
-
-$(HOST_TEST_DIR)/test_libpeak: tests/host/test_libpeak.c kernel/user/libpeak.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
-
-$(HOST_TEST_DIR)/test_ubin_registry: tests/host/test_ubin_registry.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -o $@ $<
-
-$(HOST_TEST_DIR)/test_shell_split: tests/host/test_shell_split.c kernel/shell_split.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
-
-$(HOST_TEST_DIR)/test_console_scroll: tests/host/test_console_scroll.c kernel/console_scroll.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
-
-$(HOST_TEST_DIR)/test_display_present: tests/host/test_display_present.c kernel/display_clip.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $^
-
-$(HOST_TEST_DIR)/test_wallpaper_cache: tests/host/test_wallpaper_cache.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -o $@ $<
-
-$(HOST_TEST_DIR)/test_peakdisk: tests/host/test_peakdisk.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS) -DPEAK_HOST_TEST -o $@ $<
-
-$(HOST_TEST_DIR)/test_peakvec: tests/host/test_peakvec.c tests/host/peakvec_host_stubs.c \
-		kernel/peakvec.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
-		-Itests/host/include -Ikernel/include -o $@ $^
-
-$(HOST_TEST_DIR)/test_guiproto: tests/host/test_guiproto.c tests/host/guiproto_host_stubs.c \
-		kernel/gui/guiproto.c kernel/gui/surface.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
-		-Itests/host/include -Ikernel/include -Ikernel/gui -o $@ $^
-
-$(HOST_TEST_DIR)/test_vmm_usercopy: tests/host/test_vmm_usercopy.c tests/host/vmm_host_stubs.c \
-		kernel/vmm.c | $(HOST_TEST_DIR)
-	$(CC) $(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST \
-		-Itests/host/include -Ikernel/include -o $@ $^
+$(eval $(call HOST_TEST_RULE,phase7,tests/host/test_phase7.c,$(HOST_CFLAGS)))
+$(eval $(call HOST_TEST_RULE,gfx,tests/host/test_gfx.c,$(HOST_CFLAGS)))
+$(eval $(call HOST_TEST_RULE,boot,tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c,\
+	$(HOST_CFLAGS) $(HOST_TEST_INC_BOOT)))
+$(eval $(call HOST_TEST_RULE,lan,tests/host/test_lan.c kernel/net/dhcp_util.c kernel/net/http_util.c \
+	boot/common/peak_conf.c boot/common/util.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_BOOT)))
+$(eval $(call HOST_TEST_RULE,js,tests/host/test_js.c tests/host/js_host_stubs.c \
+	kernel/js/js_core.c kernel/js/js_compile.c kernel/js/js_lex.c \
+	kernel/js/js_codegen.c kernel/js/js_parse.c kernel/js/js_vm.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/js))
+$(eval $(call HOST_TEST_RULE,random,tests/host/test_random.c kernel/random.c kernel/net/crypto.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 $(HOST_TEST_INC_HOST_BOOT_KERNEL)))
+$(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c kernel/net/tls_util.c kernel/random.c \
+	kernel/net/crypto.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_HOST_BOOT_KERNEL)))
+$(eval $(call HOST_TEST_RULE,libpeak,tests/host/test_libpeak.c kernel/user/libpeak.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST))
+$(eval $(call HOST_TEST_RULE,ubin_registry,tests/host/test_ubin_registry.c,$(HOST_CFLAGS)))
+$(eval $(call HOST_TEST_RULE,shell_split,tests/host/test_shell_split.c kernel/shell_split.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST))
+$(eval $(call HOST_TEST_RULE,console_scroll,tests/host/test_console_scroll.c kernel/console_scroll.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST))
+$(eval $(call HOST_TEST_RULE,display_present,tests/host/test_display_present.c kernel/display_clip.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST))
+$(eval $(call HOST_TEST_RULE,wallpaper_cache,tests/host/test_wallpaper_cache.c,$(HOST_CFLAGS)))
+$(eval $(call HOST_TEST_RULE,peakdisk,tests/host/test_peakdisk.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST))
+$(eval $(call HOST_TEST_RULE,peakvec,tests/host/test_peakvec.c tests/host/peakvec_host_stubs.c \
+	kernel/peakvec.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
+$(eval $(call HOST_TEST_RULE,guiproto,tests/host/test_guiproto.c tests/host/guiproto_host_stubs.c \
+	kernel/gui/guiproto.c kernel/gui/surface.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui))
+$(eval $(call HOST_TEST_RULE,vmm_usercopy,tests/host/test_vmm_usercopy.c tests/host/vmm_host_stubs.c \
+	kernel/vmm.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
 
 smoke:
 	./scripts/smoke-cli.sh
