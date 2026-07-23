@@ -8,7 +8,9 @@
  * while total capacity scales with the block device. */
 
 #define BLOBSTORE_PAGE_SIZE   4096u
-#define BLOBSTORE_CACHE_PAGES 32u   /* 128 KiB RAM cache */
+#ifndef BLOBSTORE_CACHE_PAGES
+#define BLOBSTORE_CACHE_PAGES 32u   /* 128 KiB RAM cache; override in host tests */
+#endif
 #define BLOBSTORE_MAX_OBJECTS 256u
 #define BLOBSTORE_LBA_BASE    8192u /* 4 MiB — PeakFS image lives below */
 

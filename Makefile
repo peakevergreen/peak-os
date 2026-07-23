@@ -291,7 +291,7 @@ endef
 HOST_TEST_NAMES := \
 	phase7 gfx boot lan js random tls libpeak ubin_registry \
 	shell_split console_scroll display_present wallpaper_cache \
-	peakdisk peakvec guiproto vmm_usercopy
+	peakdisk peakvec guiproto vmm_usercopy blobstore
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
 
 test: test-host
@@ -341,6 +341,9 @@ $(eval $(call HOST_TEST_RULE,guiproto,tests/host/test_guiproto.c tests/host/guip
 $(eval $(call HOST_TEST_RULE,vmm_usercopy,tests/host/test_vmm_usercopy.c tests/host/vmm_host_stubs.c \
 	kernel/vmm.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
+$(eval $(call HOST_TEST_RULE,blobstore,tests/host/test_blobstore.c tests/host/blobstore_host_stubs.c \
+	kernel/blobstore.c kernel/blockdev.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DBLOBSTORE_CACHE_PAGES=4 $(HOST_TEST_INC_KERNEL)))
 
 smoke:
 	./scripts/smoke-cli.sh
