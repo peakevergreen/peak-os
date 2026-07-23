@@ -1,5 +1,6 @@
 #include "net.h"
 #include "net_internal.h"
+#include "tcp_util.h"
 #include "peak_errno.h"
 #include "netdev.h"
 #include "timer.h"
@@ -97,43 +98,6 @@ void net_format_ip(uint32_t ip, char *buf, size_t cap) {
     snprintf(buf, cap, "%u.%u.%u.%u",
              (unsigned)((ip >> 24) & 0xFF), (unsigned)((ip >> 16) & 0xFF),
              (unsigned)((ip >> 8) & 0xFF), (unsigned)(ip & 0xFF));
-}
-
-uint16_t net_checksum(const void *data, size_t len) {
-    const uint8_t *p = data;
-    uint32_t sum = 0;
-    while (len > 1) {
-        sum += ((uint32_t)p[0] << 8) | p[1];
-        p += 2;
-        len -= 2;
-    }
-    if (len)
-        sum += (uint32_t)p[0] << 8;
-    while (sum >> 16)
-        sum = (sum & 0xFFFF) + (sum >> 16);
-    return (uint16_t)~sum;
-}
-
-uint16_t net_tcp_checksum(uint32_t src, uint32_t dst, const void *tcp, size_t tcp_len) {
-    uint32_t sum = 0;
-    sum += (src >> 16) & 0xFFFF;
-    sum += src & 0xFFFF;
-    sum += (dst >> 16) & 0xFFFF;
-    sum += dst & 0xFFFF;
-    sum += IP_TCP;
-    sum += (uint32_t)tcp_len;
-    const uint8_t *p = tcp;
-    size_t len = tcp_len;
-    while (len > 1) {
-        sum += ((uint32_t)p[0] << 8) | p[1];
-        p += 2;
-        len -= 2;
-    }
-    if (len)
-        sum += (uint32_t)p[0] << 8;
-    while (sum >> 16)
-        sum = (sum & 0xFFFF) + (sum >> 16);
-    return (uint16_t)~sum;
 }
 
 int net_eth_send(uint16_t ethertype, const uint8_t dst[6], const void *payload, uint16_t plen) {

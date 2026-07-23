@@ -1,4 +1,5 @@
 #include "net_internal.h"
+#include "tcp_util.h"
 #include "peak_errno.h"
 #include "cap.h"
 #include "privacy.h"
@@ -79,18 +80,15 @@ int net_tcp_send_seg(uint8_t flags, const void *data, uint16_t dlen) {
 }
 
 void net_handle_tcp(uint32_t src, const uint8_t *pkt, uint16_t len) {
-    if (len < 20)
+    struct tcp_hdr_info h;
+    if (tcp_parse_header(pkt, len, &h) != 0)
         return;
-    uint16_t sport = ((uint16_t)pkt[0] << 8) | pkt[1];
-    uint16_t dport = ((uint16_t)pkt[2] << 8) | pkt[3];
-    uint32_t seq = ((uint32_t)pkt[4] << 24) | ((uint32_t)pkt[5] << 16) |
-                   ((uint32_t)pkt[6] << 8) | pkt[7];
-    uint8_t data_off = (pkt[12] >> 4) * 4;
-    uint8_t flags = pkt[13];
-    if (data_off > len)
-        return;
-    uint16_t dlen = (uint16_t)(len - data_off);
-    const uint8_t *data = pkt + data_off;
+    uint16_t sport = h.sport;
+    uint16_t dport = h.dport;
+    uint32_t seq = h.seq;
+    uint8_t flags = h.flags;
+    uint16_t dlen = h.dlen;
+    const uint8_t *data = h.data;
 
     int slot = net_tcp_find_slot(src, sport, dport);
     if (slot < 0) {
@@ -123,9 +121,7 @@ void net_handle_tcp(uint32_t src, const uint8_t *pkt, uint16_t len) {
 
     if (c->state == TCP_SYN_SENT && (flags & TCP_SYN) && (flags & TCP_ACK)) {
         c->rcv_nxt = seq + 1;
-        uint32_t peer_ack = ((uint32_t)pkt[8] << 24) | ((uint32_t)pkt[9] << 16) |
-                            ((uint32_t)pkt[10] << 8) | pkt[11];
-        c->snd_nxt = peer_ack;
+        c->snd_nxt = h.ack;
         c->state = TCP_ESTABLISHED;
         net_tcp_send_seg_slot(slot, TCP_ACK, NULL, 0);
         return;

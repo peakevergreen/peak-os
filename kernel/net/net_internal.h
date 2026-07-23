@@ -3,6 +3,7 @@
 
 #include "net.h"
 #include "dhcp_util.h"
+#include "tcp_util.h"
 #include "sync.h"
 #include "peak_boot.h"
 
@@ -124,9 +125,6 @@ static inline uint32_t htonl(uint32_t x) { return bswap32(x); }
 
 void net_lock_acquire(void);
 void net_lock_release(void);
-
-uint16_t net_checksum(const void *data, size_t len);
-uint16_t net_tcp_checksum(uint32_t src, uint32_t dst, const void *tcp, size_t tcp_len);
 
 int net_eth_send(uint16_t ethertype, const uint8_t dst[6], const void *payload, uint16_t plen);
 int net_ip_send(uint32_t dst_ip, uint8_t proto, const void *payload, uint16_t plen);
