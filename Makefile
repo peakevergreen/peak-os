@@ -321,9 +321,9 @@ $(eval $(call HOST_TEST_RULE,js,tests/host/test_js.c tests/host/js_host_stubs.c 
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/js))
 $(eval $(call HOST_TEST_RULE,random,tests/host/test_random.c kernel/random.c kernel/net/crypto.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 $(HOST_TEST_INC_HOST_BOOT_KERNEL)))
-$(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c kernel/net/tls_util.c kernel/random.c \
-	kernel/net/crypto.c,\
-	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_HOST_BOOT_KERNEL)))
+$(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c tests/host/tls_host_stubs.c \
+	kernel/net/tls_util.c kernel/net/tls_trust.c kernel/random.c kernel/net/crypto.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_HOST_BOOT_KERNEL) -Ikernel/net))
 $(eval $(call HOST_TEST_RULE,libpeak,tests/host/test_libpeak.c kernel/user/libpeak.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST))
 $(eval $(call HOST_TEST_RULE,ubin_registry,tests/host/test_ubin_registry.c,$(HOST_CFLAGS)))

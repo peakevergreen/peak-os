@@ -121,11 +121,12 @@ static int leaf_cert_from_msg(const uint8_t *cert_msg, size_t len, const uint8_t
     return 0;
 }
 
+/* 1 = matched, 0 = mismatch, -1 = no usable names, -2 = truncated/malformed leaf. */
 static int verify_cert_hostname(const uint8_t *cert_msg, size_t len, const char *sni_host) {
     const uint8_t *leaf;
     size_t leaf_len;
     if (leaf_cert_from_msg(cert_msg, len, &leaf, &leaf_len) != 0)
-        return -1;
+        return -2;
     return x509_names_match_sni(leaf, leaf_len, sni_host);
 }
 
@@ -181,6 +182,11 @@ int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_h
     if (hn == 0) {
         cert_fail_reason = "Certificate hostname mismatch";
         serial_write_str("tls: certificate hostname mismatch\n");
+        return 0;
+    }
+    if (hn == -2) {
+        cert_fail_reason = "Malformed Certificate message";
+        serial_write_str("tls: truncated or malformed certificate\n");
         return 0;
     }
     hostname_matched = 1;
