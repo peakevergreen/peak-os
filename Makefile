@@ -86,6 +86,9 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/crypto.c \
 	kernel/net/tls_util.c \
 	kernel/net/tls.c \
+	kernel/net/tls_record.c \
+	kernel/net/tls_handshake.c \
+	kernel/net/tls_trust.c \
 	kernel/net/net.c \
 	kernel/net/arp.c \
 	kernel/net/dhcp.c \
