@@ -83,6 +83,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/webapi_stubs.c \
 	kernel/net/dhcp_util.c \
 	kernel/net/http_util.c \
+	kernel/net/tcp_util.c \
 	kernel/net/crypto.c \
 	kernel/net/tls_util.c \
 	kernel/net/tls.c \
@@ -293,7 +294,7 @@ $(HOST_TEST_DIR)/test_$(1): $(2) | $(HOST_TEST_DIR)
 endef
 
 HOST_TEST_NAMES := \
-	phase7 gfx boot lan js random tls libpeak ubin_registry \
+	phase7 gfx boot lan http_tcp js random tls libpeak ubin_registry \
 	shell_split console_scroll display_present wallpaper_cache \
 	peakdisk peakvec guiproto vmm_usercopy blobstore heap_pmm
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
@@ -315,6 +316,9 @@ $(eval $(call HOST_TEST_RULE,boot,tests/host/test_boot.c boot/common/elf_load.c 
 $(eval $(call HOST_TEST_RULE,lan,tests/host/test_lan.c kernel/net/dhcp_util.c kernel/net/http_util.c \
 	boot/common/peak_conf.c boot/common/util.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_BOOT)))
+$(eval $(call HOST_TEST_RULE,http_tcp,tests/host/test_http_tcp.c kernel/net/http_util.c \
+	kernel/net/tcp_util.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
 $(eval $(call HOST_TEST_RULE,js,tests/host/test_js.c tests/host/js_host_stubs.c \
 	kernel/js/js_core.c kernel/js/js_compile.c kernel/js/js_lex.c \
 	kernel/js/js_codegen.c kernel/js/js_parse.c kernel/js/js_vm.c,\

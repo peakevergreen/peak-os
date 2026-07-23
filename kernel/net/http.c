@@ -1,5 +1,6 @@
 #include "net.h"
 #include "net_internal.h"
+#include "http_util.h"
 #include "tls.h"
 #include "cap.h"
 #include "privacy.h"
@@ -8,108 +9,6 @@
 
 int net_http_needs_tls(void) {
     return http_needs_tls_flag;
-}
-
-static int parse_url(const char *url, int *https, char *host, size_t host_cap,
-                     uint16_t *port, char *path, size_t path_cap) {
-    const char *p = url;
-    *https = 0;
-    *port = 80;
-    if (!strncmp(p, "https://", 8)) {
-        *https = 1;
-        *port = 443;
-        p += 8;
-    } else if (!strncmp(p, "http://", 7)) {
-        p += 7;
-    }
-    size_t hi = 0;
-    while (*p && *p != '/' && *p != ':' && hi + 1 < host_cap)
-        host[hi++] = *p++;
-    host[hi] = '\0';
-    if (*p == ':') {
-        p++;
-        uint16_t po = 0;
-        while (*p >= '0' && *p <= '9') {
-            po = (uint16_t)(po * 10 + (*p - '0'));
-            p++;
-        }
-        *port = po;
-    }
-    if (*p == '/')
-        snprintf(path, path_cap, "%s", p);
-    else
-        snprintf(path, path_cap, "/");
-    return host[0] ? 0 : -1;
-}
-
-static int header_value(const char *raw, const char *key, char *out, size_t out_cap) {
-    size_t klen = strlen(key);
-    const char *p = raw;
-    while (*p && !(*p == '\r' && p[1] == '\n' && p[2] == '\r' && p[3] == '\n')) {
-        /* start of line */
-        int match = 1;
-        for (size_t i = 0; i < klen; i++) {
-            char a = p[i], b = key[i];
-            if (a >= 'A' && a <= 'Z')
-                a = (char)(a - 'A' + 'a');
-            if (b >= 'A' && b <= 'Z')
-                b = (char)(b - 'A' + 'a');
-            if (a != b) {
-                match = 0;
-                break;
-            }
-        }
-        if (match && p[klen] == ':') {
-            p += klen + 1;
-            while (*p == ' ' || *p == '\t')
-                p++;
-            size_t o = 0;
-            while (*p && *p != '\r' && *p != '\n' && o + 1 < out_cap)
-                out[o++] = *p++;
-            out[o] = '\0';
-            return 0;
-        }
-        while (*p && !(*p == '\r' && p[1] == '\n'))
-            p++;
-        if (*p == '\r' && p[1] == '\n')
-            p += 2;
-        else
-            break;
-    }
-    return -1;
-}
-
-static void copy_response_headers(char *buf, char *hdr_out, size_t hdr_cap) {
-    if (!hdr_out || hdr_cap < 2)
-        return;
-    hdr_out[0] = '\0';
-    if (!buf)
-        return;
-    size_t total = strlen(buf);
-    for (size_t i = 0; i + 3 < total; i++) {
-        if (buf[i] == '\r' && buf[i + 1] == '\n' && buf[i + 2] == '\r' &&
-            buf[i + 3] == '\n') {
-            size_t hlen = i + 4;
-            if (hlen >= hdr_cap)
-                hlen = hdr_cap - 1;
-            memcpy(hdr_out, buf, hlen);
-            hdr_out[hlen] = '\0';
-            return;
-        }
-    }
-}
-
-static void strip_http_headers(char *body) {
-    size_t total = strlen(body);
-    for (size_t i = 0; i + 3 < total; i++) {
-        if (body[i] == '\r' && body[i + 1] == '\n' && body[i + 2] == '\r' &&
-            body[i + 3] == '\n') {
-            char *hdr_end = body + i + 4;
-            size_t blen = strlen(hdr_end);
-            memmove(body, hdr_end, blen + 1);
-            return;
-        }
-    }
 }
 
 static void tls_fail_page(char *body, size_t body_cap, const char *host, const char *why) {
@@ -163,24 +62,6 @@ static int build_http_request(char *req, size_t req_cap, const char *method,
     }
     req[off] = '\0';
     return 0;
-}
-
-static int parse_http_status(const char *buf, int *status_out) {
-    int st = 0;
-    if (!strncmp(buf, "HTTP/", 5)) {
-        const char *s = buf;
-        while (*s && *s != ' ')
-            s++;
-        while (*s == ' ')
-            s++;
-        while (*s >= '0' && *s <= '9') {
-            st = st * 10 + (*s - '0');
-            s++;
-        }
-    }
-    if (status_out)
-        *status_out = st;
-    return st;
 }
 
 static int recv_http_response_tls(char *buf, size_t buf_cap) {
@@ -247,7 +128,7 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
     tls_close();
     if (ex != 0)
         return ex;
-    parse_http_status(buf, status_out);
+    http_parse_status(buf, status_out);
     return 0;
 }
 
@@ -273,35 +154,8 @@ static int http_exchange_raw(uint32_t ip, uint16_t port, const char *host, const
     net_tcp_close();
     if (ex != 0)
         return ex;
-    parse_http_status(buf, status_out);
+    http_parse_status(buf, status_out);
     return 0;
-}
-
-static int is_redirect(int st) {
-    return st == 301 || st == 302 || st == 303 || st == 307 || st == 308;
-}
-
-static void join_redirect(const char *scheme_host_prefix, const char *host, const char *cur_path,
-                          const char *loc, char *out, size_t out_cap) {
-    if (!strncmp(loc, "http://", 7) || !strncmp(loc, "https://", 8)) {
-        snprintf(out, out_cap, "%s", loc);
-        return;
-    }
-    if (loc[0] == '/') {
-        snprintf(out, out_cap, "%s%s%s", scheme_host_prefix, host, loc);
-        return;
-    }
-    char dir[256];
-    snprintf(dir, sizeof(dir), "%s", cur_path);
-    char *slash = NULL;
-    for (char *p = dir; *p; p++)
-        if (*p == '/')
-            slash = p;
-    if (slash)
-        slash[1] = '\0';
-    else
-        snprintf(dir, sizeof(dir), "/");
-    snprintf(out, out_cap, "%s%s%s%s", scheme_host_prefix, host, dir, loc);
 }
 
 int net_http_request(const struct net_http_request *req, char *body, size_t body_cap,
@@ -324,7 +178,7 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
         int https = 0;
         char host[128], path[256];
         uint16_t port = 80;
-        if (parse_url(cur, &https, host, sizeof(host), &port, path, sizeof(path)) != 0)
+        if (http_parse_url(cur, &https, host, sizeof(host), &port, path, sizeof(path)) != 0)
             return -1;
 
         uint32_t ip = net_dns_resolve(host, 300);
@@ -374,29 +228,33 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
         if (status_out)
             *status_out = st;
 
-        if (is_redirect(st)) {
+        if (http_is_redirect(st)) {
             char loc[280];
-            if (header_value(body, "location", loc, sizeof(loc)) != 0) {
-                copy_response_headers(body, hdr_out, hdr_cap);
-                strip_http_headers(body);
+            if (http_header_value(body, "location", loc, sizeof(loc)) != 0) {
+                http_copy_response_headers(body, hdr_out, hdr_cap);
+                http_strip_headers(body);
                 return -1;
             }
-            const char *pref = (https || port == 443) ? "https://" : "http://";
             char next[320];
-            join_redirect(pref, host, path, loc, next, sizeof(next));
+            if (http_join_redirect(https || port == 443, host, port, path, loc, next,
+                                   sizeof(next)) != 0) {
+                http_copy_response_headers(body, hdr_out, hdr_cap);
+                http_strip_headers(body);
+                return -1;
+            }
             snprintf(cur, sizeof(cur), "%s", next);
             continue;
         }
 
-        copy_response_headers(body, hdr_out, hdr_cap);
+        http_copy_response_headers(body, hdr_out, hdr_cap);
 
         if (st >= 200 && st < 300) {
-            strip_http_headers(body);
+            http_strip_headers(body);
             http_needs_tls_flag = 0;
             return 0;
         }
 
-        strip_http_headers(body);
+        http_strip_headers(body);
         if (!body[0]) {
             snprintf(body, body_cap,
                      "<html><body><h1>HTTP %d</h1><p>Empty response from %s</p></body></html>",

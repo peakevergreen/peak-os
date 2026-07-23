@@ -105,6 +105,9 @@ int http_parse_request_line(const char *req, char *method, size_t method_cap,
     method[mi] = '\0';
     if (!mi)
         return -1;
+    /* Method must be fully consumed (not truncated by cap). */
+    if (*p && *p != ' ' && *p != '\t')
+        return -1;
     while (*p == ' ' || *p == '\t')
         p++;
     size_t pi = 0;
@@ -113,6 +116,9 @@ int http_parse_request_line(const char *req, char *method, size_t method_cap,
         path[pi++] = *p++;
     path[pi] = '\0';
     if (!pi)
+        return -1;
+    /* Path must be fully consumed (not truncated by cap). */
+    if (*p && *p != ' ' && *p != '\t' && *p != '\r' && *p != '\n')
         return -1;
     return 0;
 }
@@ -141,6 +147,27 @@ static char *find_last_char(char *s, char ch) {
         if (*s == ch)
             last = s;
     return last;
+}
+
+/* Parse decimal port; reject overflow past 65535. Returns 0 and advances *pp. */
+static int parse_port_dec(const char **pp, uint16_t *port_out) {
+    const char *p = *pp;
+    if (*p < '0' || *p > '9')
+        return -1;
+    uint32_t port = 0;
+    int digits = 0;
+    while (*p >= '0' && *p <= '9') {
+        port = port * 10u + (uint32_t)(*p - '0');
+        if (port > 65535u)
+            return -1;
+        p++;
+        digits++;
+    }
+    if (!digits)
+        return -1;
+    *port_out = (uint16_t)port;
+    *pp = p;
+    return 0;
 }
 
 static int parse_url_parts(const char *url, char *scheme, size_t scheme_cap, char *host,
@@ -172,11 +199,8 @@ static int parse_url_parts(const char *url, char *scheme, size_t scheme_cap, cha
         return -1;
     if (*p == ':') {
         p++;
-        port = 0;
-        while (*p >= '0' && *p <= '9') {
-            port = (uint16_t)(port * 10 + (uint16_t)(*p - '0'));
-            p++;
-        }
+        if (parse_port_dec(&p, &port) != 0)
+            return -1;
     }
     *port_out = port;
     return 0;
@@ -294,4 +318,177 @@ int http_resolve_url(const char *base, const char *rel, char *out, size_t out_ca
         return -1;
     snprintf(out, out_cap, "%s://%s:%u%s", scheme, host, (unsigned)port, norm);
     return 0;
+}
+
+int http_parse_url(const char *url, int *https, char *host, size_t host_cap,
+                   uint16_t *port, char *path, size_t path_cap) {
+    if (!url || !https || !host || host_cap < 2 || !port || !path || path_cap < 2)
+        return -1;
+    const char *p = url;
+    *https = 0;
+    *port = 80;
+    host[0] = '\0';
+    path[0] = '\0';
+    if (!strncmp(p, "https://", 8)) {
+        *https = 1;
+        *port = 443;
+        p += 8;
+    } else if (!strncmp(p, "http://", 7)) {
+        p += 7;
+    } else {
+        return -1;
+    }
+    size_t hi = 0;
+    while (*p && *p != '/' && *p != '?' && *p != '#' && *p != ':' &&
+           hi + 1 < host_cap)
+        host[hi++] = *p++;
+    host[hi] = '\0';
+    if (!hi)
+        return -1;
+    /* Host must fit; reject truncation. */
+    if (*p && *p != '/' && *p != '?' && *p != '#' && *p != ':')
+        return -1;
+    if (*p == ':') {
+        p++;
+        if (parse_port_dec(&p, port) != 0)
+            return -1;
+    }
+    if (*p == '/' || *p == '?' || *p == '#')
+        snprintf(path, path_cap, "%s", p);
+    else
+        snprintf(path, path_cap, "/");
+    return 0;
+}
+
+size_t http_headers_len(const char *buf, size_t len) {
+    if (!buf || len < 4)
+        return 0;
+    for (size_t i = 0; i + 3 < len; i++) {
+        if (buf[i] == '\r' && buf[i + 1] == '\n' && buf[i + 2] == '\r' &&
+            buf[i + 3] == '\n')
+            return i + 4;
+    }
+    return 0;
+}
+
+int http_header_value(const char *raw, const char *key, char *out, size_t out_cap) {
+    if (!raw || !key || !out || out_cap < 2 || !key[0])
+        return -1;
+    size_t klen = strlen(key);
+    const char *p = raw;
+    while (*p && !(*p == '\r' && p[1] == '\n' && p[2] == '\r' && p[3] == '\n')) {
+        int match = 1;
+        for (size_t i = 0; i < klen; i++) {
+            char a = p[i], b = key[i];
+            if (!a) {
+                match = 0;
+                break;
+            }
+            if (a >= 'A' && a <= 'Z')
+                a = (char)(a - 'A' + 'a');
+            if (b >= 'A' && b <= 'Z')
+                b = (char)(b - 'A' + 'a');
+            if (a != b) {
+                match = 0;
+                break;
+            }
+        }
+        if (match && p[klen] == ':') {
+            p += klen + 1;
+            while (*p == ' ' || *p == '\t')
+                p++;
+            size_t o = 0;
+            while (*p && *p != '\r' && *p != '\n' && o + 1 < out_cap)
+                out[o++] = *p++;
+            out[o] = '\0';
+            /* Reject truncation of header values. */
+            if (*p && *p != '\r' && *p != '\n')
+                return -1;
+            return 0;
+        }
+        while (*p && !(*p == '\r' && p[1] == '\n'))
+            p++;
+        if (*p == '\r' && p[1] == '\n')
+            p += 2;
+        else
+            break;
+    }
+    return -1;
+}
+
+void http_copy_response_headers(const char *buf, char *hdr_out, size_t hdr_cap) {
+    if (!hdr_out || hdr_cap < 2)
+        return;
+    hdr_out[0] = '\0';
+    if (!buf)
+        return;
+    size_t total = strlen(buf);
+    size_t hlen = http_headers_len(buf, total);
+    if (!hlen)
+        return;
+    if (hlen >= hdr_cap)
+        hlen = hdr_cap - 1;
+    memcpy(hdr_out, buf, hlen);
+    hdr_out[hlen] = '\0';
+}
+
+void http_strip_headers(char *msg) {
+    if (!msg)
+        return;
+    size_t total = strlen(msg);
+    size_t hlen = http_headers_len(msg, total);
+    if (!hlen)
+        return;
+    char *hdr_end = msg + hlen;
+    size_t blen = strlen(hdr_end);
+    memmove(msg, hdr_end, blen + 1);
+}
+
+int http_parse_status(const char *buf, int *status_out) {
+    if (status_out)
+        *status_out = 0;
+    if (!buf || strncmp(buf, "HTTP/", 5) != 0)
+        return -1;
+    const char *s = buf;
+    while (*s && *s != ' ')
+        s++;
+    while (*s == ' ')
+        s++;
+    if (*s < '0' || *s > '9')
+        return -1;
+    int st = 0;
+    int digits = 0;
+    while (*s >= '0' && *s <= '9') {
+        st = st * 10 + (*s - '0');
+        if (st > 999)
+            return -1;
+        s++;
+        digits++;
+    }
+    if (digits < 3)
+        return -1;
+    if (status_out)
+        *status_out = st;
+    return 0;
+}
+
+int http_is_redirect(int status) {
+    return status == 301 || status == 302 || status == 303 || status == 307 ||
+           status == 308;
+}
+
+int http_join_redirect(int https, const char *host, uint16_t port,
+                       const char *cur_path, const char *loc, char *out,
+                       size_t out_cap) {
+    if (!host || !cur_path || !loc || !out || out_cap < 8)
+        return -1;
+    if (!strncmp(loc, "http://", 7) || !strncmp(loc, "https://", 8)) {
+        snprintf(out, out_cap, "%s", loc);
+        return 0;
+    }
+    const char *scheme = https ? "https" : "http";
+    char base[384];
+    snprintf(base, sizeof(base), "%s://%s:%u%s", scheme, host, (unsigned)port,
+             cur_path[0] ? cur_path : "/");
+    return http_resolve_url(base, loc, out, out_cap);
 }
