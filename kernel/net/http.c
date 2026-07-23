@@ -69,15 +69,15 @@ static int recv_http_response_tls(char *buf, size_t buf_cap) {
     uint64_t last_progress = timer_ticks();
     while (total + 1 < buf_cap) {
         size_t n = 0;
-        if (tls_recv(buf + total, buf_cap - 1 - total, &n, 100) != 0) {
+        if (tls_recv(buf + total, buf_cap - 1 - total, &n, NET_TCP_RECV_SLICE_TICKS) != 0) {
             /* Stream done (close_notify/alert or TCP torn down) — not a stall. */
             if (!tls_ready())
                 break;
             if (tcp_got_fin || tcp_state == TCP_CLOSED || tcp_state == TCP_CLOSE_WAIT)
                 break;
             /* Mid-transfer stall (retransmits, slow origin): keep waiting up
-             * to 12 s without progress instead of truncating the page. */
-            if (timer_ticks() - last_progress > 1200)
+             * to NET_HTTP_IDLE_TLS_TICKS without progress instead of truncating. */
+            if (net_timed_out(last_progress, NET_HTTP_IDLE_TLS_TICKS))
                 break;
             continue;
         }
@@ -91,9 +91,9 @@ static int recv_http_response_tls(char *buf, size_t buf_cap) {
 static int recv_http_response_tcp(char *buf, size_t buf_cap) {
     size_t total = 0;
     uint64_t start = timer_ticks();
-    while (total + 1 < buf_cap && timer_ticks() - start < 800) {
+    while (total + 1 < buf_cap && !net_timed_out(start, NET_HTTP_IDLE_TCP_TICKS)) {
         size_t n = 0;
-        if (net_tcp_recv(buf + total, buf_cap - 1 - total, &n, 100) != 0) {
+        if (net_tcp_recv(buf + total, buf_cap - 1 - total, &n, NET_TCP_RECV_SLICE_TICKS) != 0) {
             if (tcp_got_fin || tcp_state == TCP_CLOSED || tcp_state == TCP_CLOSE_WAIT)
                 break;
             continue;
@@ -110,7 +110,7 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
                               const char *method, const char *extra_headers,
                               const char *body, size_t body_len, char *buf, size_t buf_cap,
                               int *status_out) {
-    if (tls_connect(ip, 443, host, 1200) != 0)
+    if (tls_connect(ip, 443, host, NET_TLS_HANDSHAKE_TICKS) != 0)
         return -2;
 
     char req[2048];
@@ -136,7 +136,7 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
 static int http_exchange_raw(uint32_t ip, uint16_t port, const char *host, const char *path,
                              const char *method, const char *extra_headers, const char *body,
                              size_t body_len, char *buf, size_t buf_cap, int *status_out) {
-    if (net_tcp_connect(ip, port, 500) != 0)
+    if (net_tcp_connect(ip, port, NET_TCP_CONNECT_HTTP_TICKS) != 0)
         return -1;
 
     char req[2048];
@@ -181,7 +181,7 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
         if (http_parse_url(cur, &https, host, sizeof(host), &port, path, sizeof(path)) != 0)
             return -1;
 
-        uint32_t ip = net_dns_resolve(host, 300);
+        uint32_t ip = net_dns_resolve(host, NET_DNS_RESOLVE_TICKS);
         if (!ip) {
             if (status_out)
                 *status_out = 0;

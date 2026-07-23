@@ -88,6 +88,26 @@ this minimal in-guest client; TOFU/pins provide continuity, not WebPKI assurance
   `rm /etc/peak/tls-tofu` to re-trust after a legitimate rotation
 - Bridged mode is platform-specific (macOS vmnet); Linux tap/bridge is not wired yet
 
+## Timeouts (100 Hz ticks)
+
+Named budgets live in `kernel/net/net_internal.h` (`NET_*_TICKS`). Approximate
+wall time assumes the kernel timer at 100 Hz:
+
+| Constant | Ticks | ~Time | Used for |
+|----------|------:|------:|----------|
+| `NET_DHCP_TIMEOUT_DEFAULT` | 300 | 3s | DHCP DISCOVER / REQUEST |
+| `NET_DNS_RESOLVE_TICKS` | 300 | 3s | DNS A lookup (http / tools) |
+| `NET_DNS_CACHE_TTL_TICKS` | 600 | 6s | Positive DNS cache TTL |
+| `NET_ARP_RESOLVE_TICKS` | 200 | 2s | Next-hop MAC resolve |
+| `NET_TCP_CONNECT_HTTP_TICKS` | 500 | 5s | Plaintext HTTP connect |
+| `NET_TCP_RECV_SLICE_TICKS` | 100 | 1s | Per-recv poll slice |
+| `NET_HTTP_IDLE_TCP_TICKS` | 800 | 8s | HTTP recv stall (TCP) |
+| `NET_HTTP_IDLE_TLS_TICKS` | 1200 | 12s | HTTP recv stall (TLS) |
+| `NET_TLS_HANDSHAKE_TICKS` | 1200 | 12s | TLS connect / handshake |
+
+Blocking waits share `net_timed_out` / `net_poll_idle` (poll + HLT) rather than
+tight spin loops; the stack remains synchronous (no async rewrite).
+
 ## Troubleshooting
 
 | Symptom | Check |

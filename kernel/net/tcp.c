@@ -184,7 +184,7 @@ int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
     if (net_tcp_send_seg(TCP_SYN, NULL, 0) != 0)
         return PEAK_EIO;
     uint64_t start = timer_ticks();
-    while (timer_ticks() - start < timeout_ticks) {
+    while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (tcp_state == TCP_ESTABLISHED)
             return 0;
@@ -287,7 +287,7 @@ int net_tcp_fd_recv(int fd, void *buf, size_t cap, size_t *out_len,
             return PEAK_ENOTCONN;
         if (tcps[fd].state == TCP_CLOSED)
             return PEAK_ENOTCONN;
-        if (timer_ticks() - start > timeout_ticks)
+        if (net_timed_out(start, timeout_ticks))
             return PEAK_ETIMEOUT;
         hlt_if_enabled();
     }
@@ -305,11 +305,8 @@ void net_tcp_fd_close(int fd) {
         return;
     if (tcps[fd].state == TCP_ESTABLISHED || tcps[fd].state == TCP_CLOSE_WAIT) {
         net_tcp_send_seg_slot(fd, TCP_FIN | TCP_ACK, NULL, 0);
-        for (int i = 0; i < 10; i++) {
-            net_poll();
-            for (volatile int j = 0; j < 2000; j++)
-                ;
-        }
+        for (int i = 0; i < 10; i++)
+            net_poll_idle();
     }
     tcps[fd].state = TCP_CLOSED;
     tcps[fd].rx_len = 0;
@@ -342,7 +339,7 @@ int net_tcp_recv(void *buf, size_t cap, size_t *out_len, uint32_t timeout_ticks)
             return PEAK_ENOTCONN;
         if (tcp_state == TCP_CLOSED)
             return PEAK_ENOTCONN;
-        if (timer_ticks() - start > timeout_ticks)
+        if (net_timed_out(start, timeout_ticks))
             return PEAK_ETIMEOUT;
         hlt_if_enabled();
     }
@@ -358,11 +355,8 @@ int net_tcp_recv(void *buf, size_t cap, size_t *out_len, uint32_t timeout_ticks)
 void net_tcp_close(void) {
     if (tcp_state == TCP_ESTABLISHED || tcp_state == TCP_CLOSE_WAIT) {
         net_tcp_send_seg(TCP_FIN | TCP_ACK, NULL, 0);
-        for (int i = 0; i < 20; i++) {
-            net_poll();
-            for (volatile int j = 0; j < 5000; j++)
-                ;
-        }
+        for (int i = 0; i < 20; i++)
+            net_poll_idle();
     }
     tcp_state = TCP_CLOSED;
     tcp_rx_len = 0;

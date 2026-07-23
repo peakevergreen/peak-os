@@ -5,33 +5,11 @@
 #include "util.h"
 
 void net_arp_cache_put(uint32_t ip, const uint8_t mac[6]) {
-    for (int i = 0; i < ARP_CACHE_MAX; i++) {
-        if (arp_cache[i].valid && arp_cache[i].ip == ip) {
-            memcpy(arp_cache[i].mac, mac, 6);
-            return;
-        }
-    }
-    for (int i = 0; i < ARP_CACHE_MAX; i++) {
-        if (!arp_cache[i].valid) {
-            arp_cache[i].valid = 1;
-            arp_cache[i].ip = ip;
-            memcpy(arp_cache[i].mac, mac, 6);
-            return;
-        }
-    }
-    arp_cache[0].valid = 1;
-    arp_cache[0].ip = ip;
-    memcpy(arp_cache[0].mac, mac, 6);
+    arp_cache_store(arp_cache, ARP_CACHE_MAX, ip, mac);
 }
 
 int net_arp_cache_get(uint32_t ip, uint8_t mac[6]) {
-    for (int i = 0; i < ARP_CACHE_MAX; i++) {
-        if (arp_cache[i].valid && arp_cache[i].ip == ip) {
-            memcpy(mac, arp_cache[i].mac, 6);
-            return 0;
-        }
-    }
-    return -1;
+    return arp_cache_lookup(arp_cache, ARP_CACHE_MAX, ip, mac);
 }
 
 int net_arp_request(uint32_t tip) {
@@ -75,7 +53,7 @@ int net_resolve_next_hop_mac(uint32_t dst_ip, uint8_t mac[6], uint32_t timeout_t
         return 0;
     net_arp_request(tip);
     uint64_t start = timer_ticks();
-    while (timer_ticks() - start < timeout_ticks) {
+    while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (arp_resolved && arp_wait_ip == tip) {
             memcpy(mac, arp_wait_mac, 6);
@@ -84,7 +62,7 @@ int net_resolve_next_hop_mac(uint32_t dst_ip, uint8_t mac[6], uint32_t timeout_t
         }
         if (net_arp_cache_get(tip, mac) == 0)
             return 0;
-        hlt();
+        hlt_if_enabled();
     }
     return PEAK_ETIMEOUT;
 }

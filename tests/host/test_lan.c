@@ -1,6 +1,6 @@
 /*
  * Host tests for DHCP option parsing, HTTP path/MIME helpers,
- * and peak.conf network keys.
+ * ARP cache helpers, and peak.conf network keys.
  */
 #include <stdio.h>
 #include <string.h>
@@ -9,6 +9,7 @@
 
 #include "../../kernel/include/dhcp_util.h"
 #include "../../kernel/include/http_util.h"
+#include "../../kernel/include/arp_util.h"
 #include "peak_conf.h"
 
 static int fails;
@@ -88,6 +89,38 @@ int main(void) {
     expect(http_resolve_url("http://ex.com/a/b.html", "/z.js", resolved, sizeof(resolved)) == 0 &&
                !strcmp(resolved, "http://ex.com:80/z.js"),
            "resolve absolute path");
+
+    /* ARP open-addressed cache */
+    {
+        struct arp_entry cache[ARP_CACHE_MAX];
+        uint8_t mac[6], out[6];
+        memset(cache, 0, sizeof(cache));
+        memset(mac, 0xAB, sizeof(mac));
+        mac[5] = 0x01;
+        expect(arp_cache_lookup(cache, ARP_CACHE_MAX, 0x0A000202u, out) != 0, "arp miss empty");
+        arp_cache_store(cache, ARP_CACHE_MAX, 0x0A000202u, mac);
+        expect(arp_cache_lookup(cache, ARP_CACHE_MAX, 0x0A000202u, out) == 0 &&
+                   out[0] == 0xAB && out[5] == 0x01,
+               "arp hit after store");
+        mac[5] = 0x02;
+        arp_cache_store(cache, ARP_CACHE_MAX, 0x0A000202u, mac);
+        expect(arp_cache_lookup(cache, ARP_CACHE_MAX, 0x0A000202u, out) == 0 && out[5] == 0x02,
+               "arp update same ip");
+        /* Fill table and ensure lookup stays bounded / last write wins on home. */
+        for (unsigned i = 0; i < ARP_CACHE_MAX + 4; i++) {
+            uint32_t ip = 0x0A000100u + i;
+            uint8_t m[6] = {0, 0, 0, 0, 0, (uint8_t)i};
+            arp_cache_store(cache, ARP_CACHE_MAX, ip, m);
+        }
+        unsigned valid = 0;
+        for (unsigned i = 0; i < ARP_CACHE_MAX; i++)
+            if (cache[i].valid)
+                valid++;
+        expect(valid == ARP_CACHE_MAX, "arp cache stays bounded");
+        expect(arp_cache_home(0x0A000202u) < ARP_CACHE_MAX, "arp home in range");
+        expect(arp_cache_lookup(NULL, ARP_CACHE_MAX, 1, out) != 0, "arp reject null cache");
+        expect(arp_cache_lookup(cache, 0, 1, out) != 0, "arp reject zero n");
+    }
 
     /* peak.conf */
     struct peak_loader_conf conf;

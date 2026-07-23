@@ -98,7 +98,7 @@ int net_dhcp_try(uint32_t timeout_ticks) {
     if (!timeout_ticks)
         timeout_ticks = boot_net.dhcp_timeout_ticks
                             ? boot_net.dhcp_timeout_ticks
-                            : 300;
+                            : NET_DHCP_TIMEOUT_DEFAULT;
 
     dhcp_active = 1;
     dhcp_have_offer = 0;
@@ -120,7 +120,7 @@ int net_dhcp_try(uint32_t timeout_ticks) {
     }
 
     uint64_t start = timer_ticks();
-    while (timer_ticks() - start < timeout_ticks) {
+    while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (dhcp_have_offer)
             break;
@@ -148,7 +148,7 @@ int net_dhcp_try(uint32_t timeout_ticks) {
         return 0;
     }
     start = timer_ticks();
-    while (timer_ticks() - start < timeout_ticks) {
+    while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (dhcp_have_ack || dhcp_have_nak)
             break;
