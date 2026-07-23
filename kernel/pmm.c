@@ -164,10 +164,29 @@ void pmm_free(void *phys) {
     pmm_free_n(phys, 1);
 }
 
+static int pmm_page_on_freelist(uint64_t page) {
+    for (size_t i = 0; i < single_free_n; i++) {
+        if (single_free[i] == page)
+            return 1;
+    }
+    for (size_t i = 0; i < free_run_n; i++) {
+        if (page >= free_runs[i].start &&
+            page < free_runs[i].start + free_runs[i].n)
+            return 1;
+    }
+    return 0;
+}
+
 void pmm_free_n(void *phys, size_t n) {
     uint64_t p = (uint64_t)phys / PAGE_SIZE;
     if (n == 0 || p >= MAX_PAGES)
         return;
+
+    /* Freelist keeps bitmap bits set — reject double-free before reuse. */
+    for (size_t i = 0; i < n; i++) {
+        if (p + i >= MAX_PAGES || pmm_page_on_freelist(p + i))
+            return;
+    }
 
     /* Prefer freelist reuse: keep bitmap bits set so scan cannot steal. */
     if (n == 1 && single_free_n < PMM_SINGLE_STACK && bitmap_test(p)) {
