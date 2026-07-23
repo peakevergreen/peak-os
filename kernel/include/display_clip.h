@@ -8,8 +8,9 @@
 #endif
 
 /*
- * Clip a present rect to the visible framebuffer.
+ * Clip a present/damage rect to the visible framebuffer.
  * Returns 1 when any pixels remain; 0 when fully outside or zero-sized.
+ * Overflow-safe: never forms x+w / y+h in uint32 (wrap would mis-clip).
  */
 int display_clip_rect(uint32_t fb_w, uint32_t fb_h,
                       uint32_t x, uint32_t y, uint32_t w, uint32_t h,

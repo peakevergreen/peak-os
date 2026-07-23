@@ -11,9 +11,10 @@ int display_clip_rect(uint32_t fb_w, uint32_t fb_h,
         return 0;
     if (x >= fb_w || y >= fb_h)
         return 0;
-    if (x + w > fb_w)
+    /* Avoid uint32 x+w / y+h wrap — use remaining extent instead. */
+    if (w > fb_w - x)
         w = fb_w - x;
-    if (y + h > fb_h)
+    if (h > fb_h - y)
         h = fb_h - y;
     if (!w || !h)
         return 0;

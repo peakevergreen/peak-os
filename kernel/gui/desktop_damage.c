@@ -1,4 +1,5 @@
 #include "desktop_internal.h"
+#include "display_clip.h"
 #include "fb.h"
 
 struct damage_rect damage_list[MAX_DAMAGE];
@@ -57,15 +58,10 @@ static void damage_compact(void) {
 
 void damage_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     struct framebuffer *fb = fb_get();
-    if (!w || !h || damage_overflow)
+    if (damage_overflow)
         return;
-    if (x >= fb->width || y >= fb->height)
-        return;
-    if (x + w > fb->width)
-        w = (uint32_t)fb->width - x;
-    if (y + h > fb->height)
-        h = (uint32_t)fb->height - y;
-    if (!w || !h)
+    if (!display_clip_rect((uint32_t)fb->width, (uint32_t)fb->height,
+                           x, y, w, h, &x, &y, &w, &h))
         return;
 
     for (int i = 0; i < damage_count; i++) {

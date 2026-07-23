@@ -1,4 +1,5 @@
 #include "wallpaper.h"
+#include "display_clip.h"
 #include "fb.h"
 #include "heap.h"
 #include "util.h"
@@ -228,12 +229,8 @@ void wallpaper_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     if (!wp_cache_ok || wp_cw != fw || wp_ch != fh)
         wp_cache_rebuild(fw, fh);
 
-    if (x >= fw || y >= fh)
+    if (!display_clip_rect(fw, fh, x, y, w, h, &x, &y, &w, &h))
         return;
-    if (x + w > fw)
-        w = fw - x;
-    if (y + h > fh)
-        h = fh - y;
 
     if (wp_cache_ok && wp_cw == fw && wp_ch == fh) {
         fb_blit_argb(x, y, w, h, wp_cache + (size_t)y * (size_t)fw + x, fw);

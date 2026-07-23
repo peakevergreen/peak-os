@@ -1,4 +1,5 @@
 #include "surface.h"
+#include "display_clip.h"
 #include "fb.h"
 #include "heap.h"
 #include "serial.h"
@@ -35,15 +36,9 @@ static void surf_damage_clear(struct win_surface *s) {
 
 static void surf_damage_add(struct win_surface *s, uint32_t x, uint32_t y,
                             uint32_t w, uint32_t h) {
-    if (!s || !w || !h || s->dmg_overflow)
+    if (!s || s->dmg_overflow)
         return;
-    if (x >= s->w || y >= s->h)
-        return;
-    if (x + w > s->w)
-        w = s->w - x;
-    if (y + h > s->h)
-        h = s->h - y;
-    if (!w || !h)
+    if (!display_clip_rect(s->w, s->h, x, y, w, h, &x, &y, &w, &h))
         return;
     for (int i = 0; i < s->dmg_count; i++) {
         struct surface_rect *r = &s->dmg[i];
@@ -146,15 +141,9 @@ void surface_free(struct win_surface *s) {
 
 void surface_blit_rect(const struct win_surface *s, uint32_t dx, uint32_t dy,
                        uint32_t sx, uint32_t sy, uint32_t w, uint32_t h) {
-    if (!s || !s->px || !w || !h)
+    if (!s || !s->px)
         return;
-    if (sx >= s->w || sy >= s->h)
-        return;
-    if (sx + w > s->w)
-        w = s->w - sx;
-    if (sy + h > s->h)
-        h = s->h - sy;
-    if (!w || !h)
+    if (!display_clip_rect(s->w, s->h, sx, sy, w, h, &sx, &sy, &w, &h))
         return;
     fb_blit_argb(dx, dy, w, h, s->px + (uint64_t)sy * s->stride + sx, s->stride);
 }
