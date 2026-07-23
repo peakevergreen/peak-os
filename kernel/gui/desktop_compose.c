@@ -163,15 +163,20 @@ static void present_scene(int full_present) {
     if (!fb_backbuffer_ok())
         return;
 
+    /* Empty damage with a soft present: nothing to flush (avoid full-frame). */
+    if (!full_present && damage_count == 0)
+        return;
+
     desktop_cursor_erase_front();
 
     uint32_t t0 = gfx_now_us();
-    int use_full = full_present || damage_overflow || damage_count == 0;
+    int use_full = full_present;
     if (!use_full) {
         uint64_t dmg_px = 0;
         uint64_t screen_px = (uint64_t)fb_get()->width * (uint64_t)fb_get()->height;
         for (int i = 0; i < damage_count; i++)
             dmg_px += (uint64_t)damage_list[i].w * (uint64_t)damage_list[i].h;
+        /* Dense damage (≥25% of screen pixels): full present is cheaper. */
         if (screen_px && dmg_px * 4 >= screen_px)
             use_full = 1;
     }
@@ -403,7 +408,9 @@ static void draw_rubber_band(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
 }
 
 static void compose_damage(void) {
-    if (damage_count > 8 || damage_overflow)
+    /* Many disjoint rects: collapse to one bbox so compose stays cheap.
+     * Overflow no longer forces a full desktop redraw — list stays honest. */
+    if (damage_count > 8)
         damage_merge_all();
     if (!damage_count)
         return;
@@ -589,9 +596,12 @@ void desktop_draw(void) {
         return;
 
     int use_bb = fb_backbuffer_ok();
-    int do_full = (dirty_bits & DIRTY_FULL) || damage_overflow || !scene_ready || !use_bb;
+    int do_full = (dirty_bits & DIRTY_FULL) || !scene_ready || !use_bb;
 
-    if (!do_full && (dirty_bits & DIRTY_MOVE) && damage_count > 0) {
+    /* Prefer damage compose whenever we have rects — do not require DIRTY_MOVE
+     * alone, and never escalate to full desktop paint just because the list
+     * once hit MAX_DAMAGE (coalesce keeps rects valid). */
+    if (!do_full && damage_count > 0) {
         compose_damage();
         if (band_live && resizing)
             draw_rubber_band(band_x, band_y, band_w, band_h);

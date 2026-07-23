@@ -39,6 +39,7 @@ Product profile: **1080p @ UI scale 3**.
 
 - [ ] Monitor shows compose_us / present_us and surf pressure
 - [ ] fps counter updates while desktop is active
+- [ ] Busy drag / multi-toast: compose_us stays on damage path (no spike to full-desktop every tick when rect list overflows)
 
 ## Multi-Terminal
 
