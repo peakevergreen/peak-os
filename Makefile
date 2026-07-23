@@ -33,6 +33,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/heap.c \
 	kernel/vmm.c \
 	kernel/vfs.c \
+	kernel/vfs_path_util.c \
 	kernel/sched.c \
 	kernel/elf.c \
 	kernel/syscall.c \
@@ -302,7 +303,8 @@ test-host:
 $(HOST_TEST_DIR):
 	@mkdir -p $@
 
-$(eval $(call HOST_TEST_RULE,phase7,tests/host/test_phase7.c,$(HOST_CFLAGS)))
+$(eval $(call HOST_TEST_RULE,phase7,tests/host/test_phase7.c kernel/vfs_path_util.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
 $(eval $(call HOST_TEST_RULE,gfx,tests/host/test_gfx.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,boot,tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c,\
 	$(HOST_CFLAGS) $(HOST_TEST_INC_BOOT)))

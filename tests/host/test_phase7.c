@@ -1,12 +1,13 @@
 /*
  * Host-side Phase 7 unit tests (no QEMU).
- * Covers PeakFS path rules, ELF header bounds, agent path prefixes,
- * and DHCP/TCP parser stubs that mirror kernel policy.
+ * PeakFS path rules link kernel/vfs_path_util.c; other checks cover
+ * ELF bounds, agent prefixes, and DHCP/TCP layout stubs.
  */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "vfs_path_util.h"
 
 static int fails;
 
@@ -17,26 +18,9 @@ static void expect(int cond, const char *msg) {
     }
 }
 
-/* --- PeakFS path allowlist (mirrors kernel/vfs.c) --- */
+/* Full persist profile — matches historic phase7 PeakFS allowlist. */
 static int peakfs_path_allowed(const char *path) {
-    if (!path || path[0] != '/')
-        return 0;
-    for (size_t i = 0; path[i]; i++) {
-        if (path[i] == '.' && path[i + 1] == '.' &&
-            (i == 0 || path[i - 1] == '/') &&
-            (path[i + 2] == '/' || path[i + 2] == '\0'))
-            return 0;
-    }
-    static const char *const prefixes[] = {
-        "/home", "/etc/peak", "/var/peak", NULL
-    };
-    for (int i = 0; prefixes[i]; i++) {
-        size_t pl = strlen(prefixes[i]);
-        if (strncmp(path, prefixes[i], pl) == 0 &&
-            (path[pl] == '\0' || path[pl] == '/'))
-            return 1;
-    }
-    return 0;
+    return peakfs_path_allowed_for_profile(path, 2);
 }
 
 /* --- Agent path boundary (mirrors kernel/agent.c) --- */
@@ -198,13 +182,16 @@ static int tcp_flags_syn_ack(uint8_t flags) {
 }
 
 int main(void) {
-    /* PeakFS paths */
+    /* PeakFS paths (real vfs_path_util, full persist profile) */
     expect(peakfs_path_allowed("/home/dev/a"), "allow /home");
     expect(peakfs_path_allowed("/etc/peak/agent.policy"), "allow /etc/peak");
     expect(peakfs_path_allowed("/var/peak/sessions"), "allow /var/peak");
     expect(!peakfs_path_allowed("/etc/passwd"), "deny /etc/passwd");
     expect(!peakfs_path_allowed("/home/../etc"), "deny .. escape");
     expect(!peakfs_path_allowed("home/dev"), "deny relative");
+    expect(!peakfs_path_allowed_for_profile("/home/dev", 0), "private denies all");
+    expect(peakfs_path_allowed_for_profile("/home/dev", 1), "workspace allows /home");
+    expect(!peakfs_path_allowed_for_profile("/etc/peak/x", 1), "workspace denies /etc/peak");
 
     /* Agent prefix boundary */
     expect(path_under_prefix("/home/dev/workspace/x.c", "/home/dev/workspace"), "under workspace");
