@@ -2,6 +2,7 @@
 #include "gui.h"
 #include "fb.h"
 #include "display.h"
+#include "display_clip.h"
 #include "sysmon.h"
 #include "surface.h"
 #include "heap.h"
@@ -294,11 +295,7 @@ static void fill_desk_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     struct framebuffer *fb = fb_get();
     uint32_t tb = desktop_taskbar_h();
     uint32_t desk_h = (uint32_t)fb->height > tb ? (uint32_t)fb->height - tb : (uint32_t)fb->height;
-    if (y >= desk_h)
-        return;
-    if (y + h > desk_h)
-        h = desk_h - y;
-    if (!w || !h)
+    if (!display_clip_rect((uint32_t)fb->width, desk_h, x, y, w, h, &x, &y, &w, &h))
         return;
     if (wallpaper_enabled())
         wallpaper_draw(x, y, w, h);

@@ -1,5 +1,6 @@
 #include "fb.h"
 #include "display.h"
+#include "display_clip.h"
 #include "font_render.h"
 #include "pmm.h"
 #include "vmm.h"
@@ -191,45 +192,34 @@ void fb_end_frame(void) {
 }
 
 void fb_present_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
-    if (!g_back_ok || !w || !h)
+    if (!g_back_ok)
         return;
     if (g_in_frame)
         g_in_frame = 0;
-    if (x >= g_fb.width || y >= g_fb.height)
+    if (!display_clip_rect((uint32_t)g_fb.width, (uint32_t)g_fb.height,
+                           x, y, w, h, &x, &y, &w, &h))
         return;
-    if (x + w > g_fb.width)
-        w = (uint32_t)g_fb.width - x;
-    if (y + h > g_fb.height)
-        h = (uint32_t)g_fb.height - y;
     uint32_t fw = (uint32_t)g_fb.width;
     display_present_rect(x, y, w, h, g_back + (uint64_t)y * fw + x, fw);
 }
 
 void fb_blit_argb(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                   const uint32_t *src, uint32_t src_stride) {
-    if (!src || !w || !h)
+    if (!src)
         return;
-    uint32_t dw = draw_width(), dh = draw_height();
-    if (x >= dw || y >= dh)
+    if (!display_clip_rect(draw_width(), draw_height(), x, y, w, h, &x, &y, &w, &h))
         return;
-    if (x + w > dw)
-        w = dw - x;
-    if (y + h > dh)
-        h = dh - y;
     copy_u32_rows(draw_addr() + y * draw_pitch() + x * 4, draw_pitch(),
                   src, src_stride, w, h);
 }
 
 void fb_copy_from_back(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                        uint32_t *dst, uint32_t dst_stride) {
-    if (!g_back_ok || !dst || !w || !h)
+    if (!g_back_ok || !dst)
         return;
-    if (x >= g_fb.width || y >= g_fb.height)
+    if (!display_clip_rect((uint32_t)g_fb.width, (uint32_t)g_fb.height,
+                           x, y, w, h, &x, &y, &w, &h))
         return;
-    if (x + w > g_fb.width)
-        w = (uint32_t)g_fb.width - x;
-    if (y + h > g_fb.height)
-        h = (uint32_t)g_fb.height - y;
     uint32_t fw = (uint32_t)g_fb.width;
     for (uint32_t row = 0; row < h; row++) {
         const uint32_t *s = g_back + (uint64_t)(y + row) * fw + x;
@@ -241,14 +231,11 @@ void fb_copy_from_back(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
 
 void fb_copy_to_back(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                      const uint32_t *src, uint32_t src_stride) {
-    if (!g_back_ok || !src || !w || !h)
+    if (!g_back_ok || !src)
         return;
-    if (x >= g_fb.width || y >= g_fb.height)
+    if (!display_clip_rect((uint32_t)g_fb.width, (uint32_t)g_fb.height,
+                           x, y, w, h, &x, &y, &w, &h))
         return;
-    if (x + w > g_fb.width)
-        w = (uint32_t)g_fb.width - x;
-    if (y + h > g_fb.height)
-        h = (uint32_t)g_fb.height - y;
     uint32_t fw = (uint32_t)g_fb.width;
     copy_u32_rows((uint8_t *)(g_back + (uint64_t)y * fw + x), (uint64_t)fw * 4,
                   src, src_stride, w, h);
@@ -294,36 +281,6 @@ void fb_front_put_pixel(uint32_t x, uint32_t y, uint32_t color) {
     *pixel = color;
 }
 
-void fb_front_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color) {
-    if (!w || !h)
-        return;
-    if (x >= g_fb.width || y >= g_fb.height)
-        return;
-    if (x + w > g_fb.width)
-        w = (uint32_t)g_fb.width - x;
-    if (y + h > g_fb.height)
-        h = (uint32_t)g_fb.height - y;
-    for (uint32_t row = 0; row < h; row++) {
-        uint32_t *dst = (uint32_t *)(g_fb.addr + (y + row) * g_fb.pitch + x * 4);
-        for (uint32_t col = 0; col < w; col++)
-            dst[col] = color;
-    }
-}
-
-/* Restore a rectangle on the front buffer from the last composed back buffer. */
-void fb_restore_from_back(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
-    if (!g_back_ok || !w || !h)
-        return;
-    if (x >= g_fb.width || y >= g_fb.height)
-        return;
-    if (x + w > g_fb.width)
-        w = (uint32_t)g_fb.width - x;
-    if (y + h > g_fb.height)
-        h = (uint32_t)g_fb.height - y;
-    uint32_t fw = (uint32_t)g_fb.width;
-    display_present_rect(x, y, w, h, g_back + (uint64_t)y * fw + x, fw);
-}
-
 static void fill_u32_row(uint32_t *dst, uint32_t w, uint32_t color) {
     uint32_t col = 0;
     /* Two-at-a-time without type-punning (host TBAA can elide uint64 stores). */
@@ -335,16 +292,30 @@ static void fill_u32_row(uint32_t *dst, uint32_t w, uint32_t color) {
         dst[col] = color;
 }
 
+void fb_front_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color) {
+    if (!display_clip_rect((uint32_t)g_fb.width, (uint32_t)g_fb.height,
+                           x, y, w, h, &x, &y, &w, &h))
+        return;
+    for (uint32_t row = 0; row < h; row++) {
+        uint32_t *dst = (uint32_t *)(g_fb.addr + (y + row) * g_fb.pitch + x * 4);
+        fill_u32_row(dst, w, color);
+    }
+}
+
+/* Restore a rectangle on the front buffer from the last composed back buffer. */
+void fb_restore_from_back(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    if (!g_back_ok)
+        return;
+    if (!display_clip_rect((uint32_t)g_fb.width, (uint32_t)g_fb.height,
+                           x, y, w, h, &x, &y, &w, &h))
+        return;
+    uint32_t fw = (uint32_t)g_fb.width;
+    display_present_rect(x, y, w, h, g_back + (uint64_t)y * fw + x, fw);
+}
+
 void fb_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color) {
-    if (!w || !h)
+    if (!display_clip_rect(draw_width(), draw_height(), x, y, w, h, &x, &y, &w, &h))
         return;
-    uint32_t dw = draw_width(), dh = draw_height();
-    if (x >= dw || y >= dh)
-        return;
-    if (x + w > dw)
-        w = dw - x;
-    if (y + h > dh)
-        h = dh - y;
     uint8_t *base = draw_addr();
     uint64_t pitch = draw_pitch();
     for (uint32_t row = 0; row < h; row++) {
@@ -366,17 +337,10 @@ void fb_clear(uint32_t color) {
 }
 
 static void fill_span(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color) {
-    if (!w || !h)
-        return;
     /* Clip: callers (glyph rendering) may compute coords past the screen,
      * and the back buffer is exactly width*height — no slack to overrun. */
-    uint32_t dw = draw_width(), dh = draw_height();
-    if (x >= dw || y >= dh)
+    if (!display_clip_rect(draw_width(), draw_height(), x, y, w, h, &x, &y, &w, &h))
         return;
-    if (x + w > dw)
-        w = dw - x;
-    if (y + h > dh)
-        h = dh - y;
     uint8_t *base = draw_addr();
     uint64_t pitch = draw_pitch();
     for (uint32_t row = 0; row < h; row++) {

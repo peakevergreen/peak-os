@@ -58,13 +58,11 @@ static void scroll(void) {
      * the visible boot log with a stale/empty back — keep CLI on front.
      * Invariant: scroll copies via fb->addr (front), never fb backbuffer.
      */
-    uint32_t line_bytes = (uint32_t)fb->pitch;
-    for (uint32_t y = 0; y < copy_rows; y++) {
-        uint8_t *dst = fb->addr + y * fb->pitch;
-        uint8_t *src = fb->addr + (y + glyph_h) * fb->pitch;
-        memcpy(dst, src, line_bytes);
-    }
-    fb_fill_rect(0, h - glyph_h, (uint32_t)fb->width, glyph_h, bg_color);
+    uint64_t nbytes = console_scroll_bytes((uint32_t)fb->pitch, copy_rows);
+    if (nbytes)
+        memmove(fb->addr, fb->addr + (uint64_t)glyph_h * fb->pitch, (size_t)nbytes);
+    /* Always clear the vacated strip on the front buffer (not draw-target/back). */
+    fb_front_fill_rect(0, h - glyph_h, (uint32_t)fb->width, glyph_h, bg_color);
     if (cursor_row > 0)
         cursor_row--;
 }

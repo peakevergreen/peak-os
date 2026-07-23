@@ -68,9 +68,10 @@ static void damage_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         return;
     if (x >= g_fw || y >= g_fh)
         return;
-    if (x + w > g_fw)
+    /* Mirror display_clip_rect: avoid uint32 x+w / y+h wrap. */
+    if (w > g_fw - x)
         w = g_fw - x;
-    if (y + h > g_fh)
+    if (h > g_fh - y)
         h = g_fh - y;
     if (!w || !h)
         return;
@@ -206,9 +207,9 @@ static void surf_add_test(struct surface_rect *d, int *count, int *overflow,
         return;
     if (x >= sw || y >= sh)
         return;
-    if (x + w > sw)
+    if (w > sw - x)
         w = sw - x;
-    if (y + h > sh)
+    if (h > sh - y)
         h = sh - y;
     if (!w || !h)
         return;
@@ -266,6 +267,13 @@ int main(void) {
     expect(damage_count == 1, "merge_all collapses to one rect");
     expect(damage_list[0].w < g_fw || damage_list[0].h < g_fh,
            "merge_all is bbox not forced fullscreen");
+
+    damage_clear();
+    damage_add(1900, 10, 0xFFFFFFF0u, 8);
+    expect(damage_count == 1, "wrapping width still adds");
+    expect(damage_list[0].x == 1900 && damage_list[0].w == 20, "wrapping width clipped");
+    damage_add(0xFFFFFFF0u, 0, 8, 8);
+    expect(damage_count == 1, "off-screen overflow x ignored");
 
     uint32_t src[8 * 4];
     uint8_t dst[8 * 4 * 4 + 16];
