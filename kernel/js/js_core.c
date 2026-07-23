@@ -38,6 +38,31 @@ struct js_string *js_str_new(struct js_runtime *rt, const char *s, size_t len) {
     return st;
 }
 
+struct js_string *js_str_from_tab(struct js_runtime *rt, uint16_t id) {
+    if (!rt || id >= rt->str_count)
+        return NULL;
+    if (rt->str_imm && rt->str_imm[id])
+        return rt->str_imm[id];
+    const char *s = rt->strtab[id];
+    size_t len = s ? strlen(s) : 0;
+    struct js_string *st = js_str_new(rt, s, len);
+    if (!st)
+        return NULL;
+    if (rt->str_imm)
+        rt->str_imm[id] = st;
+    return st;
+}
+
+static void js_strtab_clear(struct js_runtime *rt) {
+    if (!rt)
+        return;
+    for (uint32_t i = 0; i < rt->str_count; i++)
+        kfree(rt->strtab[i]);
+    rt->str_count = 0;
+    if (rt->str_imm)
+        memset(rt->str_imm, 0, rt->str_cap * sizeof(*rt->str_imm));
+}
+
 struct js_object *js_obj_new(struct js_runtime *rt, int is_array) {
     if (!rt)
         return NULL;
@@ -152,6 +177,15 @@ void js_gc(struct js_runtime *rt) {
             rt->strs[i]->marked = 0;
     if (rt->global)
         mark_obj(rt->global);
+    /* Interned strtab / typeof literals stay live across GC. */
+    if (rt->str_imm) {
+        for (uint32_t i = 0; i < rt->str_count; i++)
+            if (rt->str_imm[i])
+                rt->str_imm[i]->marked = 1;
+    }
+    for (unsigned i = 0; i < sizeof(rt->typeof_str) / sizeof(rt->typeof_str[0]); i++)
+        if (rt->typeof_str[i])
+            rt->typeof_str[i]->marked = 1;
     for (uint32_t i = 0; i < rt->sp; i++)
         mark_val(rt->stack[i]);
     for (int i = 0; i < rt->fp; i++) {
@@ -213,13 +247,14 @@ struct js_runtime *js_rt_create(void) {
     rt->code = kzalloc(rt->code_cap);
     rt->str_cap = 128;
     rt->strtab = kzalloc(rt->str_cap * sizeof(char *));
+    rt->str_imm = kzalloc(rt->str_cap * sizeof(struct js_string *));
     rt->obj_cap = 128;
     rt->objs = kzalloc(rt->obj_cap * sizeof(struct js_object *));
     rt->heap_str_cap = 64;
     rt->strs = kzalloc(rt->heap_str_cap * sizeof(struct js_string *));
     rt->ins_budget = JS_INS_BUDGET_DEFAULT;
     rt->max_objs = JS_HEAP_OBJS_DEFAULT;
-    if (!rt->code || !rt->strtab || !rt->objs || !rt->strs) {
+    if (!rt->code || !rt->strtab || !rt->str_imm || !rt->objs || !rt->strs) {
         js_rt_destroy(rt);
         return NULL;
     }
@@ -242,11 +277,14 @@ void js_rt_destroy(struct js_runtime *rt) {
         rt->fp = 0;
         rt->micro_n = 0;
         memset(rt->timers, 0, sizeof(rt->timers));
+        memset(rt->typeof_str, 0, sizeof(rt->typeof_str));
+        if (rt->str_imm)
+            memset(rt->str_imm, 0, rt->str_cap * sizeof(*rt->str_imm));
         js_gc(rt);
     }
-    for (uint32_t i = 0; i < rt->str_count; i++)
-        kfree(rt->strtab[i]);
+    js_strtab_clear(rt);
     kfree(rt->strtab);
+    kfree(rt->str_imm);
     kfree(rt->code);
     kfree(rt->objs);
     kfree(rt->strs);
@@ -274,9 +312,8 @@ void js_rt_reset(struct js_runtime *rt) {
     rt->aborted = 0;
     rt->err[0] = '\0';
     rt->micro_n = 0;
-    for (uint32_t i = 0; i < rt->str_count; i++)
-        kfree(rt->strtab[i]);
-    rt->str_count = 0;
+    js_strtab_clear(rt);
+    memset(rt->typeof_str, 0, sizeof(rt->typeof_str));
     memset(rt->timers, 0, sizeof(rt->timers));
     /* Keep global object; clear user props by recreating. */
     rt->global = NULL;
@@ -296,9 +333,7 @@ int js_eval(struct js_runtime *rt, const char *source, const char *filename,
     rt->sp = 0;
     rt->fp = 0;
     rt->code_len = 0;
-    for (uint32_t i = 0; i < rt->str_count; i++)
-        kfree(rt->strtab[i]);
-    rt->str_count = 0;
+    js_strtab_clear(rt);
 
     if (js_compile(rt, source, filename ? filename : "<eval>") != 0)
         return -1;
@@ -625,12 +660,8 @@ int js_val_call(struct js_runtime *rt, void *fn, void *this_v, int argc, void *a
     fr->local_count = f->u.o->local_count;
     fr->catch_ip = -1;
     fr->this_v = this_v ? *(struct js_value *)this_v : js_undef();
-    fr->env = js_obj_new(rt, 0);
-    if (!fr->env) {
-        rt->fp--;
-        return -1;
-    }
-    fr->env->closure_env = f->u.o->closure_env;
+    /* Lazy env: allocated only if MAKE_FUNC runs inside this frame. */
+    fr->env = NULL;
     fr->bp = rt->sp;
     for (uint16_t i = 0; i < fr->local_count; i++) {
         struct js_value a = js_undef();

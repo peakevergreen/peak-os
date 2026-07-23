@@ -32,32 +32,42 @@ static int pop(struct js_runtime *rt, struct js_value *out) {
     return 0;
 }
 
-static uint8_t rd8(struct js_runtime *rt, uint32_t *ip) {
-    return rt->code[(*ip)++];
-}
-static uint16_t rd16(struct js_runtime *rt, uint32_t *ip) {
-    uint16_t v = (uint16_t)rt->code[*ip] | ((uint16_t)rt->code[*ip + 1] << 8);
-    *ip += 2;
-    return v;
-}
-static int16_t rdi16(struct js_runtime *rt, uint32_t *ip) {
-    return (int16_t)rd16(rt, ip);
-}
 static double rdf64(struct js_runtime *rt, uint32_t *ip) {
     union { double d; uint8_t b[8]; } u;
-    for (int i = 0; i < 8; i++)
-        u.b[i] = rt->code[(*ip)++];
+    memcpy(u.b, rt->code + *ip, 8);
+    *ip += 8;
     return u.d;
 }
 
-static struct js_value to_str_val(struct js_runtime *rt, struct js_value v) {
-    char buf[128];
-    js_val_to_cstring(rt, &v, buf, sizeof(buf));
-    struct js_string *s = js_str_new(rt, buf, strlen(buf));
-    struct js_value r;
-    r.type = JT_STR;
-    r.u.s = s;
-    return r;
+static void u32_dec(char *buf, size_t cap, uint32_t n) {
+    char tmp[16];
+    int i = 0;
+    if (!cap)
+        return;
+    if (n == 0) {
+        buf[0] = '0';
+        if (cap > 1)
+            buf[1] = '\0';
+        return;
+    }
+    while (n && i < (int)sizeof(tmp)) {
+        tmp[i++] = (char)('0' + (n % 10));
+        n /= 10;
+    }
+    int o = 0;
+    while (i > 0 && o + 1 < (int)cap)
+        buf[o++] = tmp[--i];
+    buf[o] = '\0';
+}
+
+static struct js_string *typeof_cached(struct js_runtime *rt, unsigned idx, const char *lit) {
+    if (idx < sizeof(rt->typeof_str) / sizeof(rt->typeof_str[0]) && rt->typeof_str[idx])
+        return rt->typeof_str[idx];
+    size_t len = strlen(lit);
+    struct js_string *s = js_str_new(rt, lit, len);
+    if (s && idx < sizeof(rt->typeof_str) / sizeof(rt->typeof_str[0]))
+        rt->typeof_str[idx] = s;
+    return s;
 }
 
 static int do_call(struct js_runtime *rt, int argc) {
@@ -90,10 +100,8 @@ static int do_call(struct js_runtime *rt, int argc) {
     fr->ip = fn->code_off;
     fr->catch_ip = -1;
     fr->this_v = js_undef();
-    fr->env = js_obj_new(rt, 0);
-    if (!fr->env)
-        return -1;
-    fr->env->closure_env = fn->closure_env;
+    /* Env allocated lazily on MAKE_FUNC — avoids per-call object churn. */
+    fr->env = NULL;
     fr->local_count = fn->local_count;
     fr->bp = rt->sp; /* after removing callee+args we'll place locals */
     /* remove callee+args from stack, then push locals */
@@ -157,33 +165,57 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             js_gc(rt);
 
         struct js_frame *fr = &rt->frames[rt->fp - 1];
-        if (fr->ip >= rt->code_len) {
+        uint32_t ip = fr->ip;
+        if (ip >= rt->code_len) {
             snprintf(rt->err, sizeof(rt->err), "ip out of range");
             return -1;
         }
-        uint8_t op = rd8(rt, &fr->ip);
+        uint8_t op = rt->code[ip++];
         switch (op) {
-        case OP_NOP: break;
-        case OP_PUSH_UNDEF: if (push(rt, js_undef())) return -1; break;
-        case OP_PUSH_NULL: if (push(rt, js_null())) return -1; break;
-        case OP_PUSH_TRUE: if (push(rt, js_bool(1))) return -1; break;
-        case OP_PUSH_FALSE: if (push(rt, js_bool(0))) return -1; break;
+        case OP_NOP:
+            fr->ip = ip;
+            break;
+        case OP_PUSH_UNDEF:
+            fr->ip = ip;
+            if (push(rt, js_undef()))
+                return -1;
+            break;
+        case OP_PUSH_NULL:
+            fr->ip = ip;
+            if (push(rt, js_null()))
+                return -1;
+            break;
+        case OP_PUSH_TRUE:
+            fr->ip = ip;
+            if (push(rt, js_bool(1)))
+                return -1;
+            break;
+        case OP_PUSH_FALSE:
+            fr->ip = ip;
+            if (push(rt, js_bool(0)))
+                return -1;
+            break;
         case OP_PUSH_BOOL: {
-            uint8_t b = rd8(rt, &fr->ip);
+            uint8_t b = rt->code[ip++];
+            fr->ip = ip;
             if (push(rt, js_bool(b)))
                 return -1;
             break;
         }
         case OP_PUSH_NUM: {
-            double n = rdf64(rt, &fr->ip);
+            double n = rdf64(rt, &ip);
+            fr->ip = ip;
             if (push(rt, js_num(n)))
                 return -1;
             break;
         }
         case OP_PUSH_STR: {
-            uint16_t id = rd16(rt, &fr->ip);
-            const char *s = strtab(rt, id);
-            struct js_string *st = js_str_new(rt, s, strlen(s));
+            uint16_t id = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
+            struct js_string *st = js_str_from_tab(rt, id);
+            if (!st)
+                return -1;
             struct js_value v;
             v.type = JT_STR;
             v.u.s = st;
@@ -191,8 +223,13 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
                 return -1;
             break;
         }
-        case OP_POP: if (pop(rt, NULL)) return -1; break;
+        case OP_POP:
+            fr->ip = ip;
+            if (pop(rt, NULL))
+                return -1;
+            break;
         case OP_DUP: {
+            fr->ip = ip;
             if (rt->sp == 0)
                 return -1;
             if (push(rt, rt->stack[rt->sp - 1]))
@@ -200,7 +237,9 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_GET_GLOBAL: {
-            uint16_t id = rd16(rt, &fr->ip);
+            uint16_t id = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
             struct js_value v;
             js_obj_get(rt, rt->global, strtab(rt, id), &v);
             if (push(rt, v))
@@ -208,14 +247,18 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_SET_GLOBAL: {
-            uint16_t id = rd16(rt, &fr->ip);
+            uint16_t id = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
             if (rt->sp == 0)
                 return -1;
             js_obj_set(rt, rt->global, strtab(rt, id), rt->stack[rt->sp - 1]);
             break;
         }
         case OP_GET_LOCAL: {
-            uint16_t i = rd16(rt, &fr->ip);
+            uint16_t i = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
             if (fr->bp + i >= rt->sp)
                 return -1;
             if (push(rt, rt->stack[fr->bp + i]))
@@ -223,29 +266,50 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_SET_LOCAL: {
-            uint16_t i = rd16(rt, &fr->ip);
+            uint16_t i = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
             if (rt->sp == 0 || fr->bp + i >= rt->sp)
                 return -1;
             rt->stack[fr->bp + i] = rt->stack[rt->sp - 1];
             break;
         }
+        case OP_INC_LOCAL: {
+            uint16_t i = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
+            if (fr->bp + i >= rt->sp)
+                return -1;
+            {
+                struct js_value *slot = &rt->stack[fr->bp + i];
+                *slot = js_num(js_val_to_number(slot) + 1.0);
+                if (push(rt, *slot))
+                    return -1;
+            }
+            break;
+        }
         case OP_GET_PROP: {
-            uint16_t id = rd16(rt, &fr->ip);
+            uint16_t id = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
             struct js_value obj;
             if (pop(rt, &obj))
                 return -1;
             struct js_value v = js_undef();
+            const char *key = strtab(rt, id);
             if (obj.type == JT_OBJ || obj.type == JT_ARR || obj.type == JT_FUNC ||
                 obj.type == JT_DOM || obj.type == JT_NATIVE)
-                js_obj_get(rt, obj.u.o, strtab(rt, id), &v);
-            else if (obj.type == JT_STR && obj.u.s && !strcmp(strtab(rt, id), "length"))
+                js_obj_get(rt, obj.u.o, key, &v);
+            else if (obj.type == JT_STR && obj.u.s && key[0] == 'l' && !strcmp(key, "length"))
                 v = js_num((double)obj.u.s->len);
             if (push(rt, v))
                 return -1;
             break;
         }
         case OP_SET_PROP: {
-            uint16_t id = rd16(rt, &fr->ip);
+            uint16_t id = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
             struct js_value val;
             if (pop(rt, &val))
                 return -1;
@@ -257,6 +321,7 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_GET_IDX: {
+            fr->ip = ip;
             struct js_value idx, obj;
             if (pop(rt, &idx) || pop(rt, &obj))
                 return -1;
@@ -279,6 +344,7 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_SET_IDX: {
+            fr->ip = ip;
             struct js_value val, idx, obj;
             if (pop(rt, &val) || pop(rt, &idx) || pop(rt, &obj))
                 return -1;
@@ -291,6 +357,7 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_ADD: {
+            fr->ip = ip;
             struct js_value b, a;
             if (pop(rt, &b) || pop(rt, &a))
                 return -1;
@@ -299,8 +366,12 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
                 js_val_to_cstring(rt, &a, ab, sizeof(ab));
                 js_val_to_cstring(rt, &b, bb, sizeof(bb));
                 size_t n = strlen(ab);
-                snprintf(ab + n, sizeof(ab) - n, "%s", bb);
-                struct js_string *s = js_str_new(rt, ab, strlen(ab));
+                size_t m = strlen(bb);
+                if (n + m >= sizeof(ab))
+                    m = sizeof(ab) - 1 - n;
+                memcpy(ab + n, bb, m);
+                ab[n + m] = '\0';
+                struct js_string *s = js_str_new(rt, ab, n + m);
                 struct js_value r;
                 r.type = JT_STR;
                 r.u.s = s;
@@ -310,20 +381,50 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
                 return -1;
             break;
         }
-        case OP_SUB: case OP_MUL: case OP_DIV: case OP_MOD: {
+        case OP_SUB: {
+            fr->ip = ip;
             struct js_value b, a;
             if (pop(rt, &b) || pop(rt, &a))
                 return -1;
-            double x = js_val_to_number(&a), y = js_val_to_number(&b), r = 0;
-            if (op == OP_SUB) r = x - y;
-            else if (op == OP_MUL) r = x * y;
-            else if (op == OP_DIV) r = y != 0 ? x / y : 0;
-            else r = y != 0 ? (double)((long long)x % (long long)y) : 0;
-            if (push(rt, js_num(r)))
+            if (push(rt, js_num(js_val_to_number(&a) - js_val_to_number(&b))))
                 return -1;
             break;
         }
+        case OP_MUL: {
+            fr->ip = ip;
+            struct js_value b, a;
+            if (pop(rt, &b) || pop(rt, &a))
+                return -1;
+            if (push(rt, js_num(js_val_to_number(&a) * js_val_to_number(&b))))
+                return -1;
+            break;
+        }
+        case OP_DIV: {
+            fr->ip = ip;
+            struct js_value b, a;
+            if (pop(rt, &b) || pop(rt, &a))
+                return -1;
+            {
+                double x = js_val_to_number(&a), y = js_val_to_number(&b);
+                if (push(rt, js_num(y != 0 ? x / y : 0)))
+                    return -1;
+            }
+            break;
+        }
+        case OP_MOD: {
+            fr->ip = ip;
+            struct js_value b, a;
+            if (pop(rt, &b) || pop(rt, &a))
+                return -1;
+            {
+                double x = js_val_to_number(&a), y = js_val_to_number(&b);
+                if (push(rt, js_num(y != 0 ? (double)((long long)x % (long long)y) : 0)))
+                    return -1;
+            }
+            break;
+        }
         case OP_NEG: {
+            fr->ip = ip;
             struct js_value a;
             if (pop(rt, &a))
                 return -1;
@@ -332,6 +433,7 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_NOT: {
+            fr->ip = ip;
             struct js_value a;
             if (pop(rt, &a))
                 return -1;
@@ -340,17 +442,34 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_TYPEOF: {
+            fr->ip = ip;
             struct js_value a;
             if (pop(rt, &a))
                 return -1;
+            unsigned tidx = 0;
             const char *t = "undefined";
-            if (a.type == JT_NULL) t = "object";
-            else if (a.type == JT_BOOL) t = "boolean";
-            else if (a.type == JT_NUM) t = "number";
-            else if (a.type == JT_STR) t = "string";
-            else if (a.type == JT_FUNC || a.type == JT_NATIVE) t = "function";
-            else if (a.type == JT_OBJ || a.type == JT_ARR || a.type == JT_DOM) t = "object";
-            struct js_string *s = js_str_new(rt, t, strlen(t));
+            if (a.type == JT_NULL) {
+                tidx = 1;
+                t = "object";
+            } else if (a.type == JT_BOOL) {
+                tidx = 2;
+                t = "boolean";
+            } else if (a.type == JT_NUM) {
+                tidx = 3;
+                t = "number";
+            } else if (a.type == JT_STR) {
+                tidx = 4;
+                t = "string";
+            } else if (a.type == JT_FUNC || a.type == JT_NATIVE) {
+                tidx = 5;
+                t = "function";
+            } else if (a.type == JT_OBJ || a.type == JT_ARR || a.type == JT_DOM) {
+                tidx = 1;
+                t = "object";
+            }
+            struct js_string *s = typeof_cached(rt, tidx, t);
+            if (!s)
+                return -1;
             struct js_value v;
             v.type = JT_STR;
             v.u.s = s;
@@ -359,6 +478,7 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_EQ: case OP_NE: case OP_LT: case OP_LE: case OP_GT: case OP_GE: {
+            fr->ip = ip;
             struct js_value b, a;
             if (pop(rt, &b) || pop(rt, &a))
                 return -1;
@@ -385,33 +505,42 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_JMP: {
-            int16_t off = rdi16(rt, &fr->ip);
-            fr->ip = (uint32_t)((int32_t)fr->ip + off);
+            int16_t off = (int16_t)((uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8));
+            ip += 2;
+            fr->ip = (uint32_t)((int32_t)ip + off);
             break;
         }
         case OP_JMP_IF: {
-            int16_t off = rdi16(rt, &fr->ip);
+            int16_t off = (int16_t)((uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8));
+            ip += 2;
             if (rt->sp == 0)
                 return -1;
             if (truthy(rt->stack[rt->sp - 1]))
-                fr->ip = (uint32_t)((int32_t)fr->ip + off);
+                fr->ip = (uint32_t)((int32_t)ip + off);
+            else
+                fr->ip = ip;
             break;
         }
         case OP_JMP_IFN: {
-            int16_t off = rdi16(rt, &fr->ip);
+            int16_t off = (int16_t)((uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8));
+            ip += 2;
             if (rt->sp == 0)
                 return -1;
             if (!truthy(rt->stack[rt->sp - 1]))
-                fr->ip = (uint32_t)((int32_t)fr->ip + off);
+                fr->ip = (uint32_t)((int32_t)ip + off);
+            else
+                fr->ip = ip;
             break;
         }
         case OP_CALL: {
-            uint8_t argc = rd8(rt, &fr->ip);
+            uint8_t argc = rt->code[ip++];
+            fr->ip = ip;
             if (do_call(rt, argc))
                 return -1;
             break;
         }
         case OP_RET: {
+            fr->ip = ip;
             struct js_value ret = js_undef();
             if (rt->sp > fr->bp + fr->local_count)
                 pop(rt, &ret);
@@ -425,6 +554,7 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_NEW_OBJ: {
+            fr->ip = ip;
             struct js_object *o = js_obj_new(rt, 0);
             if (!o)
                 return vm_fail_obj_budget(rt);
@@ -436,6 +566,7 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_NEW_ARR: {
+            fr->ip = ip;
             struct js_object *o = js_obj_new(rt, 1);
             if (!o)
                 return vm_fail_obj_budget(rt);
@@ -447,6 +578,7 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_ARR_PUSH: {
+            fr->ip = ip;
             struct js_value val;
             if (pop(rt, &val))
                 return -1;
@@ -455,15 +587,17 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             struct js_value arr = rt->stack[rt->sp - 1];
             if (arr.type == JT_ARR && arr.u.o) {
                 char key[16];
-                snprintf(key, sizeof(key), "%u", (unsigned)arr.u.o->arr_len);
+                u32_dec(key, sizeof(key), arr.u.o->arr_len);
                 js_obj_set(rt, arr.u.o, key, val);
             }
             break;
         }
         case OP_MAKE_FUNC: {
-            uint16_t off = rd16(rt, &fr->ip);
-            uint8_t arity = rd8(rt, &fr->ip);
-            uint8_t locals = rd8(rt, &fr->ip);
+            uint16_t off = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            uint8_t arity = rt->code[ip++];
+            uint8_t locals = rt->code[ip++];
+            fr->ip = ip;
             struct js_object *o = js_obj_new(rt, 0);
             if (!o)
                 return -1;
@@ -471,6 +605,13 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             o->code_off = off;
             o->arity = arity;
             o->local_count = locals;
+            if (!fr->env) {
+                fr->env = js_obj_new(rt, 0);
+                if (!fr->env)
+                    return -1;
+                if (fr->func)
+                    fr->env->closure_env = fr->func->closure_env;
+            }
             o->closure_env = fr->env;
             struct js_value v;
             v.type = JT_FUNC;
@@ -480,10 +621,12 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             break;
         }
         case OP_THIS:
+            fr->ip = ip;
             if (push(rt, fr->this_v))
                 return -1;
             break;
         case OP_THROW: {
+            fr->ip = ip;
             struct js_value ex;
             if (pop(rt, &ex))
                 return -1;
@@ -507,17 +650,22 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             return -1;
         }
         case OP_TRY_PUSH: {
-            int16_t off = rdi16(rt, &fr->ip);
-            fr->catch_ip = (int)((int32_t)fr->ip + off);
+            int16_t off = (int16_t)((uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8));
+            ip += 2;
+            fr->catch_ip = (int)((int32_t)ip + off);
+            fr->ip = ip;
             break;
         }
         case OP_TRY_POP:
+            fr->ip = ip;
             fr->catch_ip = -1;
             break;
         case OP_HALT:
+            fr->ip = ip;
             rt->fp = stop_at;
             return 0;
         default:
+            fr->ip = ip;
             snprintf(rt->err, sizeof(rt->err), "bad opcode %u", (unsigned)op);
             return -1;
         }
@@ -772,6 +920,5 @@ void js_install_builtins(struct js_runtime *rt) {
     }
     js_obj_set(rt, rt->global, "Promise", promise);
 
-    (void)to_str_val;
     (void)serial_write_str;
 }

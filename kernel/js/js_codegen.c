@@ -55,6 +55,11 @@ int js_intern_str(struct js_compiler *c, const char *s) {
         if (!n)
             return -1;
         rt->strtab = n;
+        struct js_string **imm = krealloc(rt->str_imm, nc * sizeof(*imm));
+        if (!imm)
+            return -1;
+        memset(imm + rt->str_cap, 0, (nc - rt->str_cap) * sizeof(*imm));
+        rt->str_imm = imm;
         rt->str_cap = nc;
     }
     size_t len = strlen(s);
