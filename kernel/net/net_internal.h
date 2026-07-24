@@ -63,7 +63,7 @@ struct tcp_conn {
     uint16_t local_port;
     uint32_t snd_nxt;
     uint32_t rcv_nxt;
-    uint8_t rx[32768];
+    uint8_t rx[16384];
     size_t rx_len;
     int got_fin;
     int is_server;

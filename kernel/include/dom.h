@@ -5,8 +5,9 @@
 
 #define DOM_MAX_NODES   512
 #define DOM_NAME_MAX    32
-#define DOM_ATTR_MAX    16
-#define DOM_TEXT_MAX    256
+#define DOM_ATTR_MAX    8
+#define DOM_ATTR_VAL_MAX 64
+#define DOM_TEXT_MAX    160
 #define DOM_SCRIPT_MAX  16
 
 enum dom_node_type {
@@ -17,7 +18,7 @@ enum dom_node_type {
 
 struct dom_attr {
     char name[DOM_NAME_MAX];
-    char value[96];
+    char value[DOM_ATTR_VAL_MAX];
 };
 
 struct dom_node {

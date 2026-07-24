@@ -17,8 +17,8 @@ static uint32_t wp_w, wp_h;
 static size_t wp_rgb_len;
 
 /* Scaled ARGB cache — small BSS fallback; heap for larger resolutions. */
-#define WP_CACHE_FALLBACK_W 800
-#define WP_CACHE_FALLBACK_H 600
+#define WP_CACHE_FALLBACK_W 640
+#define WP_CACHE_FALLBACK_H 480
 static uint32_t wp_cache_fallback[WP_CACHE_FALLBACK_W * WP_CACHE_FALLBACK_H];
 static uint32_t *wp_cache;
 static uint32_t wp_cw, wp_ch;
