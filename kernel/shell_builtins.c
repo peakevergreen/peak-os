@@ -196,7 +196,8 @@ void shell_help_topics(void) {
     console_write("        uname true false sh reboot help man js\n");
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
     console_write("  net   ctr ctrd ifconfig ping wget\n");
-    console_write("Try: man <cmd>   theme list   gui   ask \"...\"   js -e '1+1'\n");
+    console_write("Shell: quotes, globs (* ?), pipes |, redirects > >> <\n");
+    console_write("Try: man <cmd>   ls *.c   echo hi | wc   theme list   gui\n");
 }
 
 void shell_help_cmd(const char *cmd) {

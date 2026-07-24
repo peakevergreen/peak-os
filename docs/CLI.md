@@ -28,6 +28,17 @@ seq 1 5 | wc
 Limits: up to 4 pipeline stages; captured pipe/redirect buffers are capped at 8 KiB.
 `cat` / `head` / `tail` / `wc` / `grep` accept `-` (or omit the path) to read shell stdin from `<` or a pipe.
 
+## Globs
+
+Basename globs `*` and `?` expand against the directory of each argument (cwd if no `/`):
+
+```
+ls *.c
+rm /tmp/peak-*.log
+```
+
+No match leaves the pattern unchanged. Max 16 argv slots after expansion.
+
 ## Navigation
 | Command | Notes |
 |---------|-------|
