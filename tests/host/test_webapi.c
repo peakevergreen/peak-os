@@ -9,6 +9,8 @@
 #include <string.h>
 
 void webapi_host_set_http(int rc, int status, const char *body, const char *headers);
+void webapi_host_set_tls_fail(const char *reject_name);
+void webapi_host_clear_tls(void);
 
 static int fails;
 
@@ -99,6 +101,20 @@ int main(void) {
     eval_ok(rt, "var r=fetch('https://example.com/x'); r.ok", "false");
     webapi_host_set_http(0, 200, "x", "");
     eval_ok(rt, "var r=fetch('https://other.example/x'); r.ok", "false"); /* cross-origin no ACAO */
+
+    /* HTTPS TLS failures reject with stable fetch: tls-* names. */
+    webapi_host_set_tls_fail("fetch: tls-rng");
+    eval_fails(rt, "fetch('https://example.com/x')", "tls-rng");
+    webapi_host_set_tls_fail("fetch: tls-alert");
+    eval_fails(rt, "fetch('https://example.com/x')", "tls-alert");
+    webapi_host_set_tls_fail("fetch: tls-expired");
+    eval_fails(rt, "fetch('https://example.com/x')", "tls-expired");
+    webapi_host_set_tls_fail("fetch: tls-mismatch");
+    eval_fails(rt, "fetch('https://example.com/x')", "tls-mismatch");
+    webapi_host_set_tls_fail("fetch: tls-untrusted");
+    eval_fails(rt, "fetch('https://example.com/x')", "tls-untrusted");
+    webapi_host_clear_tls();
+    webapi_host_set_http(0, 200, "x", "");
 
     /* Storage: in-memory get/set; quota / empty / oversized fail closed. */
     eval_ok(rt, "localStorage.setItem('a','1'); localStorage.getItem('a')", "\"1\"");

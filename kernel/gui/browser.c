@@ -218,6 +218,8 @@ void browser_go(const char *url) {
 
     if (browser_is_local_host(t->url)) {
         ctr_init();
+        t->tls_secure = 0;
+        t->tls_verified = 0;
         ok = (ctr_http_get(t->url, body, BR_BODY_MAX, &st) == 0);
         if (!ok) {
             t->http_status = st;
@@ -250,7 +252,13 @@ void browser_go(const char *url) {
 
         if (!ok) {
             t->http_status = st;
-            snprintf(t->status, sizeof(t->status), "Fetch failed (HTTP %d)", st);
+            t->tls_secure = 0;
+            t->tls_verified = 0;
+            if (net_http_needs_tls()) {
+                snprintf(t->status, sizeof(t->status), "%s", net_http_tls_reject_name());
+            } else {
+                snprintf(t->status, sizeof(t->status), "Fetch failed (HTTP %d)", st);
+            }
             if (body[0]) {
                 load_document(t, body);
             } else {
@@ -262,6 +270,12 @@ void browser_go(const char *url) {
             }
             needs_redraw = 1;
             return;
+        }
+        t->tls_secure = net_http_last_tls_secure();
+        t->tls_verified = net_http_last_tls_verified();
+        if (t->tls_secure) {
+            snprintf(t->status, sizeof(t->status),
+                     t->tls_verified ? "HTTPS verified" : "HTTPS (trust limited)");
         }
     }
 

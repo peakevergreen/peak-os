@@ -7,21 +7,69 @@
 #include "timer.h"
 #include "util.h"
 
+static int last_tls_secure;
+static int last_tls_verified;
+
 int net_http_needs_tls(void) {
     return http_needs_tls_flag;
 }
 
+int net_http_last_tls_secure(void) {
+    return last_tls_secure;
+}
+
+int net_http_last_tls_verified(void) {
+    return last_tls_verified;
+}
+
+/* Stable webapi / UI names for the last TLS failure. */
+const char *net_http_tls_reject_name(void) {
+    int code = tls_last_error_code();
+    const char *why = tls_last_error();
+    if (code == TLS_E_RNG)
+        return "fetch: tls-rng";
+    if (code == TLS_E_ALERT)
+        return "fetch: tls-alert";
+    if (why && strstr(why, "expired"))
+        return "fetch: tls-expired";
+    if (why && strstr(why, "hostname mismatch"))
+        return "fetch: tls-mismatch";
+    if (why && (strstr(why, "Untrusted") || strstr(why, "untrusted") ||
+                strstr(why, "WebPKI") || strstr(why, "changed")))
+        return "fetch: tls-untrusted";
+    if (code == TLS_E_CERT)
+        return "fetch: tls-untrusted";
+    return "fetch: tls-handshake";
+}
+
 static void tls_fail_page(char *body, size_t body_cap, const char *host, const char *why) {
+    int code = tls_last_error_code();
+    const char *title = "TLS handshake failed";
+    const char *detail = why ? why : "unknown error";
+    if (code == TLS_E_RNG) {
+        title = "Secure connection unavailable — RNG not ready";
+    } else if (code == TLS_E_ALERT) {
+        title = "Server rejected the connection";
+    } else if (why && strstr(why, "expired")) {
+        title = "Certificate expired or not yet valid";
+    } else if (why && strstr(why, "hostname mismatch")) {
+        title = "Certificate hostname mismatch";
+    } else if (why && (strstr(why, "Untrusted") || strstr(why, "WebPKI") ||
+                       strstr(why, "changed"))) {
+        title = "Untrusted certificate";
+    } else if (code == TLS_E_CERT) {
+        title = "Untrusted certificate";
+    }
     snprintf(body, body_cap,
-             "<html><head><title>TLS failed</title>"
+             "<html><head><title>%s</title>"
              "<style>body{background:#0B1A12;color:#E8F0EA}h1{color:#C45C5C}"
              "code{color:#9AC4AE}</style></head><body>"
-             "<h1>TLS handshake failed</h1>"
+             "<h1>%s</h1>"
              "<p>Host: <code>%s</code></p>"
              "<p>%s</p>"
-             "<p>Peak TLS 1.2/1.3: ECDHE (X25519) + AES-GCM or ChaCha20-Poly1305.</p>"
+             "<p>Peak TLS 1.2/1.3 with WebPKI (pins override; TOFU opt-in).</p>"
              "</body></html>",
-             host, why ? why : "unknown error");
+             title, title, host, detail);
 }
 
 static int build_http_request(char *req, size_t req_cap, const char *method,
@@ -110,8 +158,13 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
                               const char *method, const char *extra_headers,
                               const char *body, size_t body_len, char *buf, size_t buf_cap,
                               int *status_out) {
+    last_tls_secure = 0;
+    last_tls_verified = 0;
     if (tls_connect(ip, 443, host, NET_TLS_HANDSHAKE_TICKS) != 0)
         return -2;
+
+    last_tls_secure = 1;
+    last_tls_verified = tls_cert_verified() && tls_hostname_matched();
 
     char req[2048];
     if (build_http_request(req, sizeof(req), method, path, host, extra_headers, body,
@@ -127,7 +180,7 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
     int ex = recv_http_response_tls(buf, buf_cap);
     tls_close();
     if (ex != 0)
-        return ex;
+        return -4;
     http_parse_status(buf, status_out);
     return 0;
 }

@@ -41,6 +41,8 @@ struct br_tab {
     int nblocks;
     int scroll_y;
     int http_status;
+    int tls_secure;   /* page loaded over HTTPS */
+    int tls_verified; /* cert verified + hostname matched */
     uint32_t page_bg, page_fg, page_muted, page_accent, page_link, page_surface;
     int colors_set;
     struct dom_document doc;

@@ -9,8 +9,10 @@
 
 static int g_http_rc = -1;
 static int g_http_status = 0;
+static int g_needs_tls;
 static char g_http_body[512];
 static char g_http_headers[256];
+static char g_tls_reject[64] = "fetch: tls-handshake";
 
 void webapi_host_set_http(int rc, int status, const char *body, const char *headers) {
     g_http_rc = rc;
@@ -21,6 +23,19 @@ void webapi_host_set_http(int rc, int status, const char *body, const char *head
         snprintf(g_http_body, sizeof(g_http_body), "%s", body);
     if (headers)
         snprintf(g_http_headers, sizeof(g_http_headers), "%s", headers);
+}
+
+void webapi_host_set_tls_fail(const char *reject_name) {
+    g_needs_tls = 1;
+    g_http_rc = -1;
+    g_http_status = 0;
+    g_http_body[0] = '\0';
+    if (reject_name)
+        snprintf(g_tls_reject, sizeof(g_tls_reject), "%s", reject_name);
+}
+
+void webapi_host_clear_tls(void) {
+    g_needs_tls = 0;
 }
 
 int net_http_request(const struct net_http_request *req, char *body, size_t body_cap,
@@ -44,5 +59,17 @@ int net_http_get(const char *url, char *body, size_t body_cap, int *status_out) 
 }
 
 int net_http_needs_tls(void) {
+    return g_needs_tls;
+}
+
+int net_http_last_tls_secure(void) {
     return 0;
+}
+
+int net_http_last_tls_verified(void) {
+    return 0;
+}
+
+const char *net_http_tls_reject_name(void) {
+    return g_tls_reject;
 }

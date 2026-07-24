@@ -7,6 +7,9 @@
 #include "rtc.h"
 #include "util.h"
 
+/* Set by tls_trust.c path; we assign on expiry. */
+extern const char *cert_fail_reason;
+
 static int cert_sha256(const uint8_t *der, size_t len, uint8_t out[32]) {
     sha256(der, len, out);
     return 0;
@@ -179,8 +182,10 @@ int webpki_verify_chain(const uint8_t *const *certs, const size_t *lens, int n,
     for (int i = 0; i < n; i++) {
         if (x509_parse_der(certs[i], lens[i], &parsed[i]) != 0)
             return 0;
-        if (!time_ok(&parsed[i]))
+        if (!time_ok(&parsed[i])) {
+            cert_fail_reason = "Certificate expired or not yet valid";
             return 0;
+        }
     }
     if (x509_cert_hostname_match(&parsed[0], sni_host) != 1)
         return 0;

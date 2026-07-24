@@ -215,6 +215,11 @@ static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, vo
         return stub_fail(rt, ret, "fetch: aborted");
     }
     int rc = net_http_request(&req, body, 64 * 1024, &st, hdrs, 2048);
+    if (rc != 0 && net_http_needs_tls()) {
+        kfree(body);
+        kfree(hdrs);
+        return stub_fail(rt, ret, net_http_tls_reject_name());
+    }
     struct js_value o;
     js_val_new_object(rt, &o);
     if (rc != 0 || !cors_ok(g_web_page_url, abs, hdrs)) {
