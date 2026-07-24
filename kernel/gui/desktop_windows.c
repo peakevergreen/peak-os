@@ -289,6 +289,14 @@ void desktop_close_win(int idx) {
 static void draw_win_chrome(struct win *w, int focused) {
     window_draw_frame(w->x, w->y, w->w, w->h, desktop_app_title(w->kind),
                       focused ? desktop_color_bg() : desktop_color_surface());
+    if (focused) {
+        uint32_t s = desktop_u(2);
+        uint32_t a = desktop_color_accent();
+        fb_fill_rect(w->x + s, w->y + s, w->w - 2 * s, s, a);
+        fb_fill_rect(w->x + s, w->y + w->h - 2 * s, w->w - 2 * s, s, a);
+        fb_fill_rect(w->x + s, w->y + s, s, w->h - 2 * s, a);
+        fb_fill_rect(w->x + w->w - 2 * s, w->y + s, s, w->h - 2 * s, a);
+    }
     uint32_t by = w->y + desktop_u(6);
     uint32_t bs = desktop_u(14);
     uint32_t gap = desktop_u(4);
