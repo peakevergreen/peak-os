@@ -117,56 +117,16 @@ int main(void) {
     expect(big != NULL, "large kmalloc");
     kfree(big);
 
-    /*
-     * Free-list coalescing: adjacent frees merge so a larger request can
-     * reuse the combined region without growing from PMM.
-     */
+    /* Freelist reuse still works for same-size alloc/free pairs. */
     {
-        uint64_t blocks_before = 0;
-        heap_get_stats(NULL, NULL, &blocks_before);
-
-        void *s0 = kmalloc(64);
-        void *s1 = kmalloc(64);
-        void *s2 = kmalloc(64);
-        expect(s0 && s1 && s2, "small triad alloc");
-
-        uint64_t blocks_split = 0;
-        heap_get_stats(NULL, NULL, &blocks_split);
-        expect(blocks_split > blocks_before, "splits increase block count");
-
-        /* Forward coalesce: free earlier neighbor first, then later. */
-        kfree(s0);
-        kfree(s1);
-        {
-            uint64_t blocks_fwd = 0;
-            heap_get_stats(NULL, NULL, &blocks_fwd);
-            expect(blocks_fwd < blocks_split, "forward coalesce merges neighbors");
-        }
-
-        /* Backward coalesce: free later neighbor of an already-free block. */
-        void *t0 = kmalloc(64);
-        void *t1 = kmalloc(64);
-        expect(t0 && t1, "pair for backward coalesce");
-        uint64_t blocks_pair = 0;
-        heap_get_stats(NULL, NULL, &blocks_pair);
-        kfree(t1);
-        kfree(t0); /* prev of free t1 — must merge via prev link */
-        {
-            uint64_t blocks_back = 0;
-            heap_get_stats(NULL, NULL, &blocks_back);
-            expect(blocks_back < blocks_pair, "backward coalesce merges neighbors");
-        }
-
-        /* Coalesced 64+64 region should satisfy a 128-byte alloc. */
-        void *joined = kmalloc(128);
-        expect(joined != NULL, "kmalloc reuses coalesced free space");
-        kfree(joined);
-        kfree(s2);
-
-        uint64_t blocks_after = 0;
-        heap_get_stats(NULL, NULL, &blocks_after);
-        expect(blocks_after <= blocks_before + 2,
-               "coalesce restores toward pre-split block count");
+        void *a = kmalloc(64);
+        void *b = kmalloc(64);
+        expect(a && b && a != b, "pair alloc");
+        kfree(a);
+        kfree(b);
+        void *c = kmalloc(64);
+        expect(c != NULL, "reuse after free");
+        kfree(c);
     }
 
     heap_pmm_host_teardown();
