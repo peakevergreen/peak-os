@@ -9,6 +9,7 @@
 #include "tls.h"
 #include "tls_session.h"
 #include "tls_hsts.h"
+#include "tls_ech.h"
 #include "x509.h"
 #include "../../kernel/include/tls_util.h"
 #include "../../kernel/net/tls_internal.h"
@@ -624,6 +625,22 @@ static void test_session_resume_cache(void) {
     tls_session_clear();
 }
 
+static void test_ech_fail_closed(void) {
+    tls_ech_clear_config();
+    tls_ech_set_required(0);
+    expect(tls_ech_prepare_client_hello() == 0, "ech optional ok");
+    tls_ech_set_required(1);
+    expect(tls_ech_prepare_client_hello() == -1, "ech required no config");
+    uint8_t cfg[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+    expect(tls_ech_set_config(cfg, sizeof(cfg)) == 0, "ech set config");
+    expect(tls_ech_have_config(), "ech have config");
+    expect(tls_ech_prepare_client_hello() == -2, "ech required+config HPKE NYI");
+    tls_ech_set_required(0);
+    expect(tls_ech_prepare_client_hello() == 0, "ech optional ignores config");
+    tls_ech_clear_config();
+    expect(tls_ech_prepare_client_hello() == 0, "ech cleared");
+}
+
 static void test_hsts_and_clear(void) {
     hsts_clear();
     expect(hsts_should_upgrade("example.com") == 0, "hsts empty");
@@ -792,6 +809,7 @@ int main(int argc, char **argv) {
     test_ske_sig_verify();
     test_clienthello_goldens();
     test_session_resume_cache();
+    test_ech_fail_closed();
     test_hsts_and_clear();
     test_wycheproof_aead();
     test_crypto_hardening();

@@ -100,7 +100,7 @@ Root DER/PEM files live under `certs/webpki/`; regenerate with
 | Finished check | PRF verify_data | HMAC-finished |
 | GREASE ClientHello | yes | yes |
 | Session tickets / PSK | cache+offer (1.2 NST) | — (PSK later) |
-| ECH | — | — (later) |
+| ECH | scaffold (fail-closed) | scaffold (fail-closed) |
 | HTTP/2 ALPN `h2` | yes (minimal GET) | yes |
 
 Host goldens: `tests/host/test_tls.c` (`test_clienthello_goldens`) asserts suite order and
@@ -118,6 +118,14 @@ Active mixed content: `http://` subresources (`fetch`, `<script src>`) on `https
 pages are blocked (`fetch: mixed-content`). HSTS-lite stores `max-age` hosts in
 `/etc/peak/tls-hsts` and upgrades later plain HTTP navigations. Settings → Network
 toggles TOFU and can clear pins / TOFU / HSTS.
+
+## Encrypted Client Hello (ECH)
+
+Peak ships an ECH **scaffold** (`tls_ech_*`): configs can be installed, and when
+`tls_ech_set_required(1)` is set without a config the ClientHello build fails
+closed (`ECH required but keys/config missing`). Full HPKE outer/inner ClientHello
+encoding is not implemented yet — installing a config currently also fails closed
+until HPKE lands (interop note).
 
 ## Limits
 
