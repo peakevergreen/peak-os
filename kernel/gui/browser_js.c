@@ -18,6 +18,17 @@ void browser_js_host_init(struct browser_js_host *h, struct js_runtime *rt,
     h->rt = rt;
     h->doc = doc;
     h->dirty = dirty;
+    h->handle_gen = 1;
+}
+
+void browser_js_invalidate_handles(struct browser_js_host *h) {
+    if (!h)
+        return;
+    h->handle_gen++;
+    if (h->handle_gen == 0)
+        h->handle_gen = 1;
+    h->nlisteners = 0;
+    memset(h->listeners, 0, sizeof(h->listeners));
 }
 
 static void mark_dirty(struct browser_js_host *h) {
@@ -27,26 +38,37 @@ static void mark_dirty(struct browser_js_host *h) {
         h->doc->dirty = 1;
 }
 
-static int make_dom_val(struct js_runtime *rt, int node_id, struct js_value *out) {
+/* Packed handle: high 32 bits = gen, low 32 = node_id+1 (stored in dom_node ptr). */
+static int make_dom_val(struct browser_js_host *h, struct js_runtime *rt, int node_id,
+                        struct js_value *out) {
     struct js_object *o = js_obj_new(rt, 0);
-    if (!o)
+    if (!o || !h)
         return -1;
     o->is_dom = 1;
-    o->dom_node = (void *)(intptr_t)(node_id + 1); /* 0 means none */
+    uint64_t packed = ((uint64_t)h->handle_gen << 32) | (uint32_t)(node_id + 1);
+    o->dom_node = (void *)(uintptr_t)packed;
     out->type = JT_DOM;
     out->u.o = o;
-    char idbuf[16];
-    snprintf(idbuf, sizeof(idbuf), "%d", node_id);
     js_obj_set(rt, o, "__node", js_num((double)node_id));
+    js_obj_set(rt, o, "__gen", js_num((double)h->handle_gen));
     return 0;
 }
 
-static int node_from_val(const struct js_value *v) {
-    if (!v || (v->type != JT_DOM && v->type != JT_OBJ) || !v->u.o)
+static int node_from_val(struct browser_js_host *h, const struct js_value *v) {
+    if (!h || !v || (v->type != JT_DOM && v->type != JT_OBJ) || !v->u.o)
         return -1;
-    if (v->u.o->is_dom)
-        return (int)(intptr_t)v->u.o->dom_node - 1;
-    struct js_value n;
+    if (v->u.o->is_dom) {
+        uint64_t packed = (uint64_t)(uintptr_t)v->u.o->dom_node;
+        uint32_t gen = (uint32_t)(packed >> 32);
+        uint32_t nid1 = (uint32_t)packed;
+        if (gen != h->handle_gen || nid1 == 0)
+            return -1; /* stale or null handle */
+        return (int)nid1 - 1;
+    }
+    struct js_value n, g;
+    if (js_obj_get(NULL, v->u.o, "__gen", &g) == 0 && g.type == JT_NUM &&
+        (uint32_t)g.u.n != h->handle_gen)
+        return -1;
     if (js_obj_get(NULL, v->u.o, "__node", &n) == 0 && n.type == JT_NUM)
         return (int)n.u.n;
     return -1;
@@ -62,7 +84,7 @@ static int nat_get_el_by_id(struct js_runtime *rt, int argc, void *argv, void *r
     js_val_to_cstring(rt, &((struct js_value *)argv)[0], id, sizeof(id));
     int nid = dom_get_element_by_id(h->doc, id);
     if (nid >= 0)
-        make_dom_val(rt, nid, (struct js_value *)ret);
+        make_dom_val(h, rt, nid, (struct js_value *)ret);
     return 0;
 }
 
@@ -76,7 +98,7 @@ static int nat_query_selector(struct js_runtime *rt, int argc, void *argv, void 
     js_val_to_cstring(rt, &((struct js_value *)argv)[0], sel, sizeof(sel));
     int nid = dom_query_selector(h->doc, h->doc->root, sel);
     if (nid >= 0)
-        make_dom_val(rt, nid, (struct js_value *)ret);
+        make_dom_val(h, rt, nid, (struct js_value *)ret);
     return 0;
 }
 
@@ -90,7 +112,7 @@ static int nat_create_element(struct js_runtime *rt, int argc, void *argv, void 
     js_val_to_cstring(rt, &((struct js_value *)argv)[0], tag, sizeof(tag));
     int nid = dom_create_element(h->doc, tag);
     if (nid >= 0) {
-        make_dom_val(rt, nid, (struct js_value *)ret);
+        make_dom_val(h, rt, nid, (struct js_value *)ret);
         mark_dirty(h);
     }
     return 0;
@@ -103,8 +125,8 @@ static int nat_append_child(struct js_runtime *rt, int argc, void *argv, void *r
     js_val_set_undefined(ret);
     if (!h || argc < 2)
         return 0;
-    int parent = node_from_val(&((struct js_value *)argv)[0]);
-    int child = node_from_val(&((struct js_value *)argv)[1]);
+    int parent = node_from_val(h, &((struct js_value *)argv)[0]);
+    int child = node_from_val(h, &((struct js_value *)argv)[1]);
     if (parent >= 0 && child >= 0) {
         dom_append_child(h->doc, parent, child);
         mark_dirty(h);
@@ -118,7 +140,7 @@ static int nat_set_text(struct js_runtime *rt, int argc, void *argv, void *ret,
     js_val_set_undefined(ret);
     if (!h || argc < 2)
         return 0;
-    int nid = node_from_val(&((struct js_value *)argv)[0]);
+    int nid = node_from_val(h, &((struct js_value *)argv)[0]);
     char text[DOM_TEXT_MAX];
     js_val_to_cstring(rt, &((struct js_value *)argv)[1], text, sizeof(text));
     if (nid >= 0) {
@@ -134,7 +156,7 @@ static int nat_get_text(struct js_runtime *rt, int argc, void *argv, void *ret,
     js_val_set_string(rt, ret, "");
     if (!h || argc < 1)
         return 0;
-    int nid = node_from_val(&((struct js_value *)argv)[0]);
+    int nid = node_from_val(h, &((struct js_value *)argv)[0]);
     if (nid < 0)
         return 0;
     char buf[DOM_TEXT_MAX];
@@ -149,7 +171,7 @@ static int nat_set_attr(struct js_runtime *rt, int argc, void *argv, void *ret,
     js_val_set_undefined(ret);
     if (!h || argc < 3)
         return 0;
-    int nid = node_from_val(&((struct js_value *)argv)[0]);
+    int nid = node_from_val(h, &((struct js_value *)argv)[0]);
     char name[32], val[96];
     js_val_to_cstring(rt, &((struct js_value *)argv)[1], name, sizeof(name));
     js_val_to_cstring(rt, &((struct js_value *)argv)[2], val, sizeof(val));
@@ -166,7 +188,7 @@ static int nat_get_attr(struct js_runtime *rt, int argc, void *argv, void *ret,
     js_val_set_null(ret);
     if (!h || argc < 2)
         return 0;
-    int nid = node_from_val(&((struct js_value *)argv)[0]);
+    int nid = node_from_val(h, &((struct js_value *)argv)[0]);
     char name[32];
     js_val_to_cstring(rt, &((struct js_value *)argv)[1], name, sizeof(name));
     const char *v = nid >= 0 ? dom_get_attr(h->doc, nid, name) : NULL;
@@ -181,7 +203,7 @@ static int nat_set_inner_html(struct js_runtime *rt, int argc, void *argv, void 
     js_val_set_undefined(ret);
     if (!h || argc < 2)
         return 0;
-    int nid = node_from_val(&((struct js_value *)argv)[0]);
+    int nid = node_from_val(h, &((struct js_value *)argv)[0]);
     char html[512];
     js_val_to_cstring(rt, &((struct js_value *)argv)[1], html, sizeof(html));
     if (nid >= 0) {
@@ -197,7 +219,7 @@ static int nat_add_event_listener(struct js_runtime *rt, int argc, void *argv, v
     js_val_set_undefined(ret);
     if (!h || argc < 3 || h->nlisteners >= 32)
         return 0;
-    int nid = node_from_val(&((struct js_value *)argv)[0]);
+    int nid = node_from_val(h, &((struct js_value *)argv)[0]);
     char type[16];
     js_val_to_cstring(rt, &((struct js_value *)argv)[1], type, sizeof(type));
     struct js_value *fn = &((struct js_value *)argv)[2];
