@@ -29,6 +29,9 @@ static void transcript_add(const uint8_t *hs_msg, size_t len) {
 static int build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *out_len) {
     if (crypto_random(client_random, 32) != 0)
         return -1; /* RNG */
+    if (crypto_random(tls13_priv, 32) != 0)
+        return -1;
+    x25519_base(tls13_client_pub, tls13_priv);
     /* TLS 1.2: first 4 bytes are GMT unix time; remaining 28 stay random. */
     uint32_t t = (uint32_t)timer_ticks();
     client_random[0] = (uint8_t)(t >> 24);
@@ -43,8 +46,14 @@ static int build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t 
     o += 32;
     out[o++] = 0;
 
-    /* Prefer ChaCha20; AES-128 then AES-256; include renegotiation SCSV (0x00FF) */
-    tls_wr16(out + o, 14);
+    /* Prefer TLS 1.3 then 1.2 AEAD suites; include renegotiation SCSV (0x00FF) */
+    tls_wr16(out + o, 20);
+    o += 2;
+    tls_wr16(out + o, CS_TLS13_AES128_GCM);
+    o += 2;
+    tls_wr16(out + o, CS_TLS13_CHACHA20);
+    o += 2;
+    tls_wr16(out + o, CS_TLS13_AES256_GCM);
     o += 2;
     tls_wr16(out + o, CS_ECDHE_ECDSA_CHACHA20);
     o += 2;
@@ -144,6 +153,31 @@ static int build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t 
     o += 2;
     out[o++] = 0;
 
+    /* supported_versions: TLS 1.3 then 1.2 */
+    tls_wr16(out + o, 0x002b);
+    o += 2;
+    tls_wr16(out + o, 5);
+    o += 2;
+    out[o++] = 4;
+    tls_wr16(out + o, 0x0304);
+    o += 2;
+    tls_wr16(out + o, 0x0303);
+    o += 2;
+
+    /* key_share: X25519 */
+    tls_wr16(out + o, 0x0033);
+    o += 2;
+    tls_wr16(out + o, 38);
+    o += 2;
+    tls_wr16(out + o, 36);
+    o += 2;
+    tls_wr16(out + o, 0x001d);
+    o += 2;
+    tls_wr16(out + o, 32);
+    o += 2;
+    memcpy(out + o, tls13_client_pub, 32);
+    o += 32;
+
     tls_wr16(out + ext_len_at, (uint16_t)(o - ext_start));
     tls_wr24(out + 1, (uint32_t)(o - 4));
     if (o > cap)
@@ -176,10 +210,15 @@ static int parse_server_hello(const uint8_t *msg, size_t len, uint16_t *cs_out) 
     *cs_out = tls_rd16(p);
     p += 2;
     p++; /* compression */
-    if (!is_aes128_gcm(*cs_out) && !is_aes256_gcm(*cs_out) && !is_chacha(*cs_out))
+    int is13_suite = (*cs_out == CS_TLS13_AES128_GCM || *cs_out == CS_TLS13_AES256_GCM ||
+                      *cs_out == CS_TLS13_CHACHA20);
+    if (!is13_suite && !is_aes128_gcm(*cs_out) && !is_aes256_gcm(*cs_out) && !is_chacha(*cs_out))
         return -1;
 
     use_ems = 0;
+    tls13 = 0;
+    int saw_version = 0;
+    int saw_share = 0;
     if (p + 2 <= end) {
         uint16_t ext_total = tls_rd16(p);
         p += 2;
@@ -195,9 +234,28 @@ static int parse_server_hello(const uint8_t *msg, size_t len, uint16_t *cs_out) 
                 break;
             if (et == 0x0017) /* extended_master_secret */
                 use_ems = 1;
+            if (et == 0x002b && el >= 2) {
+                uint16_t ver = tls_rd16(p);
+                if (ver == 0x0304) {
+                    tls13 = 1;
+                    saw_version = 1;
+                }
+            }
+            if (et == 0x0033 && el >= 4) {
+                uint16_t group = tls_rd16(p);
+                uint16_t klen = tls_rd16(p + 2);
+                if (group == 0x001d && klen == 32 && el >= 4 + 32) {
+                    memcpy(tls13_server_pub, p + 4, 32);
+                    saw_share = 1;
+                }
+            }
             p += el;
         }
     }
+    if (tls13 && (!saw_version || !saw_share || !is13_suite))
+        return -1;
+    if (!tls13 && is13_suite)
+        return -1;
     return 0;
 }
 
@@ -487,6 +545,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     tls_close();
     last_err[0] = '\0';
     use_ems = 0;
+    tls13 = 0;
     cert_verified = 0;
     hostname_matched = 0;
     hostname_parse_skipped = 0;
@@ -562,6 +621,18 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                     goto fail;
                 }
                 got_sh = 1;
+                if (tls13) {
+                    /* Consume remaining buffered cleartext (should be none) and
+                     * continue under TLS 1.3. Transcript already includes SH. */
+                    off += 4 + hslen;
+                    if (off > 0) {
+                        memmove(hs_reasm, hs_reasm + off, hs_reasm_len - off);
+                        hs_reasm_len -= off;
+                    }
+                    if (tls13_handshake_after_sh(cs, sni_host, timeout_ticks) != 0)
+                        goto fail;
+                    return 0;
+                }
             } else if (hstype == HS_CERTIFICATE) {
                 got_cert = 1;
                 if (save_leaf_from_cert(hs_reasm + off, 4 + hslen) != 0) {

@@ -13,8 +13,10 @@
 
 #define HS_CLIENT_HELLO      1
 #define HS_SERVER_HELLO      2
+#define HS_ENCRYPTED_EXT     8
 #define HS_CERTIFICATE       11
 #define HS_SERVER_KEY_EX     12
+#define HS_CERT_VERIFY       15
 #define HS_SERVER_HELLO_DONE 14
 #define HS_CLIENT_KEY_EX     16
 #define HS_FINISHED          20
@@ -25,6 +27,9 @@
 #define CS_ECDHE_ECDSA_AES256_GCM 0xC02C
 #define CS_ECDHE_RSA_CHACHA20     0xCCA8
 #define CS_ECDHE_ECDSA_CHACHA20   0xCCA9
+#define CS_TLS13_AES128_GCM       0x1301
+#define CS_TLS13_AES256_GCM       0x1302
+#define CS_TLS13_CHACHA20         0x1303
 
 #define CIPHER_AES128_GCM 0
 #define CIPHER_CHACHA20   1
@@ -36,6 +41,7 @@
 
 /* Session state (defined in tls.c). */
 extern int tls_up;
+extern int tls13;
 extern int cipher_kind;
 extern int use_ems;
 extern int cert_verified;
@@ -57,6 +63,18 @@ extern uint8_t rx_app[16384];
 extern size_t rx_app_len;
 extern uint8_t hs_reasm[24576];
 extern size_t hs_reasm_len;
+extern uint8_t tls13_priv[32];
+extern uint8_t tls13_client_pub[32];
+extern uint8_t tls13_server_pub[32];
+extern uint8_t tls13_early_secret[48];
+extern uint8_t tls13_handshake_secret[48];
+extern uint8_t tls13_master_secret[48];
+extern uint8_t tls13_client_hs_traffic[48];
+extern uint8_t tls13_server_hs_traffic[48];
+extern uint8_t tls13_client_app_traffic[48];
+extern uint8_t tls13_server_app_traffic[48];
+extern size_t tls13_hash_len;
+extern int tls13_sha384;
 
 /* tls.c */
 void tls_set_err(const char *msg);
@@ -72,5 +90,8 @@ int tls_recv_record(uint8_t *type_out, uint8_t *buf, size_t cap, size_t *out_len
 
 /* tls_trust.c */
 int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_host);
+
+/* tls13.c — continue after TLS 1.3 ServerHello (transcript already includes SH). */
+int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout_ticks);
 
 #endif

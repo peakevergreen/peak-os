@@ -7,6 +7,7 @@
 
 /* Session state — shared across tls_*.c via tls_internal.h. */
 int tls_up;
+int tls13;
 int cipher_kind;
 int use_ems;
 int cert_verified;
@@ -28,6 +29,18 @@ uint8_t rx_app[16384];
 size_t rx_app_len;
 uint8_t hs_reasm[24576];
 size_t hs_reasm_len;
+uint8_t tls13_priv[32];
+uint8_t tls13_client_pub[32];
+uint8_t tls13_server_pub[32];
+uint8_t tls13_early_secret[48];
+uint8_t tls13_handshake_secret[48];
+uint8_t tls13_master_secret[48];
+uint8_t tls13_client_hs_traffic[48];
+uint8_t tls13_server_hs_traffic[48];
+uint8_t tls13_client_app_traffic[48];
+uint8_t tls13_server_app_traffic[48];
+size_t tls13_hash_len;
+int tls13_sha384;
 
 void tls_set_err(const char *msg) {
     size_t i = 0;
@@ -116,6 +129,7 @@ void tls_close(void) {
     }
     net_tcp_close();
     tls_up = 0;
+    tls13 = 0;
     cert_verified = 0;
     rx_app_len = 0;
     hs_reasm_len = 0;
@@ -128,4 +142,12 @@ void tls_close(void) {
     memzero_explicit(server_key, sizeof(server_key));
     memzero_explicit(client_iv, sizeof(client_iv));
     memzero_explicit(server_iv, sizeof(server_iv));
+    memzero_explicit(tls13_priv, sizeof(tls13_priv));
+    memzero_explicit(tls13_early_secret, sizeof(tls13_early_secret));
+    memzero_explicit(tls13_handshake_secret, sizeof(tls13_handshake_secret));
+    memzero_explicit(tls13_master_secret, sizeof(tls13_master_secret));
+    memzero_explicit(tls13_client_hs_traffic, sizeof(tls13_client_hs_traffic));
+    memzero_explicit(tls13_server_hs_traffic, sizeof(tls13_server_hs_traffic));
+    memzero_explicit(tls13_client_app_traffic, sizeof(tls13_client_app_traffic));
+    memzero_explicit(tls13_server_app_traffic, sizeof(tls13_server_app_traffic));
 }
