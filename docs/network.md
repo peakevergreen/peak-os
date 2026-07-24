@@ -97,7 +97,8 @@ wall time assumes the kernel timer at 100 Hz:
 |----------|------:|------:|----------|
 | `NET_DHCP_TIMEOUT_DEFAULT` | 300 | 3s | DHCP DISCOVER / REQUEST |
 | `NET_DNS_RESOLVE_TICKS` | 300 | 3s | DNS A lookup (http / tools) |
-| `NET_DNS_CACHE_TTL_TICKS` | 600 | 6s | Positive DNS cache TTL |
+| `NET_DNS_CACHE_TTL_TICKS` | 3000 | 30s | Positive DNS A-cache TTL |
+| `NET_DNS_NEG_TTL_TICKS` | 1000 | 10s | Negative DNS cache (timeout / empty) |
 | `NET_ARP_RESOLVE_TICKS` | 200 | 2s | Next-hop MAC resolve |
 | `NET_ARP_RETRY_TICKS` | 50 | 0.5s | ARP re-request interval |
 | `NET_TCP_CONNECT_HTTP_TICKS` | 500 | 5s | Plaintext HTTP connect |

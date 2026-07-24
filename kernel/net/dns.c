@@ -6,9 +6,10 @@
 
 struct dns_cache_ent {
     char     host[128];
-    uint32_t ip;
+    uint32_t ip;       /* 0 when negative */
     uint64_t expires;
     uint8_t  in_use;
+    uint8_t  negative; /* 1 = remembered failure */
 };
 
 static struct dns_cache_ent dns_cache[DNS_CACHE_SLOTS];
@@ -29,7 +30,8 @@ static void dns_host_norm(const char *in, char *out, size_t out_len) {
     out[i] = '\0';
 }
 
-static uint32_t dns_cache_lookup(const char *host) {
+/* 1 = hit (ip set), 0 = miss, -1 = negative hit. */
+static int dns_cache_lookup(const char *host, uint32_t *out_ip) {
     char norm[128];
     dns_host_norm(host, norm, sizeof(norm));
     uint64_t now = timer_ticks();
@@ -40,14 +42,19 @@ static uint32_t dns_cache_lookup(const char *host) {
             dns_cache[i].in_use = 0;
             continue;
         }
-        if (!strcmp(dns_cache[i].host, norm))
-            return dns_cache[i].ip;
+        if (!strcmp(dns_cache[i].host, norm)) {
+            if (dns_cache[i].negative)
+                return -1;
+            if (out_ip)
+                *out_ip = dns_cache[i].ip;
+            return 1;
+        }
     }
     return 0;
 }
 
-static void dns_cache_store(const char *host, uint32_t ip) {
-    if (!host || !ip)
+static void dns_cache_store_ex(const char *host, uint32_t ip, int negative, uint64_t ttl) {
+    if (!host || (!ip && !negative))
         return;
     char norm[128];
     dns_host_norm(host, norm, sizeof(norm));
@@ -62,7 +69,6 @@ static void dns_cache_store(const char *host, uint32_t ip) {
             slot = i;
     }
     if (slot < 0) {
-        /* Evict soonest-expiring entry. */
         slot = 0;
         for (int i = 1; i < DNS_CACHE_SLOTS; i++) {
             if (dns_cache[i].expires < dns_cache[slot].expires)
@@ -73,9 +79,18 @@ static void dns_cache_store(const char *host, uint32_t ip) {
     for (; norm[n] && n + 1 < sizeof(dns_cache[slot].host); n++)
         dns_cache[slot].host[n] = norm[n];
     dns_cache[slot].host[n] = '\0';
-    dns_cache[slot].ip = ip;
-    dns_cache[slot].expires = now + NET_DNS_CACHE_TTL_TICKS;
+    dns_cache[slot].ip = negative ? 0 : ip;
+    dns_cache[slot].expires = now + ttl;
     dns_cache[slot].in_use = 1;
+    dns_cache[slot].negative = negative ? 1 : 0;
+}
+
+static void dns_cache_store(const char *host, uint32_t ip) {
+    dns_cache_store_ex(host, ip, 0, NET_DNS_CACHE_TTL_TICKS);
+}
+
+static void dns_cache_store_neg(const char *host) {
+    dns_cache_store_ex(host, 0, 1, NET_DNS_NEG_TTL_TICKS);
 }
 
 void net_handle_dns_udp(const uint8_t *pkt, uint16_t ulen) {
@@ -144,9 +159,12 @@ uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
     if (ok && dots == 3)
         return (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3];
 
-    uint32_t cached = dns_cache_lookup(hostname);
-    if (cached)
+    uint32_t cached = 0;
+    int hit = dns_cache_lookup(hostname, &cached);
+    if (hit > 0)
         return cached;
+    if (hit < 0)
+        return 0; /* negative cache */
 
     uint8_t q[256];
     size_t o = 0;
@@ -199,10 +217,14 @@ uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
     while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (dns_done) {
-            dns_cache_store(hostname, dns_answer_ip);
+            if (dns_answer_ip)
+                dns_cache_store(hostname, dns_answer_ip);
+            else
+                dns_cache_store_neg(hostname);
             return dns_answer_ip;
         }
         hlt_if_enabled();
     }
+    dns_cache_store_neg(hostname);
     return 0;
 }

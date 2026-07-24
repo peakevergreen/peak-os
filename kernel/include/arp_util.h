@@ -10,7 +10,7 @@
 
 /* Fixed-size open-addressed ARP cache (power of two). */
 #ifndef ARP_CACHE_MAX
-#define ARP_CACHE_MAX 16
+#define ARP_CACHE_MAX 32
 #endif
 
 struct arp_entry {
