@@ -9,6 +9,7 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 ### Raspberry Pi
 
 - Complete **Pi 3** HDMI / USB HID / PeakFS persist acceptance from a clean checkout — [scripts/pi3-hw-checklist.md](../scripts/pi3-hw-checklist.md), [rpi.md](rpi.md)
+  - Software preflight landed (HID wheel, FB NC pageflip map, Save UX, strict `smoke-aarch64`); **silicon boxes still open**
 - Finish **USB LAN / GENET / RP1 GEM** datapaths and **SDIO Wi‑Fi** association (after hub path is silicon-validated)
 - Pi 5 high MMIO / peri bring-up when mapped; xHCI rings still absent
 - Enable aarch64 **userspace ELF** (`eret` entry) when ready

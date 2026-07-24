@@ -132,7 +132,12 @@ void dwc2_hid_poll(void) {
                 usb_hid_kbd_report(dwc2_dma_buf);
             }
         } else if (h->is_mouse) {
-            if (dwc2_dma_buf[1] || dwc2_dma_buf[2] || (dwc2_dma_buf[0] & 7))
+            /* Boot mouse: buttons, dx, dy, optional wheel — wheel-only must count. */
+            int activity = dwc2_dma_buf[0] & 7;
+            activity |= dwc2_dma_buf[1] | dwc2_dma_buf[2];
+            if (h->mps > 3)
+                activity |= dwc2_dma_buf[3];
+            if (activity)
                 usb_hid_mouse_report(dwc2_dma_buf, h->mps > 3 ? 4 : 3);
         }
     }

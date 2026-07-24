@@ -247,10 +247,11 @@ void boot_shim_main(void) {
     };
 
     if (platform_mailbox_fb(&info->fb) == 0 && info->fb.addr) {
-        /* Remap the framebuffer 2 MiB blocks as Normal non-cacheable so CPU
-         * writes reach scanout RAM (cacheable writes never appear on HDMI). */
+        /* Remap framebuffer (and optional pageflip second page) as Normal
+         * non-cacheable so CPU writes reach scanout RAM. */
         uint64_t fb_lo = info->fb.addr & ~((1ULL << 21) - 1);
-        uint64_t fb_hi = info->fb.addr + (uint64_t)info->fb.pitch * info->fb.height;
+        uint64_t fb_bytes = (uint64_t)info->fb.pitch * info->fb.height * 2;
+        uint64_t fb_hi = info->fb.addr + fb_bytes;
         for (uint64_t phys = fb_lo; phys < fb_hi; phys += (1ULL << 21)) {
             if (phys < (4ULL << 30))
                 l2ip[phys >> 21] = phys | BLK_FB_NC;
