@@ -69,6 +69,7 @@ char *strchr(const char *s, int c);
 char *strstr(const char *haystack, const char *needle);
 void  itoa_u(uint64_t val, char *buf, int base);
 int   snprintf(char *buf, size_t size, const char *fmt, ...);
+const char *peak_strerror(int code);
 void  reboot(void);
 
 #endif
