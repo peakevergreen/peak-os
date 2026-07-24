@@ -4,7 +4,7 @@
 #include "types.h"
 #include "peak_boot.h"
 
-/* Peak in-guest network (e1000 + IPv4/TCP/DNS/HTTP + TCP listen). */
+/* Peak in-guest network (virtio-net preferred, e1000 fallback + IPv4/TCP/DNS/HTTP). */
 
 struct net_info {
     int up;
@@ -49,6 +49,11 @@ int net_tcp_fd_send(int fd, const void *data, size_t len);
 int net_tcp_fd_recv(int fd, void *buf, size_t cap, size_t *out_len,
                     uint32_t timeout_ticks);
 void net_tcp_fd_close(int fd);
+/* Peer / local addressing for established fds (host-order IP). */
+int net_tcp_fd_peer(int fd, uint32_t *ip, uint16_t *port);
+int net_tcp_fd_local(int fd, uint32_t *ip, uint16_t *port);
+/* how: 0=read, 1=write (FIN), 2=both */
+int net_tcp_fd_shutdown(int fd, int how);
 
 /* DHCP with configured fallback (see peak_net_config). */
 int net_dhcp_try(uint32_t timeout_ticks);

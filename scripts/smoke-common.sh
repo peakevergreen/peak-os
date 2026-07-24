@@ -37,7 +37,7 @@ smoke_check_x86_boot() {
   }
   grep -q "Physical memory" "$log" || { echo "FAIL: no PMM"; tail -40 "$log"; return 1; }
   grep -q "System monitor" "$log" || { echo "FAIL: no System monitor"; return 1; }
-  grep -Eq "e1000 \(dhcp |e1000 \(static |e1000 \(fallback |Network \(e1000\)|net: ipv4 ready" "$log" || {
+  grep -Eq "virtio-net: ready|e1000 \(dhcp |e1000 \(static |e1000 \(fallback |Network \(e1000\)|Network \(virtio|net: ipv4 ready" "$log" || {
     echo "FAIL: network did not come up"; tail -80 "$log"; return 1;
   }
   grep -q "Boot complete" "$log" || { echo "FAIL: boot incomplete"; tail -40 "$log"; return 1; }
