@@ -309,7 +309,7 @@ HOST_TEST_NAMES := \
 	phase7 gfx boot lan http_tcp js webapi random tls libpeak ubin_registry \
 	shell_split console_scroll display_present wallpaper_cache \
 	peakdisk peakvec guiproto vmm_usercopy blobstore heap_pmm agent_policy \
-	ctr_path
+	ctr_path dom
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
 
 test: test-host
@@ -381,6 +381,9 @@ $(eval $(call HOST_TEST_RULE,agent_policy,tests/host/test_agent_policy.c tests/h
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel))
 $(eval $(call HOST_TEST_RULE,ctr_path,tests/host/test_ctr_path.c kernel/ctr_path.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel))
+$(eval $(call HOST_TEST_RULE,dom,tests/host/test_dom.c tests/host/dom_host_stubs.c \
+	kernel/gui/dom_core.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui))
 
 smoke:
 	./scripts/smoke-cli.sh

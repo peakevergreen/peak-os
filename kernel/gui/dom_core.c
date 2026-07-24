@@ -141,6 +141,59 @@ int dom_get_element_by_id(struct dom_document *doc, const char *id) {
     return -1;
 }
 
+/* Whole class-token match (space/tab separated), not substring. */
+static int class_has_token(const char *class_attr, const char *cls, size_t cls_len) {
+    if (!class_attr || !cls || !cls_len)
+        return 0;
+    for (const char *p = class_attr; *p;) {
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (!*p)
+            break;
+        const char *start = p;
+        while (*p && *p != ' ' && *p != '\t')
+            p++;
+        if ((size_t)(p - start) == cls_len && !strncmp(start, cls, cls_len))
+            return 1;
+    }
+    return 0;
+}
+
+/* Preorder successor under `root` (inclusive walk starts at root). */
+static int dom_next_in_subtree(struct dom_document *doc, int root, int cur) {
+    struct dom_node *n = &doc->nodes[cur];
+    if (n->first_child >= 0)
+        return n->first_child;
+    while (cur >= 0 && cur != root) {
+        if (doc->nodes[cur].next_sibling >= 0)
+            return doc->nodes[cur].next_sibling;
+        cur = doc->nodes[cur].parent;
+    }
+    return -1;
+}
+
+static int query_class_in_subtree(struct dom_document *doc, int root, const char *cls,
+                                  size_t cls_len) {
+    for (int i = root; i >= 0; i = dom_next_in_subtree(doc, root, i)) {
+        if (!doc->nodes[i].used || doc->nodes[i].type != DOM_ELEMENT)
+            continue;
+        const char *c = dom_get_attr(doc, i, "class");
+        if (c && class_has_token(c, cls, cls_len))
+            return i;
+    }
+    return -1;
+}
+
+static int query_tag_in_subtree(struct dom_document *doc, int root, const char *tag) {
+    for (int i = root; i >= 0; i = dom_next_in_subtree(doc, root, i)) {
+        if (!doc->nodes[i].used || doc->nodes[i].type != DOM_ELEMENT)
+            continue;
+        if (dom_tag_eq(doc->nodes[i].tag, tag))
+            return i;
+    }
+    return -1;
+}
+
 int dom_query_selector(struct dom_document *doc, int root, const char *sel) {
     if (!doc || !sel)
         return -1;
@@ -148,34 +201,30 @@ int dom_query_selector(struct dom_document *doc, int root, const char *sel) {
         return dom_get_element_by_id(doc, sel + 1);
     if (sel[0] == '.') {
         const char *cls = sel + 1;
+        size_t cls_len = strlen(cls);
+        if (!cls_len)
+            return -1;
+        if (root >= 0)
+            return query_class_in_subtree(doc, root, cls, cls_len);
+        /* No root: scan live elements only (still token-match, not substring). */
         for (int i = 0; i < doc->nnodes; i++) {
             if (!doc->nodes[i].used || doc->nodes[i].type != DOM_ELEMENT)
                 continue;
-            if (root >= 0 && i != root) {
-                /* allow any descendant — simple full scan */
-            }
             const char *c = dom_get_attr(doc, i, "class");
-            if (c) {
-                size_t n = strlen(cls);
-                for (const char *p = c; *p; p++) {
-                    size_t i2 = 0;
-                    while (i2 < n && p[i2] == cls[i2])
-                        i2++;
-                    if (i2 == n)
-                        return i;
-                }
-            }
+            if (c && class_has_token(c, cls, cls_len))
+                return i;
         }
         return -1;
     }
     /* tag name */
+    if (root >= 0)
+        return query_tag_in_subtree(doc, root, sel);
     for (int i = 0; i < doc->nnodes; i++) {
         if (!doc->nodes[i].used || doc->nodes[i].type != DOM_ELEMENT)
             continue;
         if (dom_tag_eq(doc->nodes[i].tag, sel))
             return i;
     }
-    (void)root;
     return -1;
 }
 
