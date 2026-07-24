@@ -80,7 +80,8 @@ this minimal in-guest client; TOFU/pins provide continuity, not WebPKI assurance
 
 ## Limits
 
-- Small connection table (`NET_TCP_MAX`)
+- Small connection table (`NET_TCP_MAX` = 16 concurrent, `NET_LISTEN_MAX` = 8)
+- Exhausted slots return `PEAK_EBUSY` (no silent drop)
 - Weak RNG (timer-based) — not for real security
 - **Certificate trust is pins + TOFU only** (`/etc/peak/tls-tofu`); **full X.509
   chain validation is intentionally out of scope** (no CA bundle, no path
