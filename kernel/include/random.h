@@ -22,6 +22,9 @@ void random_mix(const void *data, size_t len);
 void random_mix_u64(uint64_t v);
 void random_mix_irq(uint64_t tsc_bits);
 
+/* Absorb host/HW entropy and mark CRYPTO ready (clears WEAK). */
+void random_absorb_trusted(const void *data, size_t len);
+
 /* Returns 0 on success, -1 if domain not ready (crypto fails closed in release). */
 int random_get(enum random_domain domain, uint8_t *buf, size_t len);
 int random_ready(enum random_domain domain);

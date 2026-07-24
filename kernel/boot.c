@@ -129,20 +129,7 @@ void kernel_entry(struct peak_bootinfo *info) {
     extern void __stack_chk_guard_setup(void);
     __stack_chk_guard_setup();
 #endif
-    {
-        uint32_t rf = random_status_flags();
-        char rng_line[96];
-        snprintf(rng_line, sizeof(rng_line), "Entropy flags=0x%x%s%s%s%s",
-                 (unsigned)rf,
-                 (rf & RANDOM_READY_CRYPTO) ? " CRYPTO" : "",
-                 (rf & RANDOM_READY_ANY) ? " ANY" : "",
-                 (rf & RANDOM_FLAG_WEAK) ? " WEAK" : "",
-                 (rf & RANDOM_FLAG_HW) ? " HW" : "");
-        if (random_ready(RANDOM_DOMAIN_CRYPTO))
-            status_ok(rng_line);
-        else
-            status_fail(rng_line);
-    }
+    /* Entropy status printed after platform_init (virtio-rng may unlock CRYPTO). */
     cap_init();
     privacy_init();
     status_ok("Capabilities");
@@ -188,6 +175,21 @@ void kernel_entry(struct peak_bootinfo *info) {
         status_fail("Platform");
     else
         status_ok("Platform");
+
+    {
+        uint32_t rf = random_status_flags();
+        char rng_line[96];
+        snprintf(rng_line, sizeof(rng_line), "Entropy flags=0x%x%s%s%s%s",
+                 (unsigned)rf,
+                 (rf & RANDOM_READY_CRYPTO) ? " CRYPTO" : "",
+                 (rf & RANDOM_READY_ANY) ? " ANY" : "",
+                 (rf & RANDOM_FLAG_WEAK) ? " WEAK" : "",
+                 (rf & RANDOM_FLAG_HW) ? " HW" : "");
+        if (random_ready(RANDOM_DOMAIN_CRYPTO))
+            status_ok(rng_line);
+        else
+            status_fail(rng_line);
+    }
 
     sysmon_init();
     status_ok("System monitor");

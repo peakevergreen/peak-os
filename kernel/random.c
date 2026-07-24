@@ -125,6 +125,9 @@ void random_mix_irq(uint64_t tsc_bits) {
     random_mix_u64(x);
 }
 
+/* Forward: used by random_absorb_trusted after DRBG helpers. */
+static void drbg_reseed(void);
+
 /* Compact ChaCha20 block (RFC 7539) for DRBG output. */
 static uint32_t rotl32(uint32_t x, int n) {
     return (x << n) | (x >> (32 - n));
@@ -194,6 +197,15 @@ static void drbg_reseed(void) {
     memzero_explicit(material, sizeof(material));
     /* Forward secrecy: fold key back into pool then advance. */
     pool_absorb(drbg_key, 32);
+}
+
+void random_absorb_trusted(const void *data, size_t len) {
+    if (!data || !len || !inited)
+        return;
+    pool_absorb((const uint8_t *)data, len);
+    drbg_reseed();
+    status_flags |= RANDOM_READY_CRYPTO | RANDOM_FLAG_HW | RANDOM_READY_ANY;
+    status_flags &= ~RANDOM_FLAG_WEAK;
 }
 
 static int hw_seed_collect(uint8_t *buf, size_t len) {

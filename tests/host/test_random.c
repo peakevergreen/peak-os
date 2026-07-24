@@ -103,6 +103,18 @@ int main(void) {
     expect(!random_ready(RANDOM_DOMAIN_CRYPTO), "release crypto closed on weak boot");
 #endif
 
+    /* virtio-rng / host path: absorb trusted bytes unlocks CRYPTO and clears WEAK. */
+    {
+        uint8_t seed[32];
+        for (int i = 0; i < 32; i++)
+            seed[i] = (uint8_t)(0x3C ^ i);
+        random_absorb_trusted(seed, sizeof(seed));
+        expect(random_ready(RANDOM_DOMAIN_CRYPTO), "absorb unlocks crypto");
+        expect(random_status_flags() & RANDOM_FLAG_HW, "absorb sets HW");
+        expect(!(random_status_flags() & RANDOM_FLAG_WEAK), "absorb clears WEAK");
+        expect(random_get(RANDOM_DOMAIN_CRYPTO, a, 16) == 0, "crypto get after absorb");
+    }
+
     memset(b, 0xCD, sizeof(b));
     memzero_explicit(b, sizeof(b));
     expect(buf_all(b, sizeof(b), 0), "memzero_explicit clears buffer");
