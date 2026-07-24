@@ -6,8 +6,10 @@
 static struct vfs_node nodes[VFS_MAX_NODES];
 static int node_count;
 static struct vfs_node *root;
-/* First-character child buckets: 0 = empty, else 1-based index into nodes[]. */
-static uint16_t child_bucket[VFS_MAX_NODES][32];
+/* First-character child buckets: 0 = empty, else 1-based index into nodes[].
+ * 16 buckets (was 32) halves BSS (~128 KiB) with the same first-char probe. */
+#define VFS_CHILD_BUCKETS 16u
+static uint16_t child_bucket[VFS_MAX_NODES][VFS_CHILD_BUCKETS];
 
 static int node_index(struct vfs_node *n) {
     if (!n)
@@ -19,7 +21,7 @@ static int node_index(struct vfs_node *n) {
 }
 
 static unsigned name_bucket(const char *name) {
-    return (unsigned)(unsigned char)name[0] & 31u;
+    return (unsigned)(unsigned char)name[0] & (VFS_CHILD_BUCKETS - 1u);
 }
 
 static struct vfs_node *alloc_node(const char *name, enum vfs_type type) {
@@ -82,7 +84,7 @@ static struct vfs_node *find_child(struct vfs_node *dir, const char *name) {
             start = &nodes[idx - 1];
     }
     for (struct vfs_node *c = start; c; c = c->sibling) {
-        if (((unsigned)(unsigned char)c->name[0] & 31u) != b)
+        if (((unsigned)(unsigned char)c->name[0] & (VFS_CHILD_BUCKETS - 1u)) != b)
             continue;
         if (!strcmp(c->name, name))
             return c;
@@ -90,7 +92,7 @@ static struct vfs_node *find_child(struct vfs_node *dir, const char *name) {
     /* If we started mid-chain from a stale bucket head, scan from the real head. */
     if (start != dir->child) {
         for (struct vfs_node *c = dir->child; c && c != start; c = c->sibling) {
-            if (((unsigned)(unsigned char)c->name[0] & 31u) != b)
+            if (((unsigned)(unsigned char)c->name[0] & (VFS_CHILD_BUCKETS - 1u)) != b)
                 continue;
             if (!strcmp(c->name, name))
                 return c;
@@ -347,10 +349,26 @@ int vfs_is_file(const char *path) {
 static void unlink_from_parent(struct vfs_node *n) {
     if (!n->parent)
         return;
+    int pi = node_index(n->parent);
+    int ci = node_index(n);
+    unsigned b = name_bucket(n->name);
     struct vfs_node **pp = &n->parent->child;
     while (*pp) {
         if (*pp == n) {
             *pp = n->sibling;
+            /* Keep bucket head honest so find_child skips the stale mid-chain path. */
+            if (pi >= 0 && ci >= 0 && child_bucket[pi][b] == (uint16_t)(ci + 1)) {
+                uint16_t next = 0;
+                for (struct vfs_node *s = n->sibling; s; s = s->sibling) {
+                    if (name_bucket(s->name) == b) {
+                        int si = node_index(s);
+                        if (si >= 0)
+                            next = (uint16_t)(si + 1);
+                        break;
+                    }
+                }
+                child_bucket[pi][b] = next;
+            }
             return;
         }
         pp = &(*pp)->sibling;
