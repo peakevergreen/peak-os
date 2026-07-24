@@ -444,8 +444,37 @@ static int parse_add(struct js_compiler *c) {
     return 0;
 }
 static int parse_rel(struct js_compiler *c) {
+    /* Hot path: local < number → OP_LT_LOCAL_NUM (one dispatch vs GET/PUSH/LT). */
+    if (c->tok == T_IDENT) {
+        char name[48];
+        snprintf(name, sizeof(name), "%s", c->text);
+        struct lex_save save;
+        lex_checkpoint(c, &save);
+        js_lex_next(c);
+        if (c->tok == T_LT) {
+            js_lex_next(c);
+            if (c->tok == T_NUM) {
+                double lim = c->num;
+                js_lex_next(c);
+                /* RHS must be a bare literal (not `50 + 1`, `50 * 2`, …). */
+                if (c->tok != T_PLUS && c->tok != T_MINUS && c->tok != T_STAR &&
+                    c->tok != T_SLASH && c->tok != T_PERCENT) {
+                    int depth = 0;
+                    int loc = scope_find(name, &depth);
+                    if (loc >= 0 && depth == 0) {
+                        js_emit_op(c, OP_LT_LOCAL_NUM);
+                        js_emit_u16(c, (uint16_t)loc);
+                        js_emit_f64(c, lim);
+                        goto rel_more;
+                    }
+                }
+            }
+        }
+        lex_restore(c, &save);
+    }
     if (parse_add(c))
         return -1;
+rel_more:
     while (c->tok == T_LT || c->tok == T_LE || c->tok == T_GT || c->tok == T_GE) {
         enum js_tok op = c->tok;
         js_lex_next(c);
@@ -514,7 +543,7 @@ static int parse_expr(struct js_compiler *c) {
 }
 
 static int parse_assignment(struct js_compiler *c) {
-    /* Detect ident = expr or ident = ident + 1 (INC_LOCAL peephole). */
+    /* Detect ident = expr; peephole local i=i±1 and n=n+m. */
     if (c->tok == T_IDENT) {
         char name[48];
         snprintf(name, sizeof(name), "%s", c->text);
@@ -525,7 +554,7 @@ static int parse_assignment(struct js_compiler *c) {
             js_lex_next(c);
             int depth = 0;
             int loc = scope_find(name, &depth);
-            /* Hot path: local `i = i + 1` → OP_INC_LOCAL (one dispatch). */
+            /* Hot paths: local `i = i + 1` / `i = i - 1` / `n = n + m`. */
             if (loc >= 0 && depth == 0 && c->tok == T_IDENT && !strcmp(c->text, name)) {
                 struct lex_save save2;
                 lex_checkpoint(c, &save2);
@@ -535,6 +564,30 @@ static int parse_assignment(struct js_compiler *c) {
                     if (c->tok == T_NUM && c->num == 1.0) {
                         js_lex_next(c);
                         js_emit_op(c, OP_INC_LOCAL);
+                        js_emit_u16(c, (uint16_t)loc);
+                        return 0;
+                    }
+                    if (c->tok == T_IDENT) {
+                        int d2 = 0;
+                        int src = scope_find(c->text, &d2);
+                        if (src >= 0 && d2 == 0) {
+                            js_lex_next(c);
+                            /* Bare `n = n + m` only (not `n = n + m + 1`). */
+                            if (c->tok != T_PLUS && c->tok != T_MINUS &&
+                                c->tok != T_STAR && c->tok != T_SLASH &&
+                                c->tok != T_PERCENT) {
+                                js_emit_op(c, OP_ADD_LOCAL);
+                                js_emit_u16(c, (uint16_t)loc);
+                                js_emit_u16(c, (uint16_t)src);
+                                return 0;
+                            }
+                        }
+                    }
+                } else if (c->tok == T_MINUS) {
+                    js_lex_next(c);
+                    if (c->tok == T_NUM && c->num == 1.0) {
+                        js_lex_next(c);
+                        js_emit_op(c, OP_DEC_LOCAL);
                         js_emit_u16(c, (uint16_t)loc);
                         return 0;
                     }

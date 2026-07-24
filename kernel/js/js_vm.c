@@ -288,6 +288,49 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             }
             break;
         }
+        case OP_DEC_LOCAL: {
+            uint16_t i = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
+            if (fr->bp + i >= rt->sp)
+                return -1;
+            {
+                struct js_value *slot = &rt->stack[fr->bp + i];
+                *slot = js_num(js_val_to_number(slot) - 1.0);
+                if (push(rt, *slot))
+                    return -1;
+            }
+            break;
+        }
+        case OP_ADD_LOCAL: {
+            uint16_t dst = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            uint16_t src = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            fr->ip = ip;
+            if (fr->bp + dst >= rt->sp || fr->bp + src >= rt->sp)
+                return -1;
+            {
+                struct js_value *d = &rt->stack[fr->bp + dst];
+                struct js_value *s = &rt->stack[fr->bp + src];
+                /* Numeric hot path (loop accumulators); matches INC_LOCAL style. */
+                *d = js_num(js_val_to_number(d) + js_val_to_number(s));
+                if (push(rt, *d))
+                    return -1;
+            }
+            break;
+        }
+        case OP_LT_LOCAL_NUM: {
+            uint16_t i = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
+            ip += 2;
+            double lim = rdf64(rt, &ip);
+            fr->ip = ip;
+            if (fr->bp + i >= rt->sp)
+                return -1;
+            if (push(rt, js_bool(js_val_to_number(&rt->stack[fr->bp + i]) < lim)))
+                return -1;
+            break;
+        }
         case OP_GET_PROP: {
             uint16_t id = (uint16_t)rt->code[ip] | ((uint16_t)rt->code[ip + 1] << 8);
             ip += 2;
