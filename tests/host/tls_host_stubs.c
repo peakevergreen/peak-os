@@ -5,6 +5,7 @@
  */
 #include "tls_internal.h"
 #include "vfs.h"
+#include "rtc.h"
 
 #include <string.h>
 
@@ -79,5 +80,18 @@ int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len) 
     if (n)
         memcpy(buf, host_tofu, n);
     *out_len = n;
+    return 0;
+}
+
+/* Host RTC: fixed "now" inside the example leaf validity window. */
+int rtc_read(struct rtc_time *out) {
+    if (!out)
+        return -1;
+    out->sec = 0;
+    out->min = 0;
+    out->hour = 12;
+    out->day = 1;
+    out->month = 8;
+    out->year = 2026;
     return 0;
 }

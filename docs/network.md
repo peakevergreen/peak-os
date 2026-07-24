@@ -111,10 +111,9 @@ extensions. Optional live probe: `make smoke-tls-live` (soft-fail offline).
 - Small connection table (`NET_TCP_MAX` = 16 concurrent, `NET_LISTEN_MAX` = 8)
 - Exhausted slots return `PEAK_EBUSY` (no silent drop)
 - Weak RNG (timer-based) — not for real security
-- **Certificate trust is pins + TOFU only** (`/etc/peak/tls-tofu`); **full X.509
-  chain validation is intentionally out of scope** (no CA bundle, no path
-  validation). A changed cert for a known host fails closed —
-  `rm /etc/peak/tls-tofu` to re-trust after a legitimate rotation
+- **Certificate trust is pins + TOFU** (`/etc/peak/tls-tofu`) with a real DER X.509 leaf
+  parser for SAN/validity/SPKI/BasicConstraints/KeyUsage/AKI/SKI (path building + CA
+  roots land in the WebPKI pass). Validity is enforced when RTC time is available.
 - Bridged mode is platform-specific (macOS vmnet); Linux tap/bridge is not wired yet
 
 ## Timeouts (100 Hz ticks)

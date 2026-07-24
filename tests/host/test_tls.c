@@ -7,6 +7,7 @@
 #include "random.h"
 #include "crypto.h"
 #include "tls.h"
+#include "x509.h"
 #include "../../kernel/include/tls_util.h"
 #include "../../kernel/net/tls_internal.h"
 
@@ -571,6 +572,33 @@ static void test_clienthello_goldens(void) {
     expect(n2 == n, "ch length stable");
 }
 
+static void test_x509_parser(void) {
+#include "x509_leaf_vectors.h"
+    struct x509_cert c;
+    expect(x509_parse_der(x509_leaf_example, sizeof(x509_leaf_example), &c) == 0, "parse example");
+    expect(c.has_validity, "has validity");
+    expect(c.san_count >= 1, "has san");
+    expect(x509_cert_hostname_match(&c, "example.com") == 1, "san match example");
+    expect(x509_cert_hostname_match(&c, "evil.com") == 0, "san reject evil");
+    expect(c.spki_len > 20, "has spki");
+    expect(c.has_basic_constraints, "has basicConstraints");
+    expect(!c.is_ca, "leaf not CA");
+
+    struct x509_time now = {.year = 2026, .month = 8, .day = 1, .hour = 0, .minute = 0, .second = 0};
+    expect(x509_cert_time_valid(&c, &now) == 1, "valid in window");
+    struct x509_time past = {.year = 2020, .month = 1, .day = 1, .hour = 0, .minute = 0, .second = 0};
+    expect(x509_cert_time_valid(&c, &past) == 0, "reject before notBefore");
+    struct x509_time future = {.year = 2030, .month = 1, .day = 1, .hour = 0, .minute = 0, .second = 0};
+    expect(x509_cert_time_valid(&c, &future) == 0, "reject after notAfter");
+
+    expect(x509_parse_der(x509_leaf_other, sizeof(x509_leaf_other), &c) == 0, "parse other");
+    expect(x509_cert_hostname_match(&c, "example.com") == 0, "other rejects example");
+    expect(x509_cert_hostname_match(&c, "other.test") == 1, "other matches");
+
+    uint8_t junk[8] = {0};
+    expect(x509_parse_der(junk, sizeof(junk), &c) != 0, "reject tiny");
+}
+
 int main(void) {
     test_util_helpers();
     test_pin_and_tofu_fail_closed();
@@ -580,6 +608,7 @@ int main(void) {
     test_hostname_and_pin_extras();
     test_ske_sig_verify();
     test_clienthello_goldens();
+    test_x509_parser();
 
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);

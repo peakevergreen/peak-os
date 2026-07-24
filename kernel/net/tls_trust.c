@@ -3,6 +3,8 @@
 #include "tls_util.h"
 #include "util.h"
 #include "vfs.h"
+#include "x509.h"
+#include "rtc.h"
 
 /*
  * Trust-on-first-use store: /etc/peak/tls-tofu holds "host:hex64" lines
@@ -62,6 +64,13 @@ static void tofu_remember(const char *host, const char *hexdigest) {
 }
 
 static int x509_names_match_sni(const uint8_t *cert, size_t cert_len, const char *sni_host) {
+    struct x509_cert xc;
+    if (x509_parse_der(cert, cert_len, &xc) == 0) {
+        int m = x509_cert_hostname_match(&xc, sni_host);
+        if (m >= 0)
+            return m;
+    }
+    /* Legacy heuristic fallback if DER parse finds no SANs. */
     int found_name = 0;
     int matched = 0;
     for (size_t i = 0; i + 6 < cert_len; i++) {
@@ -176,6 +185,32 @@ int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_h
     }
     if (!trusted)
         return 0;
+
+    /* Soft time check when RTC is available (hard fail deferred to WebPKI pass). */
+    {
+        const uint8_t *leaf;
+        size_t leaf_len;
+        struct x509_cert xc;
+        if (leaf_cert_from_msg(cert_msg, len, &leaf, &leaf_len) == 0 &&
+            x509_parse_der(leaf, leaf_len, &xc) == 0 && xc.has_validity) {
+            struct rtc_time rt;
+            if (rtc_read(&rt) == 0) {
+                struct x509_time now = {
+                    .year = rt.year < 100 ? (uint16_t)(2000 + rt.year) : rt.year,
+                    .month = rt.month,
+                    .day = rt.day,
+                    .hour = rt.hour,
+                    .minute = rt.min,
+                    .second = rt.sec,
+                };
+                if (x509_cert_time_valid(&xc, &now) == 0) {
+                    cert_fail_reason = "Certificate expired or not yet valid";
+                    serial_log(SERIAL_LOG_WARN, "tls: certificate outside validity window\n");
+                    return 0;
+                }
+            }
+        }
+    }
 
     int hn = verify_cert_hostname(cert_msg, len, sni_host);
     if (hn == 1) {
