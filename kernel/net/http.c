@@ -260,9 +260,16 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
         if (!ip) {
             if (status_out)
                 *status_out = 0;
-            snprintf(body, body_cap,
-                     "<html><body><h1>DNS failed</h1><p>Could not resolve %s</p></body></html>",
-                     host);
+            const char *why = net_last_error();
+            if (why && why[0])
+                snprintf(body, body_cap,
+                         "<html><body><h1>DNS failed</h1>"
+                         "<p>Could not resolve %s: %s</p></body></html>",
+                         host, why);
+            else
+                snprintf(body, body_cap,
+                         "<html><body><h1>DNS failed</h1><p>Could not resolve %s</p></body></html>",
+                         host);
             return -1;
         }
 
@@ -297,6 +304,12 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
             if (ex != 0) {
                 if (status_out)
                     *status_out = 0;
+                const char *why = net_last_error();
+                if (why && why[0])
+                    snprintf(body, body_cap,
+                             "<html><body><h1>Connect failed</h1>"
+                             "<p>%s:%u — %s</p></body></html>",
+                             host, (unsigned)port, why);
                 return -1;
             }
         }

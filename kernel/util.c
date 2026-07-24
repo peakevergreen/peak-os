@@ -1,4 +1,5 @@
 #include "util.h"
+#include "peak_errno.h"
 #include "stdarg.h"
 
 void *memset(void *dst, int c, size_t n) {
@@ -178,6 +179,30 @@ void itoa_u(uint64_t val, char *buf, int base) {
     while (i)
         buf[j++] = tmp[--i];
     buf[j] = '\0';
+}
+
+const char *peak_strerror(int code) {
+    switch (code) {
+    case PEAK_OK:           return "ok";
+    case PEAK_EINVAL:       return "invalid argument";
+    case PEAK_ENOENT:       return "not found";
+    case PEAK_ENOMEM:       return "out of memory";
+    case PEAK_EEXIST:       return "already exists";
+    case PEAK_ENOTDIR:      return "not a directory";
+    case PEAK_EISDIR:       return "is a directory";
+    case PEAK_ENOSPC:       return "no space";
+    case PEAK_EIO:          return "I/O error";
+    case PEAK_EACCES:       return "permission denied";
+    case PEAK_ETIMEOUT:     return "timed out";
+    case PEAK_ENETDOWN:     return "network down";
+    case PEAK_ENOTCONN:     return "not connected";
+    case PEAK_ENOBUFS:      return "buffer too small";
+    case PEAK_ENETUNREACH:  return "host unreachable (ARP)";
+    case PEAK_EBUSY:        return "connection table full";
+    case PEAK_EDHCP:        return "DHCP failed";
+    case PEAK_EAGAIN:       return "try again";
+    default:                return "unknown error";
+    }
 }
 
 void reboot(void) {

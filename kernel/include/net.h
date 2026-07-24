@@ -107,4 +107,8 @@ void net_attempt_stats_get(struct net_attempt_stats *out);
 void net_attempt_stats_reset(void);
 void net_attempt_stats_note_tls(void);
 
+void net_set_last_error(int code, const char *detail);
+int net_last_error_code(void);
+const char *net_last_error(void);
+
 #endif

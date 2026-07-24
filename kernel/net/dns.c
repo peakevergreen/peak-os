@@ -1,4 +1,5 @@
 #include "net_internal.h"
+#include "peak_errno.h"
 #include "timer.h"
 #include "util.h"
 
@@ -133,8 +134,19 @@ void net_handle_dns_udp(const uint8_t *pkt, uint16_t ulen) {
 
 uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
     attempt_stats.dns++;
-    if (!net_ready() || !hostname || !hostname[0])
+    net_set_last_error(0, NULL);
+    if (!net_ready()) {
+        net_set_last_error(PEAK_ENETDOWN, NULL);
         return 0;
+    }
+    if (!hostname || !hostname[0]) {
+        net_set_last_error(PEAK_EINVAL, "empty hostname");
+        return 0;
+    }
+    if (!local_dns) {
+        net_set_last_error(PEAK_ENETUNREACH, "no DNS server configured");
+        return 0;
+    }
     /* dotted quad? */
     int dots = 0, ok = 1;
     uint32_t parts[4] = {0};
@@ -163,8 +175,10 @@ uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
     int hit = dns_cache_lookup(hostname, &cached);
     if (hit > 0)
         return cached;
-    if (hit < 0)
-        return 0; /* negative cache */
+    if (hit < 0) {
+        net_set_last_error(PEAK_ENOENT, "cached failure (no A record, ~10s TTL)");
+        return 0;
+    }
 
     uint8_t q[256];
     size_t o = 0;
@@ -188,8 +202,10 @@ uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
         while (*dot && *dot != '.')
             dot++;
         size_t lab = (size_t)(dot - h);
-        if (lab == 0 || lab > 63 || o + lab + 1 >= sizeof(q))
+        if (lab == 0 || lab > 63 || o + lab + 1 >= sizeof(q)) {
+            net_set_last_error(PEAK_EINVAL, "invalid hostname label");
             return 0;
+        }
         q[o++] = (uint8_t)lab;
         memcpy(q + o, h, lab);
         o += lab;
@@ -211,20 +227,26 @@ uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
     dns_sport = ephem_port++;
     if (ephem_port < 40000)
         ephem_port = 40000;
-    net_udp_send(local_dns, dns_sport, 53, q, (uint16_t)o);
+    if (net_udp_send(local_dns, dns_sport, 53, q, (uint16_t)o) != 0) {
+        net_set_last_error(PEAK_ENETUNREACH, "DNS query send failed (ARP?)");
+        return 0;
+    }
 
     uint64_t start = timer_ticks();
     while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (dns_done) {
-            if (dns_answer_ip)
+            if (dns_answer_ip) {
                 dns_cache_store(hostname, dns_answer_ip);
-            else
-                dns_cache_store_neg(hostname);
-            return dns_answer_ip;
+                return dns_answer_ip;
+            }
+            dns_cache_store_neg(hostname);
+            net_set_last_error(PEAK_ENOENT, "no A record in DNS response");
+            return 0;
         }
         hlt_if_enabled();
     }
     dns_cache_store_neg(hostname);
+    net_set_last_error(PEAK_ETIMEOUT, "DNS query timed out (~3s)");
     return 0;
 }

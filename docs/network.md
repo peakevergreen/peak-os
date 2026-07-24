@@ -131,8 +131,12 @@ until HPKE lands (interop note).
 
 ## Limits
 
-- Small connection table (`NET_TCP_MAX` = 16 concurrent, `NET_LISTEN_MAX` = 8)
-- Exhausted slots return `PEAK_EBUSY` (no silent drop)
+- Small connection table (`NET_TCP_MAX` = 16 concurrent client+server flows,
+  `NET_LISTEN_MAX` = 8 passive listeners). When the table is full,
+  `net_tcp_connect` / `net_tcp_listen` return `PEAK_EBUSY` — tools surface this
+  as "connection table full" rather than hanging or dropping silently.
+- DNS negative cache (10s) may report "cached failure" immediately after a
+  timeout or empty response; wait or retry with a different name.
 - Weak RNG (timer-based) — not for real security
 - **Certificate trust**: pins → WebPKI (embedded roots + path build) → opt-in
   TOFU (`/etc/peak/tls-tofu`). DER X.509 parse covers SAN/validity/SPKI/

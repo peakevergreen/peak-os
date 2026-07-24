@@ -55,6 +55,33 @@ uint16_t dns_sport;
 
 int http_needs_tls_flag;
 
+static int net_last_err;
+static char net_last_detail[96];
+
+void net_set_last_error(int code, const char *detail) {
+    net_last_err = code;
+    if (detail && detail[0]) {
+        size_t i = 0;
+        for (; detail[i] && i + 1 < sizeof(net_last_detail); i++)
+            net_last_detail[i] = detail[i];
+        net_last_detail[i] = '\0';
+    } else {
+        net_last_detail[0] = '\0';
+    }
+}
+
+int net_last_error_code(void) {
+    return net_last_err;
+}
+
+const char *net_last_error(void) {
+    if (net_last_detail[0])
+        return net_last_detail;
+    if (net_last_err)
+        return peak_strerror(net_last_err);
+    return "";
+}
+
 void net_set_boot_config(const struct peak_net_config *cfg) {
     if (!cfg)
         return;
