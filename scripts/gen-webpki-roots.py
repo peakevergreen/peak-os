@@ -19,7 +19,12 @@ def load_der(path: Path) -> bytes:
     return r.stdout
 
 def main() -> int:
-    files = sorted(list(SRC.glob("*.der")) + list(SRC.glob("*.pem")))
+    # Prefer DER; fall back to PEM only when no matching .der exists (avoid double-count).
+    ders = {p.stem: p for p in SRC.glob("*.der")}
+    files = sorted(ders.values())
+    for pem in sorted(SRC.glob("*.pem")):
+        if pem.stem not in ders:
+            files.append(pem)
     if not files:
         print(f"no roots in {SRC}", file=sys.stderr)
         return 1

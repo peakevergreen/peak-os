@@ -39,12 +39,28 @@ def build_fat12(efi_path: str, out_path: str, size_kib: int, extras: list[tuple[
     fats = 2
     root_ents = 512
     sectors_per_fat = 64
-    sectors_per_cluster = 1
     root_sectors = (root_ents * 32 + sector - 1) // sector
+    # FAT12 max usable cluster index is 0xFEF; keep headroom under 0xFF0.
+    fat12_max_cl = 0xFEF
+    payload = len(efi) + sum(len(b) for _, b in extras)
+    # Dir clusters 2,3,4 plus one cluster per file minimum overhead.
+    min_clusters = 3 + 1 + len(extras) + (payload + sector - 1) // sector
+    sectors_per_cluster = 1
+    while sectors_per_cluster < 64 and min_clusters > fat12_max_cl - 4:
+        sectors_per_cluster *= 2
+        min_clusters = 3 + 1 + len(extras) + (payload + sector * sectors_per_cluster - 1) // (
+            sector * sectors_per_cluster
+        )
     data_start = reserved + fats * sectors_per_fat + root_sectors
     data_sectors = sectors - data_start
     if data_sectors < 64:
         raise SystemExit("image too small")
+    max_data_clusters = data_sectors // sectors_per_cluster
+    if min_clusters > max_data_clusters or min_clusters > fat12_max_cl - 4:
+        raise SystemExit(
+            f"ESP too small for payload ({payload} bytes); "
+            f"need ~{min_clusters} clusters at {sectors_per_cluster}s/c"
+        )
 
     img = bytearray(sectors * sector)
     bpb = bytearray(sector)
@@ -83,7 +99,8 @@ def build_fat12(efi_path: str, out_path: str, size_kib: int, extras: list[tuple[
 
     def alloc_chain(blob: bytes) -> int:
         nonlocal next_cl
-        n = (len(blob) + sector - 1) // sector
+        cl_bytes = sector * sectors_per_cluster
+        n = (len(blob) + cl_bytes - 1) // cl_bytes
         if n == 0:
             n = 1
         first = next_cl
@@ -93,11 +110,8 @@ def build_fat12(efi_path: str, out_path: str, size_kib: int, extras: list[tuple[
                 raise SystemExit("FAT12 cluster overflow")
             _set12(fat, cl, 0xFF8 if i + 1 == n else cl + 1)
         next_cl = first + n
-        off = (data_start + (first - 2)) * sector
+        off = (data_start + (first - 2) * sectors_per_cluster) * sector
         img[off : off + len(blob)] = blob
-        if len(blob) % sector:
-            # already zero-filled
-            pass
         return first
 
     efi_first = alloc_chain(efi)
@@ -119,12 +133,12 @@ def build_fat12(efi_path: str, out_path: str, size_kib: int, extras: list[tuple[
     img[efi_dir + 64 : efi_dir + 96] = _dirent(b"BOOT       ", 0x10, 3, 0)
     img[efi_dir + 96 : efi_dir + 128] = _dirent(b"PEAK       ", 0x10, 4, 0)
 
-    boot_dir = (data_start + 1) * sector
+    boot_dir = (data_start + 1 * sectors_per_cluster) * sector
     img[boot_dir : boot_dir + 32] = _dirent(b".          ", 0x10, 3, 0)
     img[boot_dir + 32 : boot_dir + 64] = _dirent(b"..         ", 0x10, 2, 0)
     img[boot_dir + 64 : boot_dir + 96] = _dirent(b"BOOTX64 EFI", 0x20, efi_first, len(efi))
 
-    peak_dir = (data_start + 2) * sector
+    peak_dir = (data_start + 2 * sectors_per_cluster) * sector
     img[peak_dir : peak_dir + 32] = _dirent(b".          ", 0x10, 4, 0)
     img[peak_dir + 32 : peak_dir + 64] = _dirent(b"..         ", 0x10, 2, 0)
     slot = 64
@@ -135,7 +149,10 @@ def build_fat12(efi_path: str, out_path: str, size_kib: int, extras: list[tuple[
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "wb") as f:
         f.write(img)
-    print(f"Wrote {out_path} ({size_kib} KiB FAT12 ESP, clusters used through {next_cl - 1})")
+    print(
+        f"Wrote {out_path} ({size_kib} KiB FAT12 ESP, "
+        f"{sectors_per_cluster}s/c, clusters used through {next_cl - 1})"
+    )
 
 
 def _short83(name: str) -> bytes:

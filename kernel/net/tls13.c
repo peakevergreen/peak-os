@@ -172,10 +172,15 @@ static int der_ecdsa_sig_to_raw(const uint8_t *der, size_t der_len, uint8_t raw[
     return 0;
 }
 
-static int save_leaf_tls13(const uint8_t *msg, size_t len, uint8_t *leaf, size_t *leaf_len,
-                           size_t leaf_cap) {
-    /* Certificate: request_context, certificate_list */
-    if (len < 8 || msg[0] != HS_CERTIFICATE)
+/*
+ * Convert a TLS 1.3 Certificate handshake message into a TLS 1.2-shaped
+ * Certificate (cert_list only, no per-entry extensions) for WebPKI/TOFU, and
+ * copy the leaf DER for CertificateVerify.
+ */
+static int tls13_cert_to_legacy(const uint8_t *msg, size_t len, uint8_t *legacy,
+                                size_t legacy_cap, size_t *legacy_len, uint8_t *leaf,
+                                size_t *leaf_len, size_t leaf_cap) {
+    if (len < 8 || msg[0] != HS_CERTIFICATE || !legacy || !legacy_len || !leaf || !leaf_len)
         return -1;
     uint32_t mlen = tls_rd24(msg + 1);
     if (mlen + 4 > len)
@@ -192,12 +197,47 @@ static int save_leaf_tls13(const uint8_t *msg, size_t len, uint8_t *leaf, size_t
     p += 3;
     if (p + list_len > end || list_len < 3)
         return -1;
-    uint32_t cert_len = tls_rd24(p);
-    p += 3;
-    if (p + cert_len + 2 > end || cert_len > leaf_cap)
+    const uint8_t *list_end = p + list_len;
+
+    /* legacy: type(1) + len24(3) + list_len24(3) + entries */
+    if (legacy_cap < 7)
         return -1;
-    memcpy(leaf, p, cert_len);
-    *leaf_len = cert_len;
+    legacy[0] = HS_CERTIFICATE;
+    size_t o = 7;
+    int ncerts = 0;
+    *leaf_len = 0;
+    while (p + 3 <= list_end && ncerts < 8) {
+        uint32_t cert_len = tls_rd24(p);
+        p += 3;
+        if (p + cert_len + 2 > list_end)
+            return -1;
+        if (o + 3 + cert_len > legacy_cap)
+            return -1;
+        if (ncerts == 0) {
+            if (cert_len > leaf_cap)
+                return -1;
+            memcpy(leaf, p, cert_len);
+            *leaf_len = cert_len;
+        }
+        tls_wr24(legacy + o, cert_len);
+        o += 3;
+        memcpy(legacy + o, p, cert_len);
+        o += cert_len;
+        p += cert_len;
+        uint16_t ext_len = tls_rd16(p);
+        p += 2;
+        if (p + ext_len > list_end)
+            return -1;
+        p += ext_len;
+        ncerts++;
+    }
+    if (ncerts < 1 || *leaf_len == 0)
+        return -1;
+    size_t body = o - 4;
+    size_t clist = o - 7;
+    tls_wr24(legacy + 1, (uint32_t)body);
+    tls_wr24(legacy + 4, (uint32_t)clist);
+    *legacy_len = o;
     return 0;
 }
 
@@ -347,7 +387,7 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
         if (type == TLS_CONTENT_CCS)
             continue;
         if (type == TLS_CONTENT_ALERT) {
-            tls_set_err_code(TLS_E_ALERT, "TLS 1.3 server alert");
+            tls_set_alert_err(hs_reasm + hs_reasm_len, n);
             return -1;
         }
         if (type != TLS_CONTENT_HS)
@@ -394,19 +434,15 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
                 }
                 transcript_add(hs, hs_total);
             } else if (hstype == HS_CERTIFICATE) {
-                if (save_leaf_tls13(hs, hs_total, leaf, &leaf_len, sizeof(leaf)) != 0) {
+                /* Full chain → legacy Certificate shape for WebPKI (not leaf-only). */
+                uint8_t synth[12288];
+                size_t synth_len = 0;
+                if (tls13_cert_to_legacy(hs, hs_total, synth, sizeof(synth), &synth_len, leaf,
+                                         &leaf_len, sizeof(leaf)) != 0) {
                     tls_set_err_code(TLS_E_CERT, "TLS 1.3 Certificate parse failed");
                     return -1;
                 }
-                /* Build a synthetic 1.2-shaped Certificate message for TOFU digest. */
-                uint8_t synth[4 + 3 + 3 + 3072];
-                size_t body = 3 + 3 + leaf_len;
-                synth[0] = HS_CERTIFICATE;
-                tls_wr24(synth + 1, (uint32_t)body);
-                tls_wr24(synth + 4, (uint32_t)(3 + leaf_len));
-                tls_wr24(synth + 7, (uint32_t)leaf_len);
-                memcpy(synth + 10, leaf, leaf_len);
-                cert_verified = tls_verify_cert_chain(synth, 10 + leaf_len, sni_host);
+                cert_verified = tls_verify_cert_chain(synth, synth_len, sni_host);
                 if (!cert_verified) {
                     tls_set_err_code(TLS_E_CERT, cert_fail_reason ? cert_fail_reason : "TLS 1.3 cert unverified");
                     return -1;

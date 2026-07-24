@@ -63,8 +63,9 @@ ctr build … && ctr run -p 8080 …
 
 HTTPS trust is **WebPKI** (embedded roots + path build + hostname/time) by default.
 **Pins** override; **TOFU** is opt-in via Settings (`tls_tofu=1` in `/etc/peak/display`).
-Root DER/PEM files live under `certs/webpki/`; regenerate with
-`python3 scripts/gen-webpki-roots.py`.
+Root DER files live under `certs/webpki/` (Mozilla/curl CA subset + Peak test root);
+regenerate with `python3 scripts/gen-webpki-roots.py`. Path verify supports RSA-PKCS1-SHA256
+and ECDSA P-256/P-384 (SHA-256/SHA-384).
 
 ## Stack
 
@@ -78,7 +79,8 @@ Root DER/PEM files live under `certs/webpki/`; regenerate with
   ALPN `http/1.1`; TLS 1.3 via `supported_versions` + `key_share` (X25519)
 - **Handshake auth**: ServerKeyExchange (1.2) / CertificateVerify (1.3) signatures verified;
   Finished `verify_data` checked against transcript PRF/HMAC
-- **Crypto TUs** (Peak-authored + Apache-2.0 p256-m adapted for P-256): `crypto_hash.c` /
+- **Crypto TUs** (Peak-authored + Apache-2.0 p256-m adapted for P-256 + MIT HACL*
+  P-384): `crypto_hash.c` /
   `crypto_sha384.c` (SHA-256/384, HMAC, PRF), `crypto_hkdf.c` (HKDF / TLS 1.3 labels),
   `crypto_aead.c` (AES-GCM + ChaCha20-Poly1305), `crypto_x25519.c`, `crypto_p256.c`,
   `crypto_rsa.c` (RSA verify), `crypto.c` (RNG glue).

@@ -29,7 +29,7 @@ static int root_match(const uint8_t *der, size_t len) {
     return 0;
 }
 
-/* Extract TBSCertificate bytes and signature BIT STRING from cert DER. */
+/* sig_alg_hint: 1 = RSA-PKCS1-SHA256, 2 = ECDSA-SHA256, 3 = ECDSA-SHA384 */
 static int cert_tbs_and_sig(const uint8_t *der, size_t der_len, const uint8_t **tbs, size_t *tbs_len,
                             const uint8_t **sig, size_t *sig_len, uint16_t *sig_alg_hint) {
     if (der_len < 10 || der[0] != 0x30)
@@ -82,12 +82,23 @@ static int cert_tbs_and_sig(const uint8_t *der, size_t der_len, const uint8_t **
         ah += 2;
     } else
         return -1;
-    /* Look for sha256WithRSAEncryption OID 1.2.840.113549.1.1.11 */
     *sig_alg_hint = 0;
+    /* sha256WithRSAEncryption 1.2.840.113549.1.1.11 */
     for (size_t k = 0; k + 11 <= al; k++) {
         if (p[ah + k] == 0x2a && p[ah + k + 1] == 0x86 && p[ah + k + 8] == 0x01 &&
             p[ah + k + 9] == 0x01 && p[ah + k + 10] == 0x0b)
-            *sig_alg_hint = 1; /* RSA-PKCS1-SHA256 */
+            *sig_alg_hint = 1;
+    }
+    /* ecdsa-with-SHA256 1.2.840.10045.4.3.2 — OID bytes 2a8648ce3d040302 */
+    for (size_t k = 0; k + 8 <= al; k++) {
+        if (p[ah + k] == 0x2a && p[ah + k + 1] == 0x86 && p[ah + k + 2] == 0x48 &&
+            p[ah + k + 3] == 0xce && p[ah + k + 4] == 0x3d && p[ah + k + 5] == 0x04 &&
+            p[ah + k + 6] == 0x03 && p[ah + k + 7] == 0x02)
+            *sig_alg_hint = 2;
+        if (p[ah + k] == 0x2a && p[ah + k + 1] == 0x86 && p[ah + k + 2] == 0x48 &&
+            p[ah + k + 3] == 0xce && p[ah + k + 4] == 0x3d && p[ah + k + 5] == 0x04 &&
+            p[ah + k + 6] == 0x03 && p[ah + k + 7] == 0x03)
+            *sig_alg_hint = 3; /* ecdsa-with-SHA384 */
     }
     p += ah + al;
     rem -= ah + al;
@@ -112,30 +123,7 @@ static int cert_tbs_and_sig(const uint8_t *der, size_t der_len, const uint8_t **
     return 0;
 }
 
-static int verify_cert_sig(const uint8_t *subject, size_t subject_len, const uint8_t *issuer_spki,
-                           size_t issuer_spki_len) {
-    const uint8_t *tbs, *sig;
-    size_t tbs_len, sig_len;
-    uint16_t hint = 0;
-    if (cert_tbs_and_sig(subject, subject_len, &tbs, &tbs_len, &sig, &sig_len, &hint) != 0)
-        return -1;
-    uint8_t digest[32];
-    sha256(tbs, tbs_len, digest);
-    /* Prefer RSA-PKCS1-SHA256; fall back to ECDSA-P256. */
-    if (rsa_verify_sha256(issuer_spki, issuer_spki_len, digest, 32, sig, sig_len, 0) == 0)
-        return 0;
-    uint8_t pub[64], raw[64];
-    int found = 0;
-    for (size_t i = 0; i + 65 <= issuer_spki_len; i++) {
-        if (issuer_spki[i] == 0x04 && i >= 2 && issuer_spki[i - 1] == 0x00 &&
-            issuer_spki[i - 2] == 0x42) {
-            memcpy(pub, issuer_spki + i + 1, 64);
-            found = 1;
-            break;
-        }
-    }
-    if (!found)
-        return -1;
+static int der_ecdsa_sig_to_raw32(const uint8_t *sig, size_t sig_len, uint8_t raw[64]) {
     if (sig_len < 8 || sig[0] != 0x30)
         return -1;
     size_t off = 2;
@@ -156,7 +144,100 @@ static int verify_cert_sig(const uint8_t *subject, size_t subject_len, const uin
         memcpy(raw + part * 32 + (32 - n), ip + skip, n);
         off += ilen;
     }
-    return p256_ecdsa_verify(raw, pub, digest, 32) == 0 ? 0 : -1;
+    return 0;
+}
+
+static int der_ecdsa_sig_to_raw48(const uint8_t *sig, size_t sig_len, uint8_t raw[96]) {
+    if (sig_len < 8 || sig[0] != 0x30)
+        return -1;
+    size_t off = 1;
+    uint8_t lb = sig[off++];
+    if (lb & 0x80) {
+        uint8_t nbytes = lb & 0x7f;
+        if (nbytes == 0 || nbytes > 2 || off + nbytes > sig_len)
+            return -1;
+        off += nbytes;
+    }
+    memset(raw, 0, 96);
+    for (int part = 0; part < 2; part++) {
+        if (off >= sig_len || sig[off++] != 0x02 || off >= sig_len)
+            return -1;
+        uint8_t ilen = sig[off++];
+        if (off + ilen > sig_len || ilen == 0 || ilen > 49)
+            return -1;
+        const uint8_t *ip = sig + off;
+        size_t skip = 0;
+        while (skip < ilen && ip[skip] == 0)
+            skip++;
+        size_t n = ilen - skip;
+        if (n > 48)
+            return -1;
+        memcpy(raw + part * 48 + (48 - n), ip + skip, n);
+        off += ilen;
+    }
+    return 0;
+}
+
+static int verify_cert_sig(const uint8_t *subject, size_t subject_len, const uint8_t *issuer_spki,
+                           size_t issuer_spki_len) {
+    const uint8_t *tbs, *sig;
+    size_t tbs_len, sig_len;
+    uint16_t hint = 0;
+    if (cert_tbs_and_sig(subject, subject_len, &tbs, &tbs_len, &sig, &sig_len, &hint) != 0)
+        return -1;
+    uint8_t digest32[32];
+    uint8_t digest48[48];
+    sha256(tbs, tbs_len, digest32);
+    /* RSA-PKCS1-SHA256 (common for Google/DigiCert RSA chains). */
+    if (hint <= 1 &&
+        rsa_verify_sha256(issuer_spki, issuer_spki_len, digest32, 32, sig, sig_len, 0) == 0)
+        return 0;
+
+    /* ECDSA P-384: BIT STRING length 0x61 = unused(1) + uncompressed point(97). */
+    {
+        uint8_t pub96[96], raw96[96];
+        int found384 = 0;
+        for (size_t i = 0; i + 97 <= issuer_spki_len; i++) {
+            if (issuer_spki[i] == 0x04 && i >= 2 && issuer_spki[i - 1] == 0x00 &&
+                issuer_spki[i - 2] == 0x61) {
+                memcpy(pub96, issuer_spki + i + 1, 96);
+                found384 = 1;
+                break;
+            }
+        }
+        if (found384) {
+            if (der_ecdsa_sig_to_raw48(sig, sig_len, raw96) != 0)
+                return -1;
+            if (hint == 3) {
+                sha384(tbs, tbs_len, digest48);
+                return p384_ecdsa_verify(raw96, pub96, digest48, 48) == 0 ? 0 : -1;
+            }
+            /* ecdsa-with-SHA256 over P-384: left-pad / use 32-byte digest. */
+            return p384_ecdsa_verify(raw96, pub96, digest32, 32) == 0 ? 0 : -1;
+        }
+    }
+
+    /* ECDSA P-256: BIT STRING length 0x42 = unused(1) + uncompressed point(65). */
+    uint8_t pub[64], raw[64];
+    int found = 0;
+    for (size_t i = 0; i + 65 <= issuer_spki_len; i++) {
+        if (issuer_spki[i] == 0x04 && i >= 2 && issuer_spki[i - 1] == 0x00 &&
+            issuer_spki[i - 2] == 0x42) {
+            memcpy(pub, issuer_spki + i + 1, 64);
+            found = 1;
+            break;
+        }
+    }
+    if (!found)
+        return -1;
+    if (der_ecdsa_sig_to_raw32(sig, sig_len, raw) != 0)
+        return -1;
+    if (hint == 3) {
+        sha384(tbs, tbs_len, digest48);
+        /* P-256 with SHA-384: verify uses leftmost 256 bits of the digest. */
+        return p256_ecdsa_verify(raw, pub, digest48, 48) == 0 ? 0 : -1;
+    }
+    return p256_ecdsa_verify(raw, pub, digest32, 32) == 0 ? 0 : -1;
 }
 
 static int time_ok(const struct x509_cert *c) {
