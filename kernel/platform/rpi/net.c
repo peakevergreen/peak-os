@@ -11,7 +11,8 @@ void rpi_net_init(void) {
         serial_log(SERIAL_LOG_DEBUG, "rpi: net usb-lan registered (bind on enum)\n");
         break;
     case RPI_SOC_BCM2711:
-        serial_log(SERIAL_LOG_DEBUG, "rpi: net genet stub (not ready)\n");
+        netdev_register_genet();
+        serial_log(SERIAL_LOG_DEBUG, "rpi: net genet registered (Pi 4 only)\n");
         break;
     case RPI_SOC_BCM2712:
         serial_log(SERIAL_LOG_DEBUG, "rpi: net rp1-gem stub (not ready)\n");
