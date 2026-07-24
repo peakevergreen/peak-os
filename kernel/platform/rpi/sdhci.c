@@ -204,11 +204,10 @@ static int sd_find_peakfs(void) {
         if (typ == 0x83 && count > 0) {
             part_lba0 = start;
             part_count = count;
-            serial_write_str("sdhci: PeakFS partition @ LBA ");
-            char b[16];
-            itoa_u(part_lba0, b, 10);
-            serial_write_str(b);
-            serial_write_str("\n");
+            char msg[48];
+            snprintf(msg, sizeof(msg), "sdhci: PeakFS partition @ LBA %u\n",
+                     (unsigned)part_lba0);
+            serial_log(SERIAL_LOG_DEBUG, msg);
             return 0;
         }
     }
@@ -274,15 +273,15 @@ void rpi_sdhci_init(void) {
     if (!sd)
         return;
     if (sd_card_init() != 0) {
-        serial_write_str("rpi: sdhci card init failed\n");
+        serial_log(SERIAL_LOG_WARN, "rpi: sdhci card init failed\n");
         return;
     }
     if (sd_find_peakfs() != 0) {
-        serial_write_str("rpi: sdhci MBR scan failed\n");
+        serial_log(SERIAL_LOG_WARN, "rpi: sdhci MBR scan failed\n");
         return;
     }
     sdhci_ok = 1;
-    serial_write_str("rpi: sdhci ready\n");
+    serial_log(SERIAL_LOG_INFO, "rpi: sdhci ready\n");
 }
 
 void blockdev_register_sdhci(void) {

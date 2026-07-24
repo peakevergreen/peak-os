@@ -6,16 +6,16 @@ void rpi_net_init(void) {
     /* Staged stubs must not be installed into netdev until they can become ready. */
     switch (p->soc) {
     case RPI_SOC_BCM2837:
-        serial_write_str("rpi: net usb-lan stub (not ready)\n");
+        serial_log(SERIAL_LOG_DEBUG, "rpi: net usb-lan stub (not ready)\n");
         break;
     case RPI_SOC_BCM2711:
-        serial_write_str("rpi: net genet stub (not ready)\n");
+        serial_log(SERIAL_LOG_DEBUG, "rpi: net genet stub (not ready)\n");
         break;
     case RPI_SOC_BCM2712:
-        serial_write_str("rpi: net rp1-gem stub (not ready)\n");
+        serial_log(SERIAL_LOG_DEBUG, "rpi: net rp1-gem stub (not ready)\n");
         break;
     default:
-        serial_write_str("rpi: no netdev for soc\n");
+        serial_log(SERIAL_LOG_DEBUG, "rpi: no netdev for soc\n");
         break;
     }
 }

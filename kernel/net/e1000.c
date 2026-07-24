@@ -182,7 +182,7 @@ int e1000_init(void) {
     if (pci_find(0x8086, 0x100E, &dev) != 0 &&
         pci_find(0x8086, 0x100F, &dev) != 0 &&
         pci_find(0x8086, 0x10D3, &dev) != 0) {
-        serial_write_str("e1000: no NIC found\n");
+        serial_log(SERIAL_LOG_INFO, "e1000: no NIC found\n");
         return -1;
     }
 
@@ -204,7 +204,7 @@ int e1000_init(void) {
 
     uint64_t rx_phys = 0, tx_phys = 0;
     if (rx_ring_init(&rx_phys) != 0 || tx_ring_init(&tx_phys) != 0) {
-        serial_write_str("e1000: ring alloc failed\n");
+        serial_log(SERIAL_LOG_WARN, "e1000: ring alloc failed\n");
         return -1;
     }
 

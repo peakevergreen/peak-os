@@ -11,10 +11,10 @@ static uint8_t mac[6] = { 0xdc, 0xa6, 0x32, 0x00, 0x00, 0x01 };
 
 static int genet_init(void) {
     if (rpi_get()->soc != RPI_SOC_BCM2711) {
-        serial_write_str("genet: wrong SoC (stub)\n");
+        serial_log(SERIAL_LOG_DEBUG, "genet: wrong SoC (stub)\n");
         return -1;
     }
-    serial_write_str("genet: stub (not ready; rings/PHY deferred)\n");
+    serial_log(SERIAL_LOG_DEBUG, "genet: stub (not ready; rings/PHY deferred)\n");
     return -1;
 }
 

@@ -18,9 +18,10 @@ int agent_tool_console_print(const char *msg) {
         agent_audit_event("console.print", "-", "deny-tool");
         return -1;
     }
-    console_write(msg ? msg : "");
+    /* UI only — goals/paths must not mirror to COM1 (privacy.md). */
+    console_write_ui(msg ? msg : "");
     if (msg && msg[0] && msg[strlen(msg) - 1] != '\n')
-        console_write("\n");
+        console_write_ui("\n");
     agent_audit_event("console.print", "-", "ok");
     return 0;
 }

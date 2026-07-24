@@ -162,12 +162,14 @@ int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_h
         if (t == 1)
             trusted = 1;
         else if (t < 0) {
-            serial_write_str("tls: certificate changed for known host (rejecting)\n");
+            serial_log(SERIAL_LOG_WARN,
+                       "tls: certificate changed for known host (rejecting)\n");
             cert_fail_reason = "Cert changed for known host; rm /etc/peak/tls-tofu to re-trust";
             return 0;
         } else {
             tofu_remember(sni_host, hexd);
-            serial_write_str("tls: first contact — certificate remembered (tofu)\n");
+            serial_log(SERIAL_LOG_INFO,
+                       "tls: first contact — certificate remembered (tofu)\n");
             trusted = 1;
         }
     }
@@ -181,16 +183,16 @@ int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_h
     }
     if (hn == 0) {
         cert_fail_reason = "Certificate hostname mismatch";
-        serial_write_str("tls: certificate hostname mismatch\n");
+        serial_log(SERIAL_LOG_WARN, "tls: certificate hostname mismatch\n");
         return 0;
     }
     if (hn == -2) {
         cert_fail_reason = "Malformed Certificate message";
-        serial_write_str("tls: truncated or malformed certificate\n");
+        serial_log(SERIAL_LOG_WARN, "tls: truncated or malformed certificate\n");
         return 0;
     }
     hostname_matched = 1;
     hostname_parse_skipped = 1;
-    serial_write_str("tls: hostname parse skipped (tofu only)\n");
+    serial_log(SERIAL_LOG_DEBUG, "tls: hostname parse skipped (tofu only)\n");
     return 1;
 }
