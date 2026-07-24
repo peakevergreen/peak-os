@@ -59,6 +59,20 @@ void x25519_base(uint8_t out[32], const uint8_t scalar[32]);
 int p256_keygen(uint8_t priv[32], uint8_t pub_uncompressed[65]);
 int p256_ecdh(uint8_t shared_x[32], const uint8_t priv[32],
               const uint8_t peer_uncompressed[65]);
+/* ECDSA: sig is raw r||s (64 bytes), pub is X||Y (64 bytes), hash is message digest. */
+int p256_ecdsa_verify(const uint8_t sig[64], const uint8_t pub[64],
+                      const uint8_t *hash, size_t hlen);
+int p256_ecdsa_sign(uint8_t sig[64], const uint8_t priv[32], const uint8_t *hash,
+                    size_t hlen);
+
+/*
+ * RSA signature verify over a precomputed SHA-256 digest.
+ * leaf_der: X.509 leaf (or bare SPKI) containing RSA public key.
+ * pss=1 → RSASSA-PSS (saltLen=hashLen); pss=0 → RSASSA-PKCS1-v1_5.
+ * Returns 0 on success.
+ */
+int rsa_verify_sha256(const uint8_t *leaf_der, size_t leaf_len, const uint8_t digest[32],
+                      size_t digest_len, const uint8_t *sig, size_t sig_len, int pss);
 
 /* Fails closed (-1) when crypto RNG not ready. */
 int crypto_random(uint8_t *buf, size_t len);

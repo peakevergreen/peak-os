@@ -417,6 +417,56 @@ static void test_hostname_and_pin_extras(void) {
     expect(tls_verify_cert_chain(cert, n, "") == 1, "empty sni with pin accepts");
 }
 
+static void test_ske_sig_verify(void) {
+#include "rsa_ske_vectors.h"
+    /* RSA PKCS#1 v1.5 and PSS accept good sigs; reject corrupt. */
+    expect(rsa_verify_sha256(rsa_spki, sizeof(rsa_spki), rsa_digest, 32, rsa_sig_pkcs,
+                             sizeof(rsa_sig_pkcs), 0) == 0,
+           "rsa pkcs1 verify ok");
+    expect(rsa_verify_sha256(rsa_spki, sizeof(rsa_spki), rsa_digest, 32, rsa_sig_pss,
+                             sizeof(rsa_sig_pss), 1) == 0,
+           "rsa pss verify ok");
+    expect(rsa_verify_sha256(rsa_spki, sizeof(rsa_spki), rsa_digest, 32, rsa_sig_bad,
+                             sizeof(rsa_sig_bad), 0) != 0,
+           "rsa pkcs1 rejects bad sig");
+    expect(rsa_verify_sha256(rsa_spki, sizeof(rsa_spki), rsa_digest, 32, rsa_sig_pkcs,
+                             sizeof(rsa_sig_pkcs), 1) != 0,
+           "rsa pss rejects pkcs padding");
+
+    /* ECDSA P-256: sign/verify roundtrip; bit-flip rejects. */
+    {
+        uint8_t seed[64];
+        memset(seed, 0x5a, sizeof(seed));
+        random_absorb_trusted(seed, sizeof(seed));
+        expect(random_ready(RANDOM_DOMAIN_CRYPTO), "crypto rng for ecdsa");
+
+        uint8_t priv[32], pub65[65], pub[64], hash[32], sig[64], bad[64];
+        memset(hash, 0x11, sizeof(hash));
+        expect(p256_keygen(priv, pub65) == 0, "ecdsa keygen");
+        memcpy(pub, pub65 + 1, 64);
+        expect(p256_ecdsa_sign(sig, priv, hash, 32) == 0, "ecdsa sign");
+        expect(p256_ecdsa_verify(sig, pub, hash, 32) == 0, "ecdsa verify ok");
+        memcpy(bad, sig, 64);
+        bad[0] ^= 0x01;
+        expect(p256_ecdsa_verify(bad, pub, hash, 32) != 0, "ecdsa rejects bad sig");
+        hash[0] ^= 0x01;
+        expect(p256_ecdsa_verify(sig, pub, hash, 32) != 0, "ecdsa rejects bad hash");
+    }
+
+    /* Finished verify_data: PRF output must match expected label binding. */
+    {
+        uint8_t ms[48], thash[32], good[12], bad[12];
+        memset(ms, 0x42, sizeof(ms));
+        memset(thash, 0x7e, sizeof(thash));
+        tls_prf_sha256(ms, 48, "server finished", thash, 32, good, 12);
+        tls_prf_sha256(ms, 48, "client finished", thash, 32, bad, 12);
+        expect(memcmp(good, bad, 12) != 0, "finished labels differ");
+        uint8_t again[12];
+        tls_prf_sha256(ms, 48, "server finished", thash, 32, again, 12);
+        expect(!memcmp(good, again, 12), "finished verify_data stable");
+    }
+}
+
 int main(void) {
     test_util_helpers();
     test_pin_and_tofu_fail_closed();
@@ -424,6 +474,7 @@ int main(void) {
     test_rng_fail_closed();
     test_crypto_edges();
     test_hostname_and_pin_extras();
+    test_ske_sig_verify();
 
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
