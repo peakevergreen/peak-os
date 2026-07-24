@@ -88,10 +88,10 @@ run_firmware_smoke() {
       -serial "file:$serial_log" \
       -display none \
       -no-reboot \
-      -device virtio-rng-pci-transitional,ioeventfd=off \
+      -device virtio-rng-pci-transitional \
       -device e1000,netdev=n0 \
       -netdev user,id=n0 \
-      >/dev/null 2>&1 &
+      >"${serial_log}.qemu" 2>&1 &
   else
     echo "    → $serial_log (SeaBIOS + hybrid ISO)"
     "$QEMU_BIN" \
@@ -102,10 +102,10 @@ run_firmware_smoke() {
       -serial "file:$serial_log" \
       -display none \
       -no-reboot \
-      -device virtio-rng-pci-transitional,ioeventfd=off \
+      -device virtio-rng-pci-transitional \
       -device e1000,netdev=n0 \
       -netdev user,id=n0 \
-      >/dev/null 2>&1 &
+      >"${serial_log}.qemu" 2>&1 &
   fi
 
   local qpid=$!
@@ -116,6 +116,13 @@ run_firmware_smoke() {
       exit 1
     fi
     echo "FAIL: no shell prompt within ${TIMEOUT_SEC}s"
+    if [[ ! -s "$serial_log" ]]; then
+      echo "    (serial log empty — QEMU likely exited at startup)"
+    fi
+    if [[ -s "${serial_log}.qemu" ]]; then
+      echo "    --- qemu stderr/stdout ---"
+      tail -40 "${serial_log}.qemu"
+    fi
     tail -40 "$serial_log"
     exit 1
   fi
