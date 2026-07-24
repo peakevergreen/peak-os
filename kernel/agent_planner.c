@@ -228,10 +228,29 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
 
     if (intent == INTENT_HELP) {
         agent_tool_console_print(
-            "Peak Agent: create/edit files, summarize workspace, recall memory, show audit.");
+            "Peak Agent tools: fs.read, fs.write, fs.list, fs.exec, console.print");
+        agent_tool_console_print(
+            "Try: ask \"summarize workspace\" | \"run ls /home/dev/workspace\" | audit | memory");
+        agent_tool_console_print("CLI builtins: man <cmd> or help");
         TOOL_NOTE("console.print");
         set_summary(summary, summary_cap, "help");
         memory_append_turn(goal, tools_used, NULL);
+        return;
+    }
+
+    if (!strncmp(goal, "run ", 4)) {
+        const char *cmdline = goal + 4;
+        agent_tool_console_print("[agent] fs.exec:");
+        TOOL_NOTE("console.print");
+        if (agent_tool_fs_exec(cmdline) == 0) {
+            TOOL_NOTE("fs.exec");
+            set_summary(summary, summary_cap, "ran allowlisted /bin cmd");
+        } else {
+            agent_tool_console_print("[agent] exec denied or failed (allowlist: ls cat wc stat …)");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "exec failed");
+        }
+        memory_append_turn(goal, tools_used, cmdline);
         return;
     }
 

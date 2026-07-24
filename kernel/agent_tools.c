@@ -2,8 +2,10 @@
 #include "console.h"
 #include "vfs.h"
 #include "util.h"
+#include "ubin.h"
 
-static const char tools_catalog[] = "fs.read,fs.write,fs.list,console.print";
+static const char tools_catalog[] =
+    "fs.read,fs.write,fs.list,fs.exec,console.print";
 
 const char *agent_tools_catalog(void) {
     return tools_catalog;
@@ -95,4 +97,77 @@ int agent_tool_fs_list(const char *path, char *out, size_t out_len) {
     int r = vfs_list(norm, out, out_len);
     agent_audit_event("fs.list", norm, r == 0 ? "ok" : "fail");
     return r;
+}
+
+static int exec_cmd_allowed(const char *cmd) {
+    static const char *allow[] = {
+        "ls", "cat", "wc", "stat", "du", "df", "which", "basename", "dirname",
+        "realpath", "head", "tail", "grep", "sort", "uniq", NULL
+    };
+    for (int i = 0; allow[i]; i++) {
+        if (!strcmp(cmd, allow[i]))
+            return 1;
+    }
+    return 0;
+}
+
+static int exec_line_safe(const char *line) {
+    if (!line || !line[0])
+        return 0;
+    for (const char *p = line; *p; p++) {
+        char c = *p;
+        if (c == '|' || c == ';' || c == '&' || c == '`' || c == '$' ||
+            c == '>' || c == '<' || c == '\n')
+            return 0;
+    }
+    return 1;
+}
+
+int agent_tool_fs_exec(const char *line) {
+    if (!agent_policy_tool_allowed("fs.exec")) {
+        agent_audit_event("fs.exec", line, "deny-tool");
+        return -1;
+    }
+    if (!exec_line_safe(line)) {
+        agent_audit_event("fs.exec", line, "deny-syntax");
+        return -1;
+    }
+    char linebuf[128];
+    size_t n = strlen(line);
+    if (n >= sizeof(linebuf))
+        n = sizeof(linebuf) - 1;
+    memcpy(linebuf, line, n);
+    linebuf[n] = '\0';
+    char *p = linebuf;
+    char cmd[32];
+    size_t i = 0;
+    while (*p == ' ')
+        p++;
+    for (; *p && *p != ' ' && i + 1 < sizeof(cmd); p++)
+        cmd[i++] = *p;
+    cmd[i] = '\0';
+    if (!cmd[0] || !exec_cmd_allowed(cmd)) {
+        agent_audit_event("fs.exec", line, "deny-cmd");
+        return -1;
+    }
+    char *argv[8];
+    int argc = 0;
+    argv[argc++] = cmd;
+    while (*p == ' ')
+        p++;
+    while (*p && argc + 1 < 8) {
+        argv[argc++] = p;
+        while (*p && *p != ' ')
+            p++;
+        if (*p)
+            *p++ = '\0';
+        while (*p == ' ')
+            p++;
+    }
+    argv[argc] = NULL;
+    char path[64];
+    snprintf(path, sizeof(path), "/bin/%s", cmd);
+    int rc = ubin_run(path, argc, argv);
+    agent_audit_event("fs.exec", line, rc == 0 ? "ok" : "fail");
+    return rc == 0 ? 0 : -1;
 }

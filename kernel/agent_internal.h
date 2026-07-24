@@ -36,6 +36,7 @@ int agent_tool_console_print(const char *msg);
 int agent_tool_fs_read(const char *path, char *out, size_t out_len, size_t *out_n);
 int agent_tool_fs_write(const char *path, const char *content, int auto_ok);
 int agent_tool_fs_list(const char *path, char *out, size_t out_len);
+int agent_tool_fs_exec(const char *line);
 
 void agent_plan_goal(const char *goal, char *summary, size_t summary_cap);
 

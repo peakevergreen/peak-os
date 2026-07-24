@@ -71,7 +71,8 @@ void agent_policy_load_defaults(void) {
     memcpy(allow_tools[1], "fs.write", 9);
     memcpy(allow_tools[2], "fs.list", 8);
     memcpy(allow_tools[3], "console.print", 14);
-    allow_tool_count = 4;
+    memcpy(allow_tools[4], "fs.exec", 8);
+    allow_tool_count = 5;
 }
 
 void agent_policy_reload(void) {
