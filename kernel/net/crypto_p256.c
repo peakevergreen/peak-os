@@ -212,9 +212,10 @@ static uint64_t u32_muladd64(uint32_t x, uint32_t y, uint32_t z, uint32_t t);
  * Arm's Cortex-A and Cortex-M lines of CPUs, which start with the v6-M and
  * v7-M architectures. __ARM_ARCH_PROFILE is not defined for v6 and earlier.
  */
-#if !defined(PEAK_HOST_TEST) && defined(__GNUC__) &&\
-    defined(__ARM_ARCH) && __ARM_ARCH >= 6 && defined(__ARM_ARCH_PROFILE) && \
-    ( __ARM_ARCH_PROFILE == 77 || __ARM_ARCH_PROFILE == 65 ) /* 'M' or 'A' */
+#if !defined(PEAK_HOST_TEST) && !defined(__aarch64__) && !defined(__arm64__) && \
+    defined(__GNUC__) && defined(__ARM_ARCH) && __ARM_ARCH >= 6 && \
+    defined(__ARM_ARCH_PROFILE) && \
+    (__ARM_ARCH_PROFILE == 77 || __ARM_ARCH_PROFILE == 65) /* 'M' or 'A' */
 
 /*
  * This set of CPUs is conveniently partitioned as follows:
