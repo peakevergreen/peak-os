@@ -9,6 +9,10 @@
 #define PEAKVEC_MAX_ENTRIES 4096u
 #define PEAKVEC_NS_DEFAULT "agent"
 
+#if (PEAKVEC_DIM % 4) != 0
+#error PEAKVEC_DIM must be a multiple of 4 for batched dot/norm helpers
+#endif
+
 struct peakvec_entry {
     char    key[PEAKVEC_KEY_MAX];
     char    meta[PEAKVEC_META_MAX];
@@ -28,6 +32,9 @@ struct peakvec_hdr {
 
 /* Single default namespace kept resident for query speed; spilled to blob/VFS. */
 static struct peakvec_entry *entries;
+/* Parallel RAM-only norm cache (not persisted; rebuilt on load/upsert). */
+static int64_t *entry_nsq;
+static uint64_t *entry_nroot;
 static uint32_t capacity;
 static uint32_t count;
 static uint32_t blob_id;
@@ -123,24 +130,78 @@ static uint64_t isqrt_u64(uint64_t x) {
     return lo;
 }
 
-/* Cosine with precomputed query self-norm (avoids recompute per corpus entry). */
-static int32_t cosine_milli_qn(const int16_t *query, int64_t qnorm,
-                               const int16_t *vec) {
-    if (qnorm == 0)
-        return 0;
-    int64_t dot = 0, vn = 0;
-    for (int i = 0; i < PEAKVEC_DIM; i++) {
-        int64_t qi = query[i];
-        int64_t vi = vec[i];
-        dot += qi * vi;
-        vn += vi * vi;
+/* 4-way batched dot / norm — better ILP than a scalar DIM loop. */
+static int64_t vec_dot_i16(const int16_t *a, const int16_t *b) {
+    int64_t s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+    for (int i = 0; i < PEAKVEC_DIM; i += 4) {
+        s0 += (int64_t)a[i] * b[i];
+        s1 += (int64_t)a[i + 1] * b[i + 1];
+        s2 += (int64_t)a[i + 2] * b[i + 2];
+        s3 += (int64_t)a[i + 3] * b[i + 3];
     }
-    if (vn == 0)
+    return s0 + s1 + s2 + s3;
+}
+
+static int64_t vec_norm_sq_i16(const int16_t *a) {
+    int64_t s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+    for (int i = 0; i < PEAKVEC_DIM; i += 4) {
+        int64_t a0 = a[i], a1 = a[i + 1], a2 = a[i + 2], a3 = a[i + 3];
+        s0 += a0 * a0;
+        s1 += a1 * a1;
+        s2 += a2 * a2;
+        s3 += a3 * a3;
+    }
+    return s0 + s1 + s2 + s3;
+}
+
+static void cache_entry_norm(uint32_t idx) {
+    if (!entry_nsq || !entry_nroot || idx >= capacity)
+        return;
+    int64_t nsq = vec_norm_sq_i16(entries[idx].vec);
+    entry_nsq[idx] = nsq;
+    entry_nroot[idx] = isqrt_u64((uint64_t)nsq);
+}
+
+static void rebuild_norm_cache(void) {
+    for (uint32_t i = 0; i < count; i++)
+        cache_entry_norm(i);
+}
+
+/*
+ * Cosine * 1000 using precomputed integer roots (query once, corpus at upsert).
+ * When early_out_worst is set (found >= topk), skip scores that cannot beat it.
+ */
+static int32_t cosine_milli_roots(const int16_t *query, uint64_t qroot,
+                                  const int16_t *vec, uint64_t vroot,
+                                  int early_out, int32_t worst,
+                                  int *skipped) {
+    if (skipped)
+        *skipped = 0;
+    if (qroot == 0 || vroot == 0)
         return 0;
-    uint64_t root = isqrt_u64((uint64_t)qnorm * (uint64_t)vn);
-    if (root == 0)
+    int64_t denom = (int64_t)qroot * (int64_t)vroot;
+    if (denom == 0)
         return 0;
-    return (int32_t)((dot * 1000) / (int64_t)root);
+    int64_t dot = vec_dot_i16(query, vec);
+    if (early_out) {
+        /* score = (dot * 1000) / denom; need score > worst to enter top-k. */
+        if (worst >= 0 && dot <= 0) {
+            if (skipped)
+                *skipped = 1;
+            return 0;
+        }
+        if (worst > 0 && (dot * 1000) <= (int64_t)worst * denom) {
+            if (skipped)
+                *skipped = 1;
+            return 0;
+        }
+        if (worst == 0 && dot <= 0) {
+            if (skipped)
+                *skipped = 1;
+            return 0;
+        }
+    }
+    return (int32_t)((dot * 1000) / denom);
 }
 
 static const char *ns_path(const char *ns, char *out, size_t out_len) {
@@ -244,14 +305,35 @@ static int ensure_capacity(uint32_t need) {
     if (need > nc)
         return -1;
     struct peakvec_entry *n = kmalloc(nc * sizeof(struct peakvec_entry));
-    if (!n)
+    int64_t *nsq = kmalloc(nc * sizeof(int64_t));
+    uint64_t *nroot = kmalloc(nc * sizeof(uint64_t));
+    if (!n || !nsq || !nroot) {
+        if (n)
+            kfree(n);
+        if (nsq)
+            kfree(nsq);
+        if (nroot)
+            kfree(nroot);
         return -1;
+    }
     memset(n, 0, nc * sizeof(struct peakvec_entry));
+    memset(nsq, 0, nc * sizeof(int64_t));
+    memset(nroot, 0, nc * sizeof(uint64_t));
     if (entries && count)
         memcpy(n, entries, count * sizeof(struct peakvec_entry));
+    if (entry_nsq && count)
+        memcpy(nsq, entry_nsq, count * sizeof(int64_t));
+    if (entry_nroot && count)
+        memcpy(nroot, entry_nroot, count * sizeof(uint64_t));
     if (entries)
         kfree(entries);
+    if (entry_nsq)
+        kfree(entry_nsq);
+    if (entry_nroot)
+        kfree(entry_nroot);
     entries = n;
+    entry_nsq = nsq;
+    entry_nroot = nroot;
     capacity = nc;
     if (use_blob && blob_id)
         (void)blobstore_resize(blob_id,
@@ -287,6 +369,7 @@ static int load_from_vfs(void) {
         count = h.count;
         blob_id = id;
         use_blob = 1;
+        rebuild_norm_cache();
         return 0;
     }
     if (n < sizeof(struct peakvec_hdr) || memcmp(hdrbuf, PEAKVEC_MAGIC, 8) != 0)
@@ -313,11 +396,14 @@ static int load_from_vfs(void) {
         memcpy(entries, full + sizeof(h), (size_t)h.count * sizeof(struct peakvec_entry));
     count = h.count;
     kfree(full);
+    rebuild_norm_cache();
     return 0;
 }
 
 void peakvec_init(void) {
     entries = NULL;
+    entry_nsq = NULL;
+    entry_nroot = NULL;
     capacity = 0;
     count = 0;
     blob_id = 0;
@@ -358,6 +444,7 @@ int peakvec_upsert(const char *ns, const char *key,
                     entries[i].meta[j] = meta[j];
                 entries[i].meta[j] = '\0';
             }
+            cache_entry_norm(i);
             (void)persist_blob();
             return 0;
         }
@@ -378,6 +465,7 @@ int peakvec_upsert(const char *ns, const char *key,
     }
     memcpy(e->vec, vec, sizeof(e->vec));
     e->in_use = 1;
+    cache_entry_norm(count);
     count++;
     (void)persist_blob();
     return 0;
@@ -390,7 +478,12 @@ int peakvec_delete(const char *ns, const char *key) {
     for (uint32_t i = 0; i < count; i++) {
         if (entries[i].in_use && !strcmp(entries[i].key, key)) {
             /* Swap-remove to avoid O(n) memmove on every delete. */
-            entries[i] = entries[count - 1];
+            uint32_t last = count - 1;
+            entries[i] = entries[last];
+            if (entry_nsq)
+                entry_nsq[i] = entry_nsq[last];
+            if (entry_nroot)
+                entry_nroot[i] = entry_nroot[last];
             count--;
             (void)persist_blob();
             return 0;
@@ -411,16 +504,20 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
         hits[i].meta[0] = '\0';
         hits[i].score_milli = -1000000;
     }
-    int64_t qnorm = 0;
-    for (int i = 0; i < PEAKVEC_DIM; i++)
-        qnorm += (int64_t)query[i] * query[i];
+    /* Normalize query once: ||q||^2 and isqrt(||q||^2). */
+    int64_t qnorm = vec_norm_sq_i16(query);
+    uint64_t qroot = isqrt_u64((uint64_t)qnorm);
     int found = 0;
     int32_t worst = -1000000;
     for (uint32_t i = 0; i < count; i++) {
         if (!entries[i].in_use)
             continue;
-        int32_t sc = cosine_milli_qn(query, qnorm, entries[i].vec);
-        if (found >= topk && sc <= worst)
+        uint64_t vroot = entry_nroot ? entry_nroot[i] : 0;
+        int early = (found >= topk);
+        int skipped = 0;
+        int32_t sc = cosine_milli_roots(query, qroot, entries[i].vec, vroot,
+                                       early, worst, &skipped);
+        if (skipped || (found >= topk && sc <= worst))
             continue;
         /* insert into topk */
         int place = topk;
