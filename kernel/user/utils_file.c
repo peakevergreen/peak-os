@@ -156,7 +156,7 @@ int ustat_main(int argc, char **argv) {
         return 1;
     struct vfs_stat st;
     if (vfs_stat(abs, &st) != 0) {
-        peak_perror("stat", "not found");
+        console_printf("stat: cannot read '%s': no such file or directory\n", abs);
         return 1;
     }
     console_printf("path: %s\n", abs);
@@ -177,6 +177,10 @@ int udu_main(int argc, char **argv) {
     char abs[VFS_PATH_MAX];
     if (shell_resolve_path(path, abs, sizeof(abs)))
         return 1;
+    if (!vfs_exists(abs)) {
+        console_printf("du: cannot access '%s': no such file or directory\n", abs);
+        return 1;
+    }
     console_printf("%lu\t%s\n", vfs_tree_bytes(abs), abs);
     return 0;
 }
@@ -184,8 +188,14 @@ int udu_main(int argc, char **argv) {
 int udf_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
-    console_printf("vfs nodes: %d / %d\n", vfs_node_count(), VFS_MAX_NODES);
-    console_printf("mem pages free: %lu / %lu\n", pmm_free_pages(), pmm_total_pages());
+    int nodes = vfs_node_count();
+    int pct = (nodes * 100) / VFS_MAX_NODES;
+    console_printf("VFS inodes: %d / %d (%d%% used)\n", nodes, VFS_MAX_NODES, pct);
+    uint64_t free_p = pmm_free_pages();
+    uint64_t total_p = pmm_total_pages();
+    console_printf("RAM pages:  %lu free / %lu total\n", free_p, total_p);
+    if (nodes >= VFS_MAX_NODES - 2)
+        console_write("df: warning — VFS inode table nearly full\n");
     return 0;
 }
 
