@@ -62,8 +62,10 @@ int main(void) {
     webapi_clear_tab(0);
     expect(webapi_install(rt, "https://example.com/page") == 0, "webapi_install");
 
-    /* AbortController must not exist — no silent fake shell. */
-    eval_ok(rt, "typeof AbortController", "\"undefined\"");
+    /* AbortController factory with live signal.aborted. */
+    eval_ok(rt, "typeof AbortController", "\"function\"");
+    eval_ok(rt, "var ac=AbortController(); ac.signal.aborted", "false");
+    eval_ok(rt, "var ac=AbortController(); ac.abort(); ac.signal.aborted", "true");
 
     /* fetch: unsupported init / URL edges fail closed with clear errors. */
     eval_fails(rt, "fetch()", "URL required");
@@ -71,16 +73,15 @@ int main(void) {
     eval_fails(rt, "fetch({})", "URL string required");
     eval_fails(rt, "fetch('javascript:alert(1)')", "only http(s)");
     eval_fails(rt, "fetch('data:text/plain,hi')", "only http(s)");
-    eval_fails(rt, "fetch('https://example.com/x',{method:'POST'})", "only GET");
-    eval_fails(rt, "fetch('https://example.com/x',{method:'post'})", "only GET");
-    eval_fails(rt, "fetch('https://example.com/x',{method:''})", "only GET");
-    eval_fails(rt, "fetch('https://example.com/x',{method:'HEAD'})", "only GET");
-    eval_fails(rt, "fetch('https://example.com/x',{signal:{}})", "AbortSignal");
-    eval_fails(rt, "fetch('https://example.com/x',{body:'x'})", "request body");
+    eval_fails(rt, "fetch('https://example.com/x',{method:'HEAD'})", "only GET/POST");
+    eval_fails(rt, "fetch('https://example.com/x',{method:''})", "only GET/POST");
+    eval_fails(rt, "fetch('https://example.com/x',{body:'x'})", "only with POST");
     eval_fails(rt, "fetch('https://example.com/x',{headers:{}})", "unsupported init");
     eval_fails(rt, "fetch('https://example.com/x',{credentials:'include'})", "unsupported init");
     eval_fails(rt, "fetch('https://example.com/x',{mode:'cors'})", "unsupported init");
     eval_fails(rt, "fetch('https://example.com/x','bad')", "init must be object");
+    eval_fails(rt, "var ac=AbortController(); ac.abort(); fetch('https://example.com/x',{signal:ac.signal})",
+               "aborted");
 
     /* fetch: GET path returns stub response shape (host-canned HTTP). */
     webapi_host_set_http(0, 200, "hello", "");
@@ -89,8 +90,9 @@ int main(void) {
     eval_ok(rt, "var r=fetch('https://example.com/x'); r.bodyText", "\"hello\"");
     eval_ok(rt, "var r=fetch('https://example.com/x',{method:'GET'}); r.ok", "true");
     eval_ok(rt, "var r=fetch('https://example.com/x',{}); r.ok", "true");
-    eval_ok(rt, "var r=fetch('https://example.com/x',{method:'get',body:null}); r.ok", "true");
+    eval_ok(rt, "var r=fetch('https://example.com/x',{method:'get'}); r.ok", "true");
     eval_ok(rt, "var r=fetch('/rel'); r.ok", "true"); /* relative → same-origin https */
+    eval_ok(rt, "var r=fetch('https://example.com/x',{method:'POST',body:'hi'}); r.ok", "true");
 
     /* Network / CORS failure → ok:false (not a silent success). */
     webapi_host_set_http(-1, 0, "", "");
@@ -100,9 +102,10 @@ int main(void) {
 
     /* Storage: in-memory get/set; quota / empty / oversized fail closed. */
     eval_ok(rt, "localStorage.setItem('a','1'); localStorage.getItem('a')", "\"1\"");
+    eval_ok(rt, "localStorage.removeItem('a'); localStorage.getItem('a')", "null");
     eval_ok(rt, "sessionStorage.setItem('b','2'); sessionStorage.getItem('b')", "\"2\"");
     eval_ok(rt, "localStorage.getItem('missing')", "null");
-    eval_ok(rt, "typeof localStorage.removeItem", "\"undefined\"");
+    eval_ok(rt, "typeof localStorage.removeItem", "\"function\"");
     eval_ok(rt, "typeof localStorage.clear", "\"undefined\"");
     eval_fails(rt, "localStorage.setItem('only')", "key and value");
     eval_fails(rt, "localStorage.setItem('','x')", "empty key");

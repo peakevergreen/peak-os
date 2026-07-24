@@ -31,7 +31,7 @@ Progressively pass representative site fixtures. Full Chromium-level standards c
 ## Isolation (current → next)
 
 - **Now:** VM instruction/object/timer budgets; `browser_tick()` only from the desktop loop (never IRQ/network locks); destroy runtime on navigate/tab close.
-- **Web API stubs** (`webapi_stubs.c`): `fetch` is GET-only http(s) with same-origin/CORS gating (not a full `Response`); non-GET / `signal` / `body` / other init options, empty or non-string URLs, and non-http(s) schemes fail closed. `localStorage`/`sessionStorage` are in-memory per-tab maps (not disk); empty keys, oversized entries, and quota exhaustion fail closed (no silent truncate). `AbortController` is not installed (unsupported — no fake shell). DOM bridge stays in `browser_js.c`.
+- **Web API stubs** (`webapi_stubs.c`): `fetch` supports GET and POST (string body, bounded) with same-origin/CORS gating. `AbortController()` factory exposes `signal.aborted` + `abort()`; pre-aborted signals fail `fetch` closed. `localStorage`/`sessionStorage` are in-memory per-tab maps with `getItem`/`setItem`/`removeItem` (not disk). Other init options and non-http(s) schemes still fail closed.
 - **Monitor:** overview shows `js tabs / objs / timers / gc`.
 - **Next:** ring-3 process isolation with validated DOM/network syscalls once userspace process support is sufficient.
 

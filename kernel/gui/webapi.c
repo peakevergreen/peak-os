@@ -75,6 +75,20 @@ int web_store_set(struct web_store *s, const char *key, const char *val) {
     return -1;
 }
 
+int web_store_remove(struct web_store *s, const char *key) {
+    if (!s || !key || !key[0] || strlen(key) >= WEB_STORE_KEY)
+        return -1;
+    for (int i = 0; i < WEB_STORE_KEYS; i++) {
+        if (s->items[i].used && !strcmp(s->items[i].key, key)) {
+            s->items[i].used = 0;
+            s->items[i].key[0] = '\0';
+            s->items[i].val[0] = '\0';
+            return 0;
+        }
+    }
+    return -1;
+}
+
 void webapi_install_fn(struct js_runtime *rt, struct js_value *obj, const char *name,
                        js_native_fn fn, void *ud) {
     struct js_object *o = js_obj_new(rt, 0);

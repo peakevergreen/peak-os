@@ -8,12 +8,11 @@
  * Browser Web API layer (partial stubs — see kernel/gui/webapi_stubs.c).
  *
  * webapi_install() exposes quarantined stubs only:
- *   fetch            GET-only http(s), same-origin/CORS; rejects non-GET / signal /
- *                    body / other init options; URL must be a non-empty string
- *   localStorage     in-memory per-tab map; not persistent disk storage; empty /
- *                    oversized keys and values fail closed (no silent truncate)
+ *   fetch            GET/POST http(s), same-origin/CORS; string body with POST
+ *                    (bounded); AbortSignal via AbortController().signal
+ *   localStorage     in-memory per-tab map; get/set/removeItem; not disk
  *   sessionStorage   same as localStorage but cleared on tab teardown
- *   AbortController  not installed (unsupported — no silent fake shell)
+ *   AbortController  factory AbortController() → {signal, abort}
  *
  * Unsupported options fail closed with clear errors (no silent no-ops).
  * DOM ↔ JS bridge lives in browser_js.c (document, __dom_* helpers).
