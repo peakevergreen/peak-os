@@ -356,7 +356,7 @@ $(eval $(call HOST_TEST_RULE,phase7,tests/host/test_phase7.c kernel/vfs_path_uti
 $(eval $(call HOST_TEST_RULE,gfx,tests/host/test_gfx.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,boot,tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c \
 	boot/common/sha256.c boot/common/verify_kernel.c boot/common/peak_conf.c,\
-	$(HOST_CFLAGS) $(HOST_TEST_INC_BOOT)))
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_BOOT)))
 $(eval $(call HOST_TEST_RULE,lan,tests/host/test_lan.c kernel/net/dhcp_util.c kernel/net/http_util.c \
 	kernel/net/arp_util.c boot/common/peak_conf.c boot/common/util.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_BOOT)))
@@ -377,9 +377,9 @@ $(eval $(call HOST_TEST_RULE,random,tests/host/test_random.c kernel/random.c \
 	kernel/net/crypto_p256.c kernel/net/crypto_p384.c kernel/net/hacl_p384/Hacl_P384.c \
 	kernel/net/crypto_rsa.c kernel/net/crypto_hkdf.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 $(HOST_TEST_INC_HOST_BOOT_KERNEL) \
-	-Ikernel/net/hacl_p384 -Ikernel/net/hacl_p384/karamel/include \
+	-Ikernel/net/hacl_p384/freestanding -Ikernel/net/hacl_p384 -Ikernel/net/hacl_p384/karamel/include \
 	-Ikernel/net/hacl_p384/karamel/krmllib/dist/minimal -DHACL_CAN_COMPILE_UINT128 \
-	-Wno-unused-function))
+	-Wno-unused-function -Wno-unused-parameter))
 $(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c tests/host/tls_host_stubs.c \
 	kernel/net/tls_util.c kernel/net/tls_trust.c kernel/net/tls_clienthello.c kernel/net/tls_session.c \
 	kernel/net/tls_hsts.c kernel/net/tls_ech.c \
@@ -389,9 +389,9 @@ $(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c tests/host/tls_host_stubs
 	kernel/net/crypto_p256.c kernel/net/crypto_p384.c kernel/net/hacl_p384/Hacl_P384.c \
 	kernel/net/crypto_rsa.c kernel/net/crypto_hkdf.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_HOST_BOOT_KERNEL) -Ikernel/net \
-	-Ikernel/net/hacl_p384 -Ikernel/net/hacl_p384/karamel/include \
+	-Ikernel/net/hacl_p384/freestanding -Ikernel/net/hacl_p384 -Ikernel/net/hacl_p384/karamel/include \
 	-Ikernel/net/hacl_p384/karamel/krmllib/dist/minimal -DHACL_CAN_COMPILE_UINT128 \
-	-Wno-unused-function))
+	-Wno-unused-function -Wno-unused-parameter))
 $(eval $(call HOST_TEST_RULE,libpeak,tests/host/test_libpeak.c kernel/user/libpeak.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST))
 $(eval $(call HOST_TEST_RULE,ubin_registry,tests/host/test_ubin_registry.c,$(HOST_CFLAGS)))

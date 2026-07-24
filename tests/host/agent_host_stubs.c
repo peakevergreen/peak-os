@@ -6,6 +6,7 @@
 #include "vfs.h"
 #include "peak_errno.h"
 #include "peakvec.h"
+#include "ubin.h"
 #include "util.h"
 
 #include <stdlib.h>
@@ -255,4 +256,12 @@ void sysmon_note_agent_audit_us(uint32_t us) {
 
 void sysmon_note_peakvec_us(uint32_t us) {
     (void)us;
+}
+
+/* agent_tools fs.exec resolves /bin commands via ubin; host tests only need linkage. */
+int ubin_run(const char *path, int argc, char **argv) {
+    (void)path;
+    (void)argc;
+    (void)argv;
+    return 0;
 }

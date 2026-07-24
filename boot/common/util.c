@@ -46,7 +46,7 @@ int boot_strncasecmp(const char *a, const char *b, size_t n) {
     return 0;
 }
 
-#if defined(__x86_64__) || defined(__i386__)
+#if (defined(__x86_64__) || defined(__i386__)) && !defined(PEAK_HOST_TEST)
 #define COM1 0x3F8
 
 static inline void outb(uint16_t port, uint8_t val) {
