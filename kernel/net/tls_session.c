@@ -1,6 +1,9 @@
 /*
  * Bounded TLS session ticket cache (TLS 1.2 NewSessionTicket / future PSK).
  * Lookup by SNI; LRU eviction over TLS_SESSION_SLOTS.
+ *
+ * Hygiene: tls_session_clear and every tls_session_put scrub ticket bytes with
+ * memzero_explicit before reuse so evicted PSK material does not linger.
  */
 #include "tls_session.h"
 #include "random.h"
@@ -91,6 +94,7 @@ int tls_session_put(const char *sni, const uint8_t *ticket, size_t ticket_len,
     if (slot < 0)
         return -1;
 
+    /* Scrub evicted / replaced ticket before storing new material. */
     memzero_explicit(slots[slot].ticket, sizeof(slots[slot].ticket));
     copy_sni(slots[slot].sni, key);
     memcpy(slots[slot].ticket, ticket, ticket_len);

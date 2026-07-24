@@ -611,6 +611,22 @@ static void test_clienthello_goldens(void) {
     expect(n2 == n, "ch length stable");
 }
 
+static void test_alert_mapping(void) {
+    uint8_t fatal[] = {2, 42};
+    tls_set_alert_err(fatal, sizeof(fatal));
+    expect(tls_last_error_code() == TLS_E_ALERT, "alert code set");
+    expect(strstr(tls_last_error(), "bad_certificate") != NULL, "bad_certificate name");
+
+    uint8_t close[] = {1, 0};
+    tls_set_alert_err(close, sizeof(close));
+    expect(strstr(tls_last_error(), "close_notify") != NULL, "close_notify name");
+    expect(strstr(tls_last_error(), "graceful") != NULL, "close_notify graceful");
+
+    uint8_t expired[] = {2, 45};
+    tls_set_alert_err(expired, sizeof(expired));
+    expect(strstr(tls_last_error(), "certificate_expired") != NULL, "cert expired alert");
+}
+
 static void test_session_resume_cache(void) {
     tls_session_clear();
     uint8_t t1[16], t2[16], t3[16], t4[16], t5[16];
@@ -633,6 +649,15 @@ static void test_session_resume_cache(void) {
     olen = sizeof(out);
     expect(tls_session_get("e.example", out, &olen, NULL) == 1, "e present");
     expect(olen == 16 && out[0] == 5, "e ticket bytes");
+
+    struct tls_session_meta m_in = {.cipher = 0x1301, .tls13 = 1};
+    struct tls_session_meta m_out;
+    tls_session_clear();
+    expect(tls_session_put("meta.example", t1, sizeof(t1), &m_in) == 0, "put meta");
+    olen = sizeof(out);
+    expect(tls_session_get("meta.example", out, &olen, &m_out) == 1, "get meta");
+    expect(m_out.cipher == 0x1301, "meta cipher roundtrip");
+    expect(m_out.tls13 == 1, "meta tls13 roundtrip");
 
     /* Resume roundtrip: cached ticket appears in ClientHello. */
     tls_session_clear();
@@ -833,6 +858,7 @@ int main(int argc, char **argv) {
     test_hostname_and_pin_extras();
     test_ske_sig_verify();
     test_clienthello_goldens();
+    test_alert_mapping();
     test_session_resume_cache();
     test_ech_fail_closed();
     test_hsts_and_clear();
