@@ -2,6 +2,7 @@
 #include "peak_errno.h"
 #include "heap.h"
 #include "util.h"
+#include "blobstore.h"
 
 static struct vfs_node nodes[VFS_MAX_NODES];
 static int node_count;
@@ -214,18 +215,92 @@ int vfs_write_file(const char *path, const void *data, size_t len) {
     f->data = buf;
     f->size = len;
     f->capacity = len;
+    f->blob_id = 0; /* heap wins over any prior blob binding */
+    return 0;
+}
+
+int vfs_bind_blob(const char *path, uint32_t blob_id, size_t size) {
+    struct vfs_node *f = vfs_create_file(path);
+    if (!f || f->type != VFS_FILE || !blob_id)
+        return PEAK_EINVAL;
+    if (!blobstore_available())
+        return PEAK_ENOENT;
+    if (f->data) {
+        kfree(f->data);
+        f->data = NULL;
+    }
+    f->capacity = 0;
+    f->blob_id = blob_id;
+    f->size = size;
+    return 0;
+}
+
+int vfs_read_at(const char *path, size_t off, void *buf, size_t len, size_t *out_len) {
+    struct vfs_node *f = vfs_lookup(path);
+    if (!f || f->type != VFS_FILE)
+        return PEAK_ENOENT;
+    if (!buf)
+        return PEAK_EINVAL;
+    if (off >= f->size) {
+        if (out_len)
+            *out_len = 0;
+        return 0;
+    }
+    if (off + len > f->size)
+        len = f->size - off;
+    if (f->blob_id) {
+        int n = blobstore_read(f->blob_id, off, buf, len);
+        if (n < 0)
+            return PEAK_EIO;
+        if (out_len)
+            *out_len = (size_t)n;
+        return 0;
+    }
+    if (!f->data && len > 0)
+        return PEAK_EIO;
+    memcpy(buf, f->data + off, len);
+    if (out_len)
+        *out_len = len;
+    return 0;
+}
+
+int vfs_write_at(const char *path, size_t off, const void *buf, size_t len) {
+    struct vfs_node *f = vfs_lookup(path);
+    if (!f || f->type != VFS_FILE)
+        return PEAK_ENOENT;
+    if (!buf)
+        return PEAK_EINVAL;
+    if (f->blob_id) {
+        int n = blobstore_write(f->blob_id, off, buf, len);
+        if (n < 0)
+            return PEAK_EIO;
+        if (off + (size_t)n > f->size)
+            f->size = off + (size_t)n;
+        return 0;
+    }
+    /* Heap-backed ranged write: grow via full replace for small files only. */
+    size_t need = off + len;
+    if (need > f->capacity || !f->data) {
+        uint8_t *nbuf = (uint8_t *)kmalloc(need ? need : 1);
+        if (!nbuf)
+            return PEAK_ENOMEM;
+        if (f->data && f->size)
+            memcpy(nbuf, f->data, f->size);
+        if (f->size < off)
+            memset(nbuf + f->size, 0, off - f->size);
+        if (f->data)
+            kfree(f->data);
+        f->data = nbuf;
+        f->capacity = need;
+    }
+    memcpy(f->data + off, buf, len);
+    if (need > f->size)
+        f->size = need;
     return 0;
 }
 
 int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len) {
-    struct vfs_node *f = vfs_lookup(path);
-    if (!f || f->type != VFS_FILE)
-        return PEAK_ENOENT;
-    size_t n = f->size < buf_len ? f->size : buf_len;
-    memcpy(buf, f->data, n);
-    if (out_len)
-        *out_len = n;
-    return 0;
+    return vfs_read_at(path, 0, buf, buf_len, out_len);
 }
 
 int vfs_list(const char *path, char *out, size_t out_len) {
@@ -401,6 +476,7 @@ int vfs_unlink(const char *path) {
     }
     n->data = NULL;
     n->size = 0;
+    n->blob_id = 0;
     n->type = 0;
     n->name[0] = '\0';
     n->parent = NULL;

@@ -32,5 +32,7 @@ int  blobstore_load(void);
 
 uint32_t blobstore_object_count(void);
 uint32_t blobstore_cache_pages_used(void);
+/* 1 if the page covering (id, off) is resident in the RAM LRU cache. */
+int blobstore_cached_at(uint32_t id, size_t off);
 
 #endif

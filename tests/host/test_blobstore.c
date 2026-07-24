@@ -1,10 +1,12 @@
 /*
- * Host tests for kernel/blobstore.c — create/read/write, LRU evict, sync/load.
+ * Host tests for kernel/blobstore.c — create/read/write, LRU evict, sync/load,
+ * hot-slot re-reads, and full-page write without RMW.
  * Built with -DBLOBSTORE_CACHE_PAGES=4 so thrash is cheap to assert.
  */
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "blobstore.h"
 #include "blockdev.h"
@@ -42,6 +44,15 @@ int main(void) {
            "read payload");
     expect(memcmp(got, payload, sizeof(payload)) == 0, "round-trip bytes");
 
+    /* Repeated same-page reads stay within the hot-slot / MRU path. */
+    for (int i = 0; i < 8; i++) {
+        memset(got, 0, sizeof(got));
+        expect(blobstore_read(id, 0, got, sizeof(payload)) == (int)sizeof(payload),
+               "hot re-read");
+        expect(memcmp(got, payload, sizeof(payload)) == 0, "hot re-read bytes");
+    }
+    expect(blobstore_cache_pages_used() >= 1, "hot page still cached");
+
     /* Fill more than CACHE_PAGES distinct pages to force eviction.
      * One object spanning CACHE_PAGES+2 pages; touch each page then re-read first. */
     uint32_t big = 0;
@@ -59,6 +70,44 @@ int main(void) {
     expect(blobstore_read(big, 0, &first, 1) == 1, "read first page after thrash");
     expect(first == 0xA0, "first page survives eviction");
 
+    /* MRU preference: fill the cache, re-touch page 0, then bring in one new
+     * page — the coldest non-MRU page is evicted, not page 0. */
+    for (uint32_t p = 0; p < BLOBSTORE_CACHE_PAGES; p++) {
+        uint8_t b = 0;
+        expect(blobstore_read(big, (size_t)p * BLOBSTORE_PAGE_SIZE, &b, 1) == 1,
+               "prime cache pages");
+    }
+    expect(blobstore_read(big, 0, &first, 1) == 1, "re-touch page 0 as MRU");
+    expect(blobstore_cached_at(big, 0), "page 0 resident after touch");
+    {
+        uint8_t b = 0;
+        size_t cold_off = (size_t)BLOBSTORE_CACHE_PAGES * BLOBSTORE_PAGE_SIZE;
+        expect(blobstore_read(big, cold_off, &b, 1) == 1, "admit one new page");
+        expect(b == (uint8_t)(0xA0 + BLOBSTORE_CACHE_PAGES), "new page mark");
+    }
+    expect(blobstore_cached_at(big, 0), "MRU page 0 retained after admit");
+
+    /* Full-page overwrite must not leave stale bytes from a prior resident. */
+    uint8_t *page = calloc(1, BLOBSTORE_PAGE_SIZE);
+    expect(page != NULL, "alloc full page");
+    if (page) {
+        memset(page, 0x5C, BLOBSTORE_PAGE_SIZE);
+        expect(blobstore_write(big, 0, page, BLOBSTORE_PAGE_SIZE) ==
+                   (int)BLOBSTORE_PAGE_SIZE,
+               "full-page overwrite");
+        uint8_t *check = calloc(1, BLOBSTORE_PAGE_SIZE);
+        expect(check != NULL, "alloc check page");
+        if (check) {
+            expect(blobstore_read(big, 0, check, BLOBSTORE_PAGE_SIZE) ==
+                       (int)BLOBSTORE_PAGE_SIZE,
+                   "read full page after overwrite");
+            expect(memcmp(check, page, BLOBSTORE_PAGE_SIZE) == 0,
+                   "full-page overwrite has no stale bytes");
+            free(check);
+        }
+        free(page);
+    }
+
     expect(blobstore_sync() == 0, "sync meta + dirty pages");
     uint32_t before_count = blobstore_object_count();
 
@@ -70,6 +119,13 @@ int main(void) {
     expect(blobstore_read(id, 0, got, sizeof(payload)) == (int)sizeof(payload),
            "read after reload");
     expect(memcmp(got, payload, sizeof(payload)) == 0, "payload persists across load");
+
+    /* blobstore_load must clear the hash index so a subsequent miss can insert. */
+    expect(blobstore_load() == 0, "load clears cache + hash");
+    expect(blobstore_cache_pages_used() == 0, "cache empty after load");
+    expect(blobstore_read(id, 0, got, sizeof(payload)) == (int)sizeof(payload),
+           "read after explicit load");
+    expect(memcmp(got, payload, sizeof(payload)) == 0, "payload after explicit load");
 
     expect(blobstore_delete(id) == 0, "delete object");
     expect(blobstore_size(id) == 0, "deleted size zero");
