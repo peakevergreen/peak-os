@@ -17,13 +17,29 @@
 - `BOOTX64.EFI`
 - `peak-os.iso` / `peak-os-rpi-arm64.img`
 
-CI runs `mkmanifest.py` after the x86 ISO build and requires `build/SHA256SUMS` (Pi images also write sums via `mkpiimg.py`). Detached Ed25519 signatures are the next wire-up (`*.sig` beside each artifact).
+CI runs `mkmanifest.py` after the x86 ISO build and requires `build/SHA256SUMS` (Pi images also write sums via `mkpiimg.py`).
+
+## Signing ceremony (S8)
+
+```bash
+make iso                                    # or pi-image
+python3 scripts/mkmanifest.py               # refresh SHA256SUMS if needed
+python3 scripts/sign-release.py             # Ed25519 → build/SHA256SUMS.sig
+PEAK_RELEASE_PUB=build/peak-release.pub \
+  python3 scripts/verify-release.py         # CI / release gate
+```
+
+- Private key: `build/peak-release.key` (Ed25519) or `build/peak-release.hmac-key` (HMAC fallback on older OpenSSL); never commit
+- Detached seal: `build/SHA256SUMS.sig` (+ `SHA256SUMS.sig.type`)
+- Prefer OpenSSL 3 Ed25519 when available; HMAC-SHA256 is an acceptable host seal until loader embed lands
+
+Optional CI step: after `SHA256SUMS` exists, run `verify-release.py` when `PEAK_RELEASE_PUB` is configured in secrets.
 
 ## Loader verify (software)
 
-Both [boot/bios/main32.c](../boot/bios/main32.c) and [boot/uefi/efi_main.c](../boot/uefi/efi_main.c) should call a Peak verify helper before `boot_elf_load` once the signature primitive lands. Fail closed on mismatch.
+Both [boot/bios/main32.c](../boot/bios/main32.c) and [boot/uefi/efi_main.c](../boot/uefi/efi_main.c) should call a Peak verify helper before `boot_elf_load` once the signature primitive is embedded in the loader. Fail closed on mismatch.
 
-Until then, purity + smoke + SHA256SUMS are the release gates.
+Until loader embed lands, purity + smoke + SHA256SUMS (+ optional `verify-release.py`) are the release gates.
 
 ## UEFI Secure Boot
 
@@ -33,15 +49,15 @@ Until then, purity + smoke + SHA256SUMS are the release gates.
 
 ## A/B updates
 
-ESP layout (planned):
+ESP layout (sketch via `scripts/peak-ab-esp.sh`):
 
 ```
 \EFI\PEAK\A\KERNEL.ELF
 \EFI\PEAK\B\KERNEL.ELF
-\EFI\PEAK\boot.slot   # active + attempt counter
+\EFI\PEAK\boot.slot   # active + attempt counter + good flag
 ```
 
-Write inactive → flush → flip → boot → mark success; else roll back.
+Write inactive → flush → flip → boot → mark `good=1`; else roll back on attempt budget.
 
 ## Recovery
 
