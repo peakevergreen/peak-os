@@ -95,6 +95,11 @@ static int expect(struct js_compiler *c, enum js_tok t, const char *msg) {
 }
 
 static int parse_primary(struct js_compiler *c) {
+    if (c->tok == T_ASYNC) {
+        /* async function / async arrow — deferred with full ES modules. */
+        js_lex_error(c, "async unsupported");
+        return -1;
+    }
     if (c->tok == T_NUM) {
         if (js_emit_op(c, OP_PUSH_NUM) || js_emit_f64(c, c->num))
             return -1;
@@ -413,8 +418,9 @@ static int parse_unary(struct js_compiler *c) {
         return js_emit_op(c, OP_TYPEOF);
     }
     if (c->tok == T_AWAIT) {
-        js_lex_next(c); /* await expr — treat as expr for now */
-        return parse_unary(c);
+        /* No async context / Promise runtime — reject rather than strip await. */
+        js_lex_error(c, "await unsupported");
+        return -1;
     }
     return parse_postfix(c);
 }
@@ -625,6 +631,10 @@ static int parse_stmt(struct js_compiler *c) {
         js_lex_next(c);
         return 0;
     }
+    if (c->tok == T_ASYNC) {
+        js_lex_error(c, "async unsupported");
+        return -1;
+    }
     if (c->tok == T_LBRACE)
         return parse_block(c);
     if (c->tok == T_VAR || c->tok == T_LET || c->tok == T_CONST) {
@@ -724,6 +734,10 @@ static int parse_stmt(struct js_compiler *c) {
     }
     if (c->tok == T_FOR) {
         js_lex_next(c);
+        if (c->tok == T_AWAIT) {
+            js_lex_error(c, "await unsupported");
+            return -1;
+        }
         if (expect(c, T_LPAREN, "'('"))
             return -1;
         /* for (init; cond; step) */
