@@ -42,6 +42,32 @@ uint8_t tls13_client_app_traffic[48];
 uint8_t tls13_server_app_traffic[48];
 size_t tls13_hash_len;
 int tls13_sha384;
+char tls_alpn[16];
+int tls_alpn_h2;
+
+void tls_alpn_clear(void) {
+    tls_alpn[0] = '\0';
+    tls_alpn_h2 = 0;
+}
+
+int tls_alpn_is_h2(void) {
+    return tls_alpn_h2;
+}
+
+void tls_alpn_set_from_ext(const uint8_t *data, size_t len) {
+    /* ALPN extension data: list_len(2) + name_len(1) + name */
+    if (!data || len < 3)
+        return;
+    uint16_t list = ((uint16_t)data[0] << 8) | data[1];
+    if (list + 2 > len || list < 1)
+        return;
+    uint8_t nlen = data[2];
+    if (3 + nlen > len || nlen == 0 || nlen >= sizeof(tls_alpn))
+        return;
+    memcpy(tls_alpn, data + 3, nlen);
+    tls_alpn[nlen] = '\0';
+    tls_alpn_h2 = (nlen == 2 && tls_alpn[0] == 'h' && tls_alpn[1] == '2');
+}
 
 void tls_set_err(const char *msg) {
     tls_set_err_code(TLS_E_GENERIC, msg);

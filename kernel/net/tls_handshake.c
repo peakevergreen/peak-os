@@ -72,6 +72,8 @@ static int parse_server_hello(const uint8_t *msg, size_t len, uint16_t *cs_out) 
             p += 2;
             if (p + el > ext_end)
                 break;
+            if (et == 0x0010 && el >= 3)
+                tls_alpn_set_from_ext(p, el);
             if (et == 0x0017) /* extended_master_secret */
                 use_ems = 1;
             if (et == 0x002b && el >= 2) {
@@ -382,6 +384,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     tls_close();
     last_err[0] = '\0';
     last_err_code = TLS_E_OK;
+    tls_alpn_clear();
     use_ems = 0;
     tls13 = 0;
     cert_verified = 0;

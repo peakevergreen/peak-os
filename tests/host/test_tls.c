@@ -569,7 +569,9 @@ static void test_clienthello_goldens(void) {
     expect(el == 38 && ed[2] == 0x00 && ed[3] == 0x1d && ed[4] == 0x00 && ed[5] == 0x20,
            "key_share x25519");
     expect(ch_find_ext(ch, n, 0x0010, &ed, &el), "has alpn");
-    expect(el == 11 && ed[2] == 8 && !memcmp(ed + 3, "http/1.1", 8), "alpn http/1.1");
+    expect(el == 14 && ed[2] == 2 && !memcmp(ed + 3, "h2", 2) && ed[5] == 8 &&
+               !memcmp(ed + 6, "http/1.1", 8),
+           "alpn h2 then http/1.1");
     expect(ch_find_ext(ch, n, 0x0000, &ed, &el), "has sni");
     expect(ch_find_ext(ch, n, 0x000a, &ed, &el), "has groups");
     expect(el == 8 && ed[0] == 0x00 && ed[1] == 0x06, "groups len with grease");

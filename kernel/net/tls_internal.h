@@ -82,10 +82,16 @@ extern uint8_t tls13_server_app_traffic[48];
 extern size_t tls13_hash_len;
 extern int tls13_sha384;
 
+extern char tls_alpn[16];
+extern int tls_alpn_h2;
+
 /* tls.c */
 void tls_set_err(const char *msg);
 void tls_set_err_code(int code, const char *msg);
 void tls_scrub_secrets(void);
+void tls_alpn_clear(void);
+int tls_alpn_is_h2(void);
+void tls_alpn_set_from_ext(const uint8_t *data, size_t len);
 
 /* tls_record.c */
 void tls_wr16(uint8_t *p, uint16_t v);
