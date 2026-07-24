@@ -15,6 +15,7 @@ int hostname_matched;
 int hostname_parse_skipped;
 const char *cert_fail_reason;
 char last_err[96];
+int last_err_code;
 uint8_t trust_pins[TLS_PIN_MAX][32];
 int trust_pin_count;
 uint8_t client_random[32];
@@ -43,7 +44,12 @@ size_t tls13_hash_len;
 int tls13_sha384;
 
 void tls_set_err(const char *msg) {
+    tls_set_err_code(TLS_E_GENERIC, msg);
+}
+
+void tls_set_err_code(int code, const char *msg) {
     size_t i = 0;
+    last_err_code = code;
     if (!msg)
         msg = "unknown";
     for (; msg[i] && i + 1 < sizeof(last_err); i++)
@@ -56,6 +62,10 @@ void tls_set_err(const char *msg) {
 
 const char *tls_last_error(void) {
     return last_err[0] ? last_err : "no error";
+}
+
+int tls_last_error_code(void) {
+    return last_err_code;
 }
 
 int tls_ready(void) {
@@ -122,6 +132,26 @@ int tls_recv(void *buf, size_t cap, size_t *out_len, uint32_t timeout_ticks) {
     return -1;
 }
 
+void tls_scrub_secrets(void) {
+    memzero_explicit(client_random, sizeof(client_random));
+    memzero_explicit(server_random, sizeof(server_random));
+    memzero_explicit(master_secret, sizeof(master_secret));
+    memzero_explicit(client_key, sizeof(client_key));
+    memzero_explicit(server_key, sizeof(server_key));
+    memzero_explicit(client_iv, sizeof(client_iv));
+    memzero_explicit(server_iv, sizeof(server_iv));
+    memzero_explicit(tls13_priv, sizeof(tls13_priv));
+    memzero_explicit(tls13_client_pub, sizeof(tls13_client_pub));
+    memzero_explicit(tls13_server_pub, sizeof(tls13_server_pub));
+    memzero_explicit(tls13_early_secret, sizeof(tls13_early_secret));
+    memzero_explicit(tls13_handshake_secret, sizeof(tls13_handshake_secret));
+    memzero_explicit(tls13_master_secret, sizeof(tls13_master_secret));
+    memzero_explicit(tls13_client_hs_traffic, sizeof(tls13_client_hs_traffic));
+    memzero_explicit(tls13_server_hs_traffic, sizeof(tls13_server_hs_traffic));
+    memzero_explicit(tls13_client_app_traffic, sizeof(tls13_client_app_traffic));
+    memzero_explicit(tls13_server_app_traffic, sizeof(tls13_server_app_traffic));
+}
+
 void tls_close(void) {
     if (tls_up) {
         uint8_t alert[2] = {1, 0};
@@ -134,20 +164,5 @@ void tls_close(void) {
     rx_app_len = 0;
     hs_reasm_len = 0;
     client_seq = server_seq = 0;
-    /* Scrub session secrets (best effort). */
-    memzero_explicit(client_random, sizeof(client_random));
-    memzero_explicit(server_random, sizeof(server_random));
-    memzero_explicit(master_secret, sizeof(master_secret));
-    memzero_explicit(client_key, sizeof(client_key));
-    memzero_explicit(server_key, sizeof(server_key));
-    memzero_explicit(client_iv, sizeof(client_iv));
-    memzero_explicit(server_iv, sizeof(server_iv));
-    memzero_explicit(tls13_priv, sizeof(tls13_priv));
-    memzero_explicit(tls13_early_secret, sizeof(tls13_early_secret));
-    memzero_explicit(tls13_handshake_secret, sizeof(tls13_handshake_secret));
-    memzero_explicit(tls13_master_secret, sizeof(tls13_master_secret));
-    memzero_explicit(tls13_client_hs_traffic, sizeof(tls13_client_hs_traffic));
-    memzero_explicit(tls13_server_hs_traffic, sizeof(tls13_server_hs_traffic));
-    memzero_explicit(tls13_client_app_traffic, sizeof(tls13_client_app_traffic));
-    memzero_explicit(tls13_server_app_traffic, sizeof(tls13_server_app_traffic));
+    tls_scrub_secrets();
 }

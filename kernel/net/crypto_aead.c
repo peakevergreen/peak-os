@@ -206,10 +206,7 @@ int aes128_gcm_decrypt(const uint8_t key[16], const uint8_t iv[12],
     aes128_encrypt_block(key, j0, t);
     for (int i = 0; i < 16; i++)
         expect[i] = t[i] ^ s[i];
-    uint8_t diff = 0;
-    for (int i = 0; i < 16; i++)
-        diff |= expect[i] ^ tag[i];
-    if (diff)
+    if (!crypto_memeq(expect, tag, 16))
         return -1;
     memcpy(ctr, j0, 16);
     size_t off = 0;
@@ -314,10 +311,7 @@ int aes256_gcm_decrypt(const uint8_t key[32], const uint8_t iv[12],
     aes256_encrypt_block(key, j0, t);
     for (int i = 0; i < 16; i++)
         expect[i] = t[i] ^ s[i];
-    uint8_t diff = 0;
-    for (int i = 0; i < 16; i++)
-        diff |= expect[i] ^ tag[i];
-    if (diff)
+    if (!crypto_memeq(expect, tag, 16))
         return -1;
     memcpy(ctr, j0, 16);
     size_t off = 0;
@@ -585,10 +579,7 @@ int chacha20_poly1305_decrypt(const uint8_t key[32], const uint8_t nonce[12],
     memcpy(poly_key, otk_block, 32);
     uint8_t expect[16];
     aead_poly1305(poly_key, aad, aad_len, cipher, cipher_len, expect);
-    uint8_t diff = 0;
-    for (int i = 0; i < 16; i++)
-        diff |= expect[i] ^ tag[i];
-    if (diff)
+    if (!crypto_memeq(expect, tag, 16))
         return -1;
     chacha20_xor(key, nonce, 1, cipher, cipher_len, plain);
     return 0;

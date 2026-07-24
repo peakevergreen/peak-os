@@ -94,6 +94,9 @@ int rsa_verify_sha256(const uint8_t *leaf_der, size_t leaf_len, const uint8_t di
 /* Fails closed (-1) when crypto RNG not ready. */
 int crypto_random(uint8_t *buf, size_t len);
 
+/* Constant-time equality: 1 if equal, 0 otherwise. Safe for tags/verify_data. */
+int crypto_memeq(const void *a, const void *b, size_t n);
+
 /* Incremental SHA-256 for handshake transcript */
 struct sha256_ctx {
     uint32_t h[8];

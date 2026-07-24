@@ -256,9 +256,9 @@ static int emsa_pkcs1_v15_sha256_check(const uint8_t *em, size_t k, const uint8_
     }
     if (em[ps_end] != 0x00)
         return -1;
-    if (memcmp(em + ps_end + 1, digest_info_prefix, sizeof(digest_info_prefix)) != 0)
+    if (!crypto_memeq(em + ps_end + 1, digest_info_prefix, sizeof(digest_info_prefix)))
         return -1;
-    if (memcmp(em + ps_end + 1 + sizeof(digest_info_prefix), digest, 32) != 0)
+    if (!crypto_memeq(em + ps_end + 1 + sizeof(digest_info_prefix), digest, 32))
         return -1;
     return 0;
 }
@@ -293,7 +293,7 @@ static int emsa_pss_sha256_check(const uint8_t *em, size_t emLen, const uint8_t 
     memcpy(mprime + 40, salt, sLen);
     uint8_t H2[32];
     sha256(mprime, sizeof(mprime), H2);
-    if (memcmp(H, H2, 32) != 0)
+    if (!crypto_memeq(H, H2, 32))
         return -1;
     return 0;
 }

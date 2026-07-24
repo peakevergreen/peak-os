@@ -370,10 +370,7 @@ static int expect_finished(uint32_t timeout_ticks) {
         sha256_ctx_final(&tmp, hash);
         tls_prf_sha256(master_secret, 48, "server finished", hash, 32, expect, 12);
     }
-    uint8_t diff = 0;
-    for (int i = 0; i < 12; i++)
-        diff |= expect[i] ^ buf[4 + i];
-    if (diff)
+    if (!crypto_memeq(expect, buf + 4, 12))
         return -1;
     transcript_add(buf, n);
     return 0;
@@ -383,13 +380,14 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     net_attempt_stats_note_tls();
     tls_close();
     last_err[0] = '\0';
+    last_err_code = TLS_E_OK;
     use_ems = 0;
     tls13 = 0;
     cert_verified = 0;
     hostname_matched = 0;
     hostname_parse_skipped = 0;
     if (net_tcp_connect(ip, port, timeout_ticks) != 0) {
-        tls_set_err("TCP connect failed");
+        tls_set_err_code(TLS_E_TCP, "TCP connect failed");
         return -1;
     }
 
@@ -405,17 +403,17 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     {
         int ch_rc = tls_build_client_hello(ch, sizeof(ch), sni_host, &ch_len);
         if (ch_rc == -1) {
-            tls_set_err("RNG not ready (crypto domain)");
+            tls_set_err_code(TLS_E_RNG, "RNG not ready (crypto domain)");
             goto fail;
         }
         if (ch_rc != 0) {
-            tls_set_err("ClientHello too large");
+            tls_set_err_code(TLS_E_BUFFER, "ClientHello too large");
             goto fail;
         }
     }
     transcript_add(ch, ch_len);
     if (tls_send_record(TLS_CONTENT_HS, ch, ch_len, 0) != 0) {
-        tls_set_err("ClientHello send failed");
+        tls_set_err_code(TLS_E_HANDSHAKE, "ClientHello send failed");
         goto fail;
     }
 
@@ -425,24 +423,29 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     int got_sh = 0, got_ske = 0, got_done = 0, got_cert = 0;
     uint16_t cs = 0;
     uint64_t start = timer_ticks();
+    uint32_t hs_records = 0;
 
     while (!got_done && timer_ticks() - start < timeout_ticks) {
         uint8_t type;
         size_t n = 0;
         size_t room = sizeof(hs_reasm) - hs_reasm_len;
         if (room == 0) {
-            tls_set_err("Handshake buffer overflow");
+            tls_set_err_code(TLS_E_DOS, "Handshake buffer overflow");
             goto fail;
         }
         /* Stage HS bytes directly into hs_reasm (avoids a second 16 KiB BSS buf). */
         if (tls_recv_record(&type, hs_reasm + hs_reasm_len, room, &n, 200, 0) != 0)
             continue;
         if (type == TLS_CONTENT_ALERT) {
-            tls_set_err("Server alert during handshake");
+            tls_set_err_code(TLS_E_ALERT, "Server alert during handshake");
             goto fail;
         }
         if (type != TLS_CONTENT_HS)
             continue;
+        if (++hs_records > TLS_HS_RECORD_MAX) {
+            tls_set_err_code(TLS_E_DOS, "Handshake record budget exceeded");
+            goto fail;
+        }
 
         hs_reasm_len += n;
 
@@ -450,13 +453,17 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
         while (off + 4 <= hs_reasm_len) {
             uint8_t hstype = hs_reasm[off];
             uint32_t hslen = tls_rd24(hs_reasm + off + 1);
+            if (hslen > TLS_HS_MSG_MAX) {
+                tls_set_err_code(TLS_E_DOS, "Handshake message too large");
+                goto fail;
+            }
             if (off + 4 + hslen > hs_reasm_len)
                 break;
             transcript_add(hs_reasm + off, 4 + hslen);
 
             if (hstype == HS_SERVER_HELLO) {
                 if (parse_server_hello(hs_reasm + off, 4 + hslen, &cs) != 0) {
-                    tls_set_err("ServerHello parse/cipher rejected");
+                    tls_set_err_code(TLS_E_HANDSHAKE, "ServerHello parse/cipher rejected");
                     goto fail;
                 }
                 got_sh = 1;
@@ -475,7 +482,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
             } else if (hstype == HS_CERTIFICATE) {
                 got_cert = 1;
                 if (save_leaf_from_cert(hs_reasm + off, 4 + hslen) != 0) {
-                    tls_set_err("Certificate leaf extract failed");
+                    tls_set_err_code(TLS_E_HANDSHAKE, "Certificate leaf extract failed");
                     goto fail;
                 }
                 cert_verified = tls_verify_cert_chain(hs_reasm + off, 4 + hslen, sni_host);
@@ -483,7 +490,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                 if (parse_server_key_exchange(hs_reasm + off, 4 + hslen, &peer_curve,
                                               peer_pub, sizeof(peer_pub),
                                               &peer_pub_len) != 0) {
-                    tls_set_err("ServerKeyExchange signature/parse failed");
+                    tls_set_err_code(TLS_E_VERIFY, "ServerKeyExchange signature/parse failed");
                     goto fail;
                 }
                 got_ske = 1;
@@ -500,19 +507,19 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
             break;
     }
     if (!got_sh || !got_ske || !got_done) {
-        tls_set_err("Timeout waiting for ServerHelloDone");
+        tls_set_err_code(TLS_E_TIMEOUT, "Timeout waiting for ServerHelloDone");
         goto fail;
     }
     /* Fail closed: missing Certificate or TOFU/pin mismatch → refuse session. */
     if (!got_cert || !cert_verified) {
-        tls_set_err(cert_fail_reason ? cert_fail_reason
+        tls_set_err_code(TLS_E_CERT, cert_fail_reason ? cert_fail_reason
                                      : "TLS certificate unverified");
         goto fail;
     }
 
     uint8_t priv[32], premaster[32];
     if (crypto_random(priv, 32) != 0) {
-        tls_set_err("RNG not ready for key generation");
+        tls_set_err_code(TLS_E_RNG, "RNG not ready for key generation");
         goto fail;
     }
 
@@ -521,11 +528,11 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     if (peer_curve == 0x0017) {
         uint8_t pub[65];
         if (p256_keygen(priv, pub) != 0) {
-            tls_set_err("P-256 keygen failed");
+            tls_set_err_code(TLS_E_HANDSHAKE, "P-256 keygen failed");
             goto fail;
         }
         if (p256_ecdh(premaster, priv, peer_pub) != 0) {
-            tls_set_err("P-256 ECDH failed");
+            tls_set_err_code(TLS_E_HANDSHAKE, "P-256 ECDH failed");
             goto fail;
         }
         cke[0] = HS_CLIENT_KEY_EX;
@@ -545,7 +552,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     }
     transcript_add(cke, cke_len);
     if (tls_send_record(TLS_CONTENT_HS, cke, cke_len, 0) != 0) {
-        tls_set_err("ClientKeyExchange send failed");
+        tls_set_err_code(TLS_E_HANDSHAKE, "ClientKeyExchange send failed");
         goto fail;
     }
 
@@ -553,12 +560,12 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
 
     uint8_t ccs = 1;
     if (tls_send_record(TLS_CONTENT_CCS, &ccs, 1, 0) != 0) {
-        tls_set_err("CCS send failed");
+        tls_set_err_code(TLS_E_HANDSHAKE, "CCS send failed");
         goto fail;
     }
 
     if (send_finished() != 0) {
-        tls_set_err("Finished send failed");
+        tls_set_err_code(TLS_E_HANDSHAKE, "Finished send failed");
         goto fail;
     }
 
@@ -573,7 +580,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                 if (tls_recv_record(&type, hs_reasm, sizeof(hs_reasm), &n, 100, 0) != 0)
                     continue;
                 if (type == TLS_CONTENT_ALERT) {
-                    tls_set_err("Server alert after Finished (bad keys?)");
+                    tls_set_err_code(TLS_E_ALERT, "Server alert after Finished (bad keys?)");
                     goto fail;
                 }
                 if (type == TLS_CONTENT_HS)
@@ -584,7 +591,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                 }
             } else {
                 if (expect_finished(timeout_ticks) != 0) {
-                    tls_set_err("Server Finished verify failed");
+                    tls_set_err_code(TLS_E_VERIFY, "Server Finished verify failed");
                     goto fail;
                 }
                 tls_up = 1;
@@ -595,11 +602,12 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                 return 0;
             }
         }
-        tls_set_err("Timeout waiting for server CCS/Finished");
+        tls_set_err_code(TLS_E_TIMEOUT, "Timeout waiting for server CCS/Finished");
     }
 
 fail:
     net_tcp_close();
     tls_up = 0;
+    tls_scrub_secrets();
     return -1;
 }

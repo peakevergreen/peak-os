@@ -97,6 +97,7 @@ Root DER/PEM files live under `certs/webpki/`; regenerate with
 | ALPN `http/1.1` | yes | yes |
 | SKE / CertVerify | ECDSA-P256, RSA-PSS/PKCS1 | ECDSA-P256, RSA-PSS-SHA256 |
 | Finished check | PRF verify_data | HMAC-finished |
+| GREASE ClientHello | yes | yes |
 | Session tickets / PSK | — | — (later) |
 | ECH | — | — (later) |
 | HTTP/2 ALPN `h2` | — | — (later) |
@@ -109,10 +110,19 @@ extensions. Optional live probe: `make smoke-tls-live` (soft-fail offline).
 - Small connection table (`NET_TCP_MAX` = 16 concurrent, `NET_LISTEN_MAX` = 8)
 - Exhausted slots return `PEAK_EBUSY` (no silent drop)
 - Weak RNG (timer-based) — not for real security
-- **Certificate trust is pins + TOFU** (`/etc/peak/tls-tofu`) with a real DER X.509 leaf
-  parser for SAN/validity/SPKI/BasicConstraints/KeyUsage/AKI/SKI (path building + CA
-  roots land in the WebPKI pass). Validity is enforced when RTC time is available.
+- **Certificate trust**: pins → WebPKI (embedded roots + path build) → opt-in
+  TOFU (`/etc/peak/tls-tofu`). DER X.509 parse covers SAN/validity/SPKI/
+  BasicConstraints/KeyUsage/AKI/SKI. Validity enforced when RTC time is available.
+  No OCSP/CRL yet.
 - Bridged mode is platform-specific (macOS vmnet); Linux tap/bridge is not wired yet
+
+## TLS hardening
+
+- Constant-time tag / `verify_data` compares (`crypto_memeq`)
+- Session secrets scrubbed on `tls_close` and handshake fail
+- ClientHello GREASE (cipher, group, empty extension) per RFC 8701
+- Handshake DoS budgets: max message `TLS_HS_MSG_MAX`, max records `TLS_HS_RECORD_MAX`
+- Structured `tls_last_error_code()` alongside string `tls_last_error()`
 
 ## Timeouts (100 Hz ticks)
 

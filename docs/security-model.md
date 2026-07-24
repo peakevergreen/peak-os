@@ -84,13 +84,12 @@ Already addressed earlier in the privacy-first program (see [CHANGELOG.md](../CH
 
 ### TLS trust scope (honest)
 
-The in-guest TLS 1.2 client verifies server certificates with **explicit SHA-256
-pins** and/or **trust-on-first-use** per SNI host (`/etc/peak/tls-tofu`), plus
-optional leaf hostname matching when parsing succeeds. **Full X.509 chain
-validation is intentionally out of scope** — there is no embedded CA store, no
-path building, and no CRL/OCSP. That is a deliberate trade-off for a small
-freestanding stack: TOFU detects certificate swaps for known hosts; pins cover
-known-good digests; neither replaces WebPKI or enterprise PKI policy.
+Browser/`wget` TLS verifies certificates in order: **explicit SHA-256 pins**
+(override), then **WebPKI** (embedded roots + path build with hostname and RTC
+expiry when available), then **opt-in TOFU** (`settings_tls_tofu`, persisted at
+`/etc/peak/tls-tofu`). There is still no OCSP/CRL or Certificate Transparency.
+Pins cover known-good digests; TOFU is continuity for operators who enable it —
+neither replaces enterprise PKI policy beyond the embedded root set.
 
 ## Degraded entropy
 
