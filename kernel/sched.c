@@ -272,6 +272,33 @@ void sched_exit(void) {
         sched_yield();
 }
 
+int sched_kill(int pid) {
+    if (pid <= 0)
+        return -1;
+    spin_lock(&sched_lock);
+    if (current && current->pid == pid) {
+        spin_unlock(&sched_lock);
+        return -2;
+    }
+    if (tasks[0].pid == pid) {
+        spin_unlock(&sched_lock);
+        return -2; /* idle */
+    }
+    for (int i = 1; i < MAX_TASKS; i++) {
+        if (tasks[i].state == TASK_UNUSED || tasks[i].state == TASK_ZOMBIE)
+            continue;
+        if (tasks[i].pid != pid)
+            continue;
+        ready_unmark(i);
+        tasks[i].state = TASK_ZOMBIE;
+        tasks[i].entry = NULL;
+        spin_unlock(&sched_lock);
+        return 0;
+    }
+    spin_unlock(&sched_lock);
+    return -1;
+}
+
 void sched_wake_sleepers(void) {
     uint64_t now = timer_ticks();
     /*

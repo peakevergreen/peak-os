@@ -28,6 +28,11 @@ extern int usort_main(int argc, char **argv);
 extern int uuniq_main(int argc, char **argv);
 extern int ucut_main(int argc, char **argv);
 extern int utr_main(int argc, char **argv);
+extern int used_main(int argc, char **argv);
+extern int ucmp_main(int argc, char **argv);
+extern int ubasename_main(int argc, char **argv);
+extern int udirname_main(int argc, char **argv);
+extern int urealpath_main(int argc, char **argv);
 extern int uhexdump_main(int argc, char **argv);
 extern int ustrings_main(int argc, char **argv);
 extern int uecho_main(int argc, char **argv);
@@ -65,6 +70,7 @@ extern int uwget_main(int argc, char **argv);
 extern int utop_main(int argc, char **argv);
 extern int usysmon_main(int argc, char **argv);
 extern int ups_main(int argc, char **argv);
+extern int ukill_main(int argc, char **argv);
 extern int ujs_main(int argc, char **argv);
 
 static const struct ubin_entry ubin_table[] = {

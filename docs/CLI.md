@@ -67,7 +67,8 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 |---------|-------|
 | `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N`) |
 | `grep <pat> <file>` | substring match |
-| `diff` `sort` `uniq` `cut` `tr` | text filters (stdin/`-` ok) |
+| `diff` `sort` `uniq` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok) |
+| `basename` `dirname` `realpath` | path helpers |
 | `hexdump` `strings` | binary helpers |
 | `echo` `clear` `edit` | misc |
 
@@ -80,6 +81,7 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 | `date` `free` `env` `export` `which` `seq` `sleep` | |
 | `top` `sysmon` | live system monitor (sparklines; `q` quit, `-n` once) |
 | `ps` | list kernel tasks/threads |
+| `kill <pid or name>` | mark READY/BLOCKED task zombie (not idle/self) |
 | `true` `false` `sh` | exit status helpers; nested `ush>` loop |
 | `js -e 'code'` / `js file.js` | Peak JS CLI — [browser-js.md](browser-js.md) |
 | `help` `man <cmd>` | categorized help (`-h` / `--help` on most utils) |
