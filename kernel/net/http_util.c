@@ -492,3 +492,13 @@ int http_join_redirect(int https, const char *host, uint16_t port,
              cur_path[0] ? cur_path : "/");
     return http_resolve_url(base, loc, out, out_cap);
 }
+
+int http_blocks_active_mixed(const char *page_url, const char *req_url) {
+    if (!page_url || !req_url)
+        return 0;
+    if (strncmp(page_url, "https://", 8) != 0)
+        return 0;
+    if (strncmp(req_url, "http://", 7) != 0)
+        return 0;
+    return 1;
+}

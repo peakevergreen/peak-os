@@ -156,6 +156,11 @@ static void test_http_redirects(void) {
                               sizeof(out)) != 0,
            "reject escape redirect");
     expect(http_join_redirect(0, NULL, 80, "/", "/x", out, sizeof(out)) != 0, "null host");
+
+    expect(http_blocks_active_mixed("https://a.com/", "http://b.com/x") == 1, "mixed block");
+    expect(http_blocks_active_mixed("https://a.com/", "https://b.com/x") == 0, "https ok");
+    expect(http_blocks_active_mixed("http://a.com/", "http://b.com/x") == 0, "http page ok");
+    expect(http_blocks_active_mixed(NULL, "http://b.com/x") == 0, "null page");
 }
 
 static void test_tcp_header_and_checksum(void) {

@@ -2,6 +2,7 @@
 #include "net_internal.h"
 #include "http_util.h"
 #include "tls.h"
+#include "tls_hsts.h"
 #include "cap.h"
 #include "privacy.h"
 #include "timer.h"
@@ -234,6 +235,15 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
         if (http_parse_url(cur, &https, host, sizeof(host), &port, path, sizeof(path)) != 0)
             return -1;
 
+        /* HSTS-lite: upgrade cached hosts to HTTPS. */
+        if (!https && hsts_should_upgrade(host)) {
+            char upgraded[320];
+            snprintf(upgraded, sizeof(upgraded), "https://%s%s", host, path[0] ? path : "/");
+            snprintf(cur, sizeof(cur), "%s", upgraded);
+            if (http_parse_url(cur, &https, host, sizeof(host), &port, path, sizeof(path)) != 0)
+                return -1;
+        }
+
         uint32_t ip = net_dns_resolve(host, NET_DNS_RESOLVE_TICKS);
         if (!ip) {
             if (status_out)
@@ -302,6 +312,14 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
         http_copy_response_headers(body, hdr_out, hdr_cap);
 
         if (st >= 200 && st < 300) {
+            if ((https || port == 443) && hdr_out)
+                hsts_process_header(host, hdr_out);
+            else if (https || port == 443) {
+                /* Headers may only live in body before strip. */
+                char hdrtmp[2048];
+                http_copy_response_headers(body, hdrtmp, sizeof(hdrtmp));
+                hsts_process_header(host, hdrtmp);
+            }
             http_strip_headers(body);
             http_needs_tls_flag = 0;
             return 0;

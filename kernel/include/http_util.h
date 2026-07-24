@@ -68,4 +68,7 @@ int http_join_redirect(int https, const char *host, uint16_t port,
                        const char *cur_path, const char *loc, char *out,
                        size_t out_cap);
 
+/* 1 if req_url is active mixed content relative to https page_url. */
+int http_blocks_active_mixed(const char *page_url, const char *req_url);
+
 #endif

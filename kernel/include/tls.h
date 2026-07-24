@@ -35,5 +35,7 @@ const char *tls_last_error(void);
 int tls_last_error_code(void);
 /* Pin a SHA-256 digest of a trusted root/SPKI (32 bytes). Returns 0 on success. */
 int tls_trust_pin_sha256(const uint8_t pin[32]);
+/* Clear in-memory pins + PeakFS TOFU + HSTS stores. */
+void tls_trust_clear_all(void);
 
 #endif

@@ -113,6 +113,11 @@ replace the generic handshake blob. Address-bar lock: `L` when verified HTTPS,
 `fetch: tls-rng`, `tls-alert`, `tls-expired`, `tls-mismatch`, `tls-untrusted`,
 `tls-handshake`.
 
+Active mixed content: `http://` subresources (`fetch`, `<script src>`) on `https://`
+pages are blocked (`fetch: mixed-content`). HSTS-lite stores `max-age` hosts in
+`/etc/peak/tls-hsts` and upgrades later plain HTTP navigations. Settings → Network
+toggles TOFU and can clear pins / TOFU / HSTS.
+
 ## Limits
 
 - Small connection table (`NET_TCP_MAX` = 16 concurrent, `NET_LISTEN_MAX` = 8)

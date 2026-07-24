@@ -148,6 +148,10 @@ int webapi_load_classic_scripts(struct js_runtime *rt, struct dom_document *doc,
         }
         if (!strncmp(abs, "peak:", 5) || !strncmp(abs, "about:", 6))
             continue;
+        if (http_blocks_active_mixed(page_url, abs)) {
+            failed++;
+            continue;
+        }
         int st = 0;
         if (net_http_get(abs, buf, 64 * 1024, &st) != 0 || st < 200 || st >= 300) {
             failed++;
