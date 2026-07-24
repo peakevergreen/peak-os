@@ -1,12 +1,14 @@
 #include "rpi.h"
+#include "netdev.h"
 #include "serial.h"
 
 void rpi_net_init(void) {
     struct rpi_plat *p = rpi_get();
-    /* Staged stubs must not be installed into netdev until they can become ready. */
     switch (p->soc) {
     case RPI_SOC_BCM2837:
-        serial_log(SERIAL_LOG_DEBUG, "rpi: net usb-lan stub (not ready)\n");
+        /* Register ops; ready() stays 0 until SMSC bulk bind succeeds. */
+        netdev_register_usb_lan();
+        serial_log(SERIAL_LOG_DEBUG, "rpi: net usb-lan registered (bind on enum)\n");
         break;
     case RPI_SOC_BCM2711:
         serial_log(SERIAL_LOG_DEBUG, "rpi: net genet stub (not ready)\n");

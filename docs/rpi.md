@@ -6,7 +6,7 @@ Flash-and-boot support for Raspberry Pi ARM64 boards. Primary physical gate: **R
 
 | Family | SoC | Notes |
 |--------|-----|--------|
-| Pi 3B / 3B+ / 3A+, Zero 2 W, CM3 / CM3+ | BCM2837 | Primary hardware gate; DWC2 hub+HID (enum/split/hotplug) in tree; USB LAN is not |
+| Pi 3B / 3B+ / 3A+, Zero 2 W, CM3 / CM3+ | BCM2837 | Primary hardware gate; DWC2 hub+HID; USB LAN bulk bind for SMSC VID (ready only after MAC read) |
 | Pi 4B / 400, CM4 / CM4S | BCM2711 | Core platform support; PCIe/VL805 xHCI and GENET are staged |
 | Pi 5 / 500 / 500+, CM5 | BCM2712 + RP1 | Core platform support; RP1 PCIe, USB, and Ethernet are staged |
 
@@ -79,7 +79,7 @@ PeakOS kernel and Peak-authored drivers remain open source.
 | Software FB desktop | implemented; silicon sign-off pending | implemented; silicon sign-off pending | deferred until high MMIO mapped |
 | SD PeakFS partition | implemented; silicon sign-off pending | implemented; unverified | deferred (SDHCI base >4 GiB) |
 | USB HID | hub+HID enum/split/hotplug; silicon sign-off pending | unavailable: PCIe/xHCI rings missing | unavailable: RP1 + high MMIO unmapped |
-| Ethernet | unavailable: USB LAN stub | unavailable: GENET rings/PHY missing | unavailable: RP1 GEM stub |
+| Ethernet | SMSC USB LAN bulk bind; silicon verify pending | unavailable: GENET rings/PHY missing | unavailable: RP1 GEM stub |
 | Wi-Fi | unavailable: SDIO/firmware loading stub | unavailable: SDIO/firmware loading stub | unavailable: SDIO/firmware loading stub |
 | Audio | unavailable: beep is a no-op | unavailable: beep is a no-op | unavailable: beep is a no-op |
 | SMP | secondary CPUs parked | parked | parked |

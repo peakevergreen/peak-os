@@ -65,4 +65,9 @@ void dwc2_hid_parse_config(uint8_t addr, uint8_t *cfg, int len, uint8_t speed,
 void dwc2_hid_clear_for_addr(uint8_t addr);
 void dwc2_hid_poll(void);
 
+/* SMSC USB LAN bind hooks (kernel/drivers/net/usb_lan.c) */
+void usb_lan_try_bind(uint8_t addr, uint16_t vid, uint16_t pid, uint8_t *cfg, int len,
+                      uint8_t speed, uint8_t hub_addr, uint8_t hub_port);
+void usb_lan_clear_for_addr(uint8_t addr);
+
 #endif
