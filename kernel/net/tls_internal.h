@@ -91,6 +91,9 @@ int tls_recv_record(uint8_t *type_out, uint8_t *buf, size_t cap, size_t *out_len
 /* tls_trust.c */
 int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_host);
 
+/* tls_clienthello.c */
+int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *out_len);
+
 /* tls13.c — continue after TLS 1.3 ServerHello (transcript already includes SH). */
 int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout_ticks);
 

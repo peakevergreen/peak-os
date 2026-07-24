@@ -494,6 +494,83 @@ static void test_ske_sig_verify(void) {
     }
 }
 
+static int ch_find_ext(const uint8_t *ch, size_t len, uint16_t want, const uint8_t **data,
+                       uint16_t *dlen) {
+    if (len < 43 || ch[0] != HS_CLIENT_HELLO)
+        return 0;
+    size_t o = 39; /* type+len+ver+random+sessionid(0) */
+    if (o + 2 > len)
+        return 0;
+    uint16_t cs_len = (uint16_t)((ch[o] << 8) | ch[o + 1]);
+    o += 2 + cs_len;
+    if (o + 2 > len)
+        return 0;
+    o += 1 + ch[o]; /* compression */
+    if (o + 2 > len)
+        return 0;
+    uint16_t ext_total = (uint16_t)((ch[o] << 8) | ch[o + 1]);
+    o += 2;
+    const uint8_t *end = ch + o + ext_total;
+    if (end > ch + len)
+        end = ch + len;
+    while (o + 4 <= (size_t)(end - ch)) {
+        uint16_t et = (uint16_t)((ch[o] << 8) | ch[o + 1]);
+        uint16_t el = (uint16_t)((ch[o + 2] << 8) | ch[o + 3]);
+        o += 4;
+        if (o + el > (size_t)(end - ch))
+            break;
+        if (et == want) {
+            if (data)
+                *data = ch + o;
+            if (dlen)
+                *dlen = el;
+            return 1;
+        }
+        o += el;
+    }
+    return 0;
+}
+
+static void test_clienthello_goldens(void) {
+    uint8_t seed[64];
+    memset(seed, 0xA5, sizeof(seed));
+    random_absorb_trusted(seed, sizeof(seed));
+    expect(random_ready(RANDOM_DOMAIN_CRYPTO), "ch rng ready");
+
+    uint8_t ch[768];
+    size_t n = 0;
+    expect(tls_build_client_hello(ch, sizeof(ch), "example.com", &n) == 0, "ch build");
+    expect(n > 100 && n < sizeof(ch), "ch size");
+    expect(ch[0] == HS_CLIENT_HELLO, "ch type");
+    expect(ch[4] == 0x03 && ch[5] == 0x03, "ch legacy version");
+
+    /* Golden suite order prefix (after session id). */
+    size_t so = 39;
+    static const uint8_t suites_prefix[] = {
+        0x00, 0x14, 0x13, 0x01, 0x13, 0x03, 0x13, 0x02, 0xcc, 0xa9, 0xcc, 0xa8};
+    expect(so + sizeof(suites_prefix) <= n, "suites room");
+    expect(!memcmp(ch + so, suites_prefix, sizeof(suites_prefix)), "golden suite prefix");
+
+    const uint8_t *ed;
+    uint16_t el;
+    expect(ch_find_ext(ch, n, 0x002b, &ed, &el), "has supported_versions");
+    expect(el == 5 && ed[0] == 4 && ed[1] == 0x03 && ed[2] == 0x04 && ed[3] == 0x03 &&
+               ed[4] == 0x03,
+           "versions 1.3 then 1.2");
+    expect(ch_find_ext(ch, n, 0x0033, &ed, &el), "has key_share");
+    expect(el == 38 && ed[2] == 0x00 && ed[3] == 0x1d && ed[4] == 0x00 && ed[5] == 0x20,
+           "key_share x25519");
+    expect(ch_find_ext(ch, n, 0x0010, &ed, &el), "has alpn");
+    expect(el == 11 && ed[2] == 8 && !memcmp(ed + 3, "http/1.1", 8), "alpn http/1.1");
+    expect(ch_find_ext(ch, n, 0x0000, &ed, &el), "has sni");
+
+    /* Determinism under fixed timer + seeded DRBG: same structure length. */
+    size_t n2 = 0;
+    uint8_t ch2[768];
+    expect(tls_build_client_hello(ch2, sizeof(ch2), "example.com", &n2) == 0, "ch build 2");
+    expect(n2 == n, "ch length stable");
+}
+
 int main(void) {
     test_util_helpers();
     test_pin_and_tofu_fail_closed();
@@ -502,6 +579,7 @@ int main(void) {
     test_crypto_edges();
     test_hostname_and_pin_extras();
     test_ske_sig_verify();
+    test_clienthello_goldens();
 
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
