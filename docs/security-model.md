@@ -30,7 +30,7 @@ Obscurity ("no designed attacks exist yet") is never counted as a control.
 |----------|----------|
 | Malicious / buggy ring-3 process | Yes |
 | Malicious browser JS / page content | Yes |
-| Network eavesdropper / MITM | Yes (TLS + TOFU / pins; no X.509 chain validation) |
+| Network eavesdropper / MITM | Yes (TLS + WebPKI path / pins; TOFU opt-in) |
 | Layout-guessing exploit after a memory bug | Yes (containment + MTD) |
 | Compromised agent prompt / tool abuse | Yes (path policy + approval) |
 | Unsigned / tampered boot image | Planned (Phase S8; not shipped) |
