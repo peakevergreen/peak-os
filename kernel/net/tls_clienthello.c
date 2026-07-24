@@ -3,6 +3,7 @@
  */
 #include "tls_internal.h"
 #include "tls_session.h"
+#include "tls_ech.h"
 #include "timer.h"
 #include "util.h"
 
@@ -25,8 +26,15 @@ static uint16_t grease_from(uint8_t b) {
     return g[b & 0x0f];
 }
 
-/* 0 ok; -1 crypto RNG not ready; -2 message exceeds cap (post-serialize). */
+/* 0 ok; -1 crypto RNG not ready; -2 message exceeds cap; -3 ECH required/missing. */
 int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *out_len) {
+    {
+        int ech = tls_ech_prepare_client_hello();
+        if (ech == -1)
+            return -3;
+        if (ech == -2)
+            return -3; /* treat unimplemented encode as fail-closed when config set */
+    }
     if (crypto_random(client_random, 32) != 0)
         return -1;
     if (crypto_random(tls13_priv, 32) != 0)

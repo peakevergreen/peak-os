@@ -410,6 +410,10 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
             tls_set_err_code(TLS_E_RNG, "RNG not ready (crypto domain)");
             goto fail;
         }
+        if (ch_rc == -3) {
+            tls_set_err_code(TLS_E_HANDSHAKE, "ECH required but keys/config missing");
+            goto fail;
+        }
         if (ch_rc != 0) {
             tls_set_err_code(TLS_E_BUFFER, "ClientHello too large");
             goto fail;

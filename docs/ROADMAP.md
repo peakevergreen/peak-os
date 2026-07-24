@@ -30,6 +30,8 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 - [x] Deeper ring-3 `/bin/sh` ELF workload + per-process fds (`PROC_FD_MAX` 32)
 - [x] **virtio-net** (preferred over e1000 on QEMU) + richer socket API (`net_tcp_fd_peer` / `local` / `shutdown`)
+- [x] TLS 1.2/1.3 client, WebPKI, HTTP/2 ALPN — [network.md](network.md)
+- ECH: fail-closed when required without config (`tls_ech_*`); full HPKE outer/inner ClientHello still open
 
 ### Agent / storage
 
