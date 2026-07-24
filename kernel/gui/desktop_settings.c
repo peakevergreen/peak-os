@@ -4,6 +4,7 @@
 #include "theme.h"
 #include "wallpaper.h"
 #include "peakdisk.h"
+#include "privacy.h"
 #include "net.h"
 #include "util.h"
 
@@ -83,7 +84,11 @@ void desktop_settings_draw(struct win *w) {
         cy += row * 2;
         fb_draw_string(tx, cy, "Disk", desktop_color_dim(), desktop_color_bg());
         cy += row;
-        fb_draw_string(tx, cy, peakdisk_available() ? "Disk persist ready" : "No block disk",
+        fb_draw_string(tx, cy,
+                       !peakdisk_available()
+                           ? "No block disk"
+                           : (privacy_persist_profile() <= 0 ? "Disk present (persist private)"
+                                                            : "Disk persist enabled"),
                        desktop_color_fg(), desktop_color_bg());
     } else {
         struct net_info ni;

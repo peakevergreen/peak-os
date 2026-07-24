@@ -18,6 +18,14 @@ need() {
 }
 
 echo "==> Peak OS doctor ARCH=$ARCH PLATFORM=$PLATFORM"
+
+# Homebrew LLVM (llvm-objcopy / ld.lld) is often not on default PATH.
+for d in /opt/homebrew/opt/llvm/bin /usr/local/opt/llvm/bin; do
+  if [[ -d "$d" ]]; then
+    export PATH="$d:$PATH"
+  fi
+done
+
 need clang
 need ld.lld
 need llvm-objcopy

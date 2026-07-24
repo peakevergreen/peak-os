@@ -8,6 +8,7 @@
 #include "net.h"
 #include "notify.h"
 #include "peakdisk.h"
+#include "privacy.h"
 #include "util.h"
 
 int menu_open;
@@ -190,10 +191,13 @@ void desktop_menu_click(int32_t mx, int32_t my) {
         help_open = 1;
         dirty_bits |= DIRTY_FULL;
     } else if (row == 9) {
-        if (peakdisk_save_async() == 0)
+        if (privacy_persist_profile() <= 0) {
+            notify_push("Enable Privacy → workspace persist first");
+        } else if (peakdisk_save_async() == 0) {
             notify_push("Saving to disk…");
-        else
+        } else {
             notify_push("Save failed");
+        }
         dirty_bits |= DIRTY_TOAST;
     } else if (row == 10) {
         session_lock = 1;

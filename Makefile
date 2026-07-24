@@ -20,6 +20,14 @@ LD      := ld.lld
 NASM    ?= nasm
 LLDLINK := lld-link
 OBJCOPY := llvm-objcopy
+# Homebrew LLVM often isn't on PATH; prefer it when llvm-objcopy is missing.
+ifeq ($(shell command -v $(OBJCOPY) >/dev/null 2>&1 && echo yes),)
+  ifneq ($(wildcard /opt/homebrew/opt/llvm/bin/llvm-objcopy),)
+    OBJCOPY := /opt/homebrew/opt/llvm/bin/llvm-objcopy
+  else ifneq ($(wildcard /usr/local/opt/llvm/bin/llvm-objcopy),)
+    OBJCOPY := /usr/local/opt/llvm/bin/llvm-objcopy
+  endif
+endif
 
 # ---- Shared portable kernel sources ----
 KERNEL_COMMON_SRCS := \

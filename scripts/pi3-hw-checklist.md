@@ -2,10 +2,18 @@
 
 Primary physical gate for Peak OS ARM64. Use a freshly built image from a clean checkout.
 
-Code prerequisites (landed in-tree for this gate):
-- [x] DWC2 hub enum + split xfer + hotplug poll (`kernel/drivers/usb/dwc2.c`)
+**Status:** silicon boxes below remain open until a tester runs them on a Pi 3.
+Software prerequisites below are *in-tree / host-verified*, not hardware sign-off.
+
+## Software prerequisites (in-tree; not HW-verified)
+
+- [x] DWC2 hub enum + split xfer + hotplug poll (`kernel/drivers/usb/dwc2*.c`)
 - [x] PeakDisk atomic publish (payload then header) + SDHCI CMD13 flush
-- [x] QEMU aarch64 smoke markers + PeakFS x86 roundtrip smoke
+- [x] FB NC-map covers pageflip second page (`boot/rpi/boot_shim.c`)
+- [x] Mouse wheel-only reports forwarded (`dwc2_hid.c`)
+- [x] Save-disk UX warns when Privacy persist is private
+- [x] QEMU `smoke-aarch64` requires `Boot complete` / `peak:/`
+- [x] PeakFS x86 roundtrip smoke (`make smoke-peakfs`)
 
 ## Prepare
 
@@ -26,8 +34,12 @@ Code prerequisites (landed in-tree for this gate):
 
 ## Persistence + power
 
+Tester notes before Save disk:
+1. Set Privacy persist to **workspace** (CLI: `privacy persist workspace`) — default is private and Save is skipped.
+2. `PEAKFS01` at partition LBA0 is the empty image marker from `mkpiimg`; live envelopes are `PEAKDSK1`/`PEAKDSK2` at partition LBA1 after a successful save.
+
 - [ ] Writable PeakFS survives reboot (save disk → reboot → data present)
-- [ ] Clean reboot/shutdown does not corrupt PeakFS envelope (`PEAKDSK1`/`PEAKDSK2` at partition LBA1; image also has `PEAKFS01` at partition start from `mkpiimg`)
+- [ ] Clean reboot/shutdown does not corrupt PeakFS envelope
 
 ## Headless
 
@@ -38,7 +50,13 @@ Code prerequisites (landed in-tree for this gate):
 
 - [ ] Zero 2 W / Pi 4 / Pi 5: UART + FB + SD at minimum; HID/Ethernet/Wi-Fi per [docs/rpi.md](../docs/rpi.md) matrix
 
-## QEMU pre-check (not a silicon substitute)
+## QEMU / host pre-check (not a silicon substitute)
 
 - [ ] `make ARCH=aarch64 smoke-aarch64` reaches `Boot complete` / `peak:/`
 - [ ] `make smoke-peakfs` (x86 IDE) two-pass save/restore
+
+## Gate log (fill on silicon)
+
+| Date | Tester | Board | Result | Notes |
+|------|--------|-------|--------|-------|
+| | | | pending | Blocked on physical Pi 3 run |

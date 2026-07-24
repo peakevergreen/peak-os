@@ -71,12 +71,19 @@ set -e
 echo "---- serial log (tail) ----"
 tail -n 80 "$LOG" || true
 
-# Reject bare "Pk" — too short to prove boot. Prefer shell/boot-complete markers.
-BOOT_RE='PeakOS booting|peak-rpi:|Boot complete|peak:/|mmu on|rpi: soc'
-if grep -qE "$BOOT_RE" "$LOG"; then
-  echo "smoke-aarch64: saw boot markers"
+# Prefer shell / boot-complete markers (checklist + docs/rpi.md). Weaker early
+# markers alone are not enough for smoke-aarch64 gate.
+STRONG_RE='Boot complete|peak:/'
+WEAK_RE='PeakOS booting|peak-rpi:|mmu on|rpi: soc'
+if grep -qE "$STRONG_RE" "$LOG"; then
+  echo "smoke-aarch64: saw Boot complete / peak:/"
   rm -f "$LOG"
   exit 0
+fi
+if grep -qE "$WEAK_RE" "$LOG"; then
+  echo "smoke-aarch64: early boot only (missing Boot complete / peak:/) — fail"
+  rm -f "$LOG"
+  exit 1
 fi
 
 # If raspi3b silent, try virt once
@@ -87,13 +94,13 @@ if [[ "$RUN" == "run_raspi3b" ]]; then
   run_timed run_virt >"$LOG" 2>&1
   set -e
   tail -n 40 "$LOG" || true
-  if grep -qE "$BOOT_RE" "$LOG"; then
-    echo "smoke-aarch64: saw boot markers (virt)"
+  if grep -qE "$STRONG_RE" "$LOG"; then
+    echo "smoke-aarch64: saw Boot complete / peak:/ (virt)"
     rm -f "$LOG"
     exit 0
   fi
 fi
 
-echo "smoke-aarch64 FAILED (no boot markers)"
+echo "smoke-aarch64 FAILED (no Boot complete / peak:/)"
 rm -f "$LOG"
 exit 1

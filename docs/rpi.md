@@ -76,7 +76,7 @@ PeakOS kernel and Peak-authored drivers remain open source.
 | Feature | Pi 3 | Pi 4 | Pi 5 |
 |---------|------|------|------|
 | UART / timer / MMU | yes | yes (GIC timer ack) | MMU yes; SoC MMIO above 4 GiB not mapped yet |
-| Software FB desktop | yes, mailbox FB | yes, mailbox FB | deferred until high MMIO mapped |
+| Software FB desktop | implemented; silicon sign-off pending | implemented; silicon sign-off pending | deferred until high MMIO mapped |
 | SD PeakFS partition | implemented; silicon sign-off pending | implemented; unverified | deferred (SDHCI base >4 GiB) |
 | USB HID | hub+HID enum/split/hotplug; silicon sign-off pending | unavailable: PCIe/xHCI rings missing | unavailable: RP1 + high MMIO unmapped |
 | Ethernet | unavailable: USB LAN stub | unavailable: GENET rings/PHY missing | unavailable: RP1 GEM stub |
