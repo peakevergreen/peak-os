@@ -3,6 +3,7 @@
 #include "fb.h"
 #include "shell.h"
 #include "keyboard.h"
+#include "clipboard.h"
 #include "util.h"
 
 struct term_state {
@@ -180,6 +181,31 @@ int desktop_active_term_index(void) {
     return active_term;
 }
 
+static int term_has_selection(struct term_state *t) {
+    return t->sel_a >= 0 && t->sel_b >= t->sel_a;
+}
+
+static void term_copy_selection(struct term_state *t) {
+    if (!term_has_selection(t))
+        return;
+    uint32_t row = t->row;
+    if (row >= TERM_ROWS)
+        return;
+    int a = t->sel_a;
+    int b = t->sel_b;
+    if (a < 0)
+        a = 0;
+    if (b >= TERM_COLS)
+        b = TERM_COLS - 1;
+    char buf[TERM_COLS + 1];
+    int n = b - a + 1;
+    if (n <= 0 || n > TERM_COLS)
+        return;
+    memcpy(buf, t->lines[row] + (size_t)a, (size_t)n);
+    buf[n] = '\0';
+    clipboard_set(buf, (size_t)n);
+}
+
 static void term_scroll_up_buf(struct term_state *t) {
     for (uint32_t r = 1; r < TERM_ROWS; r++)
         memcpy(t->lines[r - 1], t->lines[r], TERM_COLS + 1);
@@ -307,6 +333,11 @@ void desktop_terminal_draw(struct win *w) {
         uint32_t cx = t->caret_col < TERM_COLS ? t->caret_col : t->col;
         fb_fill_rect(tx + cx * cw, ty + (uint32_t)caret_row * ch, desktop_u(2), ch, desktop_color_accent());
     }
+    if (term_has_selection(t)) {
+        uint32_t hint_y = ty + vis * ch + desktop_u(2);
+        if (hint_y + ch <= w->y + w->h)
+            fb_draw_string(tx, hint_y, "Ctrl+C copy selection", desktop_color_dim(), bg);
+    }
     t->full_redraw = 0;
     t->cell_dirty = 0;
 }
@@ -323,6 +354,11 @@ int desktop_terminal_key(int key) {
     } else if (key == KEY_DOWN) {
         if (tt->scroll > 0)
             tt->scroll--;
+        tt->full_redraw = 1;
+        dirty_bits |= DIRTY_TERM;
+        term_mark_active_surf_dirty();
+    } else if (key == 3 && term_has_selection(tt)) { /* Ctrl+C — copy selection */
+        term_copy_selection(tt);
         tt->full_redraw = 1;
         dirty_bits |= DIRTY_TERM;
         term_mark_active_surf_dirty();
