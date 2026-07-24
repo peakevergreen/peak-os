@@ -618,13 +618,13 @@ int vfs_link(const char *target, const char *linkname) {
 static int walk_rec(struct vfs_node *n, char *path, size_t path_cap, size_t path_len,
                     vfs_walk_cb cb, void *ctx) {
     if (cb(path, n, ctx) != 0)
-        return -1;
+        return PEAK_EIO;
     if (n->type != VFS_DIR)
         return 0;
     for (struct vfs_node *c = n->child; c; c = c->sibling) {
         size_t o = path_len;
         if (o + 1 >= path_cap)
-            return -1;
+            return PEAK_ENOSPC;
         if (!(o == 1 && path[0] == '/')) {
             /* if path is "/" path_len is 1 */
         }
@@ -643,8 +643,9 @@ static int walk_rec(struct vfs_node *n, char *path, size_t path_cap, size_t path
         for (size_t k = 0; c->name[k] && cl + 1 < sizeof(child); k++)
             child[cl++] = c->name[k];
         child[cl] = '\0';
-        if (walk_rec(c, child, sizeof(child), cl, cb, ctx) != 0)
-            return -1;
+        int wr = walk_rec(c, child, sizeof(child), cl, cb, ctx);
+        if (wr != 0)
+            return wr;
     }
     return 0;
 }
@@ -652,7 +653,7 @@ static int walk_rec(struct vfs_node *n, char *path, size_t path_cap, size_t path
 int vfs_walk(const char *path, vfs_walk_cb cb, void *ctx) {
     struct vfs_node *n = vfs_lookup(path);
     if (!n)
-        return -1;
+        return PEAK_ENOENT;
     char pbuf[VFS_PATH_MAX];
     size_t pl = 0;
     while (path[pl] && pl + 1 < sizeof(pbuf)) {
@@ -666,7 +667,7 @@ int vfs_walk(const char *path, vfs_walk_cb cb, void *ctx) {
 int vfs_readdir(const char *path, struct vfs_dirent *ents, int max_ents) {
     struct vfs_node *n = vfs_lookup(path);
     if (!n || n->type != VFS_DIR || !ents || max_ents <= 0)
-        return -1;
+        return PEAK_EINVAL;
     int count = 0;
     for (struct vfs_node *c = n->child; c && count < max_ents; c = c->sibling) {
         memcpy(ents[count].name, c->name, VFS_NAME_MAX);

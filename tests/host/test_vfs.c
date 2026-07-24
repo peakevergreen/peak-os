@@ -218,6 +218,17 @@ int main(void) {
         expect(!vfs_exists("/home"), "tree gone");
     }
 
+    /* --- walk / readdir errno --- */
+    {
+        reset_vfs();
+        /* Missing path returns before invoking cb. */
+        expect(vfs_walk("/missing", NULL, NULL) == PEAK_ENOENT, "walk missing → ENOENT");
+        expect(vfs_readdir("/missing", NULL, 1) == PEAK_EINVAL, "readdir bad args");
+        vfs_mkdir("/home");
+        struct vfs_dirent ents[4];
+        expect(vfs_readdir("/home", ents, 4) >= 0, "readdir ok");
+    }
+
     if (fails) {
         fprintf(stderr, "%d test(s) failed\n", fails);
         return 1;
