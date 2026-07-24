@@ -102,6 +102,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/crypto_aead.c \
 	kernel/net/crypto_x25519.c \
 	kernel/net/crypto_p256.c \
+	kernel/net/crypto_rsa.c \
 	kernel/net/tls_util.c \
 	kernel/net/tls.c \
 	kernel/net/tls_record.c \
@@ -355,12 +356,12 @@ $(eval $(call HOST_TEST_RULE,webapi,tests/host/test_webapi.c tests/host/js_host_
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/js -Ikernel/gui))
 $(eval $(call HOST_TEST_RULE,random,tests/host/test_random.c kernel/random.c \
 	kernel/net/crypto.c kernel/net/crypto_hash.c kernel/net/crypto_sha384.c kernel/net/crypto_aead.c kernel/net/crypto_x25519.c \
-	kernel/net/crypto_p256.c,\
+	kernel/net/crypto_p256.c kernel/net/crypto_rsa.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 $(HOST_TEST_INC_HOST_BOOT_KERNEL)))
 $(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c tests/host/tls_host_stubs.c \
 	kernel/net/tls_util.c kernel/net/tls_trust.c kernel/random.c \
 	kernel/net/crypto.c kernel/net/crypto_hash.c kernel/net/crypto_sha384.c kernel/net/crypto_aead.c kernel/net/crypto_x25519.c \
-	kernel/net/crypto_p256.c,\
+	kernel/net/crypto_p256.c kernel/net/crypto_rsa.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_HOST_BOOT_KERNEL) -Ikernel/net))
 $(eval $(call HOST_TEST_RULE,libpeak,tests/host/test_libpeak.c kernel/user/libpeak.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST))

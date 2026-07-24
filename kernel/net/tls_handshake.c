@@ -201,6 +201,109 @@ static int parse_server_hello(const uint8_t *msg, size_t len, uint16_t *cs_out) 
     return 0;
 }
 
+/* Leaf DER saved from Certificate (for SKE signature verify). */
+static uint8_t leaf_der[3072];
+static size_t leaf_der_len;
+
+/* Extract first uncompressed P-256 pubkey (0x04||X||Y) from DER leaf. */
+static int leaf_p256_pub(const uint8_t *leaf, size_t leaf_len, uint8_t pub_xy[64]) {
+    if (!leaf || leaf_len < 65)
+        return -1;
+    for (size_t i = 0; i + 65 <= leaf_len; i++) {
+        if (leaf[i] != 0x04)
+            continue;
+        /* Prefer BIT STRING length 66 (0x00 || 0x04 || 64) pattern one byte back. */
+        if (i >= 2 && leaf[i - 1] == 0x00 && leaf[i - 2] == 0x42) {
+            memcpy(pub_xy, leaf + i + 1, 64);
+            return 0;
+        }
+    }
+    /* Fallback: first 0x04||64 with non-zero coordinates. */
+    for (size_t i = 0; i + 65 <= leaf_len; i++) {
+        if (leaf[i] != 0x04)
+            continue;
+        memcpy(pub_xy, leaf + i + 1, 64);
+        int nz = 0;
+        for (int j = 0; j < 64; j++)
+            nz |= pub_xy[j];
+        if (nz)
+            return 0;
+    }
+    return -1;
+}
+
+static int der_ecdsa_sig_to_raw(const uint8_t *der, size_t der_len, uint8_t raw[64]) {
+    /* SEQUENCE { INTEGER r, INTEGER s } */
+    if (der_len < 8 || der[0] != 0x30)
+        return -1;
+    size_t off = 2;
+    if (der[1] & 0x80)
+        return -1; /* long form not needed for P-256 */
+    if (der[1] + 2u > der_len)
+        return -1;
+    memset(raw, 0, 64);
+    for (int part = 0; part < 2; part++) {
+        if (off >= der_len || der[off++] != 0x02)
+            return -1;
+        if (off >= der_len)
+            return -1;
+        uint8_t ilen = der[off++];
+        if (off + ilen > der_len || ilen == 0 || ilen > 33)
+            return -1;
+        const uint8_t *ip = der + off;
+        size_t skip = 0;
+        while (skip < ilen && ip[skip] == 0)
+            skip++;
+        size_t n = ilen - skip;
+        if (n > 32)
+            return -1;
+        memcpy(raw + part * 32 + (32 - n), ip + skip, n);
+        off += ilen;
+    }
+    return 0;
+}
+
+static int verify_ske_ecdsa(const uint8_t *params, size_t params_len,
+                            const uint8_t *sig_der, size_t sig_len,
+                            const uint8_t *leaf, size_t leaf_len) {
+    uint8_t pub[64], raw[64], hash[32], signed_data[32 + 32 + 256];
+    if (params_len > 256)
+        return -1;
+    if (leaf_p256_pub(leaf, leaf_len, pub) != 0)
+        return -1;
+    if (der_ecdsa_sig_to_raw(sig_der, sig_len, raw) != 0)
+        return -1;
+    memcpy(signed_data, client_random, 32);
+    memcpy(signed_data + 32, server_random, 32);
+    memcpy(signed_data + 64, params, params_len);
+    sha256(signed_data, 64 + params_len, hash);
+    if (p256_ecdsa_verify(raw, pub, hash, 32) != 0)
+        return -1;
+    return 0;
+}
+
+static int save_leaf_from_cert(const uint8_t *cert_msg, size_t len) {
+    leaf_der_len = 0;
+    if (!cert_msg || len < 10 || cert_msg[0] != HS_CERTIFICATE)
+        return -1;
+    size_t off = 4;
+    if (off + 3 > len)
+        return -1;
+    size_t list_len = ((size_t)cert_msg[off] << 16) | ((size_t)cert_msg[off + 1] << 8) |
+                      cert_msg[off + 2];
+    off += 3;
+    if (off + 3 > len || off + list_len > len)
+        return -1;
+    size_t cert_len = ((size_t)cert_msg[off] << 16) | ((size_t)cert_msg[off + 1] << 8) |
+                      cert_msg[off + 2];
+    off += 3;
+    if (off + cert_len > len || cert_len > sizeof(leaf_der))
+        return -1;
+    memcpy(leaf_der, cert_msg + off, cert_len);
+    leaf_der_len = cert_len;
+    return 0;
+}
+
 static int parse_server_key_exchange(const uint8_t *msg, size_t len, uint16_t *curve_out,
                                      uint8_t *peer_pub, size_t peer_cap, size_t *peer_len) {
     if (len < 4 || msg[0] != HS_SERVER_KEY_EX)
@@ -208,7 +311,8 @@ static int parse_server_key_exchange(const uint8_t *msg, size_t len, uint16_t *c
     uint32_t mlen = tls_rd24(msg + 1);
     if (mlen + 4 > len)
         return -1;
-    const uint8_t *p = msg + 4;
+    const uint8_t *params = msg + 4;
+    const uint8_t *p = params;
     const uint8_t *end = msg + 4 + mlen;
     if (p + 4 > end)
         return -1;
@@ -222,13 +326,46 @@ static int parse_server_key_exchange(const uint8_t *msg, size_t len, uint16_t *c
             return -1;
         memcpy(peer_pub, p, 32);
         *peer_len = 32;
+        p += 32;
     } else if (curve == 0x0017) {
         if (plen != 65 || p + 65 > end || peer_cap < 65 || p[0] != 0x04)
             return -1;
         memcpy(peer_pub, p, 65);
         *peer_len = 65;
+        p += 65;
     } else {
         return -1;
+    }
+    size_t params_len = (size_t)(p - params);
+    if (p + 4 > end)
+        return -1;
+    uint8_t hash_alg = *p++;
+    uint8_t sig_alg = *p++;
+    uint16_t sig_len = tls_rd16(p);
+    p += 2;
+    if (p + sig_len > end || sig_len == 0)
+        return -1;
+    const uint8_t *sig = p;
+
+    if (hash_alg == 4 && sig_alg == 3) {
+        /* ecdsa_secp256r1_sha256 */
+        if (verify_ske_ecdsa(params, params_len, sig, sig_len, leaf_der, leaf_der_len) != 0)
+            return -1;
+    } else if ((hash_alg == 8 && sig_alg == 4) || (hash_alg == 4 && sig_alg == 1)) {
+        /* rsa_pss_rsae_sha256 (0x0804) or rsa_pkcs1_sha256 (0x0401) */
+        uint8_t signed_data[32 + 32 + 256];
+        uint8_t digest[32];
+        if (params_len > 256 || leaf_der_len == 0)
+            return -1;
+        memcpy(signed_data, client_random, 32);
+        memcpy(signed_data + 32, server_random, 32);
+        memcpy(signed_data + 64, params, params_len);
+        sha256(signed_data, 64 + params_len, digest);
+        int pss = (hash_alg == 8 && sig_alg == 4);
+        if (rsa_verify_sha256(leaf_der, leaf_der_len, digest, 32, sig, sig_len, pss) != 0)
+            return -1;
+    } else {
+        return -1; /* unsupported SKE signature scheme */
     }
     *curve_out = curve;
     return 0;
@@ -324,6 +461,23 @@ static int expect_finished(uint32_t timeout_ticks) {
     }
     if (type != TLS_CONTENT_HS || n < 16 || buf[0] != HS_FINISHED)
         return -1;
+    uint8_t expect[12];
+    if (cipher_kind == CIPHER_AES256_GCM) {
+        uint8_t hash[48];
+        struct sha384_ctx tmp = transcript384;
+        sha384_ctx_final(&tmp, hash);
+        tls_prf_sha384(master_secret, 48, "server finished", hash, 48, expect, 12);
+    } else {
+        uint8_t hash[32];
+        struct sha256_ctx tmp = transcript;
+        sha256_ctx_final(&tmp, hash);
+        tls_prf_sha256(master_secret, 48, "server finished", hash, 32, expect, 12);
+    }
+    uint8_t diff = 0;
+    for (int i = 0; i < 12; i++)
+        diff |= expect[i] ^ buf[4 + i];
+    if (diff)
+        return -1;
     transcript_add(buf, n);
     return 0;
 }
@@ -410,12 +564,16 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                 got_sh = 1;
             } else if (hstype == HS_CERTIFICATE) {
                 got_cert = 1;
+                if (save_leaf_from_cert(hs_reasm + off, 4 + hslen) != 0) {
+                    tls_set_err("Certificate leaf extract failed");
+                    goto fail;
+                }
                 cert_verified = tls_verify_cert_chain(hs_reasm + off, 4 + hslen, sni_host);
             } else if (hstype == HS_SERVER_KEY_EX) {
                 if (parse_server_key_exchange(hs_reasm + off, 4 + hslen, &peer_curve,
                                               peer_pub, sizeof(peer_pub),
                                               &peer_pub_len) != 0) {
-                    tls_set_err("ServerKeyExchange parse failed");
+                    tls_set_err("ServerKeyExchange signature/parse failed");
                     goto fail;
                 }
                 got_ske = 1;
@@ -516,7 +674,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                 }
             } else {
                 if (expect_finished(timeout_ticks) != 0) {
-                    tls_set_err("Server Finished missing/decrypt failed");
+                    tls_set_err("Server Finished verify failed");
                     goto fail;
                 }
                 tls_up = 1;
