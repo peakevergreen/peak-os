@@ -1,5 +1,6 @@
 #include "peak_conf.h"
 #include "boot_util.h"
+#include "boot_sha256.h"
 
 static int is_space(char c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n';
@@ -171,6 +172,16 @@ void peak_conf_parse(const char *text, size_t len, struct peak_loader_conf *out)
             uint32_t v = 0;
             if (parse_u32(value, &v) == 0 && v != 0)
                 out->smoke_persist = 1;
+        } else if (key_eq(key, kl, "verify_required")) {
+            uint32_t v = 0;
+            if (parse_u32(value, &v) == 0 && v != 0)
+                out->verify_required = 1;
+        } else if (key_eq(key, kl, "kernel_sha256")) {
+            size_t n = boot_strlen(value);
+            if (n == BOOT_SHA256_DIGEST_LEN * 2) {
+                boot_memcpy(out->kernel_sha256, value, n);
+                out->kernel_sha256[n] = '\0';
+            }
         }
     }
 }

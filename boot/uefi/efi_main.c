@@ -3,6 +3,7 @@
 #include "boot_elf.h"
 #include "boot_load_ctx.h"
 #include "boot_paging.h"
+#include "boot_verify.h"
 #include "peak_boot.h"
 #include "peak_conf.h"
 
@@ -234,6 +235,18 @@ efi_status efi_main(efi_handle image_handle, efi_system_table *system_table) {
         return EFI_NOT_FOUND;
     }
     boot_serial_write_str("uefi: kernel loaded\n");
+
+    static char manifest_buf[4096];
+    size_t manifest_len = 0;
+    if (efi_load_text((efi_char16 *)L"\\EFI\\PEAK\\SHA256SUMS", manifest_buf,
+                      sizeof(manifest_buf), &manifest_len) != 0)
+        (void)efi_load_text((efi_char16 *)L"\\boot\\SHA256SUMS", manifest_buf,
+                            sizeof(manifest_buf), &manifest_len);
+
+    if (boot_verify_kernel(&conf, kdata, ksize, manifest_buf, manifest_len) != 0) {
+        boot_serial_write_str("uefi: kernel verify failed\n");
+        return EFI_LOAD_ERROR;
+    }
 
     /* Allocate page-table arena + kernel image pages (32 MiB). */
     uint64_t arena = 0;

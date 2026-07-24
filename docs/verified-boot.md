@@ -37,9 +37,17 @@ Optional CI step: after `SHA256SUMS` exists, run `verify-release.py` when `PEAK_
 
 ## Loader verify (software)
 
-Both [boot/bios/main32.c](../boot/bios/main32.c) and [boot/uefi/efi_main.c](../boot/uefi/efi_main.c) should call a Peak verify helper before `boot_elf_load` once the signature primitive is embedded in the loader. Fail closed on mismatch.
+Both [boot/bios/main32.c](../boot/bios/main32.c) and [boot/uefi/efi_main.c](../boot/uefi/efi_main.c) call `boot_verify_kernel()` **before** `boot_elf_load`. The helper:
 
-Until loader embed lands, purity + smoke + SHA256SUMS (+ optional `verify-release.py`) are the release gates.
+1. Computes SHA256 over the loaded kernel image in memory (`boot/common/sha256.c`).
+2. Looks for an expected digest in `peak.conf` (`kernel_sha256=<64 hex>`) and/or a `SHA256SUMS` stub on the boot volume (`/boot/SHA256SUMS` on ISO, `\EFI\PEAK\SHA256SUMS` on ESP).
+3. **Fail closed** when `verify_required=1` in `peak.conf` and no matching digest is present.
+
+Default installs keep `verify_required` off and log `verify: skip (no expected digest)` — behavior unchanged. Release ISOs may ship `build/SHA256SUMS` (from `mkmanifest.py`) under `/boot/` when present at `make iso` time.
+
+Host tests in `tests/host/test_boot.c` cover the digest helper and verify policy.
+
+Until Ed25519/HMAC is embedded in the loader, detached `SHA256SUMS.sig` verification remains a host-side release gate (`verify-release.py`). BIOS software verify is not a hardware root of trust.
 
 ## UEFI Secure Boot
 
