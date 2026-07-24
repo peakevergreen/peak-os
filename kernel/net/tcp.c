@@ -181,15 +181,25 @@ int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
     tcp_rx_len = 0;
     tcp_got_fin = 0;
     tcp_state = TCP_SYN_SENT;
+    uint32_t syn_seq = tcp_snd_nxt;
     if (net_tcp_send_seg(TCP_SYN, NULL, 0) != 0)
         return PEAK_EIO;
     uint64_t start = timer_ticks();
+    uint64_t last_syn = start;
     while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (tcp_state == TCP_ESTABLISHED)
             return 0;
         if (tcp_state == TCP_CLOSED)
             return PEAK_ENOTCONN;
+        /* Retransmit SYN with the original ISN (send_seg advances snd_nxt). */
+        if (tcp_state == TCP_SYN_SENT &&
+            net_timed_out(last_syn, NET_TCP_SYN_RETRY_TICKS)) {
+            tcp_snd_nxt = syn_seq;
+            if (net_tcp_send_seg(TCP_SYN, NULL, 0) != 0)
+                return PEAK_EIO;
+            last_syn = timer_ticks();
+        }
         hlt_if_enabled();
     }
     tcp_state = TCP_CLOSED;

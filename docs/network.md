@@ -99,11 +99,14 @@ wall time assumes the kernel timer at 100 Hz:
 | `NET_DNS_RESOLVE_TICKS` | 300 | 3s | DNS A lookup (http / tools) |
 | `NET_DNS_CACHE_TTL_TICKS` | 600 | 6s | Positive DNS cache TTL |
 | `NET_ARP_RESOLVE_TICKS` | 200 | 2s | Next-hop MAC resolve |
+| `NET_ARP_RETRY_TICKS` | 50 | 0.5s | ARP re-request interval |
 | `NET_TCP_CONNECT_HTTP_TICKS` | 500 | 5s | Plaintext HTTP connect |
+| `NET_TCP_SYN_RETRY_TICKS` | 100 | 1s | TCP SYN retransmit |
 | `NET_TCP_RECV_SLICE_TICKS` | 100 | 1s | Per-recv poll slice |
 | `NET_HTTP_IDLE_TCP_TICKS` | 800 | 8s | HTTP recv stall (TCP) |
 | `NET_HTTP_IDLE_TLS_TICKS` | 1200 | 12s | HTTP recv stall (TLS) |
 | `NET_TLS_HANDSHAKE_TICKS` | 1200 | 12s | TLS connect / handshake |
+| `NET_TLS_RECORD_BODY_TICKS` | 1200 | 12s | Floor for TLS record body |
 
 Blocking waits share `net_timed_out` / `net_poll_idle` (poll + HLT) rather than
 tight spin loops; the stack remains synchronous (no async rewrite).
