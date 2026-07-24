@@ -9,6 +9,26 @@
 #include "tls.h"
 #include "util.h"
 
+static const char *persist_profile_label(int profile) {
+    switch (profile) {
+    case 0: return "private (RAM only)";
+    case 1: return "workspace (/home)";
+    case 2: return "full (home + system)";
+    default: return "unknown";
+    }
+}
+
+static const char *general_disk_summary(void) {
+    if (!peakdisk_available())
+        return "No disk — nothing saved between reboots";
+    switch (privacy_persist_profile()) {
+    case 0: return "Disk present — nothing written (private mode)";
+    case 1: return "Disk present — /home saved between reboots";
+    case 2: return "Disk present — home and settings saved";
+    default: return "Disk present";
+    }
+}
+
 void desktop_settings_draw(struct win *w) {
     uint32_t ch = fb_cell_h();
     uint32_t th = desktop_title_h();
@@ -19,7 +39,8 @@ void desktop_settings_draw(struct win *w) {
     uint32_t content_w = w->w > pad * 2 ? w->w - pad * 2 : w->w;
     struct framebuffer *fb = fb_get();
 
-    static const char *tabs[SETTINGS_PAGES] = {"Display", "Look", "General", "Network"};
+    static const char *tabs[SETTINGS_PAGES] =
+        {"Display", "Look", "General", "Privacy", "Network"};
     uint32_t tab_w = content_w / SETTINGS_PAGES;
     if (tab_w < desktop_u(56))
         tab_w = desktop_u(56);
@@ -83,14 +104,30 @@ void desktop_settings_draw(struct win *w) {
         cy += row;
         fb_draw_string(tx, cy, "Ctrl+Alt+Esc leaves desktop.", desktop_color_dim(), desktop_color_bg());
         cy += row * 2;
-        fb_draw_string(tx, cy, "Disk", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(tx, cy, "Storage", desktop_color_dim(), desktop_color_bg());
         cy += row;
-        fb_draw_string(tx, cy,
-                       !peakdisk_available()
-                           ? "No block disk"
-                           : (privacy_persist_profile() <= 0 ? "Disk present (persist private)"
-                                                            : "Disk persist enabled"),
-                       desktop_color_fg(), desktop_color_bg());
+        fb_draw_string(tx, cy, general_disk_summary(), desktop_color_fg(), desktop_color_bg());
+        cy += row;
+        fb_draw_string(tx, cy, "Change profile on Privacy tab.", desktop_color_dim(), desktop_color_bg());
+    } else if (settings_page == 3) {
+        fb_draw_string(tx, cy, "Persistence profile (click):", desktop_color_fg(), desktop_color_bg());
+        cy += row;
+        fb_draw_string(tx, cy, persist_profile_label(privacy_persist_profile()),
+                       desktop_color_accent(), desktop_color_bg());
+        cy += row;
+        fb_draw_string(tx, cy, "Cycles private → workspace → full.", desktop_color_dim(),
+                       desktop_color_bg());
+        cy += row * 2;
+        fb_draw_string(tx, cy, "Network kill switch (click):", desktop_color_fg(), desktop_color_bg());
+        cy += row;
+        fb_draw_string(tx, cy, privacy_net_kill_switch() ? "on (blocks outbound/listen)"
+                                                         : "off",
+                       desktop_color_accent(), desktop_color_bg());
+        cy += row * 2;
+        fb_draw_string(tx, cy, "Clear session (click)", desktop_color_accent(), desktop_color_bg());
+        cy += row;
+        fb_draw_string(tx, cy, "Revokes net grants, caps, clipboard, toasts.", desktop_color_dim(),
+                       desktop_color_bg());
     } else {
         struct net_info ni;
         net_get_info(&ni);
@@ -111,14 +148,14 @@ void desktop_settings_draw(struct win *w) {
         snprintf(line, sizeof(line), "dns %s", dns);
         fb_draw_string(tx, cy, line, desktop_color_fg(), desktop_color_bg());
         cy += row * 2;
-        snprintf(line, sizeof(line), "TLS TOFU (click): %s",
+        snprintf(line, sizeof(line), "Trust on first use (click): %s",
                  settings_tls_tofu() ? "on" : "off");
         fb_draw_string(tx, cy, line, desktop_color_accent(), desktop_color_bg());
         cy += row;
-        fb_draw_string(tx, cy, "Clear TLS trust (click)", desktop_color_accent(),
+        fb_draw_string(tx, cy, "Forget saved TLS certificates (click)", desktop_color_accent(),
                        desktop_color_bg());
         cy += row * 2;
-        fb_draw_string(tx, cy, "Clears pins, TOFU, and HSTS map.", desktop_color_dim(),
+        fb_draw_string(tx, cy, "Clears certificate pins, TOFU cache, and HSTS.", desktop_color_dim(),
                        desktop_color_bg());
     }
     (void)content_w;
@@ -163,6 +200,16 @@ int desktop_settings_click(struct win *w, int32_t mx, int32_t my) {
             settings_persist();
         }
     } else if (settings_page == 3) {
+        int row = (int)((my - (int32_t)body_y) / (int32_t)row_h);
+        if (row <= 1) {
+            int next = (privacy_persist_profile() + 1) % 3;
+            privacy_set_persist_profile(next);
+        } else if (row <= 4) {
+            privacy_set_net_kill_switch(!privacy_net_kill_switch());
+        } else if (row >= 6) {
+            privacy_clear_session();
+        }
+    } else if (settings_page == 4) {
         int row = (int)((my - (int32_t)body_y) / (int32_t)row_h);
         if (row == 6) {
             settings_toggle_tls_tofu();
