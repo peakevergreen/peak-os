@@ -6,8 +6,8 @@
 static struct vfs_node nodes[VFS_MAX_NODES];
 static int node_count;
 static struct vfs_node *root;
-/* First-character child buckets: nodes[i] -> heads[i][ch & 31]. */
-static struct vfs_node *child_bucket[VFS_MAX_NODES][32];
+/* First-character child buckets: 0 = empty, else 1-based index into nodes[]. */
+static uint16_t child_bucket[VFS_MAX_NODES][32];
 
 static int node_index(struct vfs_node *n) {
     if (!n)
@@ -51,10 +51,11 @@ static void add_child(struct vfs_node *parent, struct vfs_node *child) {
     child->sibling = parent->child;
     parent->child = child;
     int pi = node_index(parent);
-    if (pi >= 0) {
+    int ci = node_index(child);
+    if (pi >= 0 && ci >= 0) {
         unsigned b = name_bucket(child->name);
         /* Prepend keeps this child at the front of the sibling chain. */
-        child_bucket[pi][b] = child;
+        child_bucket[pi][b] = (uint16_t)(ci + 1);
     }
 }
 
@@ -75,8 +76,11 @@ static struct vfs_node *find_child(struct vfs_node *dir, const char *name) {
     int di = node_index(dir);
     unsigned b = name_bucket(name);
     struct vfs_node *start = dir->child;
-    if (di >= 0 && child_bucket[di][b])
-        start = child_bucket[di][b];
+    if (di >= 0 && child_bucket[di][b]) {
+        uint16_t idx = child_bucket[di][b];
+        if (idx >= 1 && idx <= (uint16_t)VFS_MAX_NODES)
+            start = &nodes[idx - 1];
+    }
     for (struct vfs_node *c = start; c; c = c->sibling) {
         if (((unsigned)(unsigned char)c->name[0] & 31u) != b)
             continue;

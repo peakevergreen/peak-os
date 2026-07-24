@@ -7,7 +7,7 @@
 #include "browser_js.h"
 
 #define BR_URL_MAX    160
-#define BR_BODY_MAX   (256 * 1024)
+#define BR_BODY_MAX   (128 * 1024)
 #define BR_MAX_BLOCKS 192
 #define BR_TEXT_MAX   120
 #define BR_TITLE_MAX  48

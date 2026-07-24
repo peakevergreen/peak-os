@@ -18,10 +18,16 @@ static int ntabs;
 static int active;
 static int editing;
 static int needs_redraw = 1;
-static char body_cache[BR_BODY_MAX];
+static char *body_cache;
 
 static uint32_t hit_tab_y, hit_tab_h, hit_tab_w;
 static uint32_t hit_plus_x, hit_go_x, hit_go_w, hit_bar_y, hit_bar_h;
+
+static char *ensure_body_cache(void) {
+    if (!body_cache)
+        body_cache = (char *)kmalloc(BR_BODY_MAX);
+    return body_cache;
+}
 
 static struct br_tab *cur(void) {
     if (active < 0 || active >= ntabs || !tabs[active].used)
@@ -285,13 +291,20 @@ void browser_go(const char *url) {
     snprintf(t->status, sizeof(t->status), "Fetching...");
     needs_redraw = 1;
 
+    char *body = ensure_body_cache();
+    if (!body) {
+        snprintf(t->status, sizeof(t->status), "Out of memory");
+        needs_redraw = 1;
+        return;
+    }
+
     int st = 0;
-    body_cache[0] = '\0';
+    body[0] = '\0';
     int ok;
 
     if (is_local_host(t->url)) {
         ctr_init();
-        ok = (ctr_http_get(t->url, body_cache, sizeof(body_cache), &st) == 0);
+        ok = (ctr_http_get(t->url, body, BR_BODY_MAX, &st) == 0);
         if (!ok) {
             t->http_status = st;
             snprintf(t->status, sizeof(t->status), "Local fetch failed (HTTP %d)", st);
@@ -319,13 +332,13 @@ void browser_go(const char *url) {
             return;
         }
         snprintf(t->status, sizeof(t->status), "DNS + TCP/TLS...");
-        ok = (net_http_get(t->url, body_cache, sizeof(body_cache), &st) == 0);
+        ok = (net_http_get(t->url, body, BR_BODY_MAX, &st) == 0);
 
         if (!ok) {
             t->http_status = st;
             snprintf(t->status, sizeof(t->status), "Fetch failed (HTTP %d)", st);
-            if (body_cache[0]) {
-                load_document(t, body_cache);
+            if (body[0]) {
+                load_document(t, body);
             } else {
                 browser_clear_blocks(t);
                 tab_teardown_js(t);
@@ -339,7 +352,7 @@ void browser_go(const char *url) {
     }
 
     t->http_status = st;
-    load_document(t, body_cache);
+    load_document(t, body);
 }
 
 void browser_input(char c) {

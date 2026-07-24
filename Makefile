@@ -426,6 +426,8 @@ $(BUILD)/kernel/%.o: kernel/%.S
 $(KERNEL_ELF): $(KERNEL_OBJS) $(LINKER_SCRIPT)
 	@mkdir -p $(dir $@)
 	$(LD) $(LDFLAGS) -o $@ $(KERNEL_OBJS)
+	@chmod +x scripts/check-kernel-size.sh
+	./scripts/check-kernel-size.sh $@
 
 ifeq ($(ARCH),aarch64)
 kernel8: $(KERNEL8_IMG)

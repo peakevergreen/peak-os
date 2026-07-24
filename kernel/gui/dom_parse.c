@@ -89,7 +89,7 @@ static int parse_attrs(struct dom_document *doc, int id, const char **pp) {
         while (*p && *p != '=' && *p != ' ' && *p != '>' && *p != '/')
             p++;
         p = skip_ws(p);
-        char value[96] = "true";
+        char value[DOM_ATTR_VAL_MAX] = "true";
         if (*p == '=') {
             p++;
             p = skip_ws(p);

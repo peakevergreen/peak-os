@@ -12,20 +12,45 @@ fi
 MAX_BSS=$((20 * 1024 * 1024))  # 20 MiB
 MAX_FILE=$((12 * 1024 * 1024)) # 12 MiB linked ELF on disk
 
-SIZE_TOOL=""
+bss=""
+# Prefer llvm-size / GNU size when they understand the target ELF (Linux CI).
+# On macOS, host `size` rejects foreign ELF — fall back to a tiny Python parser.
 if command -v llvm-size >/dev/null 2>&1; then
-  SIZE_TOOL=llvm-size
+  bss=$(llvm-size "$ELF" 2>/dev/null | awk 'NR==2 { print $3; exit }' || true)
 elif command -v size >/dev/null 2>&1; then
-  SIZE_TOOL=size
-else
-  echo "check-kernel-size: llvm-size/size required" >&2
-  exit 1
+  bss=$(size "$ELF" 2>/dev/null | awk 'NR==2 { print $3; exit }' || true)
 fi
 
-# Berkeley format line 2: text data bss dec hex filename
-bss=$("$SIZE_TOOL" "$ELF" | awk 'NR==2 { print $3; exit }')
 if [[ -z "${bss}" ]]; then
-  echo "check-kernel-size: could not parse BSS from $SIZE_TOOL" >&2
+  bss=$(python3 - "$ELF" <<'PY'
+import struct, sys
+path = sys.argv[1]
+data = open(path, "rb").read()
+if data[:4] != b"\x7fELF":
+    sys.exit("check-kernel-size: not an ELF")
+endian = "<" if data[5] == 1 else ">"
+ei_class = data[4]
+if ei_class == 1:
+    e_shoff = struct.unpack_from(endian + "I", data, 32)[0]
+    e_shentsize, e_shnum = struct.unpack_from(endian + "HH", data, 46)
+    shfmt = endian + "IIIIIIIIII"
+else:
+    e_shoff = struct.unpack_from(endian + "Q", data, 40)[0]
+    e_shentsize, e_shnum = struct.unpack_from(endian + "HH", data, 58)
+    shfmt = endian + "IIQQQQIIQQ"
+bss = 0
+for i in range(e_shnum):
+    f = struct.unpack_from(shfmt, data, e_shoff + i * e_shentsize)
+    # sh_type=NOBITS(8), sh_flags has SHF_ALLOC(2)
+    if f[1] == 8 and (f[2] & 2):
+        bss += f[5]
+print(bss)
+PY
+)
+fi
+
+if [[ -z "${bss}" ]]; then
+  echo "check-kernel-size: could not measure BSS (need llvm-size/size or python3)" >&2
   exit 1
 fi
 

@@ -10,8 +10,8 @@
 extern const uint8_t font8x16[256][16];
 
 /* Small emergency BSS if PMM backbuffer alloc fails (heap/PMM preferred). */
-#define FB_BACK_FALLBACK_W 800
-#define FB_BACK_FALLBACK_H 600
+#define FB_BACK_FALLBACK_W 640
+#define FB_BACK_FALLBACK_H 480
 
 static struct framebuffer g_fb;
 static uint32_t g_scale = 3;
