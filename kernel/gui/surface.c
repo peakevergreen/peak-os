@@ -5,12 +5,20 @@
 #include "serial.h"
 #include "util.h"
 
+/* Desktop MAX_WINS + guiproto GUI_MAX_WINS, with headroom. */
+#define SURFACE_LIVE_MAX 32
+
 static uint64_t g_surf_bytes;
 static int g_warned;
+static struct win_surface *g_live[SURFACE_LIVE_MAX];
+static int g_live_n;
 
 void surface_init(void) {
     g_surf_bytes = 0;
     g_warned = 0;
+    g_live_n = 0;
+    for (int i = 0; i < SURFACE_LIVE_MAX; i++)
+        g_live[i] = NULL;
 }
 
 uint64_t surface_bytes_used(void) { return g_surf_bytes; }
@@ -27,6 +35,37 @@ int surface_pressure_pct(void) {
 
 static uint64_t surf_bytes(uint32_t w, uint32_t h) {
     return (uint64_t)w * (uint64_t)h * 4ull;
+}
+
+static void live_add(struct win_surface *s) {
+    if (!s)
+        return;
+    for (int i = 0; i < g_live_n; i++) {
+        if (g_live[i] == s)
+            return;
+    }
+    if (g_live_n >= SURFACE_LIVE_MAX)
+        return;
+    g_live[g_live_n++] = s;
+}
+
+static void live_del(struct win_surface *s) {
+    if (!s)
+        return;
+    for (int i = 0; i < g_live_n; i++) {
+        if (g_live[i] != s)
+            continue;
+        g_live[i] = g_live[g_live_n - 1];
+        g_live[g_live_n - 1] = NULL;
+        g_live_n--;
+        return;
+    }
+}
+
+void surface_set_reclaimable(struct win_surface *s, int on) {
+    if (!s)
+        return;
+    s->reclaimable = on ? 1 : 0;
 }
 
 static void surf_damage_clear(struct win_surface *s) {
@@ -91,36 +130,90 @@ void surface_mark_dirty_rect(struct win_surface *s, uint32_t x, uint32_t y,
     surf_damage_add(s, x, y, w, h);
 }
 
+/*
+ * Drop pixel backing for reclaimable live surfaces (minimized / unused) until
+ * want_bytes have been released, or nothing reclaimable remains.
+ */
+uint64_t surface_reclaim(uint64_t want_bytes, struct win_surface *skip) {
+    uint64_t freed = 0;
+
+    for (;;) {
+        struct win_surface *victim = NULL;
+        for (int i = 0; i < g_live_n; i++) {
+            struct win_surface *s = g_live[i];
+            if (!s || s == skip || !s->reclaimable || !s->px)
+                continue;
+            victim = s;
+            break;
+        }
+        if (!victim)
+            break;
+
+        uint64_t b = surf_bytes(victim->w, victim->h);
+        kfree(victim->px);
+        victim->px = NULL;
+        victim->w = victim->h = victim->stride = 0;
+        surf_damage_clear(victim);
+        victim->reclaimable = 0;
+
+        if (g_surf_bytes >= b)
+            g_surf_bytes -= b;
+        else
+            g_surf_bytes = 0;
+        freed += b;
+        live_del(victim);
+        serial_write_str("surface: reclaimed unused/closed surface under budget pressure\n");
+
+        /* want_bytes == 0 → reclaim every reclaimable surface. */
+        if (want_bytes > 0 && freed >= want_bytes)
+            break;
+    }
+    return freed;
+}
+
 int surface_ensure(struct win_surface *s, uint32_t w, uint32_t h) {
     if (!s || !w || !h)
-        return -1;
-    if (s->px && s->w == w && s->h == h)
-        return 0;
+        return SURFACE_ERR_INVAL;
+    if (s->px && s->w == w && s->h == h) {
+        /* Actively retained — do not reclaim this surface under pressure. */
+        s->reclaimable = 0;
+        return SURFACE_OK;
+    }
 
     uint64_t old_b = s->px ? surf_bytes(s->w, s->h) : 0;
     uint64_t new_b = surf_bytes(w, h);
     uint64_t after = g_surf_bytes - old_b + new_b;
-    if (after > SURFACE_BUDGET_BYTES) {
-        if (!g_warned) {
-            serial_write_str("surface: budget exceeded — soft-fail alloc\n");
-            g_warned = 1;
+
+    if (SURFACE_BUDGET_BYTES > 0 && after > SURFACE_BUDGET_BYTES) {
+        /* Prefer reclaiming minimized/unused surfaces over refusing the alloc. */
+        surface_reclaim(after - SURFACE_BUDGET_BYTES, s);
+        after = g_surf_bytes - old_b + new_b;
+        if (after > SURFACE_BUDGET_BYTES) {
+            if (!g_warned) {
+                serial_write_str(
+                    "surface: soft budget exceeded — alloc refused after reclaim\n");
+                g_warned = 1;
+            }
+            return SURFACE_ERR_BUDGET;
         }
-        return -1;
     }
 
     uint32_t *np = (uint32_t *)kmalloc((size_t)new_b);
     if (!np)
-        return -1;
+        return SURFACE_ERR_NOMEM;
     memset(np, 0, (size_t)new_b);
     if (s->px)
         kfree(s->px);
+    else
+        live_add(s);
     g_surf_bytes = after;
     s->px = np;
     s->w = w;
     s->h = h;
     s->stride = w;
+    s->reclaimable = 0;
     surface_mark_dirty(s);
-    return 0;
+    return SURFACE_OK;
 }
 
 void surface_free(struct win_surface *s) {
@@ -133,9 +226,11 @@ void surface_free(struct win_surface *s) {
         else
             g_surf_bytes = 0;
         kfree(s->px);
+        live_del(s);
     }
     s->px = NULL;
     s->w = s->h = s->stride = 0;
+    s->reclaimable = 0;
     surf_damage_clear(s);
 }
 

@@ -363,7 +363,8 @@ $(eval $(call HOST_TEST_RULE,peakvec,tests/host/test_peakvec.c tests/host/peakve
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
 $(eval $(call HOST_TEST_RULE,guiproto,tests/host/test_guiproto.c tests/host/guiproto_host_stubs.c \
 	kernel/gui/guiproto.c kernel/gui/surface.c kernel/display_clip.c,\
-	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui))
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui \
+	-DSURFACE_BUDGET_BYTES=524288))
 $(eval $(call HOST_TEST_RULE,vmm_usercopy,tests/host/test_vmm_usercopy.c tests/host/vmm_host_stubs.c \
 	kernel/vmm.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))

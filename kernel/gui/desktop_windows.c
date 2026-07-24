@@ -173,6 +173,8 @@ void desktop_minimize_win(int idx) {
     uint32_t ox = wins[idx].x, oy = wins[idx].y, ow = wins[idx].w, oh = wins[idx].h;
     int prev_focus = focus;
     wins[idx].minimized = 1;
+    /* Soft-budget reclaim may drop pixels; restore path surface_ensure redraws. */
+    surface_set_reclaimable(&wins[idx].surf, 1);
     if (focus == idx) {
         focus = -1;
         int best = -1, bz = -1;
