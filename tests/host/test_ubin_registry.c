@@ -21,7 +21,7 @@ int main(void) {
     int n = 0;
     while (ubin_names[n])
         n++;
-    expect(n == 59, "expected 59 built-ins");
+    expect(n == 64, "expected 64 built-ins");
 
     for (int i = 0; i < n; i++) {
         expect(ubin_names[i][0], "non-empty name");

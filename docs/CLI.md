@@ -67,6 +67,7 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 |---------|-------|
 | `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N`) |
 | `grep <pat> <file>` | substring match |
+| `diff` `sort` `uniq` `cut` `tr` | text filters (stdin/`-` ok) |
 | `hexdump` `strings` | binary helpers |
 | `echo` `clear` `edit` | misc |
 

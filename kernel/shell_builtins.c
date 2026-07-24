@@ -145,6 +145,11 @@ static const struct help_entry help_table[] = {
     { "tail", "text", "last N lines" },
     { "wc", "text", "line/word/byte count" },
     { "grep", "text", "substring search" },
+    { "diff", "text", "line diff (-/+)" },
+    { "sort", "text", "sort lines" },
+    { "uniq", "text", "drop adjacent dup lines" },
+    { "cut", "text", "cut -f N [-d delim]" },
+    { "tr", "text", "translate chars" },
     { "hexdump", "text", "hex dump" },
     { "strings", "text", "printable runs" },
     { "echo", "text", "print arguments" },
@@ -191,7 +196,7 @@ void shell_help_topics(void) {
     console_write("Peak CLI — categories:\n");
     console_write("  nav   pwd cd ls tree find\n");
     console_write("  file  mkdir touch rm cp mv ln stat du df truncate\n");
-    console_write("  text  cat head tail wc grep hexdump strings echo edit clear\n");
+    console_write("  text  cat head tail wc grep diff sort uniq cut tr hexdump strings echo edit\n");
     console_write("  sys   date free top sysmon ps env which seq sleep theme wallpaper scale\n");
     console_write("        uname true false sh reboot help man js\n");
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
