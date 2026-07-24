@@ -54,6 +54,24 @@ struct br_tab {
     int dom_dirty;
 };
 
+/* Shared session state (defined in browser.c). */
+extern struct br_tab tabs[BR_MAX_TABS];
+extern int ntabs;
+extern int active;
+extern int editing;
+extern int needs_redraw;
+extern uint32_t hit_tab_y, hit_tab_h, hit_tab_w;
+extern uint32_t hit_plus_x, hit_go_x, hit_go_w, hit_bar_y, hit_bar_h;
+
+struct br_tab *browser_cur(void);
+void browser_select_tab(int i);
+int  browser_new_tab(const char *url);
+void browser_close_tab(int i);
+void browser_tab_teardown_js(struct br_tab *t);
+void browser_rebuild_layout(struct br_tab *t, int content_w);
+int  browser_is_local_host(const char *url);
+void browser_normalize_url(const char *in, char *out, size_t out_cap);
+
 void browser_clear_blocks(struct br_tab *t);
 int  browser_add_block(struct br_tab *t, enum br_kind kind, const char *text);
 int  browser_content_blocks(struct br_tab *t);
