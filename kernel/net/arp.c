@@ -53,6 +53,7 @@ int net_resolve_next_hop_mac(uint32_t dst_ip, uint8_t mac[6], uint32_t timeout_t
         return 0;
     net_arp_request(tip);
     uint64_t start = timer_ticks();
+    uint64_t last_req = start;
     while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (arp_resolved && arp_wait_ip == tip) {
@@ -62,6 +63,12 @@ int net_resolve_next_hop_mac(uint32_t dst_ip, uint8_t mac[6], uint32_t timeout_t
         }
         if (net_arp_cache_get(tip, mac) == 0)
             return 0;
+        /* Lost / unanswered ARP: re-request on a fixed interval inside the
+         * resolve budget (avoids one-shot probes on lossy links). */
+        if (net_timed_out(last_req, NET_ARP_RETRY_TICKS)) {
+            net_arp_request(tip);
+            last_req = timer_ticks();
+        }
         hlt_if_enabled();
     }
     return PEAK_ETIMEOUT;

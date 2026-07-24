@@ -1,5 +1,5 @@
 #include "tls_internal.h"
-#include "net.h"
+#include "net_internal.h"
 #include "timer.h"
 #include "util.h"
 
@@ -125,7 +125,9 @@ int tls_recv_record(uint8_t *type_out, uint8_t *buf, size_t cap, size_t *out_len
     /* Header consumed — we are committed to this record. Bailing out here
      * desyncs the byte stream and the AEAD sequence, killing the session,
      * so wait out retransmission stalls (timer resets on progress). */
-    uint32_t body_timeout = timeout_ticks > 1200 ? timeout_ticks : 1200;
+    uint32_t body_timeout = timeout_ticks > NET_TLS_RECORD_BODY_TICKS
+                                ? timeout_ticks
+                                : NET_TLS_RECORD_BODY_TICKS;
     if (tcp_read_full(payload, len, body_timeout) != 0)
         return -1;
 

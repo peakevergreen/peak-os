@@ -23,12 +23,15 @@
 #define NET_DNS_CACHE_TTL_TICKS     600u  /* 6s positive A-cache */
 #define NET_DNS_RESOLVE_TICKS       300u  /* 3s A-query (http / ping) */
 #define NET_ARP_RESOLVE_TICKS       200u  /* 2s next-hop MAC resolve */
+#define NET_ARP_RETRY_TICKS          50u  /* 0.5s ARP re-request interval */
 #define NET_ARP_GW_PRIME_ITERS       50u  /* post-DHCP gateway ARP prime */
 #define NET_TCP_CONNECT_HTTP_TICKS  500u  /* 5s plaintext HTTP connect */
+#define NET_TCP_SYN_RETRY_TICKS     100u  /* 1s TCP SYN retransmit */
 #define NET_TCP_RECV_SLICE_TICKS    100u  /* 1s per recv poll slice */
 #define NET_HTTP_IDLE_TCP_TICKS     800u  /* 8s stall without TCP progress */
 #define NET_HTTP_IDLE_TLS_TICKS    1200u  /* 12s stall without TLS progress */
 #define NET_TLS_HANDSHAKE_TICKS    1200u  /* 12s TLS connect / handshake */
+#define NET_TLS_RECORD_BODY_TICKS  1200u  /* 12s floor for TLS record body */
 
 #define ETH_IP   0x0800
 #define ETH_ARP  0x0806
