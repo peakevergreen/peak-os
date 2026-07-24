@@ -164,11 +164,8 @@ int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
             break;
         }
     }
-    if (slot < 0) {
-        /* Reuse current slot */
-        net_tcp_close();
-        slot = tcp_cur;
-    }
+    if (slot < 0)
+        return PEAK_EBUSY;
     tcp_cur = slot;
     memset(&tcps[slot], 0, sizeof(tcps[slot]));
     tcp_remote_ip = ip;

@@ -27,8 +27,8 @@ void net_get_info(struct net_info *out);
 /* DNS A record. Returns host-order IPv4 or 0 on failure. */
 uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks);
 
-#define NET_TCP_MAX     8
-#define NET_LISTEN_MAX  4
+#define NET_TCP_MAX     16
+#define NET_LISTEN_MAX  8
 
 /*
  * TCP helpers (up to NET_TCP_MAX concurrent connections).
