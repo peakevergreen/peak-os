@@ -310,6 +310,32 @@ static void test_crypto_edges(void) {
                 nonzero = 1;
         expect(nonzero, "tls prf produces bytes");
     }
+
+    /* PeakDisk PEAKDSK3 KDF: correct passphrase unwraps; wrong fails. */
+    {
+        const char *pass = "test-passphrase";
+        uint8_t salt[16], nonce[12], tag[16], key[32], key_bad[32];
+        uint8_t plain[32], cipher[32], out[32];
+        memset(salt, 0x11, sizeof(salt));
+        memset(nonce, 0x22, sizeof(nonce));
+        memset(plain, 0x33, sizeof(plain));
+        expect(pbkdf2_hmac_sha256((const uint8_t *)pass, strlen(pass), salt, 16, 1000,
+                                  key, 32) == 0,
+               "pbkdf2 ok");
+        expect(chacha20_poly1305_encrypt(key, nonce, salt, 16, plain, sizeof(plain),
+                                         cipher, tag) == 0,
+               "aead encrypt");
+        expect(chacha20_poly1305_decrypt(key, nonce, salt, 16, cipher, sizeof(cipher),
+                                         tag, out) == 0,
+               "aead decrypt good pass");
+        expect(memcmp(out, plain, sizeof(plain)) == 0, "plain roundtrip");
+        expect(pbkdf2_hmac_sha256((const uint8_t *)"wrong", 5, salt, 16, 1000, key_bad,
+                                  32) == 0,
+               "pbkdf2 wrong");
+        expect(chacha20_poly1305_decrypt(key_bad, nonce, salt, 16, cipher, sizeof(cipher),
+                                         tag, out) != 0,
+               "wrong passphrase rejects");
+    }
 }
 
 static void test_hostname_and_pin_extras(void) {

@@ -50,8 +50,8 @@ Do not start these until [scripts/pi3-hw-checklist.md](../scripts/pi3-hw-checkli
 - Exception recovery / fault containment beyond log+halt
 - Pi 4/5 xHCI rings, GENET datapath, Wi‑Fi association, high-MMIO maps
 - SMP (secondaries stay parked)
+- PeakDisk passphrase KDF (PEAKDSK3); PEAKDSK2 header-key retired on load
 - S8 verified boot / signed release ceremony
-- PeakDisk passphrase KDF (header-key remains experimental)
 - USB LAN bulk datapath (needs silicon-proven hub path first)
 
 ## North star

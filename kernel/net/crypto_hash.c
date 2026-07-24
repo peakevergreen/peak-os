@@ -146,6 +146,37 @@ void hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t
     sha256_ctx_final(&ctx, out);
 }
 
+int pbkdf2_hmac_sha256(const uint8_t *pass, size_t pass_len, const uint8_t *salt,
+                       size_t salt_len, uint32_t iterations, uint8_t *dk, size_t dk_len) {
+    if (!pass || !salt || !dk || !iterations || !dk_len || salt_len > 64)
+        return -1;
+    size_t produced = 0;
+    uint32_t block_index = 1;
+    while (produced < dk_len) {
+        uint8_t u[32], t[32];
+        uint8_t msg[64 + 4];
+        memcpy(msg, salt, salt_len);
+        msg[salt_len] = (uint8_t)(block_index >> 24);
+        msg[salt_len + 1] = (uint8_t)(block_index >> 16);
+        msg[salt_len + 2] = (uint8_t)(block_index >> 8);
+        msg[salt_len + 3] = (uint8_t)block_index;
+        hmac_sha256(pass, pass_len, msg, salt_len + 4, u);
+        memcpy(t, u, 32);
+        for (uint32_t i = 1; i < iterations; i++) {
+            hmac_sha256(pass, pass_len, u, 32, u);
+            for (int j = 0; j < 32; j++)
+                t[j] ^= u[j];
+        }
+        size_t n = dk_len - produced;
+        if (n > 32)
+            n = 32;
+        memcpy(dk + produced, t, n);
+        produced += n;
+        block_index++;
+    }
+    return 0;
+}
+
 void tls_prf_sha256(const uint8_t *secret, size_t secret_len, const char *label,
                     const uint8_t *seed, size_t seed_len, uint8_t *out, size_t out_len) {
     size_t label_len = strlen(label);

@@ -8,6 +8,10 @@ void sha256(const uint8_t *data, size_t len, uint8_t out[32]);
 void hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len,
                  uint8_t out[32]);
 
+/* PBKDF2-HMAC-SHA256 (RFC 8018). Writes dk_len bytes (typically 32). */
+int pbkdf2_hmac_sha256(const uint8_t *pass, size_t pass_len, const uint8_t *salt,
+                       size_t salt_len, uint32_t iterations, uint8_t *dk, size_t dk_len);
+
 /* TLS 1.2 PRF with SHA-256 */
 void tls_prf_sha256(const uint8_t *secret, size_t secret_len, const char *label,
                     const uint8_t *seed, size_t seed_len, uint8_t *out, size_t out_len);

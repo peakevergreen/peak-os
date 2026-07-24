@@ -12,9 +12,24 @@
 #include "random.h"
 
 #define PEAKDISK_LBA0 1
+#define PEAKDISK_KDF_ITERS 4096u
 
 static volatile int save_busy;
 static volatile int save_queued;
+static char g_pass[128];
+static size_t g_pass_len;
+
+void peakdisk_set_passphrase(const char *pass) {
+    memzero_explicit(g_pass, sizeof(g_pass));
+    g_pass_len = 0;
+    if (!pass || !pass[0])
+        return;
+    size_t n = strlen(pass);
+    if (n >= sizeof(g_pass))
+        n = sizeof(g_pass) - 1;
+    memcpy(g_pass, pass, n);
+    g_pass_len = n;
+}
 
 /* Write `len` bytes at payload LBA (PEAKDISK_LBA0+1) in sector-sized chunks. */
 static int write_payload_streamed(const uint8_t *data, uint32_t len) {
@@ -106,28 +121,31 @@ int peakdisk_save(void) {
     uint8_t *enc = NULL;
     int encrypted = 0;
 
-    /* PEAKDSK2: ChaCha20-Poly1305 envelope when crypto RNG is ready.
-     * Passphrase-derived keys are required for production; header key is a
-     * transitional unlock-less format (documented as experimental). */
-    if (random_ready(RANDOM_DOMAIN_CRYPTO)) {
+    /* PEAKDSK3: passphrase PBKDF2 → volume key. Key never stored in header.
+     * Without a passphrase, fall back to clear PEAKDSK1 (no PEAKDSK2 header key). */
+    if (random_ready(RANDOM_DOMAIN_CRYPTO) && g_pass_len > 0) {
         enc = kmalloc(sz);
         if (enc) {
             uint8_t key[32], nonce[12], tag[16], salt[16];
-            if (crypto_random(key, 32) == 0 && crypto_random(nonce, 12) == 0 &&
-                crypto_random(salt, 16) == 0 &&
+            memset(key, 0, sizeof(key));
+            if (crypto_random(salt, 16) == 0 && crypto_random(nonce, 12) == 0 &&
+                pbkdf2_hmac_sha256((const uint8_t *)g_pass, g_pass_len, salt, 16,
+                                   PEAKDISK_KDF_ITERS, key, 32) == 0 &&
                 chacha20_poly1305_encrypt(key, nonce, salt, 16, blob, (size_t)n,
                                           enc, tag) == 0) {
-                memcpy(hdr, "PEAKDSK2", 8);
+                memcpy(hdr, "PEAKDSK3", 8);
                 memcpy(hdr + 8, &sz, 4);
                 memcpy(hdr + 12, salt, 16);
                 memcpy(hdr + 28, nonce, 12);
                 memcpy(hdr + 40, tag, 16);
-                memcpy(hdr + 56, key, 32);
+                /* hdr+56 left zero — no clear key */
+                uint32_t iters = PEAKDISK_KDF_ITERS;
+                memcpy(hdr + 56, &iters, 4);
                 payload = enc;
                 encrypted = 1;
-                serial_log_secret(SERIAL_LOG_DEBUG, "peakdisk.hdr_key", key, sizeof(key));
                 memzero_explicit(key, sizeof(key));
             } else {
+                memzero_explicit(key, sizeof(key));
                 kfree(enc);
                 enc = NULL;
             }
@@ -208,8 +226,14 @@ int peakdisk_load(void) {
     uint8_t hdr[BLOCKDEV_SECTOR_SIZE];
     if (blockdev_read(PEAKDISK_LBA0, 1, hdr) != 0)
         return -1;
+    int v3 = (memcmp(hdr, "PEAKDSK3", 8) == 0);
     int v2 = (memcmp(hdr, "PEAKDSK2", 8) == 0);
-    if (!v2 && memcmp(hdr, "PEAKDSK1", 8) != 0)
+    if (v2) {
+        serial_log(SERIAL_LOG_WARN,
+                   "peakdisk: PEAKDSK2 header-key retired — re-save as PEAKDSK3\n");
+        return -1;
+    }
+    if (!v3 && memcmp(hdr, "PEAKDSK1", 8) != 0)
         return -1;
     uint32_t sz = 0;
     memcpy(&sz, hdr + 8, 4);
@@ -226,26 +250,34 @@ int peakdisk_load(void) {
 
     uint8_t *plain = blob;
     uint8_t *dec = NULL;
-    if (v2) {
+    if (v3) {
+        if (g_pass_len == 0) {
+            kfree(blob);
+            serial_log(SERIAL_LOG_WARN, "peakdisk: passphrase required\n");
+            return -1;
+        }
         uint8_t salt[16], nonce[12], tag[16], key[32];
+        uint32_t iters = PEAKDISK_KDF_ITERS;
         memcpy(salt, hdr + 12, 16);
         memcpy(nonce, hdr + 28, 12);
         memcpy(tag, hdr + 40, 16);
-        memcpy(key, hdr + 56, 32);
+        memcpy(&iters, hdr + 56, 4);
+        if (iters < 1000 || iters > 1000000)
+            iters = PEAKDISK_KDF_ITERS;
         dec = kmalloc(sz);
         if (!dec) {
             kfree(blob);
             return -1;
         }
-        if (chacha20_poly1305_decrypt(key, nonce, salt, 16, blob, sz, tag, dec) != 0) {
+        if (pbkdf2_hmac_sha256((const uint8_t *)g_pass, g_pass_len, salt, 16, iters,
+                               key, 32) != 0 ||
+            chacha20_poly1305_decrypt(key, nonce, salt, 16, blob, sz, tag, dec) != 0) {
             memzero_explicit(key, sizeof(key));
             kfree_sensitive(dec, sz);
             kfree(blob);
-            serial_log(SERIAL_LOG_WARN, "peakdisk: decrypt failed\n");
+            serial_log(SERIAL_LOG_WARN, "peakdisk: wrong passphrase or corrupt\n");
             return -1;
         }
-        /* Header key is transitional; never print via serial_write_str. */
-        serial_log_secret(SERIAL_LOG_DEBUG, "peakdisk.hdr_key", key, sizeof(key));
         memzero_explicit(key, sizeof(key));
         plain = dec;
     }
@@ -264,6 +296,6 @@ int peakdisk_load(void) {
 
     if (r == 0)
         serial_log(SERIAL_LOG_INFO,
-                   v2 ? "peakdisk: loaded (encrypted)\n" : "peakdisk: loaded\n");
+                   v3 ? "peakdisk: loaded (encrypted)\n" : "peakdisk: loaded\n");
     return r;
 }
