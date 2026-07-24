@@ -88,6 +88,15 @@ static void tab_label(struct br_tab *t, char *out, size_t cap) {
     out[i] = '\0';
 }
 
+static void draw_tls_padlock(uint32_t x, uint32_t y, uint32_t bg, uint32_t color) {
+    fb_fill_rect(x + 1, y, 6, 2, color);
+    fb_fill_rect(x + 1, y + 2, 2, 3, color);
+    fb_fill_rect(x + 5, y + 2, 2, 3, color);
+    fb_fill_rect(x + 1, y + 2, 6, 3, bg);
+    fb_fill_rect(x, y + 5, 8, 6, color);
+    fb_fill_rect(x + 2, y + 7, 4, 2, bg);
+}
+
 void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     const struct peak_theme *th = theme_get();
     struct br_tab *t = browser_cur();
@@ -134,13 +143,16 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     if ((int)aw < 40)
         aw = 40;
     fb_fill_rect(ax, bar_y, aw, ch + 4, editing ? th->title : th->surface);
-    /* Trust lock: "L" verified, "!" HTTPS without full verify, blank otherwise. */
     uint32_t url_x = ax + 4;
+    uint32_t bar_bg = editing ? th->title : th->surface;
     if (t->tls_secure) {
-        const char *lock = t->tls_verified ? "L" : "!";
-        fb_draw_string(url_x, bar_y + 2, lock, t->tls_verified ? th->accent : th->fg,
-                       editing ? th->title : th->surface);
-        url_x += fb_cell_w() + 2;
+        if (t->tls_verified) {
+            draw_tls_padlock(url_x, bar_y + 2, bar_bg, th->accent);
+            url_x += 10;
+        } else {
+            fb_draw_string(url_x, bar_y + 2, "!", th->danger, bar_bg);
+            url_x += fb_cell_w() + 2;
+        }
     }
     char show[BR_URL_MAX + 2];
     snprintf(show, sizeof(show), "%s%s", t->url, editing ? "_" : "");

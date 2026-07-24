@@ -186,6 +186,82 @@ void browser_reset(void) {
     editing = 0;
 }
 
+void browser_error_page(struct br_tab *t, enum br_err_kind kind,
+                        const char *detail, int http_st) {
+    const char *title = "Could not load page";
+    const char *hint = "Try again or check network settings.";
+
+    browser_clear_blocks(t);
+    browser_tab_teardown_js(t);
+    t->tls_secure = 0;
+    t->tls_verified = 0;
+
+    switch (kind) {
+    case BR_ERR_NETWORK:
+        title = "No network connection";
+        hint = "e1000 did not initialize. Check QEMU -device e1000.";
+        break;
+    case BR_ERR_DNS:
+        title = "Could not resolve host";
+        hint = detail && detail[0]
+                   ? "DNS lookup failed for this URL. Check dns in ifconfig."
+                   : "DNS lookup failed — verify hostname and DNS server.";
+        break;
+    case BR_ERR_TLS:
+        if (detail && !strcmp(detail, "fetch: tls-expired"))
+            title = "Certificate expired";
+        else if (detail && !strcmp(detail, "fetch: tls-mismatch"))
+            title = "Certificate hostname mismatch";
+        else if (detail && !strcmp(detail, "fetch: tls-untrusted"))
+            title = "Untrusted certificate";
+        else if (detail && !strcmp(detail, "fetch: tls-rng"))
+            title = "Secure connection unavailable";
+        else if (detail && !strcmp(detail, "fetch: tls-alert"))
+            title = "Server rejected the connection";
+        else
+            title = "Secure connection failed";
+        hint = "Settings → Network: trust-on-first-use or forget saved certificates.";
+        break;
+    case BR_ERR_HTTP:
+        title = "Page request failed";
+        hint = http_st > 0
+                   ? "The server returned an error. Try again later."
+                   : "No response from server — check link and hostname.";
+        break;
+    case BR_ERR_LOCAL:
+        title = "Local page not found";
+        hint = "Start the in-guest demo container, then reload.";
+        break;
+    }
+
+    browser_add_block(t, BR_H1, title);
+    browser_add_block(t, BR_SPACER, "");
+    browser_add_block(t, BR_P, hint);
+    if (kind == BR_ERR_LOCAL) {
+        browser_add_block(t, BR_LI, "ctr build");
+        browser_add_block(t, BR_LI, "ctr run");
+        browser_add_block(t, BR_LI, "Press Enter to reload");
+    } else if (detail && detail[0] && kind != BR_ERR_TLS) {
+        char line[BR_TEXT_MAX];
+        snprintf(line, sizeof(line), "%s", detail);
+        browser_add_block(t, BR_P, line);
+    }
+
+    if (kind == BR_ERR_TLS && detail)
+        snprintf(t->status, sizeof(t->status), "%s", detail);
+    else if (kind == BR_ERR_DNS)
+        snprintf(t->status, sizeof(t->status), "DNS failed");
+    else if (kind == BR_ERR_NETWORK)
+        snprintf(t->status, sizeof(t->status), "Network down");
+    else if (http_st > 0)
+        snprintf(t->status, sizeof(t->status), "HTTP %d — fetch failed", http_st);
+    else
+        snprintf(t->status, sizeof(t->status), "Fetch failed");
+
+    browser_init_page_colors(t, "");
+    needs_redraw = 1;
+}
+
 void browser_go(const char *url) {
     privacy_grant_net_client(0);
     struct br_tab *t = browser_cur();
@@ -223,28 +299,12 @@ void browser_go(const char *url) {
         ok = (ctr_http_get(t->url, body, BR_BODY_MAX, &st) == 0);
         if (!ok) {
             t->http_status = st;
-            snprintf(t->status, sizeof(t->status), "Local fetch failed (HTTP %d)", st);
-            browser_clear_blocks(t);
-            browser_tab_teardown_js(t);
-            browser_add_block(t, BR_H1, "Local page not found");
-            browser_add_block(t, BR_SPACER, "");
-            browser_add_block(t, BR_P, "Start the in-guest demo container:");
-            browser_add_block(t, BR_LI, "ctr build");
-            browser_add_block(t, BR_LI, "ctr run");
-            browser_add_block(t, BR_LI, "Reload this tab (Enter)");
-            browser_init_page_colors(t, "");
-            needs_redraw = 1;
+            browser_error_page(t, BR_ERR_LOCAL, t->url, st);
             return;
         }
     } else {
         if (!net_ready()) {
-            snprintf(t->status, sizeof(t->status), "Network down");
-            browser_clear_blocks(t);
-            browser_tab_teardown_js(t);
-            browser_add_block(t, BR_H1, "No network");
-            browser_add_block(t, BR_P, "e1000 did not initialize. Check QEMU -device e1000.");
-            browser_init_page_colors(t, "");
-            needs_redraw = 1;
+            browser_error_page(t, BR_ERR_NETWORK, NULL, 0);
             return;
         }
         snprintf(t->status, sizeof(t->status), "DNS + TCP/TLS...");
@@ -252,23 +312,13 @@ void browser_go(const char *url) {
 
         if (!ok) {
             t->http_status = st;
-            t->tls_secure = 0;
-            t->tls_verified = 0;
             if (net_http_needs_tls()) {
-                snprintf(t->status, sizeof(t->status), "%s", net_http_tls_reject_name());
+                browser_error_page(t, BR_ERR_TLS, net_http_tls_reject_name(), st);
+            } else if (body[0] && strstr(body, "DNS failed")) {
+                browser_error_page(t, BR_ERR_DNS, t->url, st);
             } else {
-                snprintf(t->status, sizeof(t->status), "Fetch failed (HTTP %d)", st);
+                browser_error_page(t, BR_ERR_HTTP, NULL, st);
             }
-            if (body[0]) {
-                load_document(t, body);
-            } else {
-                browser_clear_blocks(t);
-                browser_tab_teardown_js(t);
-                browser_add_block(t, BR_H1, "Could not load page");
-                browser_add_block(t, BR_P, "Check: ifconfig / ping / wget");
-                browser_init_page_colors(t, "");
-            }
-            needs_redraw = 1;
             return;
         }
         t->tls_secure = net_http_last_tls_secure();
