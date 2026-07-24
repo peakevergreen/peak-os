@@ -4,7 +4,6 @@
 
 extern int dwc2_init(void);
 extern void dwc2_poll(void);
-extern int xhci_init(uint64_t mmio_base);
 extern void xhci_poll(void);
 
 static int usb_host_ready;
@@ -18,12 +17,8 @@ void rpi_usb_init(void) {
         if (dwc2_init() == 0)
             usb_host_ready = 1;
     } else if (p->soc == RPI_SOC_BCM2711 || p->soc == RPI_SOC_BCM2712) {
-        extern int rpi_pcie_init(void);
-        extern uint64_t rpi_pcie_xhci_bar(void);
-        if (rpi_pcie_init() == 0 && xhci_init(rpi_pcie_xhci_bar()) == 0)
-            usb_host_ready = 1;
-        else
-            serial_write_str("rpi: PCIe/xHCI deferred\n");
+        /* Staged: skip PCIe/xHCI bring-up; never mark the host ready. */
+        serial_write_str("rpi: USB xHCI stub (not ready)\n");
     }
 }
 
