@@ -85,11 +85,13 @@ static int build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t 
 
     tls_wr16(out + o, 0x000a);
     o += 2;
+    tls_wr16(out + o, 6);
+    o += 2;
     tls_wr16(out + o, 4);
     o += 2;
-    tls_wr16(out + o, 2);
+    tls_wr16(out + o, 0x001d); /* x25519 */
     o += 2;
-    tls_wr16(out + o, 0x001d);
+    tls_wr16(out + o, 0x0017); /* secp256r1 */
     o += 2;
 
     tls_wr16(out + o, 0x000b);
@@ -101,18 +103,33 @@ static int build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t 
 
     tls_wr16(out + o, 0x000d);
     o += 2;
-    tls_wr16(out + o, 10);
+    tls_wr16(out + o, 14);
     o += 2;
-    tls_wr16(out + o, 8);
+    tls_wr16(out + o, 12);
     o += 2;
     tls_wr16(out + o, 0x0403); /* ecdsa_secp256r1_sha256 */
     o += 2;
-    tls_wr16(out + o, 0x0503); /* ecdsa_secp256r1_sha384 */
+    tls_wr16(out + o, 0x0503); /* ecdsa_secp384r1_sha384 */
     o += 2;
     tls_wr16(out + o, 0x0804); /* rsa_pss_rsae_sha256 */
     o += 2;
+    tls_wr16(out + o, 0x0805); /* rsa_pss_rsae_sha384 */
+    o += 2;
     tls_wr16(out + o, 0x0401); /* rsa_pkcs1_sha256 */
     o += 2;
+    tls_wr16(out + o, 0x0501); /* rsa_pkcs1_sha384 */
+    o += 2;
+
+    /* ALPN: http/1.1 */
+    tls_wr16(out + o, 0x0010);
+    o += 2;
+    tls_wr16(out + o, 11);
+    o += 2;
+    tls_wr16(out + o, 9);
+    o += 2;
+    out[o++] = 8;
+    memcpy(out + o, "http/1.1", 8);
+    o += 8;
 
     /* extended_master_secret */
     tls_wr16(out + o, 0x0017);
@@ -184,7 +201,8 @@ static int parse_server_hello(const uint8_t *msg, size_t len, uint16_t *cs_out) 
     return 0;
 }
 
-static int parse_server_key_exchange(const uint8_t *msg, size_t len, uint8_t peer_pub[32]) {
+static int parse_server_key_exchange(const uint8_t *msg, size_t len, uint16_t *curve_out,
+                                     uint8_t *peer_pub, size_t peer_cap, size_t *peer_len) {
     if (len < 4 || msg[0] != HS_SERVER_KEY_EX)
         return -1;
     uint32_t mlen = tls_rd24(msg + 1);
@@ -197,13 +215,22 @@ static int parse_server_key_exchange(const uint8_t *msg, size_t len, uint8_t pee
     if (p[0] != 3)
         return -1;
     uint16_t curve = tls_rd16(p + 1);
-    if (curve != 0x001d)
-        return -1;
     p += 3;
     uint8_t plen = *p++;
-    if (plen != 32 || p + 32 > end)
+    if (curve == 0x001d) {
+        if (plen != 32 || p + 32 > end || peer_cap < 32)
+            return -1;
+        memcpy(peer_pub, p, 32);
+        *peer_len = 32;
+    } else if (curve == 0x0017) {
+        if (plen != 65 || p + 65 > end || peer_cap < 65 || p[0] != 0x04)
+            return -1;
+        memcpy(peer_pub, p, 65);
+        *peer_len = 65;
+    } else {
         return -1;
-    memcpy(peer_pub, p, 32);
+    }
+    *curve_out = curve;
     return 0;
 }
 
@@ -321,7 +348,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     hs_reasm_len = 0;
     cipher_kind = CIPHER_AES128_GCM;
 
-    uint8_t ch[640];
+    uint8_t ch[768];
     size_t ch_len = 0;
     {
         int ch_rc = build_client_hello(ch, sizeof(ch), sni_host, &ch_len);
@@ -340,7 +367,9 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
         goto fail;
     }
 
-    uint8_t peer_pub[32];
+    uint8_t peer_pub[65];
+    size_t peer_pub_len = 0;
+    uint16_t peer_curve = 0;
     int got_sh = 0, got_ske = 0, got_done = 0, got_cert = 0;
     uint16_t cs = 0;
     uint64_t start = timer_ticks();
@@ -383,7 +412,9 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                 got_cert = 1;
                 cert_verified = tls_verify_cert_chain(hs_reasm + off, 4 + hslen, sni_host);
             } else if (hstype == HS_SERVER_KEY_EX) {
-                if (parse_server_key_exchange(hs_reasm + off, 4 + hslen, peer_pub) != 0) {
+                if (parse_server_key_exchange(hs_reasm + off, 4 + hslen, &peer_curve,
+                                              peer_pub, sizeof(peer_pub),
+                                              &peer_pub_len) != 0) {
                     tls_set_err("ServerKeyExchange parse failed");
                     goto fail;
                 }
@@ -411,21 +442,41 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
         goto fail;
     }
 
-    uint8_t priv[32], pub[32], premaster[32];
+    uint8_t priv[32], premaster[32];
     if (crypto_random(priv, 32) != 0) {
         tls_set_err("RNG not ready for key generation");
         goto fail;
     }
-    x25519_base(pub, priv);
-    x25519(premaster, priv, peer_pub);
 
-    uint8_t cke[40];
-    cke[0] = HS_CLIENT_KEY_EX;
-    tls_wr24(cke + 1, 33);
-    cke[4] = 32;
-    memcpy(cke + 5, pub, 32);
-    transcript_add(cke, 37);
-    if (tls_send_record(TLS_CONTENT_HS, cke, 37, 0) != 0) {
+    uint8_t cke[80];
+    size_t cke_len = 0;
+    if (peer_curve == 0x0017) {
+        uint8_t pub[65];
+        if (p256_keygen(priv, pub) != 0) {
+            tls_set_err("P-256 keygen failed");
+            goto fail;
+        }
+        if (p256_ecdh(premaster, priv, peer_pub) != 0) {
+            tls_set_err("P-256 ECDH failed");
+            goto fail;
+        }
+        cke[0] = HS_CLIENT_KEY_EX;
+        tls_wr24(cke + 1, 66);
+        cke[4] = 65;
+        memcpy(cke + 5, pub, 65);
+        cke_len = 70;
+    } else {
+        uint8_t pub[32];
+        x25519_base(pub, priv);
+        x25519(premaster, priv, peer_pub);
+        cke[0] = HS_CLIENT_KEY_EX;
+        tls_wr24(cke + 1, 33);
+        cke[4] = 32;
+        memcpy(cke + 5, pub, 32);
+        cke_len = 37;
+    }
+    transcript_add(cke, cke_len);
+    if (tls_send_record(TLS_CONTENT_HS, cke, cke_len, 0) != 0) {
         tls_set_err("ClientKeyExchange send failed");
         goto fail;
     }

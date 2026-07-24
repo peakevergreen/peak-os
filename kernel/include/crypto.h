@@ -55,6 +55,11 @@ int chacha20_poly1305_decrypt(const uint8_t key[32], const uint8_t nonce[12],
 void x25519(uint8_t out[32], const uint8_t scalar[32], const uint8_t point[32]);
 void x25519_base(uint8_t out[32], const uint8_t scalar[32]);
 
+/* NIST P-256 ECDH (uncompressed SEC1 pubkey 0x04||X||Y). Returns 0 on success. */
+int p256_keygen(uint8_t priv[32], uint8_t pub_uncompressed[65]);
+int p256_ecdh(uint8_t shared_x[32], const uint8_t priv[32],
+              const uint8_t peer_uncompressed[65]);
+
 /* Fails closed (-1) when crypto RNG not ready. */
 int crypto_random(uint8_t *buf, size_t len);
 
