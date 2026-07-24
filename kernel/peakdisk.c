@@ -16,6 +16,8 @@
 
 static volatile int save_busy;
 static volatile int save_queued;
+static char peakdisk_err[96];
+static uint32_t peakdisk_saved_bytes;
 static char g_pass[128];
 static size_t g_pass_len;
 
@@ -76,12 +78,35 @@ int peakdisk_busy(void) {
     return save_busy || save_queued;
 }
 
+static void peakdisk_set_err(const char *msg) {
+    size_t i = 0;
+    if (!msg)
+        msg = "unknown error";
+    for (; msg[i] && i + 1 < sizeof(peakdisk_err); i++)
+        peakdisk_err[i] = msg[i];
+    peakdisk_err[i] = '\0';
+}
+
+const char *peakdisk_last_error(void) {
+    return peakdisk_err;
+}
+
+uint32_t peakdisk_last_save_bytes(void) {
+    return peakdisk_saved_bytes;
+}
+
 int peakdisk_save(void) {
-    if (!blockdev_present())
+    peakdisk_set_err("");
+    if (!blockdev_present()) {
+        peakdisk_set_err("no block device (ATA/SD not present)");
         return -1;
-    if (!cap_check(CAP_DISK_PERSIST))
+    }
+    if (!cap_check(CAP_DISK_PERSIST)) {
+        peakdisk_set_err("CAP_DISK_PERSIST not granted");
         return -1;
+    }
     if (privacy_persist_profile() <= 0) {
+        peakdisk_set_err("private profile — enable workspace persist first");
         serial_log(SERIAL_LOG_INFO, "peakdisk: private mode — persist skipped\n");
         return -1;
     }
@@ -89,12 +114,14 @@ int peakdisk_save(void) {
 
     int need = vfs_export_ramdisk_size();
     if (need < 12) {
+        peakdisk_set_err("export size invalid (empty workspace?)");
         serial_log(SERIAL_LOG_WARN, "peakdisk: export size invalid\n");
         save_busy = 0;
         return -1;
     }
     /* Soft safety: refuse absurd sizes that would exhaust heap for AEAD. */
     if ((size_t)need > 32u * 1024u * 1024u) {
+        peakdisk_set_err("workspace image too large (>32 MiB)");
         serial_log(SERIAL_LOG_WARN, "peakdisk: image too large\n");
         save_busy = 0;
         return -1;
@@ -102,12 +129,14 @@ int peakdisk_save(void) {
 
     uint8_t *blob = kmalloc((size_t)need);
     if (!blob) {
+        peakdisk_set_err("out of memory for export buffer");
         serial_log(SERIAL_LOG_WARN, "peakdisk: export alloc failed\n");
         save_busy = 0;
         return -1;
     }
     int n = vfs_export_ramdisk(blob, (size_t)need);
     if (n < 12) {
+        peakdisk_set_err("PeakFS export failed");
         serial_log(SERIAL_LOG_WARN, "peakdisk: export failed\n");
         kfree(blob);
         save_busy = 0;
@@ -159,6 +188,7 @@ int peakdisk_save(void) {
     /* Atomic publish: write payload first while the old header (if any) remains
      * authoritative; only then flip LBA1 to the new envelope and flush. */
     if (write_payload_streamed(payload, sz) != 0) {
+        peakdisk_set_err("payload write to disk failed");
         serial_log(SERIAL_LOG_WARN, "peakdisk: payload write failed\n");
         if (enc)
             kfree_sensitive(enc, sz);
@@ -171,10 +201,12 @@ int peakdisk_save(void) {
             kfree_sensitive(enc, sz);
         kfree(blob);
         save_busy = 0;
+        peakdisk_set_err("disk flush failed after payload");
         serial_log(SERIAL_LOG_WARN, "peakdisk: payload flush failed\n");
         return -1;
     }
     if (blockdev_write(PEAKDISK_LBA0, 1, hdr) != 0) {
+        peakdisk_set_err("header write failed");
         serial_log(SERIAL_LOG_WARN, "peakdisk: header write failed\n");
         if (enc)
             kfree_sensitive(enc, sz);
@@ -187,6 +219,7 @@ int peakdisk_save(void) {
             kfree_sensitive(enc, sz);
         kfree(blob);
         save_busy = 0;
+        peakdisk_set_err("disk flush failed after header");
         serial_log(SERIAL_LOG_WARN, "peakdisk: header flush failed\n");
         return -1;
     }
@@ -197,6 +230,7 @@ int peakdisk_save(void) {
     /* Sync blobstore metadata + dirty cache pages (independent of PeakFS size). */
     (void)blobstore_sync();
 
+    peakdisk_saved_bytes = sz;
     serial_log(SERIAL_LOG_INFO,
                encrypted ? "peakdisk: saved (encrypted)\n" : "peakdisk: saved\n");
     save_busy = 0;
@@ -210,8 +244,14 @@ static void peakdisk_save_worker(void) {
 }
 
 int peakdisk_save_async(void) {
-    if (!blockdev_present() || save_busy || save_queued)
+    if (!blockdev_present()) {
+        peakdisk_set_err("no block device (ATA/SD not present)");
         return -1;
+    }
+    if (save_busy || save_queued) {
+        peakdisk_set_err("save already in progress");
+        return -1;
+    }
     save_queued = 1;
     if (sched_spawn_kthread("disksave", peakdisk_save_worker) < 0) {
         save_queued = 0;

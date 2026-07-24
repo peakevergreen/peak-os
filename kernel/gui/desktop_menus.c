@@ -194,9 +194,16 @@ void desktop_menu_click(int32_t mx, int32_t my) {
         if (privacy_persist_profile() <= 0) {
             notify_push("Enable Privacy → workspace persist first");
         } else if (peakdisk_save_async() == 0) {
-            notify_push("Saving to disk…");
+            notify_push("Saving workspace to disk…");
         } else {
-            notify_push("Save failed");
+            const char *why = peakdisk_last_error();
+            if (why && why[0]) {
+                char msg[72];
+                snprintf(msg, sizeof(msg), "Save failed: %s", why);
+                notify_push(msg);
+            } else {
+                notify_push("Save failed");
+            }
         }
         dirty_bits |= DIRTY_TOAST;
     } else if (row == 10) {

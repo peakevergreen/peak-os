@@ -13,6 +13,8 @@ int  peakdisk_save(void);
 int  peakdisk_save_async(void);
 int  peakdisk_load(void);
 int  peakdisk_busy(void);
+const char *peakdisk_last_error(void);
+uint32_t peakdisk_last_save_bytes(void);
 /* Set unlock passphrase for PEAKDSK3 save/load (cleared with NULL/empty). */
 void peakdisk_set_passphrase(const char *pass);
 

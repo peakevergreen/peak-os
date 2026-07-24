@@ -377,18 +377,28 @@ int udisksave_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
     if (!peakdisk_available()) {
-        console_write("disksave: no block device\n");
+        console_write("disksave: no block device (need ATA disk in QEMU/PI)\n");
         return 1;
     }
     if (privacy_persist_profile() <= 0) {
         console_write("disksave: enable with `privacy persist workspace` first\n");
         return 1;
     }
-    if (peakdisk_save() != 0) {
-        console_write("disksave: failed\n");
+    if (peakdisk_busy()) {
+        console_write("disksave: save already in progress\n");
         return 1;
     }
-    console_write("disksave: ok\n");
+    console_write("disksave: writing workspace to disk…\n");
+    if (peakdisk_save() != 0) {
+        const char *why = peakdisk_last_error();
+        if (why && why[0])
+            console_printf("disksave: failed: %s\n", why);
+        else
+            console_write("disksave: failed\n");
+        return 1;
+    }
+    console_printf("disksave: saved %u bytes to block device\n",
+                   (unsigned)peakdisk_last_save_bytes());
     return 0;
 }
 
