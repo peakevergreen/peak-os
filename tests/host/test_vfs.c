@@ -10,6 +10,9 @@
 #include "vfs_path_util.h"
 #include "peak_errno.h"
 #include "privacy.h"
+#include "blobstore.h"
+
+void vfs_host_blob_reset(void);
 
 static int fails;
 
@@ -243,6 +246,56 @@ int main(void) {
         vfs_mkdir("/home");
         struct vfs_dirent ents[4];
         expect(vfs_readdir("/home", ents, 4) >= 0, "readdir ok");
+    }
+
+    /* --- blob-backed large file (bind + ranged I/O + PeakFS export) --- */
+    {
+        reset_vfs();
+        vfs_host_blob_reset();
+        expect(blobstore_available(), "blobstore on mem disk");
+        vfs_mkdir("/home");
+        vfs_mkdir("/home/dev");
+        uint32_t id = 0;
+        expect(blobstore_create(&id, 8192) == 0, "create blob");
+        const char payload[] = "large-file-payload";
+        expect(blobstore_write(id, 0, payload, sizeof(payload)) == (int)sizeof(payload),
+               "seed blob");
+        expect(vfs_bind_blob("/home/dev/big.bin", id, sizeof(payload)) == 0,
+               "bind blob to vfs");
+        got = 0;
+        memset(buf, 0, sizeof(buf));
+        expect(vfs_read_at("/home/dev/big.bin", 0, buf, sizeof(buf), &got) == 0,
+               "read_at blob");
+        expect(got == sizeof(payload) && memcmp(buf, payload, got) == 0,
+               "blob read bytes");
+
+        const char tail[] = "-tail";
+        expect(vfs_write_at("/home/dev/big.bin", sizeof(payload), tail, sizeof(tail)) == 0,
+               "write_at extends blob");
+        size_t total = sizeof(payload) + sizeof(tail);
+        char wide[64];
+        got = 0;
+        memset(wide, 0, sizeof(wide));
+        expect(vfs_read_at("/home/dev/big.bin", 0, wide, sizeof(wide), &got) == 0,
+               "read extended blob");
+        expect(got == total, "extended size");
+        expect(memcmp(wide, payload, sizeof(payload)) == 0, "head preserved");
+        expect(memcmp(wide + sizeof(payload), tail, sizeof(tail)) == 0, "tail appended");
+
+        expect(vfs_create_blob_file("/home/dev/new.bin", 16) == 0, "create_blob_file");
+        expect(vfs_write_at("/home/dev/new.bin", 0, "fresh", 5) == 0, "write new blob file");
+
+        uint8_t blob[65536];
+        int need = vfs_export_ramdisk_size();
+        expect(need > 12, "export size with blob file");
+        int n = vfs_export_ramdisk(blob, sizeof(blob));
+        expect(n == need, "export with blob");
+        expect(vfs_load_ramdisk(blob, (size_t)n) == 0, "reload export with blob");
+        got = 0;
+        memset(buf, 0, sizeof(buf));
+        expect(vfs_read_file("/home/dev/big.bin", buf, sizeof(buf), &got) == 0,
+               "big.bin after reload");
+        expect(got == total, "blob round-trip size");
     }
 
     if (fails) {

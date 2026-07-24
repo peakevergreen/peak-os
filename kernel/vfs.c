@@ -235,6 +235,15 @@ int vfs_bind_blob(const char *path, uint32_t blob_id, size_t size) {
     return 0;
 }
 
+int vfs_create_blob_file(const char *path, size_t size) {
+    if (!blobstore_available())
+        return PEAK_ENOENT;
+    uint32_t id = 0;
+    if (blobstore_create(&id, size) != 0)
+        return PEAK_ENOENT;
+    return vfs_bind_blob(path, id, size);
+}
+
 int vfs_read_at(const char *path, size_t off, void *buf, size_t len, size_t *out_len) {
     struct vfs_node *f = vfs_lookup(path);
     if (!f || f->type != VFS_FILE)
