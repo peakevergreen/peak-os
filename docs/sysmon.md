@@ -18,7 +18,7 @@ Shows load/idle, memory & heap (with peaks), network rates, scheduler stats
 
 Desktop → Peak menu → **Monitor**, or press **`7`**.
 
-Pages: **1 Overview** · **2 Tasks** · **3 Network**. **R** resets history.
+Pages: **1 Overview** · **2 Tasks** · **3 Network**. **P** pauses/resumes sampling; **R** resets history.
 `[` / `]` also switch pages.
 
 ## Metrics
@@ -32,8 +32,8 @@ Pages: **1 Overview** · **2 Tasks** · **3 Network**. **R** resets history.
 | Tasks / ctx | Cooperative scheduler |
 | IRQs | PIT tick count |
 | GUI FPS | Frames presented per second |
-| Compose µs | Last compose duration (approx.) |
-| Present µs | Last present / blit duration (approx.) |
+| Layout µs | Last desktop compose / layout duration (approx.) |
+| Blit µs | Last present / blit duration (approx.) |
 | Surf pressure | Window-surface memory budget (0–100%) |
 | PeakVec µs | Last PeakVec query duration (approx.) |
 | Agent audit µs | Last agent audit append duration (approx.) |
