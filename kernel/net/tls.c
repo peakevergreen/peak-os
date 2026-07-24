@@ -86,25 +86,39 @@ void tls_set_err_code(int code, const char *msg) {
     serial_log(SERIAL_LOG_WARN, line);
 }
 
-/* RFC 5246 alert descriptions (common ones). */
+/* RFC 5246 / RFC 8446 alert descriptions (subset surfaced to CLI/browser). */
 void tls_set_alert_err(const uint8_t *alert, size_t n) {
     uint8_t level = (n >= 1) ? alert[0] : 0;
     uint8_t desc = (n >= 2) ? alert[1] : 0;
     const char *name = "unknown";
     switch (desc) {
+    case 0:  name = "close_notify"; break;
     case 10: name = "unexpected_message"; break;
     case 20: name = "bad_record_mac"; break;
+    case 22: name = "record_overflow"; break;
     case 40: name = "handshake_failure"; break;
     case 42: name = "bad_certificate"; break;
+    case 43: name = "unsupported_certificate"; break;
+    case 44: name = "certificate_revoked"; break;
+    case 45: name = "certificate_expired"; break;
+    case 46: name = "certificate_unknown"; break;
     case 47: name = "illegal_parameter"; break;
+    case 48: name = "unknown_ca"; break;
+    case 49: name = "access_denied"; break;
+    case 50: name = "decode_error"; break;
+    case 51: name = "decrypt_error"; break;
     case 70: name = "protocol_version"; break;
     case 71: name = "insufficient_security"; break;
     case 80: name = "internal_error"; break;
+    case 90: name = "user_canceled"; break;
     case 112: name = "unrecognized_name"; break;
     default: break;
     }
     char buf[96];
-    snprintf(buf, sizeof(buf), "Server alert %s (%u/%u)", name, level, desc);
+    if (desc == 0 && level == 1)
+        snprintf(buf, sizeof(buf), "Server alert %s (graceful close)", name);
+    else
+        snprintf(buf, sizeof(buf), "Server alert %s (level %u desc %u)", name, level, desc);
     tls_set_err_code(TLS_E_ALERT, buf);
 }
 
@@ -161,8 +175,7 @@ int tls_recv(void *buf, size_t cap, size_t *out_len, uint32_t timeout_ticks) {
             continue;
         }
         if (type == TLS_CONTENT_ALERT) {
-            /* close_notify (or fatal alert): session is over. Mark it so
-             * callers can tell "stream ended" from "momentary stall". */
+            tls_set_alert_err(rx_app, n);
             tls_up = 0;
             return -1;
         }
