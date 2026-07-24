@@ -129,6 +129,21 @@ int snprintf(char *buf, size_t size, const char *fmt, ...) {
             itoa_u(v, tmp, 10);
             for (char *t = tmp; *t && o + 1 < size; t++)
                 buf[o++] = *t;
+        } else if (*p == 'x' || *p == 'X') {
+            uint64_t v = (uint64_t)va_arg(ap, unsigned);
+            char tmp[24];
+            itoa_u(v, tmp, 16);
+            int len = 0;
+            while (tmp[len])
+                len++;
+            for (int w = len; w < width && o + 1 < size; w++)
+                buf[o++] = pad_zero ? '0' : ' ';
+            for (char *t = tmp; *t && o + 1 < size; t++) {
+                char c = *t;
+                if (*p == 'X' && c >= 'a' && c <= 'f')
+                    c = (char)(c - 'a' + 'A');
+                buf[o++] = c;
+            }
         } else if (*p == '%') {
             buf[o++] = '%';
         } else {

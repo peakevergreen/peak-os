@@ -76,9 +76,10 @@ this minimal in-guest client; TOFU/pins provide continuity, not WebPKI assurance
 - TCP client and TCP listen/accept
 - HTTP/1.0 GET client with redirect following
 - Container static HTTP server (GET/HEAD)
-- **TLS 1.2**: ECDHE (X25519) + AES-128-GCM or ChaCha20-Poly1305
-- **Crypto TUs** (all Peak-authored, no OpenSSL): `crypto_hash.c` (SHA-256/HMAC/PRF),
-  `crypto_aead.c` (AES-GCM + ChaCha20-Poly1305), `crypto_x25519.c`, `crypto.c` (RNG glue).
+- **TLS 1.2**: ECDHE (X25519) + AES-128/256-GCM or ChaCha20-Poly1305
+- **Crypto TUs** (all Peak-authored, no OpenSSL): `crypto_hash.c` / `crypto_sha384.c`
+  (SHA-256/384, HMAC, PRF), `crypto_aead.c` (AES-GCM + ChaCha20-Poly1305),
+  `crypto_x25519.c`, `crypto.c` (RNG glue).
   Audit: every exported primitive is used by TLS, PeakDisk, or CSPRNG — no dead algos.
 
 ## Limits
