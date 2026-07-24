@@ -54,7 +54,7 @@ fi
 
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
-grep -qi 'tls certificate unverified' kernel/net/tls.c
+grep -qi 'tls certificate unverified' kernel/net/tls.c kernel/net/tls_handshake.c
 grep -q 'agent_approve_write' kernel/agent.c
 grep -q 'hlt_if_enabled' kernel/net/*.c
 grep -q 'blockdev_flush' kernel/peakdisk.c

@@ -7,6 +7,12 @@
 struct heap_block {
     size_t size;
     int free;
+    /*
+     * Set only for unsplit alloc_pages_block spans. Coalesced bootstrap pages
+     * must NOT return via pmm_free_n — that path assumes one contiguous PMM
+     * multi-page alloc and will GPF after heap_coalesce merges neighbors.
+     */
+    int whole_pages;
     struct heap_block *next;      /* address-adjacent chain (stats / coalesce) */
     struct heap_block *prev;      /* bidirectional coalesce without full scan */
     struct heap_block *free_next; /* size-class / large freelist when free */
@@ -90,6 +96,7 @@ void heap_init(void) {
         struct heap_block *b = (struct heap_block *)vmm_phys_to_virt((uint64_t)phys);
         b->size = 4096 - sizeof(struct heap_block);
         b->free = 1;
+        b->whole_pages = 0;
         b->free_next = NULL;
         block_insert_head(b);
         freelist_push(b);
@@ -102,6 +109,7 @@ static void *take_free_block(struct heap_block *b, size_t size) {
         struct heap_block *n = (struct heap_block *)split_at;
         n->size = b->size - size - sizeof(struct heap_block);
         n->free = 1;
+        n->whole_pages = 0;
         n->free_next = NULL;
         n->prev = b;
         n->next = b->next;
@@ -109,6 +117,7 @@ static void *take_free_block(struct heap_block *b, size_t size) {
             b->next->prev = n;
         b->next = n;
         b->size = size;
+        b->whole_pages = 0; /* split: neither side is a raw PMM span */
         freelist_push(n);
     }
     b->free = 0;
@@ -125,6 +134,7 @@ static void *alloc_pages_block(size_t size) {
     struct heap_block *b = (struct heap_block *)vmm_phys_to_virt((uint64_t)phys);
     b->size = npages * (size_t)PAGE_SIZE - sizeof(struct heap_block);
     b->free = 0;
+    b->whole_pages = (npages > 1 || total > PAGE_SIZE) ? 1 : 1;
     b->free_next = NULL;
     block_insert_head(b);
     return (void *)(b + 1);
@@ -231,6 +241,7 @@ static struct heap_block *heap_coalesce_block(struct heap_block *b) {
         b->next = n->next;
         if (n->next)
             n->next->prev = b;
+        b->whole_pages = 0; /* merged span is no longer a single PMM alloc */
     }
     while (b->prev && b->prev->free) {
         uint8_t *end = (uint8_t *)(b->prev + 1) + b->prev->size;
@@ -242,6 +253,7 @@ static struct heap_block *heap_coalesce_block(struct heap_block *b) {
         p->next = b->next;
         if (b->next)
             b->next->prev = p;
+        p->whole_pages = 0;
         b = p;
     }
     return b;
@@ -268,7 +280,8 @@ void kfree(void *ptr) {
         return;
     }
     size_t total = b->size + sizeof(*b);
-    if (total > PAGE_SIZE) {
+    /* Only raw multi-page PMM spans return to the page allocator. */
+    if (b->whole_pages && total > PAGE_SIZE) {
         block_unlink(b);
         size_t npages = (total + PAGE_SIZE - 1) / PAGE_SIZE;
         pmm_free_n((void *)vmm_virt_to_phys(b), npages);
