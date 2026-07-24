@@ -67,6 +67,8 @@ extern int uctrd_main(int argc, char **argv);
 extern int uifconfig_main(int argc, char **argv);
 extern int uping_main(int argc, char **argv);
 extern int uwget_main(int argc, char **argv);
+extern int ucurl_main(int argc, char **argv);
+extern int utar_main(int argc, char **argv);
 extern int utop_main(int argc, char **argv);
 extern int usysmon_main(int argc, char **argv);
 extern int ups_main(int argc, char **argv);

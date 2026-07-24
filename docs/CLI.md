@@ -93,7 +93,8 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 ## Network / containers
 | Command | Notes |
 |---------|-------|
-| `ifconfig` `ping` `wget` | IPv4 + HTTP — [network.md](network.md) |
+| `ifconfig` `ping` `wget` `curl` | IPv4 + HTTP — [network.md](network.md) |
+| `tar -c` / `tar -x` | ustar archive create/extract (64 KiB cap) |
 | `ctr` `ctrd` | Dockerfile staging / static HTTP (not OCI) — [containers.md](containers.md) |
 
 Prompt shows cwd: `peak:/home/dev/workspace> `
