@@ -19,6 +19,8 @@ struct vfs_node {
     size_t size;
     size_t capacity;
     uint32_t refs; /* hard-link refcount for files; dirs = 1 */
+    /* 0 = heap-resident data[]; else blobstore object for large-file backend. */
+    uint32_t blob_id;
     struct vfs_node *parent;
     struct vfs_node *child;
     struct vfs_node *sibling;
@@ -46,6 +48,10 @@ struct vfs_node *vfs_mkdir(const char *path);
 struct vfs_node *vfs_create_file(const char *path);
 int vfs_write_file(const char *path, const void *data, size_t len);
 int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len);
+/* Bind an existing blobstore object as the file body (large-file prep). */
+int vfs_bind_blob(const char *path, uint32_t blob_id, size_t size);
+int vfs_read_at(const char *path, size_t off, void *buf, size_t len, size_t *out_len);
+int vfs_write_at(const char *path, size_t off, const void *buf, size_t len);
 int vfs_list(const char *path, char *out, size_t out_len);
 int vfs_load_ramdisk(const void *blob, size_t len);
 /* Serialize files under / into PEAKFS1 blob. Returns bytes written or -1. */

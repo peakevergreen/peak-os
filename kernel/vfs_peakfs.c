@@ -4,6 +4,7 @@
 #include "util.h"
 #include "privacy.h"
 #include "heap.h"
+#include "blobstore.h"
 
 /* Keep in sync with AGENT_AUDIT_PATH in agent_internal.h */
 #define PEAKFS_AUDIT_PATH "/var/peak/audit.log"
@@ -172,6 +173,25 @@ static int export_cb(const char *path, struct vfs_node *node, void *vctx) {
     }
     if (node->type != VFS_FILE)
         return 0;
+    /* Blob-backed large files: materialize through the LRU for PeakFS export.
+     * Streaming export can replace this once the backend is fully wired. */
+    if (node->blob_id) {
+        if (node->size == 0)
+            return export_write_entry(c, path, NULL, 0);
+        uint8_t *tmp = (uint8_t *)kmalloc(node->size);
+        if (!tmp) {
+            c->err = 1;
+            return -1;
+        }
+        if (blobstore_read(node->blob_id, 0, tmp, node->size) != (int)node->size) {
+            kfree(tmp);
+            c->err = 1;
+            return -1;
+        }
+        int r = export_write_entry(c, path, tmp, node->size);
+        kfree(tmp);
+        return r;
+    }
     return export_write_entry(c, path, node->data, node->size);
 }
 

@@ -42,6 +42,10 @@ static struct blob_super super;
 static struct cache_page cache[BLOBSTORE_CACHE_PAGES];
 static uint32_t lru_tick;
 static int ready;
+/* Last hit slot — sequential/same-page reads skip the hash probe. */
+static int cache_hot;
+/* Live pages; avoids an LRU scan while the cache still has free slots. */
+static uint32_t cache_live;
 /* Open-addressed map: global_page -> cache slot (0xFF = empty). */
 #define CACHE_HASH_SIZE 64u
 static uint8_t cache_hash[CACHE_HASH_SIZE];
@@ -173,49 +177,85 @@ static int flush_page(struct cache_page *cp) {
     return 0;
 }
 
+static void cache_touch(uint32_t idx) {
+    /* Already MRU — skip tick bump on repeated hits of the same page. */
+    if (cache[idx].lru != lru_tick)
+        cache[idx].lru = ++lru_tick;
+    cache_hot = (int)idx;
+}
+
 static struct cache_page *cache_evict(void) {
-    struct cache_page *victim = &cache[0];
-    uint32_t victim_i = 0;
-    for (uint32_t i = 1; i < BLOBSTORE_CACHE_PAGES; i++) {
-        if (!cache[i].valid) {
-            victim = &cache[i];
-            victim_i = i;
-            break;
+    struct cache_page *victim;
+    uint32_t victim_i;
+
+    if (cache_live < BLOBSTORE_CACHE_PAGES) {
+        for (uint32_t i = 0; i < BLOBSTORE_CACHE_PAGES; i++) {
+            if (!cache[i].valid) {
+                victim = &cache[i];
+                victim_i = i;
+                goto got_victim;
+            }
         }
+    }
+
+    victim = &cache[0];
+    victim_i = 0;
+    for (uint32_t i = 1; i < BLOBSTORE_CACHE_PAGES; i++) {
         if (cache[i].lru < victim->lru) {
             victim = &cache[i];
             victim_i = i;
         }
     }
+
+got_victim:
     if (victim->valid) {
         if (victim->dirty)
             (void)flush_page(victim);
         cache_hash_remove(victim->global_page, victim_i);
+        if (cache_live)
+            cache_live--;
+        if (cache_hot == (int)victim_i)
+            cache_hot = -1;
     }
     victim->valid = 0;
     victim->dirty = 0;
     return victim;
 }
 
-static struct cache_page *cache_get(uint32_t global_page, int for_write) {
+/* fetch: load from disk on miss. 0 = zero-fill (full-page overwrite). */
+static struct cache_page *cache_get(uint32_t global_page, int for_write, int fetch) {
+    if (cache_hot >= 0 && (uint32_t)cache_hot < BLOBSTORE_CACHE_PAGES &&
+        cache[cache_hot].valid &&
+        cache[cache_hot].global_page == global_page) {
+        cache_touch((uint32_t)cache_hot);
+        return &cache[cache_hot];
+    }
+
     int hit = cache_hash_find(global_page);
     if (hit >= 0) {
-        cache[hit].lru = ++lru_tick;
+        cache_touch((uint32_t)hit);
         return &cache[hit];
     }
+
     struct cache_page *cp = cache_evict();
     uint32_t idx = (uint32_t)(cp - cache);
     cp->global_page = global_page;
-    uint32_t secs = BLOBSTORE_PAGE_SIZE / BLOCKDEV_SECTOR_SIZE;
-    if (blockdev_read(page_to_lba(global_page), secs, cp->data) != 0) {
-        if (!for_write)
-            return NULL;
+    if (fetch) {
+        uint32_t secs = BLOBSTORE_PAGE_SIZE / BLOCKDEV_SECTOR_SIZE;
+        if (blockdev_read(page_to_lba(global_page), secs, cp->data) != 0) {
+            if (!for_write)
+                return NULL;
+            memset(cp->data, 0, BLOBSTORE_PAGE_SIZE);
+        }
+    } else {
         memset(cp->data, 0, BLOBSTORE_PAGE_SIZE);
     }
     cp->valid = 1;
     cp->dirty = 0;
     cp->lru = ++lru_tick;
     cache_hash_insert(global_page, idx);
+    cache_live++;
+    cache_hot = (int)idx;
     return cp;
 }
 
@@ -233,6 +273,8 @@ void blobstore_init(void) {
     memset(cache, 0, sizeof(cache));
     memset(&super, 0, sizeof(super));
     lru_tick = 0;
+    cache_hot = -1;
+    cache_live = 0;
     ready = 0;
     if (!blockdev_present())
         return;
@@ -335,7 +377,7 @@ int blobstore_read(uint32_t id, size_t off, void *buf, size_t len) {
         size_t chunk = BLOBSTORE_PAGE_SIZE - page_off;
         if (chunk > len - done)
             chunk = len - done;
-        struct cache_page *cp = cache_get(page, 0);
+        struct cache_page *cp = cache_get(page, 0, 1);
         if (!cp)
             return -1;
         memcpy(dst + done, cp->data + page_off, chunk);
@@ -364,7 +406,9 @@ int blobstore_write(uint32_t id, size_t off, const void *buf, size_t len) {
         size_t chunk = BLOBSTORE_PAGE_SIZE - page_off;
         if (chunk > len - done)
             chunk = len - done;
-        struct cache_page *cp = cache_get(page, 1);
+        /* Full-page overwrite: skip disk read-modify-write. */
+        int fetch = !(page_off == 0 && chunk == BLOBSTORE_PAGE_SIZE);
+        struct cache_page *cp = cache_get(page, 1, fetch);
         if (!cp)
             return -1;
         memcpy(cp->data + page_off, src + done, chunk);
@@ -389,7 +433,11 @@ int blobstore_sync(void) {
 int blobstore_load(void) {
     if (!blockdev_present())
         return -1;
+    cache_hash_clear();
     memset(cache, 0, sizeof(cache));
+    lru_tick = 0;
+    cache_hot = -1;
+    cache_live = 0;
     if (read_meta() != 0) {
         format_new();
         ready = 1;
@@ -404,10 +452,16 @@ uint32_t blobstore_object_count(void) {
 }
 
 uint32_t blobstore_cache_pages_used(void) {
-    uint32_t n = 0;
-    for (uint32_t i = 0; i < BLOBSTORE_CACHE_PAGES; i++) {
-        if (cache[i].valid)
-            n++;
-    }
-    return n;
+    return cache_live;
+}
+
+int blobstore_cached_at(uint32_t id, size_t off) {
+    struct blob_obj *o = find_obj(id);
+    if (!o || off >= o->size)
+        return 0;
+    uint32_t page = o->start_page + (uint32_t)(off / BLOBSTORE_PAGE_SIZE);
+    if (cache_hot >= 0 && (uint32_t)cache_hot < BLOBSTORE_CACHE_PAGES &&
+        cache[cache_hot].valid && cache[cache_hot].global_page == page)
+        return 1;
+    return cache_hash_find(page) >= 0;
 }
