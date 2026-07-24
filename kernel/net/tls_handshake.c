@@ -298,10 +298,14 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
 
     while (!got_done && timer_ticks() - start < timeout_ticks) {
         uint8_t type;
-        /* Static: 16 KiB does not fit on the 8 KiB kernel stack. */
-        static uint8_t buf[16384];
         size_t n = 0;
-        if (tls_recv_record(&type, buf, sizeof(buf), &n, 200, 0) != 0)
+        size_t room = sizeof(hs_reasm) - hs_reasm_len;
+        if (room == 0) {
+            tls_set_err("Handshake buffer overflow");
+            goto fail;
+        }
+        /* Stage HS bytes directly into hs_reasm (avoids a second 16 KiB BSS buf). */
+        if (tls_recv_record(&type, hs_reasm + hs_reasm_len, room, &n, 200, 0) != 0)
             continue;
         if (type == TLS_CONTENT_ALERT) {
             tls_set_err("Server alert during handshake");
@@ -310,11 +314,6 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
         if (type != TLS_CONTENT_HS)
             continue;
 
-        if (hs_reasm_len + n > sizeof(hs_reasm)) {
-            tls_set_err("Handshake buffer overflow");
-            goto fail;
-        }
-        memcpy(hs_reasm + hs_reasm_len, buf, n);
         hs_reasm_len += n;
 
         size_t off = 0;
@@ -397,13 +396,13 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
 
     {
         uint8_t type;
-        static uint8_t buf[8192]; /* NewSessionTicket can be large; keep off stack */
+        /* Reuse hs_reasm: reassembly finished; tickets are discarded. */
         size_t n = 0;
         start = timer_ticks();
         int got_ccs = 0;
         while (timer_ticks() - start < timeout_ticks) {
             if (!got_ccs) {
-                if (tls_recv_record(&type, buf, sizeof(buf), &n, 100, 0) != 0)
+                if (tls_recv_record(&type, hs_reasm, sizeof(hs_reasm), &n, 100, 0) != 0)
                     continue;
                 if (type == TLS_CONTENT_ALERT) {
                     tls_set_err("Server alert after Finished (bad keys?)");

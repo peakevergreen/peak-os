@@ -27,37 +27,38 @@ int tls_hostname_matched(void) {
     return hostname_matched;
 }
 
+/* Shared: tofu_check then tofu_remember never nest (saves one TOFU_MAX BSS). */
+static char tofu_buf[TOFU_MAX];
+
 /* 1 = match, 0 = unknown host, -1 = MISMATCH (possible MITM). */
 static int tofu_check(const char *host, const char *hexdigest) {
-    static char buf[TOFU_MAX];
     size_t n = 0;
     if (!host || !host[0])
         return 0;
-    if (vfs_read_file(TOFU_PATH, buf, sizeof(buf) - 1, &n) != 0 || n == 0)
+    if (vfs_read_file(TOFU_PATH, tofu_buf, sizeof(tofu_buf) - 1, &n) != 0 || n == 0)
         return 0;
-    buf[n] = '\0';
-    return tls_tofu_check_store(buf, host, hexdigest);
+    tofu_buf[n] = '\0';
+    return tls_tofu_check_store(tofu_buf, host, hexdigest);
 }
 
 static void tofu_remember(const char *host, const char *hexdigest) {
-    static char buf[TOFU_MAX];
     size_t n = 0;
     if (!host || !host[0])
         return;
-    if (vfs_read_file(TOFU_PATH, buf, sizeof(buf) - 1, &n) != 0)
+    if (vfs_read_file(TOFU_PATH, tofu_buf, sizeof(tofu_buf) - 1, &n) != 0)
         n = 0;
-    buf[n] = '\0';
+    tofu_buf[n] = '\0';
     size_t need = strlen(host) + 1 + 64 + 1;
-    if (n + need + 1 > sizeof(buf))
+    if (n + need + 1 > sizeof(tofu_buf))
         return; /* store full — keep existing entries */
     size_t o = n;
     for (const char *s = host; *s; s++)
-        buf[o++] = *s;
-    buf[o++] = ':';
+        tofu_buf[o++] = *s;
+    tofu_buf[o++] = ':';
     for (const char *s = hexdigest; *s; s++)
-        buf[o++] = *s;
-    buf[o++] = '\n';
-    vfs_write_file(TOFU_PATH, buf, o);
+        tofu_buf[o++] = *s;
+    tofu_buf[o++] = '\n';
+    vfs_write_file(TOFU_PATH, tofu_buf, o);
 }
 
 static int x509_names_match_sni(const uint8_t *cert, size_t cert_len, const char *sni_host) {
