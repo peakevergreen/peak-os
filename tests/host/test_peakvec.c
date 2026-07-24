@@ -168,6 +168,42 @@ static void test_dense_pack_after_deletes(void) {
     expect(!strcmp(hits[0].key, "c"), "c still queryable after pack");
 }
 
+static void test_namespace_isolation(void) {
+    peakvec_init();
+    int16_t vec[PEAKVEC_DIM];
+    peakvec_embed_text("shared key text", vec);
+    expect(peakvec_upsert("agent", "k1", vec, "agent-meta") == 0, "upsert agent");
+    expect(peakvec_upsert("workspace", "k1", vec, "ws-meta") == 0, "upsert workspace");
+    expect(peakvec_count("agent") == 1, "agent count");
+    expect(peakvec_count("workspace") == 1, "workspace count");
+    struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
+    int n = peakvec_query("agent", vec, 3, hits);
+    expect(n == 1 && !strcmp(hits[0].meta, "agent-meta"), "agent query isolated");
+    n = peakvec_query("workspace", vec, 3, hits);
+    expect(n == 1 && !strcmp(hits[0].meta, "ws-meta"), "workspace query isolated");
+    expect(peakvec_delete("agent", "k1") == 0, "delete agent only");
+    expect(peakvec_count("agent") == 0, "agent empty");
+    expect(peakvec_count("workspace") == 1, "workspace remains");
+}
+
+static void test_ann_threshold_corpus(void) {
+    /* Fill past ANN threshold; self-query must still find needle. */
+    peakvec_init();
+    char key[32], text[80];
+    for (int i = 0; i < 80; i++) {
+        snprintf(key, sizeof(key), "ann%d", i);
+        snprintf(text, sizeof(text), "filler document about topic %d kernels", i);
+        upsert_text(key, text);
+    }
+    upsert_text("ann-needle", "unique peakvec ivf bucket probe phrase");
+    int16_t q[PEAKVEC_DIM];
+    peakvec_embed_text("unique peakvec ivf bucket probe phrase", q);
+    struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
+    int n = peakvec_query("agent", q, 3, hits);
+    expect(n >= 1, "ann corpus returns hits");
+    expect(!strcmp(hits[0].key, "ann-needle"), "ann finds needle");
+}
+
 int main(void) {
     test_embed_similarity();
     test_basic_query();
@@ -176,6 +212,8 @@ int main(void) {
     test_delete_and_zero_query();
     test_upsert_refreshes_norm();
     test_dense_pack_after_deletes();
+    test_namespace_isolation();
+    test_ann_threshold_corpus();
 
     if (fails) {
         fprintf(stderr, "%d peakvec test(s) failed\n", fails);

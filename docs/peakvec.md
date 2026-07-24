@@ -6,7 +6,7 @@ PeakVec is a Peak-authored, in-guest vector index for session/workspace context.
 
 - **Local-only by default.** Embeddings are hashed n-grams (`peakvec_embed_text`) — no model weights, no network.
 - **Slim kernel, large data on disk.** Index pages through the [blobstore](#blobstore) LRU cache (128 KiB). Total size scales with the block device.
-- **Brute-force cosine** over int16 vectors (`PEAKVEC_DIM=64`). The query path caches corpus norms, normalizes the query once (binary isqrt), walks the dense `[0, count)` table, uses batched dot/norm helpers, and early-outs scores that cannot enter top-k. Last query duration is published to sysmon (`peakvec_us`). ANN (HNSW/IVF) is still deferred until corpora need it — revisit when a namespace regularly exceeds ~512 live entries or query latency shows up in Monitor/sysmon.
+- **Cosine search** over int16 vectors (`PEAKVEC_DIM=64`). Norms are cached; the query is normalized once. When a namespace has ≥64 live entries, an IVF-lite coarse bucket (argmax dimension) probes first, then falls back to the remainder. Namespaces are honored on upsert/query/delete/count (RAM tags; default `agent`). Last query duration is published to sysmon (`peakvec_us`).
 - **Capability-gated:** `CAP_VEC` (shell default includes it); agent namespace also accepts `CAP_AGENT`.
 
 ## Blobstore
@@ -14,7 +14,7 @@ PeakVec is a Peak-authored, in-guest vector index for session/workspace context.
 `kernel/blobstore.c` — block-backed object store starting at LBA 8192 (4 MiB), with:
 
 - bump-allocated extents
-- 32×4 KiB LRU page cache
+- 48×4 KiB LRU page cache
 - sync on PeakDisk save
 
 PeakFS persistence itself is **streamed** (no fixed 512 KiB snapshot cap); see `peakdisk_save` / `vfs_export_ramdisk_size`.

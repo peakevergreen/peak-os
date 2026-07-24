@@ -9,6 +9,8 @@
 #define PEAKVEC_MAGIC "PEAKVEC1"
 #define PEAKVEC_MAX_ENTRIES 4096u
 #define PEAKVEC_NS_DEFAULT "agent"
+#define PEAKVEC_ANN_BUCKETS 16u
+#define PEAKVEC_ANN_THRESHOLD 64u
 
 #if (PEAKVEC_DIM % 4) != 0
 #error PEAKVEC_DIM must be a multiple of 4 for batched dot/norm helpers
@@ -31,11 +33,13 @@ struct peakvec_hdr {
     uint32_t blob_id; /* 0 = VFS fallback file */
 };
 
-/* Single default namespace kept resident for query speed; spilled to blob/VFS. */
+/* Single resident table; namespaces are tags (RAM) so queries stay isolated. */
 static struct peakvec_entry *entries;
-/* Parallel RAM-only norm cache (not persisted; rebuilt on load/upsert). */
+/* Parallel RAM-only caches (not persisted; rebuilt on load/upsert). */
 static int64_t *entry_nsq;
 static uint64_t *entry_nroot;
+static char *entry_ns;          /* capacity * PEAKVEC_NS_MAX */
+static uint8_t *entry_bucket;   /* IVF-lite coarse id */
 static uint32_t capacity;
 static uint32_t count;
 static uint32_t blob_id;
@@ -43,6 +47,35 @@ static int use_blob;
 static int ready;
 
 static uint64_t isqrt_u64(uint64_t x);
+
+static void ns_copy(char *dst, const char *ns) {
+    if (!ns || !ns[0])
+        ns = PEAKVEC_NS_DEFAULT;
+    size_t i = 0;
+    for (; ns[i] && i + 1 < PEAKVEC_NS_MAX; i++)
+        dst[i] = ns[i];
+    dst[i] = '\0';
+}
+
+static int ns_eq(const char *want, const char *have) {
+    char a[PEAKVEC_NS_MAX], b[PEAKVEC_NS_MAX];
+    ns_copy(a, want);
+    ns_copy(b, have);
+    return !strcmp(a, b);
+}
+
+static uint8_t vec_bucket(const int16_t *v) {
+    int best = 0;
+    int16_t best_abs = 0;
+    for (int i = 0; i < PEAKVEC_DIM; i++) {
+        int16_t a = v[i] < 0 ? (int16_t)(-v[i]) : v[i];
+        if (a > best_abs) {
+            best_abs = a;
+            best = i;
+        }
+    }
+    return (uint8_t)((unsigned)best % PEAKVEC_ANN_BUCKETS);
+}
 
 static void embed_add(int32_t acc[PEAKVEC_DIM], uint32_t h, int weight) {
     uint32_t idx = h % PEAKVEC_DIM;
@@ -159,11 +192,16 @@ static void cache_entry_norm(uint32_t idx) {
     int64_t nsq = vec_norm_sq_i16(entries[idx].vec);
     entry_nsq[idx] = nsq;
     entry_nroot[idx] = isqrt_u64((uint64_t)nsq);
+    if (entry_bucket)
+        entry_bucket[idx] = vec_bucket(entries[idx].vec);
 }
 
 static void rebuild_norm_cache(void) {
-    for (uint32_t i = 0; i < count; i++)
+    for (uint32_t i = 0; i < count; i++) {
+        if (entry_ns && (!entry_ns[i * PEAKVEC_NS_MAX]))
+            ns_copy(&entry_ns[i * PEAKVEC_NS_MAX], PEAKVEC_NS_DEFAULT);
         cache_entry_norm(i);
+    }
 }
 
 /*
@@ -301,33 +339,51 @@ static int ensure_capacity(uint32_t need) {
     struct peakvec_entry *n = kmalloc(nc * sizeof(struct peakvec_entry));
     int64_t *nsq = kmalloc(nc * sizeof(int64_t));
     uint64_t *nroot = kmalloc(nc * sizeof(uint64_t));
-    if (!n || !nsq || !nroot) {
+    char *ns = kmalloc(nc * PEAKVEC_NS_MAX);
+    uint8_t *buck = kmalloc(nc * sizeof(uint8_t));
+    if (!n || !nsq || !nroot || !ns || !buck) {
         if (n)
             kfree(n);
         if (nsq)
             kfree(nsq);
         if (nroot)
             kfree(nroot);
+        if (ns)
+            kfree(ns);
+        if (buck)
+            kfree(buck);
         return -1;
     }
     memset(n, 0, nc * sizeof(struct peakvec_entry));
     memset(nsq, 0, nc * sizeof(int64_t));
     memset(nroot, 0, nc * sizeof(uint64_t));
+    memset(ns, 0, nc * PEAKVEC_NS_MAX);
+    memset(buck, 0, nc * sizeof(uint8_t));
     if (entries && count)
         memcpy(n, entries, count * sizeof(struct peakvec_entry));
     if (entry_nsq && count)
         memcpy(nsq, entry_nsq, count * sizeof(int64_t));
     if (entry_nroot && count)
         memcpy(nroot, entry_nroot, count * sizeof(uint64_t));
+    if (entry_ns && count)
+        memcpy(ns, entry_ns, count * PEAKVEC_NS_MAX);
+    if (entry_bucket && count)
+        memcpy(buck, entry_bucket, count * sizeof(uint8_t));
     if (entries)
         kfree(entries);
     if (entry_nsq)
         kfree(entry_nsq);
     if (entry_nroot)
         kfree(entry_nroot);
+    if (entry_ns)
+        kfree(entry_ns);
+    if (entry_bucket)
+        kfree(entry_bucket);
     entries = n;
     entry_nsq = nsq;
     entry_nroot = nroot;
+    entry_ns = ns;
+    entry_bucket = buck;
     capacity = nc;
     if (use_blob && blob_id)
         (void)blobstore_resize(blob_id,
@@ -395,9 +451,21 @@ static int load_from_vfs(void) {
 }
 
 void peakvec_init(void) {
+    if (entries)
+        kfree(entries);
+    if (entry_nsq)
+        kfree(entry_nsq);
+    if (entry_nroot)
+        kfree(entry_nroot);
+    if (entry_ns)
+        kfree(entry_ns);
+    if (entry_bucket)
+        kfree(entry_bucket);
     entries = NULL;
     entry_nsq = NULL;
     entry_nroot = NULL;
+    entry_ns = NULL;
+    entry_bucket = NULL;
     capacity = 0;
     count = 0;
     blob_id = 0;
@@ -423,13 +491,16 @@ void peakvec_init(void) {
 
 int peakvec_upsert(const char *ns, const char *key,
                    const int16_t vec[PEAKVEC_DIM], const char *meta) {
-    (void)ns;
     if (!ready || !key || !vec)
         return -1;
     if (!cap_check(CAP_AGENT) && !cap_check(CAP_FS_WRITE))
         return -1;
+    char nsb[PEAKVEC_NS_MAX];
+    ns_copy(nsb, ns);
     for (uint32_t i = 0; i < count; i++) {
-        if (entries[i].in_use && !strcmp(entries[i].key, key)) {
+        if (entries[i].in_use && entry_ns &&
+            ns_eq(nsb, &entry_ns[i * PEAKVEC_NS_MAX]) &&
+            !strcmp(entries[i].key, key)) {
             memcpy(entries[i].vec, vec, sizeof(entries[i].vec));
             entries[i].meta[0] = '\0';
             if (meta) {
@@ -459,6 +530,8 @@ int peakvec_upsert(const char *ns, const char *key,
     }
     memcpy(e->vec, vec, sizeof(e->vec));
     e->in_use = 1;
+    if (entry_ns)
+        ns_copy(&entry_ns[count * PEAKVEC_NS_MAX], nsb);
     cache_entry_norm(count);
     count++;
     (void)persist_blob();
@@ -466,18 +539,25 @@ int peakvec_upsert(const char *ns, const char *key,
 }
 
 int peakvec_delete(const char *ns, const char *key) {
-    (void)ns;
     if (!ready || !key)
         return -1;
+    char nsb[PEAKVEC_NS_MAX];
+    ns_copy(nsb, ns);
     for (uint32_t i = 0; i < count; i++) {
-        if (entries[i].in_use && !strcmp(entries[i].key, key)) {
-            /* Swap-remove to avoid O(n) memmove on every delete. */
+        if (entries[i].in_use && entry_ns &&
+            ns_eq(nsb, &entry_ns[i * PEAKVEC_NS_MAX]) &&
+            !strcmp(entries[i].key, key)) {
             uint32_t last = count - 1;
             entries[i] = entries[last];
             if (entry_nsq)
                 entry_nsq[i] = entry_nsq[last];
             if (entry_nroot)
                 entry_nroot[i] = entry_nroot[last];
+            if (entry_ns)
+                memcpy(&entry_ns[i * PEAKVEC_NS_MAX],
+                       &entry_ns[last * PEAKVEC_NS_MAX], PEAKVEC_NS_MAX);
+            if (entry_bucket)
+                entry_bucket[i] = entry_bucket[last];
             count--;
             (void)persist_blob();
             return 0;
@@ -488,57 +568,86 @@ int peakvec_delete(const char *ns, const char *key) {
 
 int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
                   int topk, struct peakvec_hit *hits) {
-    (void)ns;
     if (!ready || !query || !hits || topk <= 0)
         return -1;
     if (topk > PEAKVEC_TOPK_MAX)
         topk = PEAKVEC_TOPK_MAX;
+    char nsb[PEAKVEC_NS_MAX];
+    ns_copy(nsb, ns);
     uint32_t t0 = sysmon_now_us();
     for (int i = 0; i < topk; i++) {
         hits[i].key[0] = '\0';
         hits[i].meta[0] = '\0';
         hits[i].score_milli = -1000000;
     }
-    /* Normalize query once: ||q||^2 and isqrt(||q||^2). */
     int64_t qnorm = vec_norm_sq_i16(query);
     uint64_t qroot = isqrt_u64((uint64_t)qnorm);
+    uint8_t qb = vec_bucket(query);
+    int use_ann = (count >= PEAKVEC_ANN_THRESHOLD && entry_bucket != NULL);
     int found = 0;
     int32_t worst = -1000000;
-    /* Dense packing: swap-remove keeps [0, count) live — no in_use scan. */
-    for (uint32_t i = 0; i < count; i++) {
-        uint64_t vroot = entry_nroot ? entry_nroot[i] : 0;
-        int early = (found >= topk);
-        int skipped = 0;
-        int32_t sc = cosine_milli_roots(query, qroot, entries[i].vec, vroot,
-                                       early, worst, &skipped);
-        if (skipped || (found >= topk && sc <= worst))
-            continue;
-        /* insert into topk */
-        int place = topk;
-        for (int k = 0; k < topk; k++) {
-            if (sc > hits[k].score_milli) {
-                place = k;
-                break;
+
+    for (int pass = 0; pass < (use_ann ? 2 : 1); pass++) {
+        /* pass 0: same IVF bucket; pass 1: remainder (or full if !ANN). */
+        for (uint32_t i = 0; i < count; i++) {
+            if (entry_ns && !ns_eq(nsb, &entry_ns[i * PEAKVEC_NS_MAX]))
+                continue;
+            if (use_ann) {
+                uint8_t b = entry_bucket[i];
+                if (pass == 0 && b != qb)
+                    continue;
+                if (pass == 1 && b == qb)
+                    continue; /* already scored */
             }
+            uint64_t vroot = entry_nroot ? entry_nroot[i] : 0;
+            int early = (found >= topk);
+            int skipped = 0;
+            int32_t sc = cosine_milli_roots(query, qroot, entries[i].vec, vroot,
+                                           early, worst, &skipped);
+            if (skipped || (found >= topk && sc <= worst))
+                continue;
+            int place = topk;
+            for (int k = 0; k < topk; k++) {
+                if (sc > hits[k].score_milli) {
+                    place = k;
+                    break;
+                }
+            }
+            if (place >= topk)
+                continue;
+            for (int k = topk - 1; k > place; k--)
+                hits[k] = hits[k - 1];
+            memcpy(hits[place].key, entries[i].key, PEAKVEC_KEY_MAX);
+            memcpy(hits[place].meta, entries[i].meta, PEAKVEC_META_MAX);
+            hits[place].score_milli = sc;
+            if (found < topk)
+                found++;
+            worst = hits[topk - 1].score_milli;
         }
-        if (place >= topk)
-            continue;
-        for (int k = topk - 1; k > place; k--)
-            hits[k] = hits[k - 1];
-        memcpy(hits[place].key, entries[i].key, PEAKVEC_KEY_MAX);
-        memcpy(hits[place].meta, entries[i].meta, PEAKVEC_META_MAX);
-        hits[place].score_milli = sc;
-        if (found < topk)
-            found++;
-        worst = hits[topk - 1].score_milli;
+        /* If ANN bucket pass already filled top-k with strong hits, skip rest. */
+        if (use_ann && pass == 0 && found >= topk && worst > 500)
+            break;
     }
     sysmon_note_peakvec_us(sysmon_now_us() - t0);
     return found;
 }
 
 int peakvec_count(const char *ns) {
-    (void)ns;
-    return ready ? (int)count : 0;
+    if (!ready)
+        return 0;
+    if (!ns || !ns[0] || !strcmp(ns, PEAKVEC_NS_DEFAULT)) {
+        /* Fast path: count matching default ns (or all if tags missing). */
+        if (!entry_ns)
+            return (int)count;
+    }
+    char nsb[PEAKVEC_NS_MAX];
+    ns_copy(nsb, ns);
+    int n = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        if (entry_ns && ns_eq(nsb, &entry_ns[i * PEAKVEC_NS_MAX]))
+            n++;
+    }
+    return n;
 }
 
 /* op: 1=upsert_text 2=query_text 3=count 4=delete
