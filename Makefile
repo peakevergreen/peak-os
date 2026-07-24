@@ -295,7 +295,9 @@ BIOS_C_SRCS := \
 	boot/common/elf_load.c \
 	boot/common/paging.c \
 	boot/common/load_ctx.c \
-	boot/common/peak_conf.c
+	boot/common/peak_conf.c \
+	boot/common/sha256.c \
+	boot/common/verify_kernel.c
 
 BIOS_S_SRCS := boot/bios/entry.S boot/bios/lm_enter.S
 BIOS_OBJS := $(patsubst %.c,$(BUILD)/%.o,$(BIOS_C_SRCS)) \
@@ -352,7 +354,8 @@ $(HOST_TEST_DIR):
 $(eval $(call HOST_TEST_RULE,phase7,tests/host/test_phase7.c kernel/vfs_path_util.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
 $(eval $(call HOST_TEST_RULE,gfx,tests/host/test_gfx.c,$(HOST_CFLAGS)))
-$(eval $(call HOST_TEST_RULE,boot,tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c,\
+$(eval $(call HOST_TEST_RULE,boot,tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c \
+	boot/common/sha256.c boot/common/verify_kernel.c boot/common/peak_conf.c,\
 	$(HOST_CFLAGS) $(HOST_TEST_INC_BOOT)))
 $(eval $(call HOST_TEST_RULE,lan,tests/host/test_lan.c kernel/net/dhcp_util.c kernel/net/http_util.c \
 	kernel/net/arp_util.c boot/common/peak_conf.c boot/common/util.c,\
@@ -585,13 +588,22 @@ $(BUILD)/uefi/peak_conf.o: boot/common/peak_conf.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UEFI_CFLAGS) -c $< -o $@
 
+$(BUILD)/uefi/sha256.o: boot/common/sha256.c
+	@mkdir -p $(dir $@)
+	$(CC) $(UEFI_CFLAGS) -c $< -o $@
+
+$(BUILD)/uefi/verify_kernel.o: boot/common/verify_kernel.c
+	@mkdir -p $(dir $@)
+	$(CC) $(UEFI_CFLAGS) -c $< -o $@
+
 $(UEFI_EFI): $(BUILD)/uefi/efi_main.o $(BUILD)/uefi/util.o $(BUILD)/uefi/elf_load.o \
-             $(BUILD)/uefi/paging.o $(BUILD)/uefi/load_ctx.o $(BUILD)/uefi/peak_conf.o
+             $(BUILD)/uefi/paging.o $(BUILD)/uefi/load_ctx.o $(BUILD)/uefi/peak_conf.o \
+             $(BUILD)/uefi/sha256.o $(BUILD)/uefi/verify_kernel.o
 	@mkdir -p $(dir $@)
 	$(LLDLINK) /subsystem:efi_application /entry:efi_main /out:$@ \
 		$(BUILD)/uefi/efi_main.o $(BUILD)/uefi/util.o \
 		$(BUILD)/uefi/elf_load.o $(BUILD)/uefi/paging.o $(BUILD)/uefi/load_ctx.o \
-		$(BUILD)/uefi/peak_conf.o
+		$(BUILD)/uefi/peak_conf.o $(BUILD)/uefi/sha256.o $(BUILD)/uefi/verify_kernel.o
 
 $(ESP_IMG): $(UEFI_EFI) $(KERNEL_ELF) boot/peak.conf scripts/mkesp.py
 	python3 scripts/mkesp.py $(UEFI_EFI) $@ --size-kib 8192 --kernel $(KERNEL_ELF) \
@@ -607,6 +619,7 @@ $(ISO): $(KERNEL_ELF) $(BIOS_BIN) $(ESP_IMG) $(UEFI_EFI) boot/peak.conf
 	cp $(BIOS_BIN) $(ISO_ROOT)/boot/peak-bios.bin
 	cp $(ESP_IMG) $(ISO_ROOT)/boot/efi.img
 	cp $(UEFI_EFI) $(ISO_ROOT)/EFI/BOOT/BOOTX64.EFI
+	if [ -f $(BUILD)/SHA256SUMS ]; then cp $(BUILD)/SHA256SUMS $(ISO_ROOT)/boot/SHA256SUMS; fi
 	cp boot/peak.conf $(ISO_ROOT)/boot/peak.conf
 	@BLS=$$(( ($$(stat -f%z $(BIOS_BIN) 2>/dev/null || stat -c%s $(BIOS_BIN)) + 511) / 512 )); \
 	xorriso -as mkisofs -R -r -J \

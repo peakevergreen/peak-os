@@ -6,6 +6,9 @@
 #include "peak_boot.h"
 #include "boot_elf.h"
 #include "boot_util.h"
+#include "boot_sha256.h"
+#include "boot_verify.h"
+#include "peak_conf.h"
 
 static uint8_t arena[1024 * 1024];
 static size_t arena_off;
@@ -192,6 +195,60 @@ int main(int argc, char **argv) {
     char a[] = "BOOT";
     char b[] = "boot";
     expect(boot_strncasecmp(a, b, 4) == 0, "strncasecmp");
+
+    /* SHA256 empty string vector */
+    {
+        struct boot_sha256_ctx ctx;
+        boot_sha256_init(&ctx);
+        uint8_t dig[BOOT_SHA256_DIGEST_LEN];
+        boot_sha256_final(&ctx, dig);
+        static const uint8_t empty_ref[32] = {
+            0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8,
+            0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
+            0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55,
+        };
+        expect(memcmp(dig, empty_ref, 32) == 0, "sha256 empty");
+    }
+
+    /* boot_verify_kernel: optional skip, required fail-closed, manifest match */
+    {
+        struct peak_loader_conf conf;
+        peak_conf_defaults(&conf);
+        const char payload[] = "kernel-bytes-for-verify";
+        expect(boot_verify_kernel(&conf, (const uint8_t *)payload, sizeof(payload) - 1,
+                                  NULL, 0) == 0,
+               "verify skips when not required");
+
+        conf.verify_required = 1;
+        expect(boot_verify_kernel(&conf, (const uint8_t *)payload, sizeof(payload) - 1,
+                                  NULL, 0) != 0,
+               "verify required without digest fails");
+
+        struct boot_sha256_ctx ctx;
+        boot_sha256_init(&ctx);
+        boot_sha256_update(&ctx, payload, sizeof(payload) - 1);
+        uint8_t dig[BOOT_SHA256_DIGEST_LEN];
+        boot_sha256_final(&ctx, dig);
+        char hex[BOOT_SHA256_DIGEST_LEN * 2 + 1];
+        static const char k[] = "0123456789abcdef";
+        for (int i = 0; i < BOOT_SHA256_DIGEST_LEN; i++) {
+            hex[i * 2] = k[dig[i] >> 4];
+            hex[i * 2 + 1] = k[dig[i] & 0xF];
+        }
+        hex[BOOT_SHA256_DIGEST_LEN * 2] = '\0';
+        strcpy(conf.kernel_sha256, hex);
+        expect(boot_verify_kernel(&conf, (const uint8_t *)payload, sizeof(payload) - 1,
+                                  NULL, 0) == 0,
+               "verify conf digest ok");
+
+        char manifest[128];
+        snprintf(manifest, sizeof(manifest), "%s  boot/kernel.elf\n", hex);
+        conf.kernel_sha256[0] = '\0';
+        conf.verify_required = 1;
+        expect(boot_verify_kernel(&conf, (const uint8_t *)payload, sizeof(payload) - 1,
+                                  manifest, strlen(manifest)) == 0,
+               "verify manifest digest ok");
+    }
 
     if (fuzz_iters > 0) {
         int bad_accept = fuzz_mutations(fuzz_seed, fuzz_iters);

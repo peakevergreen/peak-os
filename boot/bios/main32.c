@@ -3,6 +3,7 @@
 #include "boot_elf.h"
 #include "boot_load_ctx.h"
 #include "boot_paging.h"
+#include "boot_verify.h"
 #include "peak_boot.h"
 #include "peak_conf.h"
 
@@ -79,16 +80,29 @@ void bios_main32(uint32_t drive) {
     }
     boot_serial_write_str("bios: kernel loaded\n");
 
+    static char manifest_buf[4096];
+    uint32_t manifest_len = 0;
+    if (iso_load_file("/boot/SHA256SUMS", manifest_buf, sizeof(manifest_buf) - 1,
+                      &manifest_len) != 0)
+        (void)iso_load_file("/BOOT/SHA256SUMS", manifest_buf, sizeof(manifest_buf) - 1,
+                            &manifest_len);
+    manifest_buf[manifest_len] = '\0';
+
+    struct boot_elf_image img = {
+        .data = (const uint8_t *)(uintptr_t)KERNEL_LOAD_PHYS,
+        .size = ksz,
+    };
+    if (boot_verify_kernel(&conf, img.data, img.size, manifest_buf, manifest_len) != 0) {
+        boot_serial_write_str("bios: kernel verify failed\n");
+        boot_hang();
+    }
+
     boot_load_ctx_init(&load_ctx, PT_ARENA_PHYS, PT_ARENA_SIZE);
     if (boot_load_ctx_paging_init(&load_ctx, 0x100000000ULL) != 0) {
         boot_serial_write_str("bios: paging init failed\n");
         boot_hang();
     }
 
-    struct boot_elf_image img = {
-        .data = (const uint8_t *)(uintptr_t)KERNEL_LOAD_PHYS,
-        .size = ksz,
-    };
     struct boot_loaded_kernel k;
     if (boot_load_ctx_elf_load(&load_ctx, &img, &k) != 0) {
         boot_serial_write_str("bios: ELF load failed\n");
