@@ -177,6 +177,10 @@ int dwc2_hub_enum_device(uint8_t parent_hub, uint8_t parent_port, uint8_t speed,
     if (is_hub && parent_hub == 0) {
         (void)register_hub(addr, speed, cfg, (int)total);
     } else {
+        uint16_t vid = (uint16_t)desc[8] | ((uint16_t)desc[9] << 8);
+        uint16_t pid = (uint16_t)desc[10] | ((uint16_t)desc[11] << 8);
+        usb_lan_try_bind(addr, vid, pid, cfg, (int)total, speed, parent_hub,
+                         parent_port);
         dwc2_hid_parse_config(addr, cfg, (int)total, speed, parent_hub, parent_port);
     }
     if (out_addr)
@@ -197,6 +201,7 @@ void dwc2_hub_poll_ports(void) {
             uint8_t child = h->port_child[p - 1];
             if (!connected && child) {
                 dwc2_hid_clear_for_addr(child);
+                usb_lan_clear_for_addr(child);
                 h->port_child[p - 1] = 0;
                 h->port_seen[p - 1] = 0;
                 serial_log_rl(SERIAL_LOG_DEBUG, 100,
