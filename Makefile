@@ -135,6 +135,8 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/desktop_agent.c \
 	kernel/gui/game.c \
 	kernel/gui/browser.c \
+	kernel/gui/browser_draw.c \
+	kernel/gui/browser_nav.c \
 	kernel/gui/monitor.c
 
 KERNEL_COMMON_ASMS := kernel/wallpaper_data.S
