@@ -82,4 +82,15 @@ void browser_extract_title(struct br_tab *t, const char *html, int tab_index);
 void browser_parse_html(struct br_tab *t, const char *html, int tab_index);
 void browser_reader_fallback(struct br_tab *t, const char *html, int tab_index);
 
+enum br_err_kind {
+    BR_ERR_NETWORK = 0,
+    BR_ERR_DNS,
+    BR_ERR_TLS,
+    BR_ERR_HTTP,
+    BR_ERR_LOCAL,
+};
+
+void browser_error_page(struct br_tab *t, enum br_err_kind kind,
+                        const char *detail, int http_st);
+
 #endif
