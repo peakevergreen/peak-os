@@ -18,6 +18,7 @@ enum js_tok {
     T_WHILE, T_FOR, T_TRUE, T_FALSE, T_NULL, T_UNDEFINED,
     T_NEW, T_THIS, T_TYPEOF, T_THROW, T_TRY, T_CATCH, T_FINALLY,
     T_CLASS, T_EXTENDS, T_ASYNC, T_AWAIT, T_OF, T_IN,
+    T_IMPORT, T_EXPORT, T_FROM,
 };
 
 struct js_compiler {
@@ -29,6 +30,8 @@ struct js_compiler {
     char text[256];
     double num;
     int line;
+    int pending_async; /* set when `async` precedes function/arrow */
+    int module_mode;   /* allow export; bind exports object */
 };
 
 /* Lexer (js_lex.c) */

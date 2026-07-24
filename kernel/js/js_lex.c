@@ -116,6 +116,7 @@ void js_lex_next(struct js_compiler *c) {
         KW("catch", T_CATCH); KW("finally", T_FINALLY); KW("class", T_CLASS);
         KW("extends", T_EXTENDS); KW("async", T_ASYNC); KW("await", T_AWAIT);
         KW("of", T_OF); KW("in", T_IN);
+        KW("import", T_IMPORT); KW("export", T_EXPORT); KW("from", T_FROM);
 #undef KW
         c->tok = T_IDENT;
         return;

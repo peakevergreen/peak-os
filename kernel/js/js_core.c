@@ -200,6 +200,9 @@ void js_gc(struct js_runtime *rt) {
             mark_val(rt->timers[i].fn);
     for (int i = 0; i < rt->micro_n; i++)
         mark_val(rt->micro[i]);
+    for (int i = 0; i < 8; i++)
+        if (rt->modules[i].used)
+            mark_val(rt->modules[i].exports);
 
     uint32_t w = 0;
     for (uint32_t i = 0; i < rt->obj_count; i++) {
@@ -367,6 +370,49 @@ int js_eval(struct js_runtime *rt, const char *source, const char *filename,
     return 0;
 }
 
+int js_eval_module(struct js_runtime *rt, const char *source, const char *name,
+                   char *out_json, size_t out_cap) {
+    if (!rt || !source || !name || !name[0])
+        return -1;
+    rt->err[0] = '\0';
+    rt->ins_used = 0;
+    rt->aborted = 0;
+    rt->sp = 0;
+    rt->fp = 0;
+    rt->code_len = 0;
+    js_strtab_clear(rt);
+
+    if (js_compile_ex(rt, source, name, 1) != 0)
+        return -1;
+    if (js_vm_run(rt, 0) != 0)
+        return -1;
+
+    struct js_value exports = js_undef();
+    if (rt->sp > 0)
+        exports = rt->stack[rt->sp - 1];
+
+    int slot = -1;
+    for (int i = 0; i < 8; i++) {
+        if (rt->modules[i].used && !strcmp(rt->modules[i].name, name)) {
+            slot = i;
+            break;
+        }
+        if (!rt->modules[i].used && slot < 0)
+            slot = i;
+    }
+    if (slot < 0) {
+        snprintf(rt->err, sizeof(rt->err), "module table full");
+        return -1;
+    }
+    snprintf(rt->modules[slot].name, sizeof(rt->modules[slot].name), "%s", name);
+    rt->modules[slot].exports = exports;
+    rt->modules[slot].used = 1;
+
+    if (out_json && out_cap)
+        snprintf(out_json, out_cap, "[module]");
+    return 0;
+}
+
 int js_rt_set_global_fn(struct js_runtime *rt, const char *name, js_native_fn fn,
                         void *userdata) {
     if (!rt || !name || !fn || !rt->global)
@@ -409,6 +455,18 @@ void js_clear_timer(struct js_runtime *rt, int id) {
     rt->timers[id - 1].used = 0;
 }
 
+void js_drain_microtasks(struct js_runtime *rt) {
+    if (!rt)
+        return;
+    while (rt->micro_n > 0) {
+        struct js_value fn = rt->micro[--rt->micro_n];
+        if (fn.type == JT_FUNC || fn.type == JT_NATIVE) {
+            struct js_value ret;
+            js_val_call(rt, &fn, NULL, 0, NULL, &ret);
+        }
+    }
+}
+
 void js_tick(struct js_runtime *rt) {
     if (!rt)
         return;
@@ -428,14 +486,7 @@ void js_tick(struct js_runtime *rt) {
         else
             rt->timers[i].used = 0;
     }
-    /* microtasks */
-    while (rt->micro_n > 0) {
-        struct js_value fn = rt->micro[--rt->micro_n];
-        if (fn.type == JT_FUNC || fn.type == JT_NATIVE) {
-            struct js_value ret;
-            js_val_call(rt, &fn, NULL, 0, NULL, &ret);
-        }
-    }
+    js_drain_microtasks(rt);
 }
 
 int js_pending_work(struct js_runtime *rt) {
@@ -659,6 +710,7 @@ int js_val_call(struct js_runtime *rt, void *fn, void *this_v, int argc, void *a
     fr->ip = f->u.o->code_off;
     fr->local_count = f->u.o->local_count;
     fr->catch_ip = -1;
+    fr->is_async = f->u.o->is_async;
     fr->this_v = this_v ? *(struct js_value *)this_v : js_undef();
     /* Lazy env: allocated only if MAKE_FUNC runs inside this frame. */
     fr->env = NULL;

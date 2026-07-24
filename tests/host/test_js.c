@@ -74,14 +74,19 @@ int main(void) {
     eval_eq(rt, "var e; try{throw 1}catch(x){e=x;} e", "1");
     eval_eq(rt, "class C{} typeof C", "\"function\"");
 
-    /* async/await: fail closed (no half-stripped await / fake async). ES modules deferred. */
-    eval_fails(rt, "await 1", "await unsupported");
-    eval_fails(rt, "var x=await 1; x", "await unsupported");
-    eval_fails(rt, "function f(){return await 1;} f()", "await unsupported");
+    /* async/await: unwrap Promise.resolve; async functions return promises.
+     * for-await still fail-closed. ES modules via js_eval_module + import. */
+    eval_eq(rt, "await 7", "7");
+    eval_eq(rt, "await Promise.resolve(42)", "42");
+    eval_eq(rt, "async function f(){return 3;} await f()", "3");
+    eval_eq(rt, "var f=async ()=>5; await f()", "5");
     eval_fails(rt, "for await(var x of []){}", "await unsupported");
-    eval_fails(rt, "async function f(){return 1;}", "async unsupported");
-    eval_fails(rt, "async ()=>1", "async unsupported");
-    eval_fails(rt, "var f=async function(){return 1;}", "async unsupported");
+    {
+        char mout[64];
+        expect(js_eval_module(rt, "export var x=41;", "m1", mout, sizeof(mout)) == 0,
+               "eval module");
+        eval_eq(rt, "import {x} from \"m1\"; x+1", "42");
+    }
 
     /* Hot-path regressions: string reuse, INC/DEC/ADD_LOCAL, LT_LOCAL_NUM, lazy call env */
     eval_eq(rt, "var t='ab'+'cd'; t", "\"abcd\"");
