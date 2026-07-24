@@ -299,33 +299,6 @@ int vfs_write_at(const char *path, size_t off, const void *buf, size_t len) {
     return 0;
 }
 
-<<<<<<< HEAD
-int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len) {
-    return vfs_read_at(path, 0, buf, buf_len, out_len);
-=======
-int vfs_read_at(const char *path, size_t off, void *buf, size_t len, size_t *out_len) {
-    struct vfs_node *f = vfs_lookup(path);
-    if (!f || f->type != VFS_FILE)
-        return PEAK_ENOENT;
-    if (!buf)
-        return PEAK_EINVAL;
-    if (off >= f->size) {
-        if (out_len)
-            *out_len = 0;
-        return 0;
-    }
-    if (off + len > f->size)
-        len = f->size - off;
-    if (len && f->data)
-        memcpy(buf, f->data + off, len);
-    else if (len && !f->data)
-        return PEAK_EIO;
-    if (out_len)
-        *out_len = len;
-    return 0;
->>>>>>> f482547 (perf(agent): peakvec path and sysmon honesty)
-}
-
 int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len) {
     return vfs_read_at(path, 0, buf, buf_len, out_len);
 }
