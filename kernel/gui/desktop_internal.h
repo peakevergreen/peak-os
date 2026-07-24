@@ -10,7 +10,7 @@
 #define CURSOR_MAX 64
 #define FILES_ROWS 24
 #define MAX_WINS 12
-#define SETTINGS_PAGES 4
+#define SETTINGS_PAGES 5
 #define MOVE_PIX_CAP (1920u * 1200u)
 #define MAX_DAMAGE 16
 
