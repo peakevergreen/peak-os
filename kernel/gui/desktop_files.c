@@ -98,7 +98,8 @@ static void files_new_file(void) {
         if (!vfs_exists(path)) {
             vfs_write_file(path, "", 0);
             notify_push("Created file");
-            dirty_bits |= DIRTY_FULL;
+            dirty_bits |= DIRTY_WIN;
+            desktop_mark_focus_surf_dirty();
             return;
         }
     }
@@ -121,7 +122,8 @@ static void files_delete_sel(void) {
     if (files_sel > 0)
         files_sel--;
     notify_push("Deleted");
-    dirty_bits |= DIRTY_FULL;
+    dirty_bits |= DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
 }
 
 static void files_rename_sel(void) {
@@ -140,7 +142,8 @@ static void files_rename_sel(void) {
         snprintf(newp, sizeof(newp), "%s/%s_renamed", files_cwd, ents[files_sel].name);
     vfs_rename(oldp, newp);
     notify_push("Renamed");
-    dirty_bits |= DIRTY_FULL;
+    dirty_bits |= DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
 }
 
 static void files_activate(void) {
@@ -168,7 +171,8 @@ static void files_activate(void) {
         desktop_open_app(APP_TERM);
         shell_execute(cmd);
     }
-    dirty_bits |= DIRTY_FULL;
+    dirty_bits |= DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
 }
 
 int desktop_files_key(int key) {
@@ -180,7 +184,8 @@ int desktop_files_key(int key) {
         files_rename_sel();
     else if (key == 'u' || key == 'U') {
         files_go_up();
-        dirty_bits |= DIRTY_FULL;
+        dirty_bits |= DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
     } else if (key == '\n')
         files_activate();
     else if (key == 'j' || key == 'J' || key == KEY_DOWN) {
