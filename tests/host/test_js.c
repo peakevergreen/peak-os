@@ -31,6 +31,24 @@ static int eval_eq(struct js_runtime *rt, const char *src, const char *want) {
     return 1;
 }
 
+static int eval_fails(struct js_runtime *rt, const char *src, const char *err_sub) {
+    char out[64];
+    int rc = js_eval(rt, src, "<test>", out, sizeof(out));
+    if (rc == 0) {
+        fprintf(stderr, "FAIL expected error for '%s' (got %s)\n", src, out);
+        fails++;
+        return 0;
+    }
+    const char *err = js_last_error(rt);
+    if (err_sub && (!err || !strstr(err, err_sub))) {
+        fprintf(stderr, "FAIL '%s' error '%s' missing '%s'\n", src, err ? err : "(null)",
+                err_sub);
+        fails++;
+        return 0;
+    }
+    return 1;
+}
+
 int main(void) {
     struct js_runtime *rt = js_rt_create();
     expect(rt != NULL, "create runtime");
@@ -56,7 +74,20 @@ int main(void) {
     eval_eq(rt, "var e; try{throw 1}catch(x){e=x;} e", "1");
     eval_eq(rt, "class C{} typeof C", "\"function\"");
 
+<<<<<<< HEAD
     /* Hot-path regressions: string reuse, INC/DEC/ADD_LOCAL, LT_LOCAL_NUM, lazy call env */
+=======
+    /* async/await: fail closed (no half-stripped await / fake async). ES modules deferred. */
+    eval_fails(rt, "await 1", "await unsupported");
+    eval_fails(rt, "var x=await 1; x", "await unsupported");
+    eval_fails(rt, "function f(){return await 1;} f()", "await unsupported");
+    eval_fails(rt, "for await(var x of []){}", "await unsupported");
+    eval_fails(rt, "async function f(){return 1;}", "async unsupported");
+    eval_fails(rt, "async ()=>1", "async unsupported");
+    eval_fails(rt, "var f=async function(){return 1;}", "async unsupported");
+
+    /* Hot-path regressions: string reuse, INC_LOCAL, lazy call env */
+>>>>>>> 8a25ad8 (fix(js): fail-closed await parse stub)
     eval_eq(rt, "var t='ab'+'cd'; t", "\"abcd\"");
     eval_eq(rt, "typeof typeof 1", "\"string\"");
     eval_eq(rt,
