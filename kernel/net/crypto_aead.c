@@ -1,3 +1,7 @@
+/*
+ * crypto_aead.c — AES-128-GCM and ChaCha20-Poly1305 for TLS 1.2 + PeakDisk.
+ * See also crypto_hash.c, crypto_x25519.c, crypto.c (RNG glue).
+ */
 #include "crypto.h"
 #include "util.h"
 

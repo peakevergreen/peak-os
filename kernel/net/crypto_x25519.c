@@ -1,3 +1,7 @@
+/*
+ * crypto_x25519.c — X25519 (RFC 7748) for TLS ECDHE.
+ * See also crypto_hash.c, crypto_aead.c, crypto.c (RNG glue).
+ */
 #include "crypto.h"
 #include "util.h"
 
