@@ -79,7 +79,7 @@ PeakOS kernel and Peak-authored drivers remain open source.
 | Software FB desktop | implemented; silicon sign-off pending | implemented; silicon sign-off pending | deferred until high MMIO mapped |
 | SD PeakFS partition | implemented; silicon sign-off pending | implemented; unverified | deferred (SDHCI base >4 GiB) |
 | USB HID | hub+HID enum/split/hotplug; silicon sign-off pending | unavailable: PCIe/xHCI rings missing | unavailable: RP1 + high MMIO unmapped |
-| Ethernet | SMSC USB LAN bulk bind; silicon verify pending | unavailable: GENET rings/PHY missing | unavailable: RP1 GEM stub |
+| Ethernet | SMSC USB LAN bulk bind; silicon verify pending | GENET rings+MDIO probe; silicon verify pending | unavailable: RP1 GEM stub |
 | Wi-Fi | unavailable: SDIO/firmware loading stub | unavailable: SDIO/firmware loading stub | unavailable: SDIO/firmware loading stub |
 | Audio | unavailable: beep is a no-op | unavailable: beep is a no-op | unavailable: beep is a no-op |
 | SMP | secondary CPUs parked | parked | parked |
