@@ -108,6 +108,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/tls_clienthello.c \
 	kernel/net/tls_session.c \
 	kernel/net/tls_hsts.c \
+	kernel/net/http2.c \
 	kernel/net/x509.c \
 	kernel/net/webpki.c \
 	kernel/net/webpki_roots_data.c \

@@ -373,6 +373,25 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
 
             if (hstype == HS_ENCRYPTED_EXT) {
                 got_ee = 1;
+                if (hslen >= 2) {
+                    uint16_t ext_total = tls_rd16(hs + 4);
+                    const uint8_t *ep = hs + 6;
+                    const uint8_t *eend = hs + 4 + hslen;
+                    if (ep + ext_total <= eend) {
+                        const uint8_t *ee = ep + ext_total;
+                        while (ep + 4 <= ee) {
+                            uint16_t et = tls_rd16(ep);
+                            ep += 2;
+                            uint16_t el = tls_rd16(ep);
+                            ep += 2;
+                            if (ep + el > ee)
+                                break;
+                            if (et == 0x0010)
+                                tls_alpn_set_from_ext(ep, el);
+                            ep += el;
+                        }
+                    }
+                }
                 transcript_add(hs, hs_total);
             } else if (hstype == HS_CERTIFICATE) {
                 if (save_leaf_tls13(hs, hs_total, leaf, &leaf_len, sizeof(leaf)) != 0) {
