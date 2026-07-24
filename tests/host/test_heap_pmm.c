@@ -59,6 +59,21 @@ int main(void) {
     pmm_free_n(run3, 3);
     expect(pmm_free_pages() == free0, "run recycle restores count");
 
+    /* Cross a 64-page block boundary (two-level map stress). */
+    {
+        void *pages[96];
+        int got = 1;
+        for (int i = 0; i < 96; i++) {
+            pages[i] = pmm_alloc();
+            if (!pages[i])
+                got = 0;
+        }
+        expect(got, "alloc 96 singles across block boundary");
+        for (int i = 0; i < 96; i++)
+            pmm_free(pages[i]);
+        expect(pmm_free_pages() == free0, "block-boundary frees restore count");
+    }
+
     heap_init();
     void *a = kmalloc(32);
     void *b = kmalloc(64);
