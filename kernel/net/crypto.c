@@ -20,3 +20,12 @@ int crypto_random(uint8_t *buf, size_t len) {
     }
     return 0;
 }
+
+int crypto_memeq(const void *a, const void *b, size_t n) {
+    const uint8_t *x = a;
+    const uint8_t *y = b;
+    uint8_t diff = 0;
+    for (size_t i = 0; i < n; i++)
+        diff |= (uint8_t)(x[i] ^ y[i]);
+    return diff == 0;
+}

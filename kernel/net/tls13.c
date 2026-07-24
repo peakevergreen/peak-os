@@ -4,6 +4,7 @@
  * send client Finished, install application traffic keys.
  */
 #include "tls_internal.h"
+#include "random.h"
 #include "serial.h"
 #include "timer.h"
 #include "util.h"
@@ -271,10 +272,9 @@ static int verify_finished(const uint8_t *msg, size_t len, const uint8_t *base_k
         hmac_sha384(finished_key, tls13_hash_len, th, tls13_hash_len, expect);
     else
         hmac_sha256(finished_key, tls13_hash_len, th, tls13_hash_len, expect);
-    uint8_t diff = 0;
-    for (size_t i = 0; i < tls13_hash_len; i++)
-        diff |= expect[i] ^ msg[4 + i];
-    return diff ? -1 : 0;
+    int ok = crypto_memeq(expect, msg + 4, tls13_hash_len);
+    memzero_explicit(finished_key, sizeof(finished_key));
+    return ok ? 0 : -1;
 }
 
 static int send_client_finished(void) {
@@ -312,18 +312,18 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
         tls13_sha384 = 0;
         tls13_hash_len = 32;
     } else {
-        tls_set_err("TLS 1.3 cipher rejected");
+        tls_set_err_code(TLS_E_HANDSHAKE, "TLS 1.3 cipher rejected");
         return -1;
     }
 
     uint8_t shared[32];
     x25519(shared, tls13_priv, tls13_server_pub);
     if (derive_handshake_secrets(shared, 32) != 0) {
-        tls_set_err("TLS 1.3 handshake secret derive failed");
+        tls_set_err_code(TLS_E_HANDSHAKE, "TLS 1.3 handshake secret derive failed");
         return -1;
     }
     if (install_hs_keys() != 0) {
-        tls_set_err("TLS 1.3 handshake key install failed");
+        tls_set_err_code(TLS_E_HANDSHAKE, "TLS 1.3 handshake key install failed");
         return -1;
     }
 
@@ -331,6 +331,7 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
     size_t leaf_len = 0;
     int got_ee = 0, got_cert = 0, got_cv = 0, got_fin = 0;
     uint64_t start = timer_ticks();
+    uint32_t hs_records = 0;
     hs_reasm_len = 0;
 
     while (!got_fin && timer_ticks() - start < timeout_ticks) {
@@ -338,7 +339,7 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
         size_t n = 0;
         size_t room = sizeof(hs_reasm) - hs_reasm_len;
         if (room == 0) {
-            tls_set_err("TLS 1.3 handshake buffer overflow");
+            tls_set_err_code(TLS_E_DOS, "TLS 1.3 handshake buffer overflow");
             return -1;
         }
         if (tls_recv_record(&type, hs_reasm + hs_reasm_len, room, &n, 200, 1) != 0)
@@ -346,17 +347,25 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
         if (type == TLS_CONTENT_CCS)
             continue;
         if (type == TLS_CONTENT_ALERT) {
-            tls_set_err("TLS 1.3 server alert");
+            tls_set_err_code(TLS_E_ALERT, "TLS 1.3 server alert");
             return -1;
         }
         if (type != TLS_CONTENT_HS)
             continue;
+        if (++hs_records > TLS_HS_RECORD_MAX) {
+            tls_set_err_code(TLS_E_DOS, "TLS 1.3 handshake record budget exceeded");
+            return -1;
+        }
         hs_reasm_len += n;
 
         size_t off = 0;
         while (off + 4 <= hs_reasm_len) {
             uint8_t hstype = hs_reasm[off];
             uint32_t hslen = tls_rd24(hs_reasm + off + 1);
+            if (hslen > TLS_HS_MSG_MAX) {
+                tls_set_err_code(TLS_E_DOS, "TLS 1.3 handshake message too large");
+                return -1;
+            }
             if (off + 4 + hslen > hs_reasm_len)
                 break;
             const uint8_t *hs = hs_reasm + off;
@@ -367,7 +376,7 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
                 transcript_add(hs, hs_total);
             } else if (hstype == HS_CERTIFICATE) {
                 if (save_leaf_tls13(hs, hs_total, leaf, &leaf_len, sizeof(leaf)) != 0) {
-                    tls_set_err("TLS 1.3 Certificate parse failed");
+                    tls_set_err_code(TLS_E_CERT, "TLS 1.3 Certificate parse failed");
                     return -1;
                 }
                 /* Build a synthetic 1.2-shaped Certificate message for TOFU digest. */
@@ -380,29 +389,29 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
                 memcpy(synth + 10, leaf, leaf_len);
                 cert_verified = tls_verify_cert_chain(synth, 10 + leaf_len, sni_host);
                 if (!cert_verified) {
-                    tls_set_err(cert_fail_reason ? cert_fail_reason : "TLS 1.3 cert unverified");
+                    tls_set_err_code(TLS_E_CERT, cert_fail_reason ? cert_fail_reason : "TLS 1.3 cert unverified");
                     return -1;
                 }
                 got_cert = 1;
                 transcript_add(hs, hs_total);
             } else if (hstype == HS_CERT_VERIFY) {
                 if (!got_cert) {
-                    tls_set_err("TLS 1.3 CertificateVerify before Certificate");
+                    tls_set_err_code(TLS_E_HANDSHAKE, "TLS 1.3 CertificateVerify before Certificate");
                     return -1;
                 }
                 if (verify_cert_verify(hs, hs_total, leaf, leaf_len) != 0) {
-                    tls_set_err("TLS 1.3 CertificateVerify failed");
+                    tls_set_err_code(TLS_E_VERIFY, "TLS 1.3 CertificateVerify failed");
                     return -1;
                 }
                 got_cv = 1;
                 transcript_add(hs, hs_total);
             } else if (hstype == HS_FINISHED) {
                 if (!got_ee || !got_cert || !got_cv) {
-                    tls_set_err("TLS 1.3 Finished before required messages");
+                    tls_set_err_code(TLS_E_HANDSHAKE, "TLS 1.3 Finished before required messages");
                     return -1;
                 }
                 if (verify_finished(hs, hs_total, tls13_server_hs_traffic) != 0) {
-                    tls_set_err("TLS 1.3 server Finished verify failed");
+                    tls_set_err_code(TLS_E_VERIFY, "TLS 1.3 server Finished verify failed");
                     return -1;
                 }
                 transcript_add(hs, hs_total);
@@ -419,7 +428,7 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
         }
     }
     if (!got_fin) {
-        tls_set_err("TLS 1.3 timeout waiting for Finished");
+        tls_set_err_code(TLS_E_TIMEOUT, "TLS 1.3 timeout waiting for Finished");
         return -1;
     }
 
@@ -428,11 +437,11 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
     (void)tls_send_record(TLS_CONTENT_CCS, &ccs, 1, 0);
 
     if (send_client_finished() != 0) {
-        tls_set_err("TLS 1.3 client Finished send failed");
+        tls_set_err_code(TLS_E_HANDSHAKE, "TLS 1.3 client Finished send failed");
         return -1;
     }
     if (derive_app_secrets() != 0 || install_app_keys() != 0) {
-        tls_set_err("TLS 1.3 app key derive failed");
+        tls_set_err_code(TLS_E_HANDSHAKE, "TLS 1.3 app key derive failed");
         return -1;
     }
 

@@ -546,12 +546,15 @@ static void test_clienthello_goldens(void) {
     expect(ch[0] == HS_CLIENT_HELLO, "ch type");
     expect(ch[4] == 0x03 && ch[5] == 0x03, "ch legacy version");
 
-    /* Golden suite order prefix (after session id). */
+    /* Suite list: GREASE + real suites (length 22). */
     size_t so = 39;
+    expect(ch[so] == 0x00 && ch[so + 1] == 0x16, "suite list len 22");
+    uint16_t grease = (uint16_t)((ch[so + 2] << 8) | ch[so + 3]);
+    expect((grease & 0x0f0f) == 0x0a0a, "grease cipher form");
     static const uint8_t suites_prefix[] = {
-        0x00, 0x14, 0x13, 0x01, 0x13, 0x03, 0x13, 0x02, 0xcc, 0xa9, 0xcc, 0xa8};
-    expect(so + sizeof(suites_prefix) <= n, "suites room");
-    expect(!memcmp(ch + so, suites_prefix, sizeof(suites_prefix)), "golden suite prefix");
+        0x13, 0x01, 0x13, 0x03, 0x13, 0x02, 0xcc, 0xa9, 0xcc, 0xa8};
+    expect(so + 4 + sizeof(suites_prefix) <= n, "suites room");
+    expect(!memcmp(ch + so + 4, suites_prefix, sizeof(suites_prefix)), "golden suite prefix");
 
     const uint8_t *ed;
     uint16_t el;
@@ -565,12 +568,27 @@ static void test_clienthello_goldens(void) {
     expect(ch_find_ext(ch, n, 0x0010, &ed, &el), "has alpn");
     expect(el == 11 && ed[2] == 8 && !memcmp(ed + 3, "http/1.1", 8), "alpn http/1.1");
     expect(ch_find_ext(ch, n, 0x0000, &ed, &el), "has sni");
+    expect(ch_find_ext(ch, n, 0x000a, &ed, &el), "has groups");
+    expect(el == 8 && ed[0] == 0x00 && ed[1] == 0x06, "groups len with grease");
 
     /* Determinism under fixed timer + seeded DRBG: same structure length. */
     size_t n2 = 0;
     uint8_t ch2[768];
     expect(tls_build_client_hello(ch2, sizeof(ch2), "example.com", &n2) == 0, "ch build 2");
     expect(n2 == n, "ch length stable");
+}
+
+static void test_crypto_hardening(void) {
+    uint8_t a[16], b[16];
+    memset(a, 0x5a, sizeof(a));
+    memset(b, 0x5a, sizeof(b));
+    expect(crypto_memeq(a, b, 16), "memeq equal");
+    b[7] ^= 1;
+    expect(!crypto_memeq(a, b, 16), "memeq unequal");
+    expect(crypto_memeq(a, a, 0), "memeq zero len");
+    expect(TLS_HS_MSG_MAX == 16384u, "hs msg budget");
+    expect(TLS_HS_RECORD_MAX == 48u, "hs record budget");
+    expect(TLS_E_RNG == 2 && TLS_E_DOS == 9, "structured err codes");
 }
 
 static void test_x509_parser(void) {
@@ -658,6 +676,7 @@ int main(void) {
     test_hostname_and_pin_extras();
     test_ske_sig_verify();
     test_clienthello_goldens();
+    test_crypto_hardening();
     test_x509_parser();
     test_webpki_path();
 

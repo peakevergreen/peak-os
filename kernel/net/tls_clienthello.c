@@ -16,6 +16,14 @@ static void wr24(uint8_t *p, uint32_t v) {
     p[2] = (uint8_t)v;
 }
 
+/* RFC 8701 GREASE values (one of 0x0A0A..0xFAFA). */
+static uint16_t grease_from(uint8_t b) {
+    static const uint16_t g[] = {
+        0x0A0A, 0x1A1A, 0x2A2A, 0x3A3A, 0x4A4A, 0x5A5A, 0x6A6A, 0x7A7A,
+        0x8A8A, 0x9A9A, 0xAAAA, 0xBABA, 0xCACA, 0xDADA, 0xEAEA, 0xFAFA};
+    return g[b & 0x0f];
+}
+
 /* 0 ok; -1 crypto RNG not ready; -2 message exceeds cap (post-serialize). */
 int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *out_len) {
     if (crypto_random(client_random, 32) != 0)
@@ -28,6 +36,15 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     client_random[1] = (uint8_t)(t >> 16);
     client_random[2] = (uint8_t)(t >> 8);
     client_random[3] = (uint8_t)t;
+
+    uint16_t grease_cs = grease_from(client_random[4]);
+    uint16_t grease_grp = grease_from(client_random[5] ^ 0x55);
+    if (grease_grp == grease_cs)
+        grease_grp = grease_from(client_random[5] ^ 0xaa);
+    uint16_t grease_ext = grease_from(client_random[6] ^ 0x33);
+    if (grease_ext == grease_cs || grease_ext == grease_grp)
+        grease_ext = grease_from(client_random[6] ^ 0xcc);
+
     out[0] = HS_CLIENT_HELLO;
     size_t o = 4;
     out[o++] = 0x03;
@@ -36,7 +53,10 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     o += 32;
     out[o++] = 0;
 
-    wr16(out + o, 20);
+    /* Cipher suites: GREASE + real + SCSV (22 bytes of suites → length 22). */
+    wr16(out + o, 22);
+    o += 2;
+    wr16(out + o, grease_cs);
     o += 2;
     wr16(out + o, CS_TLS13_AES128_GCM);
     o += 2;
@@ -66,6 +86,12 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     o += 2;
     size_t ext_start = o;
 
+    /* GREASE extension (empty). */
+    wr16(out + o, grease_ext);
+    o += 2;
+    wr16(out + o, 0);
+    o += 2;
+
     if (sni && sni[0]) {
         size_t sl = strlen(sni);
         wr16(out + o, 0x0000);
@@ -83,9 +109,11 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
 
     wr16(out + o, 0x000a);
     o += 2;
+    wr16(out + o, 8);
+    o += 2;
     wr16(out + o, 6);
     o += 2;
-    wr16(out + o, 4);
+    wr16(out + o, grease_grp);
     o += 2;
     wr16(out + o, 0x001d);
     o += 2;

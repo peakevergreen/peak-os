@@ -39,6 +39,11 @@
 #define TOFU_PATH   "/etc/peak/tls-tofu"
 #define TOFU_MAX    8192
 
+/* Handshake DoS budgets */
+#define TLS_HS_MSG_MAX       16384u
+#define TLS_HS_RECORD_MAX    48u
+#define TLS_HS_REASM_MAX     24576u
+
 /* Session state (defined in tls.c). */
 extern int tls_up;
 extern int tls13;
@@ -49,6 +54,7 @@ extern int hostname_matched;
 extern int hostname_parse_skipped;
 extern const char *cert_fail_reason;
 extern char last_err[96];
+extern int last_err_code;
 extern uint8_t trust_pins[TLS_PIN_MAX][32];
 extern int trust_pin_count;
 extern uint8_t client_random[32];
@@ -78,6 +84,8 @@ extern int tls13_sha384;
 
 /* tls.c */
 void tls_set_err(const char *msg);
+void tls_set_err_code(int code, const char *msg);
+void tls_scrub_secrets(void);
 
 /* tls_record.c */
 void tls_wr16(uint8_t *p, uint16_t v);
