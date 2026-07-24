@@ -361,15 +361,25 @@ void fb_draw_string(uint32_t x, uint32_t y, const char *s, uint32_t fg, uint32_t
     uint32_t cx = x;
     uint32_t cw = fb_cell_w();
     uint32_t ch = fb_cell_h();
+    uint32_t scale = g_scale;
     while (*s) {
         if (*s == '\n') {
             cx = x;
             y += ch;
-        } else {
-            fb_draw_char(cx, y, *s, fg, bg);
-            cx += cw;
+            s++;
+            continue;
         }
-        s++;
+        /* One wide cell-bg fill for a contiguous run, then glyph ink. */
+        const char *run = s;
+        uint32_t n = 0;
+        while (run[n] && run[n] != '\n')
+            n++;
+        if (n)
+            font_render_cell_bg(cx, y, n * cw, ch, bg, fill_span);
+        for (uint32_t i = 0; i < n; i++)
+            font_render_glyph(s[i], cx + i * cw, y, fg, scale, cw, ch, fill_span);
+        cx += n * cw;
+        s += n;
     }
 }
 
@@ -380,13 +390,15 @@ void fb_draw_string_fit(uint32_t x, uint32_t y, uint32_t max_w, const char *s,
     uint32_t cw = fb_cell_w();
     if (!cw)
         return;
-    uint32_t n = max_w / cw;
-    uint32_t cx = x;
-    uint32_t drawn = 0;
-    while (*s && *s != '\n' && drawn < n) {
-        fb_draw_char(cx, y, *s, fg, bg);
-        cx += cw;
-        drawn++;
-        s++;
-    }
+    uint32_t nmax = max_w / cw;
+    uint32_t n = 0;
+    while (s[n] && s[n] != '\n' && n < nmax)
+        n++;
+    if (!n)
+        return;
+    uint32_t ch = fb_cell_h();
+    uint32_t scale = g_scale;
+    font_render_cell_bg(x, y, n * cw, ch, bg, fill_span);
+    for (uint32_t i = 0; i < n; i++)
+        font_render_glyph(s[i], x + i * cw, y, fg, scale, cw, ch, fill_span);
 }
