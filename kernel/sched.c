@@ -33,6 +33,8 @@ static uint64_t ctx_switches;
 static struct spinlock sched_lock;
 static int zombie_stacks_freed;
 static uint32_t ready_mask;
+/* Earliest TASK_BLOCKED wake_tick, or 0 if no timed sleepers (UP cooperative). */
+static uint64_t next_sleeper_wake;
 
 static int task_slot(const struct task *t) {
     return (int)(t - tasks);
@@ -77,6 +79,7 @@ void sched_init(void) {
     need_resched = 0;
     ctx_switches = 0;
     ready_mask = 0;
+    next_sleeper_wake = 0;
 }
 
 struct task *sched_current(void) {
@@ -271,14 +274,26 @@ void sched_exit(void) {
 
 void sched_wake_sleepers(void) {
     uint64_t now = timer_ticks();
+    /*
+     * Fast path: no timed sleepers, or none due yet. Avoid scanning all
+     * task slots on every PIT tick while the system is idle.
+     */
+    if (!next_sleeper_wake || now < next_sleeper_wake)
+        return;
+
+    uint64_t next = 0;
     for (int i = 0; i < MAX_TASKS; i++) {
-        if (tasks[i].state == TASK_BLOCKED && tasks[i].wake_tick &&
-            now >= tasks[i].wake_tick) {
+        if (tasks[i].state != TASK_BLOCKED || !tasks[i].wake_tick)
+            continue;
+        if (now >= tasks[i].wake_tick) {
             tasks[i].wake_tick = 0;
             tasks[i].state = TASK_READY;
             ready_mark(i);
+        } else if (!next || tasks[i].wake_tick < next) {
+            next = tasks[i].wake_tick;
         }
     }
+    next_sleeper_wake = next;
 }
 
 void sched_sleep_ticks(uint64_t ticks) {
@@ -288,6 +303,8 @@ void sched_sleep_ticks(uint64_t ticks) {
     if (current) {
         ready_unmark(task_slot(current));
         current->wake_tick = timer_ticks() + ticks;
+        if (!next_sleeper_wake || current->wake_tick < next_sleeper_wake)
+            next_sleeper_wake = current->wake_tick;
         current->state = TASK_BLOCKED;
     }
     spin_unlock(&sched_lock);
@@ -305,7 +322,16 @@ void sched_on_timer(void) {
     if (current)
         current->cpu_ticks++;
     sched_wake_sleepers();
-    need_resched = 1;
+    /*
+     * Cooperative UP: only raise the resched hint when another task is
+     * READY (including any sleeper just woken above). Avoids shell/desktop
+     * preempt checks thrashing need_resched on every idle tick.
+     */
+    uint32_t others = ready_mask;
+    if (current)
+        others &= ~(1u << (unsigned)task_slot(current));
+    if (others)
+        need_resched = 1;
 }
 
 void sched_maybe_preempt(void) {
