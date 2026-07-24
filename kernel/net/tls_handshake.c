@@ -12,8 +12,17 @@ static int is_aes128_gcm(uint16_t cs) {
     return cs == CS_ECDHE_RSA_AES128_GCM || cs == CS_ECDHE_ECDSA_AES128_GCM;
 }
 
+static int is_aes256_gcm(uint16_t cs) {
+    return cs == CS_ECDHE_RSA_AES256_GCM || cs == CS_ECDHE_ECDSA_AES256_GCM;
+}
+
+static int is_sha384_suite(uint16_t cs) {
+    return is_aes256_gcm(cs);
+}
+
 static void transcript_add(const uint8_t *hs_msg, size_t len) {
     sha256_ctx_update(&transcript, hs_msg, len);
+    sha384_ctx_update(&transcript384, hs_msg, len);
 }
 
 /* 0 ok; -1 crypto RNG not ready; -2 message exceeds cap (post-serialize). */
@@ -34,8 +43,8 @@ static int build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t 
     o += 32;
     out[o++] = 0;
 
-    /* Prefer ChaCha20; include renegotiation SCSV (0x00FF) */
-    tls_wr16(out + o, 10);
+    /* Prefer ChaCha20; AES-128 then AES-256; include renegotiation SCSV (0x00FF) */
+    tls_wr16(out + o, 14);
     o += 2;
     tls_wr16(out + o, CS_ECDHE_ECDSA_CHACHA20);
     o += 2;
@@ -44,6 +53,10 @@ static int build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t 
     tls_wr16(out + o, CS_ECDHE_ECDSA_AES128_GCM);
     o += 2;
     tls_wr16(out + o, CS_ECDHE_RSA_AES128_GCM);
+    o += 2;
+    tls_wr16(out + o, CS_ECDHE_ECDSA_AES256_GCM);
+    o += 2;
+    tls_wr16(out + o, CS_ECDHE_RSA_AES256_GCM);
     o += 2;
     tls_wr16(out + o, 0x00FF); /* TLS_EMPTY_RENEGOTIATION_INFO_SCSV */
     o += 2;
@@ -146,7 +159,7 @@ static int parse_server_hello(const uint8_t *msg, size_t len, uint16_t *cs_out) 
     *cs_out = tls_rd16(p);
     p += 2;
     p++; /* compression */
-    if (!is_aes128_gcm(*cs_out) && !is_chacha(*cs_out))
+    if (!is_aes128_gcm(*cs_out) && !is_aes256_gcm(*cs_out) && !is_chacha(*cs_out))
         return -1;
 
     use_ems = 0;
@@ -195,17 +208,29 @@ static int parse_server_key_exchange(const uint8_t *msg, size_t len, uint8_t pee
 }
 
 static void derive_keys(const uint8_t premaster[32], uint16_t cs) {
+    int sha384 = is_sha384_suite(cs);
     if (use_ems) {
-        uint8_t session_hash[32];
-        struct sha256_ctx tmp = transcript;
-        sha256_ctx_final(&tmp, session_hash);
-        tls_prf_sha256(premaster, 32, "extended master secret",
-                       session_hash, 32, master_secret, 48);
+        if (sha384) {
+            uint8_t session_hash[48];
+            struct sha384_ctx tmp = transcript384;
+            sha384_ctx_final(&tmp, session_hash);
+            tls_prf_sha384(premaster, 32, "extended master secret",
+                           session_hash, 48, master_secret, 48);
+        } else {
+            uint8_t session_hash[32];
+            struct sha256_ctx tmp = transcript;
+            sha256_ctx_final(&tmp, session_hash);
+            tls_prf_sha256(premaster, 32, "extended master secret",
+                           session_hash, 32, master_secret, 48);
+        }
     } else {
         uint8_t seed[64];
         memcpy(seed, client_random, 32);
         memcpy(seed + 32, server_random, 32);
-        tls_prf_sha256(premaster, 32, "master secret", seed, 64, master_secret, 48);
+        if (sha384)
+            tls_prf_sha384(premaster, 32, "master secret", seed, 64, master_secret, 48);
+        else
+            tls_prf_sha256(premaster, 32, "master secret", seed, 64, master_secret, 48);
     }
 
     uint8_t seed2[64];
@@ -220,6 +245,14 @@ static void derive_keys(const uint8_t premaster[32], uint16_t cs) {
         memcpy(server_key, key_block + 32, 32);
         memcpy(client_iv, key_block + 64, 12);
         memcpy(server_iv, key_block + 76, 12);
+    } else if (is_aes256_gcm(cs)) {
+        cipher_kind = CIPHER_AES256_GCM;
+        uint8_t key_block[72];
+        tls_prf_sha384(master_secret, 48, "key expansion", seed2, 64, key_block, 72);
+        memcpy(client_key, key_block, 32);
+        memcpy(server_key, key_block + 32, 32);
+        memcpy(client_iv, key_block + 64, 4);
+        memcpy(server_iv, key_block + 68, 4);
     } else {
         cipher_kind = CIPHER_AES128_GCM;
         uint8_t key_block[40];
@@ -232,12 +265,19 @@ static void derive_keys(const uint8_t premaster[32], uint16_t cs) {
 }
 
 static int send_finished(void) {
-    uint8_t hash[32];
-    struct sha256_ctx tmp = transcript;
-    sha256_ctx_final(&tmp, hash);
     uint8_t verify[12];
-    tls_prf_sha256(master_secret, 48, "client finished", hash, 32, verify, 12);
     uint8_t msg[16];
+    if (cipher_kind == CIPHER_AES256_GCM) {
+        uint8_t hash[48];
+        struct sha384_ctx tmp = transcript384;
+        sha384_ctx_final(&tmp, hash);
+        tls_prf_sha384(master_secret, 48, "client finished", hash, 48, verify, 12);
+    } else {
+        uint8_t hash[32];
+        struct sha256_ctx tmp = transcript;
+        sha256_ctx_final(&tmp, hash);
+        tls_prf_sha256(master_secret, 48, "client finished", hash, 32, verify, 12);
+    }
     msg[0] = HS_FINISHED;
     tls_wr24(msg + 1, 12);
     memcpy(msg + 4, verify, 12);
@@ -275,6 +315,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     }
 
     sha256_ctx_init(&transcript);
+    sha384_ctx_init(&transcript384);
     client_seq = server_seq = 0;
     rx_app_len = 0;
     hs_reasm_len = 0;

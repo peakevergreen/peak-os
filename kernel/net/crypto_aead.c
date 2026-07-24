@@ -1,5 +1,5 @@
 /*
- * crypto_aead.c — AES-128-GCM and ChaCha20-Poly1305 for TLS 1.2 + PeakDisk.
+ * crypto_aead.c — AES-128/256-GCM and ChaCha20-Poly1305 for TLS 1.2 + PeakDisk.
  * See also crypto_hash.c, crypto_x25519.c, crypto.c (RNG glue).
  */
 #include "crypto.h"
@@ -217,6 +217,114 @@ int aes128_gcm_decrypt(const uint8_t key[16], const uint8_t iv[12],
         gcm_inc32(ctr);
         uint8_t ks[16];
         aes128_encrypt_block(key, ctr, ks);
+        size_t n = cipher_len - off;
+        if (n > 16)
+            n = 16;
+        for (size_t i = 0; i < n; i++)
+            plain[off + i] = cipher[off + i] ^ ks[i];
+        off += n;
+    }
+    return 0;
+}
+
+
+/* ---- AES-256 ---- */
+
+static void aes256_key_expand(const uint8_t key[32], uint8_t rk[240]) {
+    memcpy(rk, key, 32);
+    for (int i = 8; i < 60; i++) {
+        uint8_t t[4];
+        memcpy(t, rk + (i - 1) * 4, 4);
+        if (i % 8 == 0) {
+            uint8_t tmp = t[0];
+            t[0] = sbox[t[1]] ^ rcon[i / 8];
+            t[1] = sbox[t[2]];
+            t[2] = sbox[t[3]];
+            t[3] = sbox[tmp];
+        } else if (i % 8 == 4) {
+            t[0] = sbox[t[0]];
+            t[1] = sbox[t[1]];
+            t[2] = sbox[t[2]];
+            t[3] = sbox[t[3]];
+        }
+        for (int j = 0; j < 4; j++)
+            rk[i * 4 + j] = rk[(i - 8) * 4 + j] ^ t[j];
+    }
+}
+
+void aes256_encrypt_block(const uint8_t key[32], const uint8_t in[16], uint8_t out[16]) {
+    uint8_t rk[240], s[16];
+    aes256_key_expand(key, rk);
+    memcpy(s, in, 16);
+    aes_add_round_key(s, rk);
+    for (int r = 1; r < 14; r++) {
+        aes_sub_bytes(s);
+        aes_shift_rows(s);
+        aes_mix_columns(s);
+        aes_add_round_key(s, rk + r * 16);
+    }
+    aes_sub_bytes(s);
+    aes_shift_rows(s);
+    aes_add_round_key(s, rk + 224);
+    memcpy(out, s, 16);
+}
+
+int aes256_gcm_encrypt(const uint8_t key[32], const uint8_t iv[12],
+                       const uint8_t *aad, size_t aad_len,
+                       const uint8_t *plain, size_t plain_len,
+                       uint8_t *cipher, uint8_t tag[16]) {
+    uint8_t h[16], j0[16], ctr[16], s[16];
+    memset(h, 0, 16);
+    aes256_encrypt_block(key, h, h);
+    memset(j0, 0, 16);
+    memcpy(j0, iv, 12);
+    j0[15] = 1;
+    memcpy(ctr, j0, 16);
+    size_t off = 0;
+    while (off < plain_len) {
+        gcm_inc32(ctr);
+        uint8_t ks[16];
+        aes256_encrypt_block(key, ctr, ks);
+        size_t n = plain_len - off;
+        if (n > 16)
+            n = 16;
+        for (size_t i = 0; i < n; i++)
+            cipher[off + i] = plain[off + i] ^ ks[i];
+        off += n;
+    }
+    ghash(s, h, aad, aad_len, cipher, plain_len);
+    uint8_t t[16];
+    aes256_encrypt_block(key, j0, t);
+    for (int i = 0; i < 16; i++)
+        tag[i] = t[i] ^ s[i];
+    return 0;
+}
+
+int aes256_gcm_decrypt(const uint8_t key[32], const uint8_t iv[12],
+                       const uint8_t *aad, size_t aad_len,
+                       const uint8_t *cipher, size_t cipher_len,
+                       const uint8_t tag[16], uint8_t *plain) {
+    uint8_t h[16], j0[16], ctr[16], s[16], t[16], expect[16];
+    memset(h, 0, 16);
+    aes256_encrypt_block(key, h, h);
+    memset(j0, 0, 16);
+    memcpy(j0, iv, 12);
+    j0[15] = 1;
+    ghash(s, h, aad, aad_len, cipher, cipher_len);
+    aes256_encrypt_block(key, j0, t);
+    for (int i = 0; i < 16; i++)
+        expect[i] = t[i] ^ s[i];
+    uint8_t diff = 0;
+    for (int i = 0; i < 16; i++)
+        diff |= expect[i] ^ tag[i];
+    if (diff)
+        return -1;
+    memcpy(ctr, j0, 16);
+    size_t off = 0;
+    while (off < cipher_len) {
+        gcm_inc32(ctr);
+        uint8_t ks[16];
+        aes256_encrypt_block(key, ctr, ks);
         size_t n = cipher_len - off;
         if (n > 16)
             n = 16;

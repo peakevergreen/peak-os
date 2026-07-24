@@ -88,7 +88,7 @@ run_firmware_smoke() {
       -serial "file:$serial_log" \
       -display none \
       -no-reboot \
-      -device virtio-rng-pci \
+      -device virtio-rng-pci-transitional,ioeventfd=off \
       -device e1000,netdev=n0 \
       -netdev user,id=n0 \
       >/dev/null 2>&1 &
@@ -102,7 +102,7 @@ run_firmware_smoke() {
       -serial "file:$serial_log" \
       -display none \
       -no-reboot \
-      -device virtio-rng-pci \
+      -device virtio-rng-pci-transitional,ioeventfd=off \
       -device e1000,netdev=n0 \
       -netdev user,id=n0 \
       >/dev/null 2>&1 &

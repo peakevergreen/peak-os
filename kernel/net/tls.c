@@ -23,6 +23,7 @@ uint8_t client_key[32], server_key[32];
 uint8_t client_iv[12], server_iv[12];
 uint64_t client_seq, server_seq;
 struct sha256_ctx transcript;
+struct sha384_ctx transcript384;
 uint8_t rx_app[16384];
 size_t rx_app_len;
 uint8_t hs_reasm[24576];

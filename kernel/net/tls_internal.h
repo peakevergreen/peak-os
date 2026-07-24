@@ -21,11 +21,14 @@
 
 #define CS_ECDHE_RSA_AES128_GCM   0xC02F
 #define CS_ECDHE_ECDSA_AES128_GCM 0xC02B
+#define CS_ECDHE_RSA_AES256_GCM   0xC030
+#define CS_ECDHE_ECDSA_AES256_GCM 0xC02C
 #define CS_ECDHE_RSA_CHACHA20     0xCCA8
 #define CS_ECDHE_ECDSA_CHACHA20   0xCCA9
 
 #define CIPHER_AES128_GCM 0
 #define CIPHER_CHACHA20   1
+#define CIPHER_AES256_GCM 2
 
 #define TLS_PIN_MAX 8
 #define TOFU_PATH   "/etc/peak/tls-tofu"
@@ -49,6 +52,7 @@ extern uint8_t client_key[32], server_key[32];
 extern uint8_t client_iv[12], server_iv[12];
 extern uint64_t client_seq, server_seq;
 extern struct sha256_ctx transcript;
+extern struct sha384_ctx transcript384;
 extern uint8_t rx_app[16384];
 extern size_t rx_app_len;
 extern uint8_t hs_reasm[24576];

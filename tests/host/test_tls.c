@@ -220,6 +220,18 @@ static void test_crypto_edges(void) {
                    32),
            "sha256 empty");
 
+    /* Empty SHA-384 (FIPS 180-4). */
+    {
+        uint8_t d384[48];
+        sha384((const uint8_t *)"", 0, d384);
+        expect(!memcmp(d384,
+                       "\x38\xb0\x60\xa7\x51\xac\x96\x38\x4c\xd9\x32\x7e\xb1\xb1\xe3\x6a"
+                       "\x21\xfd\xb7\x11\x14\xbe\x07\x43\x4c\x0c\xc7\xbf\x63\xf6\xe1\xda"
+                       "\x27\x4e\xde\xbf\xe7\x6f\x65\xfb\xd5\x1a\xd2\xf1\x48\x98\xb9\x5b",
+                       48),
+               "sha384 empty");
+    }
+
     /* Incremental SHA-256 matches one-shot. */
     {
         const uint8_t msg[] = "abc";
@@ -268,6 +280,26 @@ static void test_crypto_edges(void) {
                "gcm empty decrypt");
     }
 
+    /* AES-256-GCM roundtrip + tag tamper. */
+    {
+        uint8_t key[32], iv[12], aad[4], plain[8], cipher[8], tag[16], out[8];
+        memset(key, 0x44, sizeof(key));
+        memset(iv, 0x55, sizeof(iv));
+        memset(aad, 0x66, sizeof(aad));
+        memcpy(plain, "peak256!", 8);
+        expect(aes256_gcm_encrypt(key, iv, aad, sizeof(aad), plain, sizeof(plain),
+                                  cipher, tag) == 0,
+               "aes256 gcm encrypt");
+        expect(aes256_gcm_decrypt(key, iv, aad, sizeof(aad), cipher, sizeof(cipher),
+                                  tag, out) == 0,
+               "aes256 gcm decrypt ok");
+        expect(!memcmp(out, plain, 8), "aes256 gcm roundtrip");
+        tag[0] ^= 0x01;
+        expect(aes256_gcm_decrypt(key, iv, aad, sizeof(aad), cipher, sizeof(cipher),
+                                  tag, out) != 0,
+               "aes256 gcm bad tag");
+    }
+
     /* ChaCha20-Poly1305 roundtrip + AAD mismatch fail-closed. */
     {
         uint8_t key[32], nonce[12], aad[3], plain[5], cipher[5], tag[16], out[5];
@@ -309,6 +341,14 @@ static void test_crypto_edges(void) {
             if (out[i])
                 nonzero = 1;
         expect(nonzero, "tls prf produces bytes");
+        memset(out, 0, sizeof(out));
+        tls_prf_sha384(secret, sizeof(secret), "key expansion", seed, sizeof(seed),
+                       out, sizeof(out));
+        nonzero = 0;
+        for (size_t i = 0; i < sizeof(out); i++)
+            if (out[i])
+                nonzero = 1;
+        expect(nonzero, "tls prf384 produces bytes");
     }
 
     /* PeakDisk PEAKDSK3 KDF: correct passphrase unwraps; wrong fails. */

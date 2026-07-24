@@ -90,13 +90,18 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
         return net_tcp_send(rec, 5 + payload);
     }
 
-    /* AES-128-GCM: 4-byte fixed IV + 8-byte explicit nonce */
+    /* AES-GCM: 4-byte fixed IV + 8-byte explicit nonce */
     uint8_t iv[12];
     memcpy(iv, client_iv, 4);
     uint8_t explicit[8];
     seq_bytes(explicit, client_seq);
     memcpy(iv + 4, explicit, 8);
-    if (aes128_gcm_encrypt(client_key, iv, aad, 13, data, len, cipher, tag) != 0)
+    int enc_rc;
+    if (cipher_kind == CIPHER_AES256_GCM)
+        enc_rc = aes256_gcm_encrypt(client_key, iv, aad, 13, data, len, cipher, tag);
+    else
+        enc_rc = aes128_gcm_encrypt(client_key, iv, aad, 13, data, len, cipher, tag);
+    if (enc_rc != 0)
         return -1;
     size_t payload = 8 + len + 16;
     rec[0] = type;
@@ -177,8 +182,12 @@ int tls_recv_record(uint8_t *type_out, uint8_t *buf, size_t cap, size_t *out_len
     tls_wr16(aad + 11, (uint16_t)clen);
     if (clen > cap)
         return -1;
-    if (aes128_gcm_decrypt(server_key, iv, aad, 13, payload + 8, clen, payload + 8 + clen, buf) != 0)
+    if (cipher_kind == CIPHER_AES256_GCM) {
+        if (aes256_gcm_decrypt(server_key, iv, aad, 13, payload + 8, clen, payload + 8 + clen, buf) != 0)
+            return -1;
+    } else if (aes128_gcm_decrypt(server_key, iv, aad, 13, payload + 8, clen, payload + 8 + clen, buf) != 0) {
         return -1;
+    }
     server_seq++;
     *out_len = clen;
     *type_out = type;

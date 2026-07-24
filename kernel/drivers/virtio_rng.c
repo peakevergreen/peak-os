@@ -5,13 +5,13 @@
 #include "random.h"
 #include "util.h"
 #include "serial.h"
-#include "timer.h"
 
-/* VirtIO entropy (legacy PCI transitional) — QEMU -device virtio-rng-pci.
- * Vendor 1AF4 / device 1004. Seeds CSPRNG when boot entropy was weak. */
+/* VirtIO entropy (legacy PCI transitional) — QEMU virtio-rng-pci-transitional.
+ * Vendor 1AF4 / device 1004. Seeds CSPRNG when boot entropy was weak.
+ * Legacy config is an I/O BAR — use in/out, not MMIO pointer stores. */
 
 #define VIRTIO_VENDOR 0x1AF4
-#define VIRTIO_RNG_DEV 0x1004
+#define VIRTIO_RNG_DEV 0x1005 /* legacy transitional RNG (QEMU/Linux ID) */
 
 #define VIRTIO_ACKNOWLEDGE 1
 #define VIRTIO_DRIVER 2
@@ -42,24 +42,34 @@ struct vring_used {
     struct vring_used_elem ring[QNUM];
 };
 
-static volatile uint8_t *io;
+static uint16_t iobase;
 static int seeded;
 
-static void viow8(uint16_t off, uint8_t v) { io[off] = v; }
-static void viow16(uint16_t off, uint16_t v) {
-    io[off] = (uint8_t)v;
-    io[off + 1] = (uint8_t)(v >> 8);
+static void outb_port(uint16_t port, uint8_t v) {
+    __asm__ volatile("outb %0, %w1" : : "a"(v), "Nd"(port));
 }
-static void viow32(uint16_t off, uint32_t v) {
-    io[off] = (uint8_t)v;
-    io[off + 1] = (uint8_t)(v >> 8);
-    io[off + 2] = (uint8_t)(v >> 16);
-    io[off + 3] = (uint8_t)(v >> 24);
+static void outw_port(uint16_t port, uint16_t v) {
+    __asm__ volatile("outw %0, %w1" : : "a"(v), "Nd"(port));
 }
-static uint32_t vior32(uint16_t off) {
-    return (uint32_t)io[off] | ((uint32_t)io[off + 1] << 8) |
-           ((uint32_t)io[off + 2] << 16) | ((uint32_t)io[off + 3] << 24);
+static void outl_port(uint16_t port, uint32_t v) {
+    __asm__ volatile("outl %0, %w1" : : "a"(v), "Nd"(port));
 }
+static uint16_t inw_port(uint16_t port) {
+    uint16_t v;
+    __asm__ volatile("inw %w1, %0" : "=a"(v) : "Nd"(port));
+    return v;
+}
+static uint32_t inl_port(uint16_t port) {
+    uint32_t v;
+    __asm__ volatile("inl %w1, %0" : "=a"(v) : "Nd"(port));
+    return v;
+}
+
+static void viow8(uint16_t off, uint8_t v) { outb_port((uint16_t)(iobase + off), v); }
+static void viow16(uint16_t off, uint16_t v) { outw_port((uint16_t)(iobase + off), v); }
+static void viow32(uint16_t off, uint32_t v) { outl_port((uint16_t)(iobase + off), v); }
+static uint16_t vior16(uint16_t off) { return inw_port((uint16_t)(iobase + off)); }
+static uint32_t vior32(uint16_t off) { return inl_port((uint16_t)(iobase + off)); }
 
 static void *cpu_map(void *phys) {
     return (void *)(uintptr_t)((uint64_t)(uintptr_t)phys + pmm_hhdm());
@@ -71,48 +81,55 @@ int virtio_rng_seeded(void) {
 
 int virtio_rng_init(void) {
     seeded = 0;
+    iobase = 0;
     if (random_ready(RANDOM_DOMAIN_CRYPTO))
-        return 0; /* already have trusted entropy */
+        return 0;
 
     struct pci_device dev;
-    if (pci_find(VIRTIO_VENDOR, VIRTIO_RNG_DEV, &dev) != 0)
+    if (pci_find(VIRTIO_VENDOR, VIRTIO_RNG_DEV, &dev) != 0 &&
+        pci_find(VIRTIO_VENDOR, 0x1004, &dev) != 0 &&
+        pci_find(VIRTIO_VENDOR, 0x1003, &dev) != 0) {
+        serial_log(SERIAL_LOG_WARN, "virtio-rng: PCI device not found\n");
         return -1;
+    }
     pci_enable_bus_master(&dev);
     uint32_t bar = dev.bar0;
-    if (bar & 1)
-        io = (volatile uint8_t *)(uintptr_t)(bar & ~3u);
-    else
-        io = (volatile uint8_t *)vmm_phys_to_virt(bar & ~0xfu);
-    if (!io)
+    if (!(bar & 1)) {
+        serial_log(SERIAL_LOG_WARN, "virtio-rng: need legacy I/O BAR\n");
         return -1;
+    }
+    iobase = (uint16_t)(bar & ~3u);
 
     viow8(18, 0);
     viow8(18, VIRTIO_ACKNOWLEDGE);
     viow8(18, VIRTIO_ACKNOWLEDGE | VIRTIO_DRIVER);
     (void)vior32(0);
-    viow32(4, 0); /* no feature bits required */
+    viow32(4, 0);
 
     viow16(14, 0);
-    uint16_t qsz = (uint16_t)(io[12] | (io[13] << 8));
-    if (qsz < QNUM)
+    uint16_t qsz = vior16(12);
+    if (qsz < QNUM) {
+        serial_log(SERIAL_LOG_WARN, "virtio-rng: queue too small\n");
         return -1;
+    }
 
-    void *dp = pmm_alloc_pages(2);
-    void *up = pmm_alloc_pages(1);
+    void *ringp = pmm_alloc_pages(2); /* desc+avail page0, used page1 (legacy contiguous) */
     void *bp = pmm_alloc_pages(1);
-    if (!dp || !up || !bp)
+    if (!ringp || !bp)
         return -1;
-    memset(cpu_map(dp), 0, 8192);
-    memset(cpu_map(up), 0, 4096);
+    memset(cpu_map(ringp), 0, 8192);
     memset(cpu_map(bp), 0, 4096);
 
-    struct vring_desc *desc = (struct vring_desc *)cpu_map(dp);
-    struct vring_avail *avail = (struct vring_avail *)((uint8_t *)cpu_map(dp) + QNUM * 16);
-    struct vring_used *used = (struct vring_used *)cpu_map(up);
+    struct vring_desc *desc = (struct vring_desc *)cpu_map(ringp);
+    struct vring_avail *avail =
+        (struct vring_avail *)((uint8_t *)cpu_map(ringp) + QNUM * 16);
+    struct vring_used *used =
+        (struct vring_used *)((uint8_t *)cpu_map(ringp) + 4096);
     uint8_t *bufs = (uint8_t *)cpu_map(bp);
     uint64_t bufs_phys = (uint64_t)(uintptr_t)bp;
 
-    viow32(8, (uint32_t)((uintptr_t)dp >> 12));
+    /* Legacy QueuePFN = first page of contiguous desc/avail/used region. */
+    viow32(8, (uint32_t)((uintptr_t)ringp >> 12));
 
     for (uint16_t i = 0; i < QNUM; i++) {
         desc[i].addr = bufs_phys + (uint64_t)i * BUF_SZ;
@@ -125,13 +142,13 @@ int virtio_rng_init(void) {
     avail->idx = QNUM;
 
     viow8(18, VIRTIO_ACKNOWLEDGE | VIRTIO_DRIVER | VIRTIO_DRIVER_OK);
-    viow16(16, 0); /* notify queue 0 */
+    viow16(16, 0); /* QueueNotify queue 0 */
 
     uint16_t last = 0;
-    uint64_t start = timer_ticks();
     uint8_t collected[256];
     size_t got = 0;
-    while (got < sizeof(collected) && timer_ticks() - start < 200) {
+    /* platform_init runs before arch_irq_enable — do not wait on timer_ticks. */
+    for (int spins = 0; got < sizeof(collected) && spins < 2000000; spins++) {
         if (last == used->idx) {
             __asm__ volatile("pause");
             continue;
@@ -149,7 +166,6 @@ int virtio_rng_init(void) {
             memcpy(collected + got, bufs + id * BUF_SZ, n);
             got += n;
         }
-        /* re-queue */
         desc[id].addr = bufs_phys + (uint64_t)id * BUF_SZ;
         desc[id].len = BUF_SZ;
         desc[id].flags = VRING_DESC_F_WRITE;
