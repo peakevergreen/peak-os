@@ -9,7 +9,13 @@ static volatile uint64_t irq_count;
 static void timer_tick(void) {
     ticks++;
     irq_count++;
-    random_mix_irq(ticks ^ (ticks << 17));
+    /*
+     * Entropy from the PIT is useful, but mixing on every 100 Hz tick is
+     * wasted work on an idle cooperative UP box. Keyboard/mouse IRQs still
+     * mix at full rate; sample the tick counter every 4th IRQ instead.
+     */
+    if ((ticks & 3u) == 0u)
+        random_mix_irq(ticks ^ (ticks << 17));
     sched_on_timer();
 }
 
