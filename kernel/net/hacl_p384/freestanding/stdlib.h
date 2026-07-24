@@ -1,5 +1,9 @@
 #if defined(PEAK_HOST_TEST)
 #include_next <stdlib.h>
+/* Linux host libc may omit alloca without extra feature macros. */
+#ifndef alloca
+#define alloca __builtin_alloca
+#endif
 #else
 #ifndef PEAK_HACL_STDLIB_H
 #define PEAK_HACL_STDLIB_H

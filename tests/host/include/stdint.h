@@ -1,31 +1,36 @@
 #ifndef PEAK_HOST_STDINT_H
 #define PEAK_HOST_STDINT_H
 
-/* Prefer this over kernel/include/stdint.h during host JS tests. */
-typedef signed char        int8_t;
-typedef short              int16_t;
-typedef int                int32_t;
-typedef long long          int64_t;
-typedef unsigned char      uint8_t;
-typedef unsigned short     uint16_t;
-typedef unsigned int       uint32_t;
-typedef unsigned long long uint64_t;
-typedef unsigned long      uintptr_t;
-typedef long               intptr_t;
-typedef long long          intmax_t;
-typedef unsigned long long uintmax_t;
+/*
+ * Prefer this over kernel/include/stdint.h during host tests.
+ * Use the compiler's ABI types so we match system headers on both
+ * Linux CI (int64_t is long) and Darwin (int64_t is long long).
+ * Needed when HACL freestanding shims #include_next into libc.
+ */
+typedef __INT8_TYPE__    int8_t;
+typedef __INT16_TYPE__   int16_t;
+typedef __INT32_TYPE__   int32_t;
+typedef __INT64_TYPE__   int64_t;
+typedef __UINT8_TYPE__   uint8_t;
+typedef __UINT16_TYPE__  uint16_t;
+typedef __UINT32_TYPE__  uint32_t;
+typedef __UINT64_TYPE__  uint64_t;
+typedef __UINTPTR_TYPE__ uintptr_t;
+typedef __INTPTR_TYPE__  intptr_t;
+typedef __INTMAX_TYPE__  intmax_t;
+typedef __UINTMAX_TYPE__ uintmax_t;
 
-#define INT8_MAX    127
-#define UINT8_MAX   255u
-#define INT16_MAX   32767
-#define UINT16_MAX  65535u
-#define INT32_MAX   2147483647
-#define UINT32_MAX  4294967295u
-#define INT64_MAX   9223372036854775807LL
-#define UINT64_MAX  18446744073709551615ULL
-#define INTMAX_MAX  INT64_MAX
-#define UINTMAX_MAX UINT64_MAX
-#define SIZE_MAX    UINT64_MAX
-#define PTRDIFF_MAX INT64_MAX
+#define INT8_MAX    __INT8_MAX__
+#define UINT8_MAX   __UINT8_MAX__
+#define INT16_MAX   __INT16_MAX__
+#define UINT16_MAX  __UINT16_MAX__
+#define INT32_MAX   __INT32_MAX__
+#define UINT32_MAX  __UINT32_MAX__
+#define INT64_MAX   __INT64_MAX__
+#define UINT64_MAX  __UINT64_MAX__
+#define INTMAX_MAX  __INTMAX_MAX__
+#define UINTMAX_MAX __UINTMAX_MAX__
+#define SIZE_MAX    __SIZE_MAX__
+#define PTRDIFF_MAX __PTRDIFF_MAX__
 
 #endif

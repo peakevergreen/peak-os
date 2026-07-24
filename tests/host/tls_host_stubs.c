@@ -6,6 +6,7 @@
 #include "tls_internal.h"
 #include "vfs.h"
 #include "rtc.h"
+#include "util.h"
 
 #include <string.h>
 
@@ -16,11 +17,70 @@ int hostname_parse_skipped;
 const char *cert_fail_reason;
 uint8_t trust_pins[TLS_PIN_MAX][32];
 int trust_pin_count;
+char last_err[96];
+int last_err_code;
 
 /* Needed by tls_clienthello.c when linked into host tests. */
 uint8_t client_random[32];
 uint8_t tls13_priv[32];
 uint8_t tls13_client_pub[32];
+
+void tls_set_err_code(int code, const char *msg) {
+    size_t i = 0;
+    last_err_code = code;
+    if (!msg)
+        msg = "unknown";
+    for (; msg[i] && i + 1 < sizeof(last_err); i++)
+        last_err[i] = msg[i];
+    last_err[i] = '\0';
+}
+
+void tls_set_err(const char *msg) {
+    tls_set_err_code(TLS_E_GENERIC, msg);
+}
+
+void tls_set_alert_err(const uint8_t *alert, size_t n) {
+    uint8_t level = (n >= 1) ? alert[0] : 0;
+    uint8_t desc = (n >= 2) ? alert[1] : 0;
+    const char *name = "unknown";
+    switch (desc) {
+    case 0:  name = "close_notify"; break;
+    case 10: name = "unexpected_message"; break;
+    case 20: name = "bad_record_mac"; break;
+    case 22: name = "record_overflow"; break;
+    case 40: name = "handshake_failure"; break;
+    case 42: name = "bad_certificate"; break;
+    case 43: name = "unsupported_certificate"; break;
+    case 44: name = "certificate_revoked"; break;
+    case 45: name = "certificate_expired"; break;
+    case 46: name = "certificate_unknown"; break;
+    case 47: name = "illegal_parameter"; break;
+    case 48: name = "unknown_ca"; break;
+    case 49: name = "access_denied"; break;
+    case 50: name = "decode_error"; break;
+    case 51: name = "decrypt_error"; break;
+    case 70: name = "protocol_version"; break;
+    case 71: name = "insufficient_security"; break;
+    case 80: name = "internal_error"; break;
+    case 90: name = "user_canceled"; break;
+    case 112: name = "unrecognized_name"; break;
+    default: break;
+    }
+    char buf[96];
+    if (desc == 0 && level == 1)
+        snprintf(buf, sizeof(buf), "Server alert %s (graceful close)", name);
+    else
+        snprintf(buf, sizeof(buf), "Server alert %s (level %u desc %u)", name, level, desc);
+    tls_set_err_code(TLS_E_ALERT, buf);
+}
+
+const char *tls_last_error(void) {
+    return last_err[0] ? last_err : "no error";
+}
+
+int tls_last_error_code(void) {
+    return last_err_code;
+}
 
 #define HOST_TOFU_CAP 4096
 static char host_tofu[HOST_TOFU_CAP];
@@ -33,6 +93,8 @@ void tls_host_reset_trust(void) {
     hostname_matched = 0;
     hostname_parse_skipped = 0;
     cert_fail_reason = NULL;
+    last_err[0] = '\0';
+    last_err_code = TLS_E_OK;
     host_tofu_len = 0;
     host_tofu[0] = '\0';
 }
