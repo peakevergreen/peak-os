@@ -56,7 +56,7 @@ int main(void) {
     eval_eq(rt, "var e; try{throw 1}catch(x){e=x;} e", "1");
     eval_eq(rt, "class C{} typeof C", "\"function\"");
 
-    /* Hot-path regressions: string reuse, INC_LOCAL, lazy call env */
+    /* Hot-path regressions: string reuse, INC/DEC/ADD_LOCAL, LT_LOCAL_NUM, lazy call env */
     eval_eq(rt, "var t='ab'+'cd'; t", "\"abcd\"");
     eval_eq(rt, "typeof typeof 1", "\"string\"");
     eval_eq(rt,
@@ -78,8 +78,32 @@ int main(void) {
                "inc_local eval");
         expect(strcmp(out, "50") == 0, "inc_local result");
         js_rt_stats(rt, &objs, &ins, &timers, &gc);
-        /* 50 iterations: cond+inc body; budget sanity (pre-INC was much higher). */
-        expect(ins > 50 && ins < 900, "inc_local dispatch bound");
+        /* 50 iterations: LT_LOCAL_NUM + INC_LOCAL keep dispatch well under prior bound. */
+        expect(ins > 50 && ins < 500, "inc_local dispatch bound");
+        /* DEC_LOCAL: i = i - 1 */
+        expect(js_eval(rt,
+                       "function d(){var i=40; while(i>0){i=i-1;} return i;} d()",
+                       "<dec>", out, sizeof(out)) == 0,
+               "dec_local eval");
+        expect(strcmp(out, "0") == 0, "dec_local result");
+        js_rt_stats(rt, &objs, &ins, &timers, &gc);
+        expect(ins > 40 && ins < 500, "dec_local dispatch bound");
+        /* ADD_LOCAL + LT_LOCAL_NUM: n = n + i with local < const */
+        expect(js_eval(rt,
+                       "function acc(){var n=0; for(var i=0;i<30;i=i+1){n=n+i;} return n;} acc()",
+                       "<add>", out, sizeof(out)) == 0,
+               "add_local eval");
+        expect(strcmp(out, "435") == 0, "add_local result");
+        js_rt_stats(rt, &objs, &ins, &timers, &gc);
+        expect(ins > 30 && ins < 700, "add_local dispatch bound");
+        /* Stay within default instruction/object budgets on a denser loop. */
+        expect(js_eval(rt,
+                       "function hot(){var n=0; for(var i=0;i<200;i=i+1){n=n+i;} return n;} hot()",
+                       "<hot>", out, sizeof(out)) == 0,
+               "hot loop within budget");
+        expect(strcmp(out, "19900") == 0, "hot loop result");
+        js_rt_stats(rt, &objs, &ins, &timers, &gc);
+        expect(ins < 8000 && objs < 64, "hot loop budget sanity");
     }
 
     /* Budgets: runaway loop must fail */

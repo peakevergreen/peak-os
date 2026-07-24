@@ -100,7 +100,10 @@ enum js_op {
     OP_TRY_POP,
     OP_CLOSURE_GET, /* u16 */
     OP_CLOSURE_SET, /* u16 */
-    OP_INC_LOCAL,   /* u16 */
+    OP_INC_LOCAL,   /* u16: local = local + 1; push */
+    OP_DEC_LOCAL,   /* u16: local = local - 1; push */
+    OP_ADD_LOCAL,   /* u16 dst, u16 src: dst = dst + src; push */
+    OP_LT_LOCAL_NUM,/* u16 local, f64: push (local < num) */
     OP_HALT,
 };
 
