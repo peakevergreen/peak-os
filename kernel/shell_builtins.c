@@ -182,10 +182,10 @@ static const struct help_entry help_table[] = {
     { "help", "sys", "this help" },
     { "man", "sys", "command help" },
     { "peak", "meta", "Peak meta info" },
-    { "ask", "meta", "peak-agent prompt (quotes ok)" },
-    { "audit", "meta", "show audit log" },
-    { "memory", "meta", "project memory" },
-    { "policy", "meta", "agent policy" },
+    { "ask", "meta", "peak-agent prompt (run ls …, audit, memory)" },
+    { "audit", "meta", "show agent audit log tail" },
+    { "memory", "meta", "project memory / recall file" },
+    { "policy", "meta", "agent tool/path policy file" },
     { "privacy", "meta", "persist / net-allow / kill-switch" },
     { "disksave", "meta", "save workspace to block device" },
     { "gui", "meta", "enter desktop (Ctrl+Alt+Esc leaves)" },
@@ -222,7 +222,7 @@ void shell_help_cmd(const char *cmd) {
             return;
         }
     }
-    console_write("unknown command — try help\n");
+    console_write("unknown command — try help or man <cmd>\n");
 }
 
 void shell_builtins_init(void) {

@@ -119,9 +119,11 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     fb_fill_rect(x, y, w, h, bg);
     fb_fill_rect(x, y, w, 2 * s, acc);
     fb_draw_string(x + 8 * s, y + 8 * s, "Peak Agent", fg, bg);
-    fb_draw_string(x + 8 * s, y + 8 * s + ch + 4 * s, "mode: local+PeakVec", fg, bg);
+    fb_draw_string(x + 8 * s, y + 8 * s + ch + 4 * s,
+                   "tools: read write list exec print", fg, bg);
     fb_draw_string(x + 8 * s, y + 8 * s + 2 * (ch + 4 * s),
-                   last_summary[0] ? last_summary : "(no session)", fg, bg);
+                   last_summary[0] ? last_summary : "(no session — type a goal below)",
+                   fg, bg);
     char pend[48] = "pending: ";
     char num[8];
     itoa_u((uint64_t)pending, num, 10);
