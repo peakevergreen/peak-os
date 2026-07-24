@@ -36,6 +36,7 @@ struct br_tab *browser_cur(void) {
 void browser_tab_teardown_js(struct br_tab *t) {
     if (!t)
         return;
+    browser_js_invalidate_handles(&t->jsh);
     if (t->js) {
         js_rt_destroy(t->js);
         t->js = NULL;

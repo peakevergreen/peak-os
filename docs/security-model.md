@@ -76,7 +76,7 @@ Rule: the *scheme* is documented; only the *seed* is secret. Never log seeds, ca
 Still open (not claimed done):
 
 - **Verified boot / signed releases / A/B rollback** — design notes in [verified-boot.md](verified-boot.md); not shipped (Phase S8)
-- **Full ring-3 isolation for browser DOM/net** — in-kernel JS today; validated handles are next (Phase 10)
+- **Full ring-3 isolation for browser DOM/net** — in-kernel JS with generation-validated DOM handles today; process boundary next (Phase 10)
 - **Release acceptance beyond CI** — host tests + bios/aarch64 smoke land; signed artifacts and continuous fuzz are not gates yet (Phase S9 partial)
 - Session lock is convenience idle UI, not authentication
 

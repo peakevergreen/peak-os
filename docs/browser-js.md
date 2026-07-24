@@ -31,10 +31,11 @@ Progressively pass representative site fixtures. Full Chromium-level standards c
 ## Isolation (current → next)
 
 - **Now:** VM instruction/object/timer budgets; `browser_tick()` only from the desktop loop (never IRQ/network locks); destroy runtime on navigate/tab close.
+- **DOM handles:** each DOM object carries a generation (`handle_gen`); `browser_js_invalidate_handles` on navigate makes stale node refs fail closed (no use-after-navigate).
 - **Web API stubs** (`webapi_stubs.c`): `fetch` supports GET and POST (string body, bounded) with same-origin/CORS gating. `AbortController()` factory exposes `signal.aborted` + `abort()`; pre-aborted signals fail `fetch` closed. `localStorage`/`sessionStorage` are in-memory per-tab maps with `getItem`/`setItem`/`removeItem` (not disk). Other init options and non-http(s) schemes still fail closed.
 - **JS language:** `async`/`await` unwraps settled `Promise.resolve` values (and non-thenables as identity). `async function` / `async ()=>` return promises. `for await` remains fail-closed. ES modules: `js_eval_module` + `export var`/`export function` + `import {name} from "id"` (max 8 registered modules).
 - **Monitor:** overview shows `js tabs / objs / timers / gc`.
-- **Next:** ring-3 process isolation with validated DOM/network syscalls once userspace process support is sufficient.
+- **Next:** full ring-3 process isolation once aarch64/x86 ELF userspace process support is sufficient; DOM/net syscalls behind validated handles.
 
 ## Public sites
 
