@@ -9,10 +9,12 @@
 static char files_cwd[VFS_PATH_MAX] = "/home/dev/workspace";
 static int files_sel;
 static int files_scroll;
+static int files_confirm_del;
 
 void desktop_files_init(void) {
     files_sel = 0;
     files_scroll = 0;
+    files_confirm_del = 0;
 }
 
 static void files_clamp_sel(void) {
@@ -36,8 +38,52 @@ void desktop_files_draw(struct win *w) {
     uint32_t tx = w->x + desktop_u(12);
     uint32_t ty = w->y + th + desktop_u(8);
     uint32_t inner = w->w > desktop_u(24) ? w->w - desktop_u(24) : w->w;
-    fb_draw_string_fit(tx, ty, inner, files_cwd, desktop_color_dim(), desktop_color_bg());
-    fb_draw_string_fit(tx, ty + ch, inner, "[n]ew [d]el [r]ename [u]p  wheel scroll",
+    /* Breadcrumb: show last segments as "a › b › c" */
+    {
+        char crumb[VFS_PATH_MAX];
+        const char *segs[16];
+        int nseg = 0;
+        static char tmp[VFS_PATH_MAX];
+        size_t i = 0;
+        for (; files_cwd[i] && i + 1 < sizeof(tmp); i++)
+            tmp[i] = files_cwd[i];
+        tmp[i] = '\0';
+        if (tmp[0] == '/' && !tmp[1]) {
+            snprintf(crumb, sizeof(crumb), "/");
+        } else {
+            char *p = tmp;
+            if (*p == '/')
+                p++;
+            while (*p && nseg < 16) {
+                segs[nseg++] = p;
+                while (*p && *p != '/')
+                    p++;
+                if (*p == '/')
+                    *p++ = '\0';
+            }
+            int start = nseg > 3 ? nseg - 3 : 0;
+            size_t o = 0;
+            if (start > 0) {
+                crumb[o++] = '.';
+                crumb[o++] = '.';
+                crumb[o++] = '.';
+            }
+            for (int s = start; s < nseg; s++) {
+                if (o && o + 3 < sizeof(crumb)) {
+                    crumb[o++] = ' ';
+                    crumb[o++] = '>';
+                    crumb[o++] = ' ';
+                }
+                for (const char *q = segs[s]; *q && o + 1 < sizeof(crumb); q++)
+                    crumb[o++] = *q;
+            }
+            crumb[o] = '\0';
+        }
+        fb_draw_string_fit(tx, ty, inner, crumb, desktop_color_dim(), desktop_color_bg());
+    }
+    fb_draw_string_fit(tx, ty + ch, inner,
+                       files_confirm_del ? "[d] again to confirm delete  Esc cancel"
+                                         : "[n]ew [d]el (confirm) [r]ename [u]p",
                        desktop_color_dim(), desktop_color_bg());
     uint32_t area_h = w->h > th + ch * 2 + desktop_u(24) ? w->h - th - ch * 2 - desktop_u(24) : ch;
     int max_rows = (int)(area_h / ch);
@@ -49,6 +95,13 @@ void desktop_files_draw(struct win *w) {
     int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
     if (n < 0)
         n = 0;
+    if (n == 0) {
+        fb_draw_string(tx, ty + ch * 2 + desktop_u(4), "This folder is empty",
+                       desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(tx, ty + ch * 3 + desktop_u(4), "n new file · u go up",
+                       desktop_color_dim(), desktop_color_bg());
+        return;
+    }
     if (files_scroll > n)
         files_scroll = n > 0 ? n - 1 : 0;
     if (files_sel < files_scroll)
@@ -110,6 +163,14 @@ static void files_delete_sel(void) {
     int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
     if (n <= 0 || files_sel < 0 || files_sel >= n)
         return;
+    if (!files_confirm_del) {
+        files_confirm_del = 1;
+        notify_push("Press d again to confirm delete");
+        dirty_bits |= DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+        return;
+    }
+    files_confirm_del = 0;
     char path[VFS_PATH_MAX];
     if (!strcmp(files_cwd, "/"))
         snprintf(path, sizeof(path), "/%s", ents[files_sel].name);
@@ -176,24 +237,34 @@ static void files_activate(void) {
 }
 
 int desktop_files_key(int key) {
-    if (key == 'n' || key == 'N')
+    if (key == 'n' || key == 'N') {
+        files_confirm_del = 0;
         files_new_file();
-    else if (key == 'd' || key == 'D')
+    } else if (key == 'd' || key == 'D')
         files_delete_sel();
-    else if (key == 'r' || key == 'R')
+    else if (key == 'r' || key == 'R') {
+        files_confirm_del = 0;
         files_rename_sel();
-    else if (key == 'u' || key == 'U') {
+    } else if (key == 'u' || key == 'U') {
+        files_confirm_del = 0;
         files_go_up();
         dirty_bits |= DIRTY_WIN;
         desktop_mark_focus_surf_dirty();
-    } else if (key == '\n')
+    } else if (key == '\n') {
+        files_confirm_del = 0;
         files_activate();
-    else if (key == 'j' || key == 'J' || key == KEY_DOWN) {
+    } else if (key == 'j' || key == 'J' || key == KEY_DOWN) {
+        files_confirm_del = 0;
         files_sel++;
         dirty_bits |= DIRTY_WIN;
         desktop_mark_focus_surf_dirty();
     } else if ((key == 'k' || key == 'K' || key == KEY_UP) && files_sel > 0) {
+        files_confirm_del = 0;
         files_sel--;
+        dirty_bits |= DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+    } else if (key == 27) {
+        files_confirm_del = 0;
         dirty_bits |= DIRTY_WIN;
         desktop_mark_focus_surf_dirty();
     } else
