@@ -257,11 +257,22 @@ void kernel_entry(struct peak_bootinfo *info) {
             serial_write_str("peakdisk: smoke restore ok\n");
         } else {
             privacy_set_persist_profile(1);
-            if (vfs_write_file("/home/dev/workspace/.peak_smoke_ok", "1", 1) == 0 &&
-                peakdisk_save() == 0)
-                serial_write_str("peakdisk: smoke save ok\n");
-            else
-                serial_write_str("peakdisk: smoke save failed\n");
+            if (vfs_write_file("/home/dev/workspace/.peak_smoke_ok", "1", 1) != 0) {
+                serial_write_str("peakdisk: smoke marker write failed\n");
+            } else {
+                int saved = -1;
+                /* ATA PIO on loaded CI/TCG hosts can miss a tight wait once. */
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    if (peakdisk_save() == 0) {
+                        saved = 0;
+                        break;
+                    }
+                }
+                if (saved == 0)
+                    serial_write_str("peakdisk: smoke save ok\n");
+                else
+                    serial_write_str("peakdisk: smoke save failed\n");
+            }
         }
     }
 

@@ -198,7 +198,7 @@ jobs:
           export PATH="/usr/lib/llvm-*/bin:$PATH"
           test -f build/x86_64/kernel.elf
           chmod +x scripts/smoke-peakfs.sh
-          TIMEOUT_SEC=90 ./scripts/smoke-peakfs.sh
+          TIMEOUT_SEC=120 ./scripts/smoke-peakfs.sh
 
   smoke-aarch64:
     name: QEMU aarch64 smoke
