@@ -185,8 +185,13 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
              (unsigned)s->gui_fps, (unsigned)s->compose_us, (unsigned)s->present_us);
     fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
     row += ch + U(2);
-    snprintf(line, sizeof(line), "tasks %u  surf pressure %u%%",
-             (unsigned)s->tasks, (unsigned)s->surf_pressure);
+    snprintf(line, sizeof(line), "peakvec %uus  audit %uus  surf %u%%",
+             (unsigned)s->peakvec_us, (unsigned)s->agent_audit_us,
+             (unsigned)s->surf_pressure);
+    fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
+    row += ch + U(2);
+    snprintf(line, sizeof(line), "tasks %u",
+             (unsigned)s->tasks);
     fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
     row += ch + U(8);
 

@@ -62,11 +62,16 @@ static void top_render_once(int oneshot) {
     console_printf("     total RX %s TX %s  pkts %lu / %lu\n",
                    rxt, txt,
                    (unsigned long)s->rx_packets, (unsigned long)s->tx_packets);
-    console_printf("Sched tasks %u  ctx %lu  irq %lu  vfs %lu\n\n",
+    console_printf("Sched tasks %u  ctx %lu  irq %lu  vfs %lu\n",
                    (unsigned)s->tasks,
                    (unsigned long)s->ctx_switches,
                    (unsigned long)s->irq_count,
                    (unsigned long)s->vfs_nodes);
+    console_printf("GFX  compose %uus  present %uus  surf %u%%\n",
+                   (unsigned)s->compose_us, (unsigned)s->present_us,
+                   (unsigned)s->surf_pressure);
+    console_printf("Agent peakvec %uus  audit %uus\n\n",
+                   (unsigned)s->peakvec_us, (unsigned)s->agent_audit_us);
 
     struct task list[MAX_TASKS];
     int tn = sched_list_tasks(list, MAX_TASKS);

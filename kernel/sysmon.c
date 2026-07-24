@@ -34,6 +34,31 @@ static uint32_t last_fps;
 static uint32_t last_compose_us;
 static uint32_t last_present_us;
 static uint32_t last_surf_pressure;
+static uint32_t last_peakvec_us;
+static uint32_t last_agent_audit_us;
+
+#if defined(__x86_64__)
+static uint64_t sysmon_cycles(void) {
+    uint32_t lo, hi;
+    __asm__ volatile ("rdtsc" : "=a"(lo), "=d"(hi));
+    return ((uint64_t)hi << 32) | lo;
+}
+#elif defined(__aarch64__)
+static uint64_t sysmon_cycles(void) {
+    uint64_t t;
+    __asm__ volatile ("mrs %0, cntvct_el0" : "=r"(t));
+    return t;
+}
+#else
+static uint64_t sysmon_cycles(void) {
+    return timer_ticks() * 20000ull;
+}
+#endif
+
+uint32_t sysmon_now_us(void) {
+    /* Match desktop compose/present scale (~2k cycles per µs at typical QEMU). */
+    return (uint32_t)(sysmon_cycles() / 2000ull);
+}
 
 void sysmon_init(void) {
     spin_init(&mon_lock, "sysmon");
@@ -55,6 +80,8 @@ void sysmon_init(void) {
     last_compose_us = 0;
     last_present_us = 0;
     last_surf_pressure = 0;
+    last_peakvec_us = 0;
+    last_agent_audit_us = 0;
     inited = 1;
 }
 
@@ -82,6 +109,14 @@ void sysmon_note_surf_pressure(uint32_t pct) {
     if (pct > 100)
         pct = 100;
     last_surf_pressure = pct;
+}
+
+void sysmon_note_peakvec_us(uint32_t us) {
+    last_peakvec_us = us;
+}
+
+void sysmon_note_agent_audit_us(uint32_t us) {
+    last_agent_audit_us = us;
 }
 
 void sysmon_idle_enter(void) {
@@ -222,6 +257,8 @@ void sysmon_poll(void) {
     s.compose_us = last_compose_us;
     s.present_us = last_present_us;
     s.surf_pressure = last_surf_pressure;
+    s.peakvec_us = last_peakvec_us;
+    s.agent_audit_us = last_agent_audit_us;
 
     latest = s;
     push_sample(&s);

@@ -90,6 +90,19 @@ int cap_check(uint32_t need) {
     return 1;
 }
 
+uint32_t sysmon_now_us(void) {
+    static uint32_t t;
+    return ++t;
+}
+
+void sysmon_note_peakvec_us(uint32_t us) {
+    (void)us;
+}
+
+void sysmon_note_agent_audit_us(uint32_t us) {
+    (void)us;
+}
+
 void itoa_u(uint64_t val, char *buf, int base) {
     if (base != 10 && base != 16)
         base = 10;

@@ -33,6 +33,8 @@ struct sysmon_sample {
     uint32_t compose_us; /* last compose duration (approx µs) */
     uint32_t present_us; /* last present duration (approx µs) */
     uint32_t surf_pressure; /* surface memory budget 0–100 */
+    uint32_t peakvec_us; /* last PeakVec query duration (approx µs) */
+    uint32_t agent_audit_us; /* last agent audit append (approx µs) */
 };
 
 void sysmon_init(void);
@@ -44,6 +46,10 @@ void sysmon_note_frame(void); /* call after each GUI present */
 void sysmon_note_compose_us(uint32_t us);
 void sysmon_note_present_us(uint32_t us);
 void sysmon_note_surf_pressure(uint32_t pct);
+void sysmon_note_peakvec_us(uint32_t us);
+void sysmon_note_agent_audit_us(uint32_t us);
+/* Coarse cycle timer for hot-path notes (same scale as compose/present). */
+uint32_t sysmon_now_us(void);
 
 const struct sysmon_sample *sysmon_latest(void);
 int  sysmon_history(struct sysmon_sample *out, int max);
