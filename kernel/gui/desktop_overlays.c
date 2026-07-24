@@ -19,14 +19,17 @@ void desktop_draw_session_overlays(void) {
     if (session_lock) {
         fb_fill_rect(0, 0, (uint32_t)fb->width, (uint32_t)fb->height, desktop_color_bg());
         uint32_t mw = desktop_u(340);
-        uint32_t mh = desktop_u(120);
+        uint32_t mh = desktop_u(140);
         uint32_t mx = ((uint32_t)fb->width - mw) / 2;
         uint32_t my = ((uint32_t)fb->height - mh) / 3;
         fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
         fb_fill_rect(mx, my, mw, desktop_u(3), desktop_color_accent());
         fb_draw_string(mx + desktop_u(24), my + desktop_u(28), "Session locked", desktop_color_fg(), desktop_color_surface());
-        fb_draw_string(mx + desktop_u(24), my + desktop_u(28) + fb_cell_h() + desktop_u(8),
-                       "Press Enter to unlock (single-user)", desktop_color_dim(), desktop_color_surface());
+        fb_draw_string(mx + desktop_u(24), my + desktop_u(28) + fb_cell_h() + desktop_u(4),
+                       "Idle privacy cover — not a password login",
+                       desktop_color_dim(), desktop_color_surface());
+        fb_draw_string(mx + desktop_u(24), my + desktop_u(28) + 2 * (fb_cell_h() + desktop_u(4)),
+                       "Press Enter to resume (single-user)", desktop_color_dim(), desktop_color_surface());
         return;
     }
     if (power_confirm) {

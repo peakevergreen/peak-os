@@ -8,6 +8,9 @@
 #include "net.h"
 #include "tls.h"
 #include "util.h"
+#include "notify.h"
+
+static int privacy_kill_arm;
 
 static const char *persist_profile_label(int profile) {
     switch (profile) {
@@ -120,9 +123,14 @@ void desktop_settings_draw(struct win *w) {
         cy += row * 2;
         fb_draw_string(tx, cy, "Network kill switch (click):", desktop_color_fg(), desktop_color_bg());
         cy += row;
-        fb_draw_string(tx, cy, privacy_net_kill_switch() ? "on (blocks outbound/listen)"
-                                                         : "off",
-                       desktop_color_accent(), desktop_color_bg());
+        if (privacy_kill_arm && !privacy_net_kill_switch()) {
+            fb_draw_string(tx, cy, "click again to ENABLE (blocks all net)",
+                           theme_get()->danger, desktop_color_bg());
+        } else {
+            fb_draw_string(tx, cy, privacy_net_kill_switch() ? "on (blocks outbound/listen)"
+                                                             : "off — click twice to enable",
+                           desktop_color_accent(), desktop_color_bg());
+        }
         cy += row * 2;
         fb_draw_string(tx, cy, "Clear session (click)", desktop_color_accent(), desktop_color_bg());
         cy += row;
@@ -205,9 +213,22 @@ int desktop_settings_click(struct win *w, int32_t mx, int32_t my) {
             int next = (privacy_persist_profile() + 1) % 3;
             privacy_set_persist_profile(next);
         } else if (row <= 4) {
-            privacy_set_net_kill_switch(!privacy_net_kill_switch());
+            if (privacy_net_kill_switch()) {
+                privacy_set_net_kill_switch(0);
+                privacy_kill_arm = 0;
+                notify_push("Kill switch off");
+            } else if (!privacy_kill_arm) {
+                privacy_kill_arm = 1;
+                notify_push("Click kill switch again to confirm");
+            } else {
+                privacy_set_net_kill_switch(1);
+                privacy_kill_arm = 0;
+                notify_push("Kill switch on — network blocked");
+            }
         } else if (row >= 6) {
+            privacy_kill_arm = 0;
             privacy_clear_session();
+            notify_push("Session cleared");
         }
     } else if (settings_page == 4) {
         int row = (int)((my - (int32_t)body_y) / (int32_t)row_h);

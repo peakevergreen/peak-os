@@ -433,6 +433,11 @@ int uprivacy_main(int argc, char **argv) {
     }
     if (argc >= 2 && !strcmp(argv[1], "kill-switch")) {
         int on = (argc < 3 || strcmp(argv[2], "off") != 0);
+        if (on && (argc < 4 || strcmp(argv[3], "--confirm") != 0)) {
+            console_write("kill-switch: enabling blocks all outbound/listen.\n");
+            console_write("confirm with: privacy kill-switch on --confirm\n");
+            return 1;
+        }
         privacy_set_net_kill_switch(on);
         console_printf("kill-switch: %s\n", on ? "on" : "off");
         return 0;
