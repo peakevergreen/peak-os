@@ -20,7 +20,8 @@
  */
 #define NET_TIMER_HZ                100u
 #define NET_DHCP_TIMEOUT_DEFAULT    300u  /* 3s DISCOVER / REQUEST wait */
-#define NET_DNS_CACHE_TTL_TICKS     600u  /* 6s positive A-cache */
+#define NET_DNS_CACHE_TTL_TICKS     3000u /* 30s positive A-cache */
+#define NET_DNS_NEG_TTL_TICKS       1000u /* 10s negative (NXDOMAIN / timeout) */
 #define NET_DNS_RESOLVE_TICKS       300u  /* 3s A-query (http / ping) */
 #define NET_ARP_RESOLVE_TICKS       200u  /* 2s next-hop MAC resolve */
 #define NET_ARP_RETRY_TICKS          50u  /* 0.5s ARP re-request interval */
