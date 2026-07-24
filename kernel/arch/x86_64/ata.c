@@ -21,6 +21,9 @@
 #define ATA_CMD_FLUSH  0xE7
 
 #define ATA_MAX_XFER   256
+/* QEMU TCG on loaded CI hosts can need more polls than a bare-metal spin. */
+#define ATA_WAIT_ITERS 1000000
+#define ATA_IO_RETRIES 4
 
 static int have_disk;
 
@@ -32,7 +35,7 @@ static void ata_delay(void) {
 }
 
 static int ata_wait_bsy(void) {
-    for (int i = 0; i < 100000; i++) {
+    for (int i = 0; i < ATA_WAIT_ITERS; i++) {
         if (!(inb(ATA_STATUS) & ATA_SR_BSY))
             return 0;
     }
@@ -40,7 +43,7 @@ static int ata_wait_bsy(void) {
 }
 
 static int ata_wait_drq(void) {
-    for (int i = 0; i < 100000; i++) {
+    for (int i = 0; i < ATA_WAIT_ITERS; i++) {
         uint8_t st = inb(ATA_STATUS);
         if (st & ATA_SR_ERR)
             return -1;
@@ -103,10 +106,15 @@ static int ata_pio_xfer_chunk(uint32_t lba, uint32_t count, void *buf, int write
         }
         p += 256;
     }
+    /* Drain BSY before the next command; WRITE especially can lag on TCG. */
+    if (ata_wait_bsy() != 0)
+        return -1;
+    if (inb(ATA_STATUS) & ATA_SR_ERR)
+        return -1;
     return 0;
 }
 
-static int ata_pio_xfer(uint32_t lba, uint32_t count, void *buf, int write) {
+static int ata_pio_xfer_once(uint32_t lba, uint32_t count, void *buf, int write) {
     if (!have_disk || count == 0)
         return -1;
     uint8_t *p = (uint8_t *)buf;
@@ -121,6 +129,17 @@ static int ata_pio_xfer(uint32_t lba, uint32_t count, void *buf, int write) {
     return 0;
 }
 
+static int ata_pio_xfer(uint32_t lba, uint32_t count, void *buf, int write) {
+    for (int attempt = 0; attempt < ATA_IO_RETRIES; attempt++) {
+        if (ata_pio_xfer_once(lba, count, buf, write) == 0)
+            return 0;
+        /* Soft reset recovery is out of scope; brief settle then retry. */
+        ata_delay();
+        (void)ata_wait_bsy();
+    }
+    return -1;
+}
+
 int ata_read_sectors(uint32_t lba, uint32_t count, void *buf) {
     return ata_pio_xfer(lba, count, buf, 0);
 }
@@ -132,9 +151,16 @@ int ata_write_sectors(uint32_t lba, uint32_t count, const void *buf) {
 int ata_flush(void) {
     if (!have_disk)
         return -1;
-    if (ata_wait_bsy() != 0)
-        return -1;
-    outb(ATA_DRIVE, 0xE0);
-    outb(ATA_CMD, ATA_CMD_FLUSH);
-    return ata_wait_bsy();
+    for (int attempt = 0; attempt < ATA_IO_RETRIES; attempt++) {
+        if (ata_wait_bsy() != 0) {
+            ata_delay();
+            continue;
+        }
+        outb(ATA_DRIVE, 0xE0);
+        outb(ATA_CMD, ATA_CMD_FLUSH);
+        if (ata_wait_bsy() == 0 && !(inb(ATA_STATUS) & ATA_SR_ERR))
+            return 0;
+        ata_delay();
+    }
+    return -1;
 }

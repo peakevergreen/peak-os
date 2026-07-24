@@ -74,6 +74,7 @@ int peakdisk_save(void) {
 
     int need = vfs_export_ramdisk_size();
     if (need < 12) {
+        serial_log(SERIAL_LOG_WARN, "peakdisk: export size invalid\n");
         save_busy = 0;
         return -1;
     }
@@ -86,11 +87,13 @@ int peakdisk_save(void) {
 
     uint8_t *blob = kmalloc((size_t)need);
     if (!blob) {
+        serial_log(SERIAL_LOG_WARN, "peakdisk: export alloc failed\n");
         save_busy = 0;
         return -1;
     }
     int n = vfs_export_ramdisk(blob, (size_t)need);
     if (n < 12) {
+        serial_log(SERIAL_LOG_WARN, "peakdisk: export failed\n");
         kfree(blob);
         save_busy = 0;
         return -1;
@@ -138,6 +141,7 @@ int peakdisk_save(void) {
     /* Atomic publish: write payload first while the old header (if any) remains
      * authoritative; only then flip LBA1 to the new envelope and flush. */
     if (write_payload_streamed(payload, sz) != 0) {
+        serial_log(SERIAL_LOG_WARN, "peakdisk: payload write failed\n");
         if (enc)
             kfree_sensitive(enc, sz);
         kfree(blob);
@@ -153,6 +157,7 @@ int peakdisk_save(void) {
         return -1;
     }
     if (blockdev_write(PEAKDISK_LBA0, 1, hdr) != 0) {
+        serial_log(SERIAL_LOG_WARN, "peakdisk: header write failed\n");
         if (enc)
             kfree_sensitive(enc, sz);
         kfree(blob);
