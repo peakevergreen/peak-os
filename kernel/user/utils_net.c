@@ -10,6 +10,14 @@
 #include "util.h"
 #include "vfs.h"
 
+static void net_print_failure(const char *tool, const char *what) {
+    const char *detail = net_last_error();
+    if (detail && detail[0])
+        console_printf("%s: %s: %s\n", tool, what, detail);
+    else
+        peak_perror(tool, what);
+}
+
 int uifconfig_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
@@ -53,21 +61,25 @@ int uping_main(int argc, char **argv) {
     }
     uint32_t ip = net_dns_resolve(argv[1], 300);
     if (!ip) {
-        peak_perror("ping", "DNS failed");
+        net_print_failure("ping", "DNS failed");
         return 1;
     }
     char buf[32];
     net_format_ip(ip, buf, sizeof(buf));
     console_printf("PING %s (%s)\n", argv[1], buf);
     uint64_t t0 = timer_ticks();
-    int ok = (net_tcp_connect(ip, 80, 300) == 0);
+    int cr = net_tcp_connect(ip, 80, 300);
     uint64_t dt = timer_ticks() - t0;
-    if (ok) {
+    if (cr == 0) {
         net_tcp_close();
         console_printf("tcp/:80 open from %s time=%lums\n", buf, (unsigned long)(dt * 10));
         return 0;
     }
-    console_printf("tcp/:80 no response from %s (host may filter)\n", buf);
+    const char *why = net_last_error();
+    if (why && why[0])
+        console_printf("tcp/:80 failed from %s: %s\n", buf, why);
+    else
+        console_printf("tcp/:80 no response from %s (%s)\n", buf, peak_strerror(cr));
     console_printf("DNS ok - stack is talking to the network.\n");
     return 1;
 }
@@ -101,10 +113,13 @@ int uwget_main(int argc, char **argv) {
     console_printf("GET %s\n", url);
     if (net_http_get(url, body, sizeof(body), &st) != 0) {
         const char *tls = net_http_tls_reject_name();
+        const char *detail = net_last_error();
         if (tls && tls[0])
             console_printf("failed: TLS %s (HTTP status %d)\n", tls, st);
         else if (st > 0)
             console_printf("failed: HTTP %d\n", st);
+        else if (detail && detail[0])
+            console_printf("failed: %s (status %d)\n", detail, st);
         else
             console_printf("failed: connect/DNS/TLS error (status %d)\n", st);
         if (body[0]) {
@@ -139,13 +154,11 @@ int uwget_main(int argc, char **argv) {
     return 0;
 }
 
-/* curl-shaped alias: curl URL  or  curl -o path URL */
 int ucurl_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("curl", "[-o path] <url>");
         return argc < 2 ? 1 : 0;
     }
-    /* Rewrite -o → -O for wget. */
     char *av[16];
     int ac = 0;
     av[ac++] = (char *)"wget";

@@ -153,10 +153,15 @@ void net_handle_tcp(uint32_t src, const uint8_t *pkt, uint16_t len) {
 
 int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
     attempt_stats.tcp++;
-    if (!net_ready())
+    net_set_last_error(0, NULL);
+    if (!net_ready()) {
+        net_set_last_error(PEAK_ENETDOWN, NULL);
         return PEAK_ENETDOWN;
-    if (!privacy_net_client_allowed())
+    }
+    if (!privacy_net_client_allowed()) {
+        net_set_last_error(PEAK_EACCES, "net client capability denied");
         return PEAK_EACCES;
+    }
     int slot = -1;
     for (int i = 0; i < NET_TCP_MAX; i++) {
         if (tcps[i].state == TCP_CLOSED) {
@@ -164,8 +169,10 @@ int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
             break;
         }
     }
-    if (slot < 0)
+    if (slot < 0) {
+        net_set_last_error(PEAK_EBUSY, "TCP table full (max 16)");
         return PEAK_EBUSY;
+    }
     tcp_cur = slot;
     memset(&tcps[slot], 0, sizeof(tcps[slot]));
     tcp_remote_ip = ip;
@@ -179,27 +186,34 @@ int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
     tcp_got_fin = 0;
     tcp_state = TCP_SYN_SENT;
     uint32_t syn_seq = tcp_snd_nxt;
-    if (net_tcp_send_seg(TCP_SYN, NULL, 0) != 0)
-        return PEAK_EIO;
+    if (net_tcp_send_seg(TCP_SYN, NULL, 0) != 0) {
+        net_set_last_error(PEAK_ENETUNREACH, "SYN send failed (ARP?)");
+        return PEAK_ENETUNREACH;
+    }
     uint64_t start = timer_ticks();
     uint64_t last_syn = start;
     while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
         if (tcp_state == TCP_ESTABLISHED)
             return 0;
-        if (tcp_state == TCP_CLOSED)
+        if (tcp_state == TCP_CLOSED) {
+            net_set_last_error(PEAK_ENOTCONN, "connection refused or reset");
             return PEAK_ENOTCONN;
+        }
         /* Retransmit SYN with the original ISN (send_seg advances snd_nxt). */
         if (tcp_state == TCP_SYN_SENT &&
             net_timed_out(last_syn, NET_TCP_SYN_RETRY_TICKS)) {
             tcp_snd_nxt = syn_seq;
-            if (net_tcp_send_seg(TCP_SYN, NULL, 0) != 0)
-                return PEAK_EIO;
+            if (net_tcp_send_seg(TCP_SYN, NULL, 0) != 0) {
+                net_set_last_error(PEAK_ENETUNREACH, "SYN retransmit failed");
+                return PEAK_ENETUNREACH;
+            }
             last_syn = timer_ticks();
         }
         hlt_if_enabled();
     }
     tcp_state = TCP_CLOSED;
+    net_set_last_error(PEAK_ETIMEOUT, "TCP connect timed out (SYN retransmits every 1s)");
     return PEAK_ETIMEOUT;
 }
 
