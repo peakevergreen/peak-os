@@ -16,7 +16,8 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 ### Security (Phase S remainder)
 
-- **S8:** verified boot, signed releases, A/B rollback — [verified-boot.md](verified-boot.md)
+- [x] **S8:** verified boot, signed releases, A/B rollback — [verified-boot.md](verified-boot.md)
+  - Signing ceremony (`sign-release.py` / `verify-release.py`) + A/B ESP sketch landed; loader-embedded verify still remaining
 - **S9:** release acceptance beyond CI smoke (signed artifacts, continuous fuzz corpus)
 
 ### Browser / JS
@@ -50,8 +51,8 @@ Do not start these until [scripts/pi3-hw-checklist.md](../scripts/pi3-hw-checkli
 - Exception recovery / fault containment beyond log+halt
 - Pi 4/5 xHCI rings, GENET datapath, Wi‑Fi association, high-MMIO maps
 - SMP (secondaries stay parked)
+- S8 verified boot / signed release ceremony (partial: host sign/verify + A/B sketch; loader embed TBD)
 - PeakDisk passphrase KDF (PEAKDSK3); PEAKDSK2 header-key retired on load
-- S8 verified boot / signed release ceremony
 - USB LAN bulk datapath (needs silicon-proven hub path first)
 
 ## North star
