@@ -26,6 +26,9 @@ echo "==> builtin count in ubin registry"
 count=$(grep -c '^UBIN_CMD' kernel/user/ubin_cmds.def || true)
 echo "    registered commands: $count"
 test "$count" -ge 25
+grep -q 'test_ubin_registry' Makefile
+grep -q 'shell_parse_pipeline' kernel/shell_split.c
+grep -q 'SHELL_PIPE_MAX' kernel/include/shell_split.h
 
 echo "==> theme names"
 grep -q evergreen kernel/theme.c
