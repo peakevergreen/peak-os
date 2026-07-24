@@ -68,7 +68,6 @@ extern int band_live;
 
 extern struct damage_rect damage_list[MAX_DAMAGE];
 extern int damage_count;
-extern int damage_overflow;
 
 extern int dirty_bits;
 extern int scene_ready;

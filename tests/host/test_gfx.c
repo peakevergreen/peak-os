@@ -12,12 +12,10 @@ struct damage_rect {
 
 static struct damage_rect damage_list[MAX_DAMAGE];
 static int damage_count;
-static int damage_overflow;
 static uint32_t g_fw = 1920, g_fh = 1080;
 
 static void damage_clear(void) {
     damage_count = 0;
-    damage_overflow = 0;
 }
 
 static uint64_t rect_area(uint32_t w, uint32_t h) {
@@ -63,8 +61,10 @@ static void damage_compact(void) {
     }
 }
 
+static void damage_merge_all(void);
+
 static void damage_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
-    if (!w || !h || damage_overflow)
+    if (!w || !h)
         return;
     if (x >= g_fw || y >= g_fh)
         return;
@@ -90,7 +90,8 @@ static void damage_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         }
         if (rects_touch(x, y, w, h, r->x, r->y, r->w, r->h)) {
             rect_union_into(r, x, y, w, h);
-            damage_compact();
+            if (damage_count >= MAX_DAMAGE - 2)
+                damage_compact();
             return;
         }
     }
@@ -119,6 +120,14 @@ static void damage_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         }
     }
     rect_union_into(&damage_list[best], x, y, w, h);
+    {
+        uint64_t screen = rect_area(g_fw, g_fh);
+        uint64_t grown = rect_area(damage_list[best].w, damage_list[best].h);
+        if (screen && grown * 4 >= screen) {
+            damage_merge_all();
+            return;
+        }
+    }
     damage_compact();
 }
 
@@ -134,7 +143,6 @@ static void damage_merge_all(void) {
         if (r->y + r->h > y2) y2 = r->y + r->h;
     }
     damage_count = 0;
-    damage_overflow = 0;
     if (x2 > x1 && y2 > y1)
         damage_add(x1, y1, x2 - x1, y2 - y1);
 }
@@ -260,13 +268,24 @@ int main(void) {
     damage_clear();
     for (int i = 0; i < MAX_DAMAGE + 4; i++)
         damage_add((uint32_t)(i * 40), (uint32_t)(i * 30), 8, 8);
-    expect(damage_overflow == 0, "overflow coalesces without flag");
     expect(damage_count <= MAX_DAMAGE, "overflow keeps list bounded");
     expect(damage_count >= 1, "overflow keeps honest rects");
+    expect(damage_count > 1, "small overflow stays multi-rect");
     damage_merge_all();
     expect(damage_count == 1, "merge_all collapses to one rect");
     expect(damage_list[0].w < g_fw || damage_list[0].h < g_fh,
            "merge_all is bbox not forced fullscreen");
+
+    /* Overflow fold that grows a rect to >= 25% of the screen collapses now. */
+    damage_clear();
+    for (int i = 0; i < MAX_DAMAGE; i++)
+        damage_add(1000u + (uint32_t)(i % 4) * 50u,
+                   600u + (uint32_t)(i / 4) * 50u, 20, 20);
+    expect(damage_count == MAX_DAMAGE, "fill damage list");
+    damage_add(0, 0, g_fw / 2, g_fh / 2); /* ~25% screen → merge_all */
+    expect(damage_count == 1, "large overflow triggers merge_all");
+    expect(damage_list[0].w >= g_fw / 2 && damage_list[0].h >= g_fh / 2,
+           "large overflow bbox covers grown rect");
 
     damage_clear();
     damage_add(1900, 10, 0xFFFFFFF0u, 8);

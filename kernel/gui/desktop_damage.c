@@ -4,11 +4,9 @@
 
 struct damage_rect damage_list[MAX_DAMAGE];
 int damage_count;
-int damage_overflow;
 
 void damage_clear(void) {
     damage_count = 0;
-    damage_overflow = 0;
 }
 
 static uint64_t rect_area(uint32_t w, uint32_t h) {
@@ -58,8 +56,6 @@ static void damage_compact(void) {
 
 void damage_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     struct framebuffer *fb = fb_get();
-    if (damage_overflow)
-        return;
     if (!display_clip_rect((uint32_t)fb->width, (uint32_t)fb->height,
                            x, y, w, h, &x, &y, &w, &h))
         return;
@@ -79,7 +75,11 @@ void damage_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         }
         if (rects_touch(x, y, w, h, r->x, r->y, r->w, r->h)) {
             rect_union_into(r, x, y, w, h);
-            damage_compact();
+            /* Compact only when slots are scarce — keeps finer rects while
+             * the list has headroom (compose_damage still merges when count
+             * is high). */
+            if (damage_count >= MAX_DAMAGE - 2)
+                damage_compact();
             return;
         }
     }
@@ -112,6 +112,15 @@ void damage_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         }
     }
     rect_union_into(&damage_list[best], x, y, w, h);
+
+    /* One rect already large vs the screen: further disjoint tracking pays
+     * little — collapse to a single bbox immediately. */
+    uint64_t screen = rect_area((uint32_t)fb->width, (uint32_t)fb->height);
+    uint64_t grown = rect_area(damage_list[best].w, damage_list[best].h);
+    if (screen && grown * 4 >= screen) {
+        damage_merge_all();
+        return;
+    }
     damage_compact();
 }
 
@@ -133,7 +142,6 @@ void damage_merge_all(void) {
         if (r->y + r->h > y2) y2 = r->y + r->h;
     }
     damage_count = 0;
-    damage_overflow = 0;
     if (x2 > x1 && y2 > y1)
         damage_add(x1, y1, x2 - x1, y2 - y1);
 }
