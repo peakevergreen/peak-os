@@ -6,6 +6,7 @@
 #include "peakdisk.h"
 #include "privacy.h"
 #include "net.h"
+#include "tls.h"
 #include "util.h"
 
 void desktop_settings_draw(struct win *w) {
@@ -110,7 +111,15 @@ void desktop_settings_draw(struct win *w) {
         snprintf(line, sizeof(line), "dns %s", dns);
         fb_draw_string(tx, cy, line, desktop_color_fg(), desktop_color_bg());
         cy += row * 2;
-        fb_draw_string(tx, cy, "IPv4: static QEMU defaults (no DHCP client).", desktop_color_dim(), desktop_color_bg());
+        snprintf(line, sizeof(line), "TLS TOFU (click): %s",
+                 settings_tls_tofu() ? "on" : "off");
+        fb_draw_string(tx, cy, line, desktop_color_accent(), desktop_color_bg());
+        cy += row;
+        fb_draw_string(tx, cy, "Clear TLS trust (click)", desktop_color_accent(),
+                       desktop_color_bg());
+        cy += row * 2;
+        fb_draw_string(tx, cy, "Clears pins, TOFU, and HSTS map.", desktop_color_dim(),
+                       desktop_color_bg());
     }
     (void)content_w;
 }
@@ -152,6 +161,14 @@ int desktop_settings_click(struct win *w, int32_t mx, int32_t my) {
         if (my >= (int32_t)body_y && my < (int32_t)(body_y + row_h * 2)) {
             settings_toggle_clock();
             settings_persist();
+        }
+    } else if (settings_page == 3) {
+        int row = (int)((my - (int32_t)body_y) / (int32_t)row_h);
+        if (row == 6) {
+            settings_toggle_tls_tofu();
+            settings_persist();
+        } else if (row == 7) {
+            tls_trust_clear_all();
         }
     }
     dirty_bits |= DIRTY_FULL;

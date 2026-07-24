@@ -8,6 +8,7 @@
 #include "crypto.h"
 #include "tls.h"
 #include "tls_session.h"
+#include "tls_hsts.h"
 #include "x509.h"
 #include "../../kernel/include/tls_util.h"
 #include "../../kernel/net/tls_internal.h"
@@ -621,6 +622,16 @@ static void test_session_resume_cache(void) {
     tls_session_clear();
 }
 
+static void test_hsts_and_clear(void) {
+    hsts_clear();
+    expect(hsts_should_upgrade("example.com") == 0, "hsts empty");
+    hsts_host_put("example.com", (uint32_t)timer_ticks() + 100000);
+    expect(hsts_should_upgrade("example.com") == 1, "hsts hit");
+    expect(hsts_should_upgrade("other.com") == 0, "hsts miss");
+    tls_trust_clear_all();
+    expect(hsts_should_upgrade("example.com") == 0, "clear drops hsts");
+}
+
 /* Wycheproof-style AES-GCM: roundtrip + fail-closed on tag flip (empty AAD). */
 static void test_wycheproof_aead(void) {
     static const uint8_t key[16] = {
@@ -779,6 +790,7 @@ int main(int argc, char **argv) {
     test_ske_sig_verify();
     test_clienthello_goldens();
     test_session_resume_cache();
+    test_hsts_and_clear();
     test_wycheproof_aead();
     test_crypto_hardening();
     test_x509_parser();

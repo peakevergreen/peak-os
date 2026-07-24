@@ -116,6 +116,9 @@ int main(void) {
     webapi_host_clear_tls();
     webapi_host_set_http(0, 200, "x", "");
 
+    /* Active mixed content blocked on HTTPS pages. */
+    eval_fails(rt, "fetch('http://evil.example/x')", "mixed-content");
+
     /* Storage: in-memory get/set; quota / empty / oversized fail closed. */
     eval_ok(rt, "localStorage.setItem('a','1'); localStorage.getItem('a')", "\"1\"");
     eval_ok(rt, "localStorage.removeItem('a'); localStorage.getItem('a')", "null");

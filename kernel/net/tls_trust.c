@@ -1,4 +1,5 @@
 #include "tls_internal.h"
+#include "tls_hsts.h"
 #include "serial.h"
 #include "tls_util.h"
 #include "util.h"
@@ -7,6 +8,7 @@
 #include "rtc.h"
 #include "webpki.h"
 #include "settings.h"
+#include "random.h"
 
 /*
  * Trust-on-first-use store: /etc/peak/tls-tofu holds "host:hex64" lines
@@ -29,6 +31,13 @@ int tls_cert_verified(void) {
 
 int tls_hostname_matched(void) {
     return hostname_matched;
+}
+
+void tls_trust_clear_all(void) {
+    trust_pin_count = 0;
+    memzero_explicit(trust_pins, sizeof(trust_pins));
+    vfs_write_file(TOFU_PATH, "", 0);
+    hsts_clear();
 }
 
 /* Shared: tofu_check then tofu_remember never nest (saves one TOFU_MAX BSS). */

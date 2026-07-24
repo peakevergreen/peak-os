@@ -192,6 +192,8 @@ static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, vo
         snprintf(abs, sizeof(abs), "%s", url);
     if (strncmp(abs, "http://", 7) != 0 && strncmp(abs, "https://", 8) != 0)
         return stub_fail(rt, ret, "fetch: only http(s) URLs supported");
+    if (http_blocks_active_mixed(g_web_page_url, abs))
+        return stub_fail(rt, ret, "fetch: mixed-content");
 
     char *body = kmalloc(64 * 1024);
     char *hdrs = kmalloc(2048);
