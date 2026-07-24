@@ -32,12 +32,27 @@ Agent memory, net grants, and browser storage are session-scoped unless the user
 
 `vfs_unlink` + heap zeroing + rewriting a PeakDisk image are **best effort**. Peak does not claim DoD wipe, TRIM-guaranteed erase, or protection against a hostile host that snapshots the qcow2/raw disk.
 
+## Session lock (honest)
+
+Desktop idle lock is a **privacy cover**, not authentication. Anyone with console
+access can press Enter to resume. It does not encrypt VFS, revoke capabilities, or
+replace a password. See [security-model.md](security-model.md).
+
+## Kill switch
+
+Enabling the network kill switch (Settings → Privacy, or
+`privacy kill-switch on --confirm`) blocks outbound client and listen paths until
+turned off. Enabling requires an explicit confirm click/flag so it is hard to
+toggle by accident.
+
 ## UI surfaces
 
 Settings → General: plain-language storage summary (disk present, what persists).  
-Settings → Privacy: persist profile (private / workspace / full), network kill switch, clear session (revokes grants, caps, clipboard).  
+Settings → Privacy: persist profile (private / workspace / full), network kill switch
+(double-click to enable), clear session (revokes grants, caps, clipboard).  
 Settings → Network: link info, trust-on-first-use toggle, forget saved TLS certificates.
 
-CLI: `privacy persist private|workspace|full`, `privacy net-allow`, `privacy kill-switch [on|off]` (same posture as Settings). See [CLI.md](CLI.md).
+CLI: `privacy persist private|workspace|full`, `privacy net-allow`,
+`privacy kill-switch on --confirm` / `privacy kill-switch off`. See [CLI.md](CLI.md).
 
 See [security-model.md](security-model.md).

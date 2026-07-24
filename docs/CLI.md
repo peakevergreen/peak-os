@@ -86,7 +86,7 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 | `js -e 'code'` / `js file.js` | Peak JS CLI — [browser-js.md](browser-js.md) |
 | `help` `man <cmd>` | categorized help (`-h` / `--help` on most utils) |
 | `ask` `audit` `memory` `policy` `peak` `gui` | agent + desktop |
-| `privacy` | `persist` / `net-allow` / `kill-switch` — [privacy.md](privacy.md) |
+| `privacy` | `persist` / `net-allow` / `kill-switch on --confirm` — [privacy.md](privacy.md) |
 
 `gui` enters the desktop; **Ctrl+Alt+Esc** returns to CLI.
 
