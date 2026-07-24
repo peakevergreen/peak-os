@@ -40,6 +40,19 @@ int main(void) {
     char *a5[] = { "cat", "f", NULL };
     expect(peak_wants_help(2, a5) == 0, "no help");
 
+    {
+        char buf[64];
+        char *j1[] = { "ask", "hello world", NULL };
+        expect(peak_join_args(2, j1, 1, buf, sizeof(buf)) == 11, "join single len");
+        expect(strcmp(buf, "hello world") == 0, "join single");
+        char *j2[] = { "ask", "create", "fib.c", NULL };
+        expect(peak_join_args(3, j2, 1, buf, sizeof(buf)) == 12, "join multi len");
+        expect(strcmp(buf, "create fib.c") == 0, "join multi");
+        expect(peak_join_args(1, j1, 1, buf, sizeof(buf)) == 0, "join empty range");
+        expect(buf[0] == '\0', "join empty nul");
+        expect(peak_join_args(2, j1, 1, NULL, 8) == (size_t)-1, "join bad buf");
+    }
+
     if (fails) {
         fprintf(stderr, "%d libpeak test(s) failed\n", fails);
         return 1;

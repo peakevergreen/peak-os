@@ -61,6 +61,47 @@ int main(void) {
         check_split("   one   ", 1, w);
     }
     {
+        /* Empty input / whitespace-only */
+        char empty[] = "";
+        char *av0[16];
+        expect(shell_split_args(empty, av0, 16) == 0, "empty");
+        char sp[] = "   ";
+        char *av[16];
+        expect(shell_split_args(sp, av, 16) == 0, "spaces only");
+    }
+    {
+        /* Empty quoted args */
+        const char *w[] = { "echo", "" };
+        check_split("echo \"\"", 2, w);
+        check_split("echo ''", 2, w);
+    }
+    {
+        /* Adjacent quoted tokens */
+        const char *w[] = { "a", "b" };
+        check_split("\"a\"\"b\"", 2, w);
+    }
+    {
+        /* Mixed quote styles on one line */
+        const char *w[] = { "cp", "src x", "dst y" };
+        check_split("cp \"src x\" 'dst y'", 3, w);
+    }
+    {
+        /* Leading/trailing spaces around quoted arg */
+        const char *w[] = { "ask", "hi there" };
+        check_split("  ask  \"hi there\"  ", 2, w);
+    }
+    {
+        /* In-place: argv aliases into mutated buffer (no heap) */
+        char buf[] = "echo 'x y'";
+        char *argv[8];
+        int argc = shell_split_args(buf, argv, 8);
+        expect(argc == 2, "inplace argc");
+        expect(argv[0] == buf, "argv0 aliases buf");
+        expect(argv[1] > buf && argv[1] < buf + sizeof(buf), "argv1 in buf");
+        expect(strcmp(argv[0], "echo") == 0, "inplace echo");
+        expect(strcmp(argv[1], "x y") == 0, "inplace quoted");
+    }
+    {
         char buf[64];
         strcpy(buf, "a b c d e f g h i j k l m n o p q");
         char *argv[4];
@@ -69,6 +110,11 @@ int main(void) {
         expect(argv[3] == NULL, "cap NULL");
     }
     expect(shell_split_args(NULL, NULL, 16) == 0, "null cmd");
+    {
+        char buf[] = "x";
+        char *av[2] = {0};
+        expect(shell_split_args(buf, av, 1) == 0, "max < 2");
+    }
 
     if (fails) {
         fprintf(stderr, "%d shell_split test(s) failed\n", fails);

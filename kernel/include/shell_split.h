@@ -9,9 +9,10 @@
 #endif
 
 /*
- * In-place argv split. Supports "double" and 'single' quotes (quotes stripped).
- * Unclosed quote: remainder of the string is one argument.
- * Returns argc; argv[argc] is set to NULL. At most max-1 args.
+ * In-place argv split (no heap). Supports "double" and 'single' quotes
+ * (quotes stripped). Unclosed quote: remainder of the string is one argument.
+ * Writes NULs into cmd; argv entries alias cmd. Returns argc; argv[argc] is
+ * NULL. At most max-1 args.
  */
 int shell_split_args(char *cmd, char **argv, int max);
 

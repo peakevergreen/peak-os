@@ -85,3 +85,24 @@ const char *peak_flag_arg(int argc, char **argv, const char *flag) {
 int peak_wants_help(int argc, char **argv) {
     return peak_has_flag(argc, argv, "-h") || peak_has_flag(argc, argv, "--help");
 }
+
+size_t peak_join_args(int argc, char **argv, int start, char *buf, size_t cap) {
+    if (!buf || cap == 0 || !argv || start < 0)
+        return (size_t)-1;
+    size_t o = 0;
+    for (int i = start; i < argc; i++) {
+        const char *p = argv[i];
+        if (!p)
+            break;
+        if (i > start) {
+            if (o + 1 >= cap)
+                break;
+            buf[o++] = ' ';
+        }
+        while (*p && o + 1 < cap)
+            buf[o++] = *p++;
+    }
+    buf[o] = '\0';
+    return o;
+}
+

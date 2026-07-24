@@ -16,7 +16,8 @@ void shell_feed_key(int key); /* ASCII or KEY_* from keyboard.h */
 void shell_redraw_prompt(void);
 enum os_mode shell_mode(void);
 void shell_set_mode(enum os_mode mode);
-void shell_execute(const char *line);
+/* Mutates line in place (quote-split). Pass a writable buffer. */
+void shell_execute(char *line);
 
 const char *shell_getcwd(void);
 int  shell_chdir(const char *path);
