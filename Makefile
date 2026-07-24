@@ -106,6 +106,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/crypto_hkdf.c \
 	kernel/net/tls_util.c \
 	kernel/net/tls_clienthello.c \
+	kernel/net/tls_session.c \
 	kernel/net/x509.c \
 	kernel/net/webpki.c \
 	kernel/net/webpki_roots_data.c \
@@ -365,7 +366,8 @@ $(eval $(call HOST_TEST_RULE,random,tests/host/test_random.c kernel/random.c \
 	kernel/net/crypto_p256.c kernel/net/crypto_rsa.c kernel/net/crypto_hkdf.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 $(HOST_TEST_INC_HOST_BOOT_KERNEL)))
 $(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c tests/host/tls_host_stubs.c \
-	kernel/net/tls_util.c kernel/net/tls_trust.c kernel/net/tls_clienthello.c kernel/net/x509.c \
+	kernel/net/tls_util.c kernel/net/tls_trust.c kernel/net/tls_clienthello.c kernel/net/tls_session.c \
+	kernel/net/x509.c \
 	kernel/net/webpki.c kernel/net/webpki_roots_data.c kernel/random.c \
 	kernel/net/crypto.c kernel/net/crypto_hash.c kernel/net/crypto_sha384.c kernel/net/crypto_aead.c kernel/net/crypto_x25519.c \
 	kernel/net/crypto_p256.c kernel/net/crypto_rsa.c kernel/net/crypto_hkdf.c,\

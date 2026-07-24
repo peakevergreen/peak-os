@@ -2,6 +2,7 @@
  * TLS ClientHello serializer (shared by handshake + host golden tests).
  */
 #include "tls_internal.h"
+#include "tls_session.h"
 #include "timer.h"
 #include "util.h"
 
@@ -160,6 +161,24 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     o += 2;
     wr16(out + o, 0);
     o += 2;
+
+    /* session_ticket (RFC 5077): empty = willing; body = cached ticket. */
+    {
+        uint8_t ticket[TLS_SESSION_TICKET_MAX];
+        size_t tlen = sizeof(ticket);
+        int have = tls_session_get(sni, ticket, &tlen, NULL);
+        wr16(out + o, 0x0023);
+        o += 2;
+        if (have && tlen > 0 && tlen <= TLS_SESSION_TICKET_MAX) {
+            wr16(out + o, (uint16_t)tlen);
+            o += 2;
+            memcpy(out + o, ticket, tlen);
+            o += tlen;
+        } else {
+            wr16(out + o, 0);
+            o += 2;
+        }
+    }
 
     wr16(out + o, 0xFF01);
     o += 2;
