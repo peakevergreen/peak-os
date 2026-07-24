@@ -209,11 +209,134 @@ static void test_rng_fail_closed(void) {
     expect(digest[0] == 0 && digest[31] == 0, "release crypto_random scrub");
 }
 
+/* NIST-ish empty SHA-256 + HMAC / AEAD edge vectors (fail-closed decrypt). */
+static void test_crypto_edges(void) {
+    /* Empty SHA-256 (FIPS 180-4). */
+    uint8_t dig[32];
+    sha256((const uint8_t *)"", 0, dig);
+    expect(!memcmp(dig,
+                   "\xe3\xb0\xc4\x42\x98\xfc\x1c\x14\x9a\xfb\xf4\xc8\x99\x6f\xb9\x24"
+                   "\x27\xae\x41\xe4\x64\x9b\x93\x4c\xa4\x95\x99\x1b\x78\x52\xb8\x55",
+                   32),
+           "sha256 empty");
+
+    /* Incremental SHA-256 matches one-shot. */
+    {
+        const uint8_t msg[] = "abc";
+        uint8_t one[32], inc[32];
+        sha256(msg, 3, one);
+        struct sha256_ctx c;
+        sha256_ctx_init(&c);
+        sha256_ctx_update(&c, msg, 1);
+        sha256_ctx_update(&c, msg + 1, 2);
+        sha256_ctx_final(&c, inc);
+        expect(!memcmp(one, inc, 32), "sha256 incremental == one-shot");
+    }
+
+    /* HMAC-SHA256 empty key/data still produces 32 bytes (no crash). */
+    {
+        uint8_t mac[32];
+        memset(mac, 0, sizeof(mac));
+        hmac_sha256((const uint8_t *)"", 0, (const uint8_t *)"", 0, mac);
+        expect(mac[0] != 0 || mac[1] != 0 || mac[31] != 0, "hmac empty non-zero");
+    }
+
+    /* AES-GCM roundtrip + tag tamper fail-closed. */
+    {
+        uint8_t key[16], iv[12], aad[4], plain[8], cipher[8], tag[16], out[8];
+        memset(key, 0x11, sizeof(key));
+        memset(iv, 0x22, sizeof(iv));
+        memset(aad, 0x33, sizeof(aad));
+        memcpy(plain, "peak-os!", 8);
+        expect(aes128_gcm_encrypt(key, iv, aad, sizeof(aad), plain, sizeof(plain),
+                                  cipher, tag) == 0,
+               "gcm encrypt");
+        expect(aes128_gcm_decrypt(key, iv, aad, sizeof(aad), cipher, sizeof(cipher),
+                                  tag, out) == 0,
+               "gcm decrypt ok");
+        expect(!memcmp(out, plain, 8), "gcm roundtrip");
+        tag[0] ^= 0x01;
+        memset(out, 0xAA, sizeof(out));
+        expect(aes128_gcm_decrypt(key, iv, aad, sizeof(aad), cipher, sizeof(cipher),
+                                  tag, out) != 0,
+               "gcm bad tag rejects");
+        /* Empty plaintext AEAD. */
+        uint8_t tag0[16];
+        expect(aes128_gcm_encrypt(key, iv, aad, sizeof(aad), plain, 0, cipher, tag0) == 0,
+               "gcm empty encrypt");
+        expect(aes128_gcm_decrypt(key, iv, aad, sizeof(aad), cipher, 0, tag0, out) == 0,
+               "gcm empty decrypt");
+    }
+
+    /* ChaCha20-Poly1305 roundtrip + AAD mismatch fail-closed. */
+    {
+        uint8_t key[32], nonce[12], aad[3], plain[5], cipher[5], tag[16], out[5];
+        memset(key, 0x44, sizeof(key));
+        memset(nonce, 0x55, sizeof(nonce));
+        memcpy(aad, "aad", 3);
+        memcpy(plain, "hello", 5);
+        expect(chacha20_poly1305_encrypt(key, nonce, aad, 3, plain, 5, cipher, tag) == 0,
+               "chacha encrypt");
+        expect(chacha20_poly1305_decrypt(key, nonce, aad, 3, cipher, 5, tag, out) == 0,
+               "chacha decrypt");
+        expect(!memcmp(out, plain, 5), "chacha roundtrip");
+        uint8_t bad_aad[3] = {'A', 'A', 'D'};
+        expect(chacha20_poly1305_decrypt(key, nonce, bad_aad, 3, cipher, 5, tag, out) != 0,
+               "chacha aad mismatch rejects");
+    }
+
+    /* X25519 base point: clamp + base should be deterministic for fixed scalar. */
+    {
+        uint8_t scalar[32], out_a[32], out_b[32];
+        memset(scalar, 0, sizeof(scalar));
+        scalar[0] = 9;
+        x25519_base(out_a, scalar);
+        x25519_base(out_b, scalar);
+        expect(!memcmp(out_a, out_b, 32), "x25519_base deterministic");
+        expect(out_a[0] != 0 || out_a[31] != 0, "x25519_base non-zero");
+    }
+
+    /* TLS PRF length: request 48 bytes of key material. */
+    {
+        uint8_t secret[16], seed[16], out[48];
+        memset(secret, 0xAB, sizeof(secret));
+        memset(seed, 0xCD, sizeof(seed));
+        memset(out, 0, sizeof(out));
+        tls_prf_sha256(secret, sizeof(secret), "key expansion", seed, sizeof(seed),
+                       out, sizeof(out));
+        int nonzero = 0;
+        for (size_t i = 0; i < sizeof(out); i++)
+            if (out[i])
+                nonzero = 1;
+        expect(nonzero, "tls prf produces bytes");
+    }
+}
+
+static void test_hostname_and_pin_extras(void) {
+    /* Extra SNI edge cases. */
+    expect(tls_hostname_matches_sni("*.a.b", "x.a.b"), "wildcard multi-label base");
+    expect(!tls_hostname_matches_sni("*.a.b", "y.x.a.b"), "wildcard single label only");
+    expect(!tls_hostname_matches_sni("", "example.com"), "empty pattern");
+
+    /* Empty SNI host on verify → still need valid cert shape; pin path. */
+    uint8_t cert[128];
+    size_t n = build_cert_msg(cert, sizeof(cert), 0x77, 12);
+    expect(n > 0, "extra cert fixture");
+    uint8_t dig[32];
+    sha256(cert, n, dig);
+    tls_host_reset_trust();
+    expect(tls_trust_pin_sha256(dig) == 0, "pin for empty sni");
+    /* Empty host: pin match still verifies (TOFU skipped). */
+    expect(tls_verify_cert_chain(cert, n, "") == 1, "empty sni with pin accepts");
+}
+
 int main(void) {
     test_util_helpers();
     test_pin_and_tofu_fail_closed();
     test_truncated_cert_records();
     test_rng_fail_closed();
+    test_crypto_edges();
+    test_hostname_and_pin_extras();
 
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);
