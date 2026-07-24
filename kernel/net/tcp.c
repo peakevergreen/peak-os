@@ -321,6 +321,46 @@ void net_tcp_fd_close(int fd) {
     tcps[fd].accepted = 0;
 }
 
+int net_tcp_fd_peer(int fd, uint32_t *ip, uint16_t *port) {
+    if (fd < 0 || fd >= NET_TCP_MAX || tcps[fd].state == TCP_CLOSED)
+        return PEAK_EINVAL;
+    if (ip)
+        *ip = tcps[fd].remote_ip;
+    if (port)
+        *port = tcps[fd].remote_port;
+    return 0;
+}
+
+int net_tcp_fd_local(int fd, uint32_t *ip, uint16_t *port) {
+    if (fd < 0 || fd >= NET_TCP_MAX || tcps[fd].state == TCP_CLOSED)
+        return PEAK_EINVAL;
+    if (ip)
+        *ip = local_ip;
+    if (port)
+        *port = tcps[fd].local_port;
+    return 0;
+}
+
+int net_tcp_fd_shutdown(int fd, int how) {
+    if (fd < 0 || fd >= NET_TCP_MAX)
+        return PEAK_EINVAL;
+    if (how == 0) {
+        /* Half-close read: discard RX. */
+        tcps[fd].rx_len = 0;
+        return 0;
+    }
+    if (how == 1 || how == 2) {
+        if (tcps[fd].state == TCP_ESTABLISHED || tcps[fd].state == TCP_CLOSE_WAIT) {
+            if (net_tcp_send_seg_slot(fd, TCP_FIN | TCP_ACK, NULL, 0) != 0)
+                return PEAK_EIO;
+        }
+        if (how == 2)
+            tcps[fd].rx_len = 0;
+        return 0;
+    }
+    return PEAK_EINVAL;
+}
+
 int net_tcp_send(const void *data, size_t len) {
     if (tcp_state != TCP_ESTABLISHED)
         return PEAK_ENOTCONN;

@@ -1,9 +1,14 @@
 #include "netdev.h"
 
 static const struct netdev_ops *g_nd;
+static const struct netdev_ops *g_fallback;
 
 void netdev_register(const struct netdev_ops *ops) {
     g_nd = ops;
+}
+
+void netdev_register_fallback(const struct netdev_ops *ops) {
+    g_fallback = ops;
 }
 
 const struct netdev_ops *netdev_get(void) {
@@ -11,9 +16,14 @@ const struct netdev_ops *netdev_get(void) {
 }
 
 int netdev_init(void) {
-    if (!g_nd || !g_nd->init)
-        return -1;
-    return g_nd->init();
+    if (g_nd && g_nd->init && g_nd->init() == 0)
+        return 0;
+    if (g_fallback && g_fallback->init) {
+        g_nd = g_fallback;
+        g_fallback = 0;
+        return g_nd->init();
+    }
+    return -1;
 }
 
 int netdev_ready(void) {

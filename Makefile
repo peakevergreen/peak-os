@@ -180,7 +180,8 @@ KERNEL_ARCH_SRCS := \
 	kernel/arch/x86_64/irq_lines.c \
 	kernel/platform/pc.c \
 	kernel/drivers/block/ata_bd.c \
-	kernel/drivers/net/e1000_nd.c
+	kernel/drivers/net/e1000_nd.c \
+	kernel/drivers/net/virtio_net.c
 
 KERNEL_ARCH_ASMS := \
 	kernel/arch/x86_64/isr.S \

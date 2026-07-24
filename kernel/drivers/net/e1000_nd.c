@@ -14,3 +14,7 @@ static const struct netdev_ops e1000_ops = {
 void netdev_register_e1000(void) {
     netdev_register(&e1000_ops);
 }
+
+void netdev_register_e1000_fallback(void) {
+    netdev_register_fallback(&e1000_ops);
+}

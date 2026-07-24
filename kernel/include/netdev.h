@@ -22,6 +22,7 @@ struct netdev_ops {
 };
 
 void netdev_register(const struct netdev_ops *ops);
+void netdev_register_fallback(const struct netdev_ops *ops);
 const struct netdev_ops *netdev_get(void);
 int  netdev_init(void);
 int  netdev_ready(void);
@@ -32,6 +33,8 @@ int  netdev_rx_pending(void);
 
 /* Built-in backends */
 void netdev_register_e1000(void);
+void netdev_register_e1000_fallback(void);
+void netdev_register_virtio_net(void);
 void netdev_register_usb_lan(void);
 void netdev_register_genet(void);
 void netdev_register_rp1_eth(void);

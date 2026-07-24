@@ -2,6 +2,7 @@
 #include "gpio.h"
 #include "blockdev.h"
 #include "netdev.h"
+#include "pci.h"
 #include "peak_boot.h"
 #include "util.h"
 
@@ -12,7 +13,9 @@ int  platform_gpio_read(unsigned pin) { (void)pin; return 0; }
 int platform_init(struct peak_bootinfo *info) {
     (void)info;
     blockdev_register_ata();
-    netdev_register_e1000();
+    /* Prefer virtio-net; e1000 if virtio PCI missing or init fails. */
+    netdev_register_virtio_net();
+    netdev_register_e1000_fallback();
     return 0;
 }
 

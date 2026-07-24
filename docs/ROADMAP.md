@@ -27,7 +27,7 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 ### Userspace & networking
 
 - Deeper ring-3 `/bin/sh` ELF workload + per-process fds
-- **virtio-net** (replace e1000) + richer socket API
+- [x] **virtio-net** (preferred over e1000 on QEMU) + richer socket API (`net_tcp_fd_peer` / `local` / `shutdown`)
 
 ### Agent / storage
 
