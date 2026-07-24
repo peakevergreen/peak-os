@@ -77,7 +77,7 @@ void desktop_draw_help(void) {
         return;
     struct framebuffer *fb = fb_get();
     uint32_t mw = desktop_u(420);
-    uint32_t mh = desktop_u(260);
+    uint32_t mh = desktop_u(280);
     uint32_t mx = ((uint32_t)fb->width - mw) / 2;
     uint32_t my = desktop_u(80);
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
@@ -88,6 +88,7 @@ void desktop_draw_help(void) {
         "Peak desktop shortcuts",
         "1-7  open apps",
         "Alt+Tab  switch windows",
+        "Ctrl+W  close focused window",
         "Ctrl+Alt+Esc  leave desktop",
         "S scale  T theme",
         "Files: n new  d delete  r rename  u up",
@@ -96,7 +97,7 @@ void desktop_draw_help(void) {
         "Esc closes menus (not desktop)",
         "Click title buttons: _ [] x",
     };
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 11; i++) {
         fb_draw_string(mx + desktop_u(12), cy, lines[i], i == 0 ? desktop_color_accent() : desktop_color_fg(), desktop_color_surface());
         cy += ch;
     }

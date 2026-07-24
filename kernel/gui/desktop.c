@@ -129,6 +129,12 @@ void desktop_run(void) {
             desktop_alttab_commit_if_open();
         }
 
+        if (key && keyboard_ctrl_down() && (key == 'w' || key == 'W') &&
+            focus >= 0 && wins[focus].open) {
+            desktop_close_win(focus);
+            key = 0;
+        }
+
         if (key == 20) {
             theme_next();
             theme_persist();
