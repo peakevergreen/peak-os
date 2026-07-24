@@ -158,7 +158,7 @@ static const struct help_entry help_table[] = {
     { "hexdump", "text", "hex dump" },
     { "strings", "text", "printable runs" },
     { "echo", "text", "print arguments" },
-    { "edit", "text", "line editor" },
+    { "edit", "text", "buffer editor (:w/:q/:p /search)" },
     { "clear", "sys", "clear screen" },
     { "date", "sys", "uptime clock" },
     { "free", "sys", "memory pages" },

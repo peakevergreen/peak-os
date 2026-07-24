@@ -70,7 +70,7 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 | `diff` `sort` `uniq` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok) |
 | `basename` `dirname` `realpath` | path helpers |
 | `hexdump` `strings` | binary helpers |
-| `echo` `clear` `edit` | misc |
+| `echo` `clear` `edit` | misc (`edit` loads file; `:w` `:q` `:wq` `:p`; `/pat`) |
 
 ## System / meta
 | Command | Notes |
