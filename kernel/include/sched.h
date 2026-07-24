@@ -17,7 +17,7 @@ enum task_state {
     TASK_ZOMBIE,
 };
 
-#define PROC_FD_MAX 16
+#define PROC_FD_MAX 32
 
 struct proc_fd {
     int used;

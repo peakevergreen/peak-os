@@ -72,9 +72,16 @@ void proc_finish_exit(int code) {
         vmm_destroy_address_space(user_cr3);
         user_cr3 = 0;
     }
+    if (!user_return_rip)
+        return;
 #if defined(__aarch64__)
-    (void)user_return_rsp;
-    (void)user_return_rip;
+    __asm__ volatile (
+        "mov sp, %[rsp]\n"
+        "br %[rip]\n"
+        :
+        : [rsp] "r"(user_return_rsp), [rip] "r"(user_return_rip)
+        : "memory"
+    );
 #else
     __asm__ volatile (
         "mov %[rsp], %%rsp\n"
@@ -154,13 +161,27 @@ static uint32_t phdr_vmm_flags(uint32_t p_flags) {
 
 static void enter_user(uint64_t entry, uint64_t stack) {
 #if defined(__aarch64__)
-    serial_write_str("aarch64 userspace deferred\n");
-    (void)entry;
-    (void)stack;
-    user_return_rip = 0;
-    user_return_rsp = 0;
-    user_exited = 1;
-    user_exit_code = -1;
+    /* Drop to EL0t via eret; SYS_exit restores kernel SP/PC via proc_finish_exit. */
+    uint64_t spsr = 0; /* M[3:0]=0 → EL0t */
+    __asm__ volatile (
+        "adr x9, 1f\n"
+        "str x9, %[save_rip]\n"
+        "mov x9, sp\n"
+        "str x9, %[save_rsp]\n"
+        "msr elr_el1, %[entry]\n"
+        "msr spsr_el1, %[spsr]\n"
+        "msr sp_el0, %[usp]\n"
+        "mov x0, xzr\n"
+        "mov x1, xzr\n"
+        "mov x2, xzr\n"
+        "mov x3, xzr\n"
+        "mov x8, xzr\n"
+        "eret\n"
+        "1:\n"
+        : [save_rip] "=m"(user_return_rip), [save_rsp] "=m"(user_return_rsp)
+        : [entry] "r"(entry), [usp] "r"(stack), [spsr] "r"(spsr)
+        : "x0", "x1", "x2", "x3", "x8", "x9", "memory"
+    );
 #else
     uint64_t user_ss = GDT_USER_DATA | 3;
     uint64_t user_cs = GDT_USER_CODE | 3;
