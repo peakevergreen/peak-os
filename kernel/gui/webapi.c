@@ -37,7 +37,9 @@ struct web_store *web_store_for(const char *which) {
 }
 
 int web_store_get(struct web_store *s, const char *key, char *out, size_t cap) {
-    if (!s || !key)
+    if (!s || !key || !key[0] || !out || !cap)
+        return -1;
+    if (strlen(key) >= WEB_STORE_KEY)
         return -1;
     for (int i = 0; i < WEB_STORE_KEYS; i++) {
         if (s->items[i].used && !strcmp(s->items[i].key, key)) {
@@ -49,7 +51,12 @@ int web_store_get(struct web_store *s, const char *key, char *out, size_t cap) {
 }
 
 int web_store_set(struct web_store *s, const char *key, const char *val) {
-    if (!s || !key)
+    if (!s || !key || !key[0])
+        return -1;
+    /* Fail closed on oversized entries — never silently truncate. */
+    if (strlen(key) >= WEB_STORE_KEY)
+        return -1;
+    if (val && strlen(val) >= WEB_STORE_VAL)
         return -1;
     for (int i = 0; i < WEB_STORE_KEYS; i++) {
         if (s->items[i].used && !strcmp(s->items[i].key, key)) {

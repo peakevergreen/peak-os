@@ -8,8 +8,10 @@
  * Browser Web API layer (partial stubs — see kernel/gui/webapi_stubs.c).
  *
  * webapi_install() exposes quarantined stubs only:
- *   fetch            GET-only, same-origin/CORS; rejects non-GET / signal / body
- *   localStorage     in-memory per-tab map; not persistent disk storage
+ *   fetch            GET-only http(s), same-origin/CORS; rejects non-GET / signal /
+ *                    body / other init options; URL must be a non-empty string
+ *   localStorage     in-memory per-tab map; not persistent disk storage; empty /
+ *                    oversized keys and values fail closed (no silent truncate)
  *   sessionStorage   same as localStorage but cleared on tab teardown
  *   AbortController  not installed (unsupported — no silent fake shell)
  *

@@ -4,12 +4,13 @@
 #include "../js/js_internal.h"
 
 #define WEB_STORE_KEYS 16
+#define WEB_STORE_KEY  48 /* includes NUL; max content len is WEB_STORE_KEY - 1 */
 #define WEB_STORE_VAL  256
 #define WEB_ORIGIN_MAX 160
 
 struct web_kv {
     int used;
-    char key[48];
+    char key[WEB_STORE_KEY];
     char val[WEB_STORE_VAL];
 };
 
