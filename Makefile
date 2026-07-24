@@ -356,7 +356,7 @@ $(eval $(call HOST_TEST_RULE,phase7,tests/host/test_phase7.c kernel/vfs_path_uti
 $(eval $(call HOST_TEST_RULE,gfx,tests/host/test_gfx.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,boot,tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c \
 	boot/common/sha256.c boot/common/verify_kernel.c boot/common/peak_conf.c,\
-	$(HOST_CFLAGS) $(HOST_TEST_INC_BOOT)))
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_BOOT)))
 $(eval $(call HOST_TEST_RULE,lan,tests/host/test_lan.c kernel/net/dhcp_util.c kernel/net/http_util.c \
 	kernel/net/arp_util.c boot/common/peak_conf.c boot/common/util.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_BOOT)))
