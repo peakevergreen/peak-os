@@ -30,6 +30,7 @@ extern int g_web_private_tab;
 struct web_store *web_store_for(const char *which);
 int web_store_get(struct web_store *s, const char *key, char *out, size_t cap);
 int web_store_set(struct web_store *s, const char *key, const char *val);
+int web_store_remove(struct web_store *s, const char *key);
 
 void webapi_install_fn(struct js_runtime *rt, struct js_value *obj, const char *name,
                        js_native_fn fn, void *ud);
