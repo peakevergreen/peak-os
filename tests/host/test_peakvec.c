@@ -151,6 +151,23 @@ static void test_upsert_refreshes_norm(void) {
     expect(hits[0].score_milli < 900, "refreshed vector weakens old query");
 }
 
+static void test_dense_pack_after_deletes(void) {
+    /* Swap-remove must keep [0,count) queryable without holes. */
+    peakvec_init();
+    upsert_text("a", "alpha vector memory note");
+    upsert_text("b", "beta vector memory note");
+    upsert_text("c", "gamma vector memory note");
+    expect(peakvec_delete("agent", "b") == 0, "delete middle");
+    expect(peakvec_count("agent") == 2, "count after middle delete");
+
+    int16_t q[PEAKVEC_DIM];
+    peakvec_embed_text("gamma vector memory note", q);
+    struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
+    int n = peakvec_query("agent", q, 2, hits);
+    expect(n == 2, "dense pack returns both live");
+    expect(!strcmp(hits[0].key, "c"), "c still queryable after pack");
+}
+
 int main(void) {
     test_embed_similarity();
     test_basic_query();
@@ -158,6 +175,7 @@ int main(void) {
     test_early_out_stable();
     test_delete_and_zero_query();
     test_upsert_refreshes_norm();
+    test_dense_pack_after_deletes();
 
     if (fails) {
         fprintf(stderr, "%d peakvec test(s) failed\n", fails);

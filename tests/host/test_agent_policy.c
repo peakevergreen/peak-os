@@ -172,6 +172,38 @@ static void test_planner_audit_and_help(void) {
     expect(!strcmp(summary, "help"), "help intent summary");
 }
 
+static void test_planner_audit_true_tail(void) {
+    /* Oversized audit: planner must show the true file tail, not the head. */
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+
+    char pad[180];
+    memset(pad, 'H', sizeof(pad) - 1);
+    pad[sizeof(pad) - 1] = '\0';
+    for (int i = 0; i < 30; i++) {
+        char line[220];
+        snprintf(line, sizeof(line), "head-%02d-%s", i, pad);
+        agent_audit_append(line);
+    }
+    agent_audit_append("TRUE-TAIL-MARKER-XYZ");
+    expect(audit_len() > 1024, "audit larger than read buffer");
+
+    char summary[128];
+    agent_plan_goal("show audit", summary, sizeof(summary));
+    expect(!strcmp(summary, "showed audit"), "true-tail audit summary");
+
+    /* Append path itself kept the marker through truncation. */
+    char *full = (char *)malloc(8192);
+    expect(full != NULL, "alloc for true-tail check");
+    if (!full)
+        return;
+    size_t n = 0;
+    expect(vfs_read_file(AGENT_AUDIT_PATH, full, 8191, &n) == 0, "read audit after plan");
+    full[n < 8191 ? n : 8191] = '\0';
+    expect(strstr(full, "TRUE-TAIL-MARKER-XYZ") != NULL, "marker still in audit after plan");
+    free(full);
+}
+
 int main(void) {
     test_path_policy();
     test_tool_policy_reload();
@@ -179,6 +211,7 @@ int main(void) {
     test_audit_truncate_keeps_tail();
     test_deny_audit_write();
     test_planner_audit_and_help();
+    test_planner_audit_true_tail();
 
     if (fails) {
         fprintf(stderr, "%d agent policy test(s) failed\n", fails);

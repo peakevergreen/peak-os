@@ -35,10 +35,14 @@ Pages: **1 Overview** · **2 Tasks** · **3 Network**. **R** resets history.
 | Compose µs | Last compose duration (approx.) |
 | Present µs | Last present / blit duration (approx.) |
 | Surf pressure | Window-surface memory budget (0–100%) |
+| PeakVec µs | Last PeakVec query duration (approx.) |
+| Agent audit µs | Last agent audit append duration (approx.) |
 
 Sampling runs in the background (`sysmon_poll`). Desktop path notes:
 `sysmon_note_compose_us` / `sysmon_note_present_us` / `sysmon_note_surf_pressure`
-from the compositor. Stress checklist: [scripts/gui-stress-checklist.md](../scripts/gui-stress-checklist.md).
+from the compositor. Agent / PeakVec notes:
+`sysmon_note_peakvec_us` / `sysmon_note_agent_audit_us` (via `sysmon_now_us`).
+Stress checklist: [scripts/gui-stress-checklist.md](../scripts/gui-stress-checklist.md).
 
 ## Concurrency notes
 

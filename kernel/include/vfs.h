@@ -50,6 +50,7 @@ int vfs_write_file(const char *path, const void *data, size_t len);
 int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len);
 /* Bind an existing blobstore object as the file body (large-file prep). */
 int vfs_bind_blob(const char *path, uint32_t blob_id, size_t size);
+/* Ranged I/O for audit tails and blob-backed large files. */
 int vfs_read_at(const char *path, size_t off, void *buf, size_t len, size_t *out_len);
 int vfs_write_at(const char *path, size_t off, const void *buf, size_t len);
 int vfs_list(const char *path, char *out, size_t out_len);

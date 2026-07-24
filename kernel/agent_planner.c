@@ -245,15 +245,27 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     }
 
     if (intent == INTENT_AUDIT) {
+        /* True tail: read last ~400 bytes even when the log exceeds the buffer. */
         char audit[AGENT_READ_CONTENT_MAX];
         size_t n = 0;
-        if (vfs_read_file(AGENT_AUDIT_PATH, audit, sizeof(audit) - 1, &n) == 0 && n) {
-            audit[n] = '\0';
-            agent_tool_console_print("[agent] audit tail:");
-            size_t start = n > 400 ? n - 400 : 0;
-            agent_tool_console_print(audit + start);
-        } else {
+        struct vfs_stat st;
+        size_t file_sz = 0;
+        if (vfs_stat(AGENT_AUDIT_PATH, &st) == 0 && st.type == VFS_FILE)
+            file_sz = st.size;
+        size_t want = 400;
+        if (want + 1 > sizeof(audit))
+            want = sizeof(audit) - 1;
+        if (file_sz == 0) {
             agent_tool_console_print("[agent] audit empty");
+        } else {
+            size_t off = file_sz > want ? file_sz - want : 0;
+            if (vfs_read_at(AGENT_AUDIT_PATH, off, audit, want, &n) == 0 && n) {
+                audit[n] = '\0';
+                agent_tool_console_print("[agent] audit tail:");
+                agent_tool_console_print(audit);
+            } else {
+                agent_tool_console_print("[agent] audit empty");
+            }
         }
         TOOL_NOTE("console.print");
         set_summary(summary, summary_cap, "showed audit");

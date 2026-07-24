@@ -138,16 +138,26 @@ int vfs_write_file(const char *path, const void *data, size_t len) {
     return 0;
 }
 
-int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len) {
+int vfs_read_at(const char *path, size_t off, void *buf, size_t buf_len, size_t *out_len) {
     struct host_file *f = host_find(path);
     if (!f)
         return PEAK_ENOENT;
-    size_t n = f->len < buf_len ? f->len : buf_len;
+    if (off >= f->len) {
+        if (out_len)
+            *out_len = 0;
+        return 0;
+    }
+    size_t avail = f->len - off;
+    size_t n = avail < buf_len ? avail : buf_len;
     if (n && buf)
-        memcpy(buf, f->data, n);
+        memcpy(buf, f->data + off, n);
     if (out_len)
         *out_len = n;
     return 0;
+}
+
+int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len) {
+    return vfs_read_at(path, 0, buf, buf_len, out_len);
 }
 
 int vfs_stat(const char *path, struct vfs_stat *st) {
@@ -233,4 +243,16 @@ int peakvec_query(const char *ns, const int16_t *query, int top_k, struct peakve
     (void)top_k;
     (void)out;
     return 0;
+}
+
+uint32_t sysmon_now_us(void) {
+    return 0;
+}
+
+void sysmon_note_agent_audit_us(uint32_t us) {
+    (void)us;
+}
+
+void sysmon_note_peakvec_us(uint32_t us) {
+    (void)us;
 }

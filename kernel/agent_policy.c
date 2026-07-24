@@ -1,7 +1,7 @@
 #include "agent_internal.h"
-#include "heap.h"
 #include "vfs.h"
 #include "util.h"
+#include "sysmon.h"
 
 static char allow_paths[AGENT_ALLOW_PATHS_MAX][AGENT_ALLOW_PATH_LEN];
 static int allow_path_count;
@@ -152,9 +152,12 @@ void agent_audit_append(const char *line) {
     if (!add)
         return;
 
+    uint32_t t0 = sysmon_now_us();
+
     /*
      * Working set is 2 KiB. Always retain the *tail* of the on-disk log so a
      * truncated read of an oversized file cannot rewrite and wipe recent events.
+     * Oversized files: read only the keep-tail via vfs_read_at (no full kmalloc).
      */
     struct vfs_stat st;
     size_t file_sz = 0;
@@ -168,25 +171,13 @@ void agent_audit_append(const char *line) {
             n = 0;
         existing[n] = '\0';
     } else {
-        char *full = (char *)kmalloc(file_sz + 1);
-        if (!full) {
-            existing[0] = '\0';
-            n = 0;
-        } else {
-            size_t got = 0;
-            if (vfs_read_file(AGENT_AUDIT_PATH, full, file_sz, &got) != 0)
-                got = 0;
-            size_t keep = sizeof(existing) / 2;
-            if (got > keep) {
-                memcpy(existing, full + (got - keep), keep);
-                n = keep;
-            } else {
-                memcpy(existing, full, got);
-                n = got;
-            }
-            existing[n] = '\0';
-            kfree(full);
-        }
+        size_t keep = sizeof(existing) / 2;
+        size_t off = file_sz > keep ? file_sz - keep : 0;
+        size_t got = 0;
+        if (vfs_read_at(AGENT_AUDIT_PATH, off, existing, keep, &got) != 0)
+            got = 0;
+        n = got;
+        existing[n] = '\0';
     }
 
     if (n + add + 2 >= sizeof(existing)) {
@@ -204,6 +195,7 @@ void agent_audit_append(const char *line) {
         existing[n] = '\0';
         vfs_write_file(AGENT_AUDIT_PATH, existing, n);
     }
+    sysmon_note_agent_audit_us(sysmon_now_us() - t0);
 }
 
 void agent_audit_event(const char *op, const char *target, const char *decision) {

@@ -4,6 +4,7 @@
 #include "heap.h"
 #include "util.h"
 #include "cap.h"
+#include "sysmon.h"
 
 #define PEAKVEC_MAGIC "PEAKVEC1"
 #define PEAKVEC_MAX_ENTRIES 4096u
@@ -40,6 +41,8 @@ static uint32_t count;
 static uint32_t blob_id;
 static int use_blob;
 static int ready;
+
+static uint64_t isqrt_u64(uint64_t x);
 
 static void embed_add(int32_t acc[PEAKVEC_DIM], uint32_t h, int weight) {
     uint32_t idx = h % PEAKVEC_DIM;
@@ -87,7 +90,7 @@ void peakvec_embed_text(const char *text, int16_t out[PEAKVEC_DIM]) {
         if (q > p)
             p = q - 1;
     }
-    /* L2 normalize into int16 range. */
+    /* L2 normalize into int16 range (binary isqrt — same helper as query). */
     int64_t sumsq = 0;
     for (int i = 0; i < PEAKVEC_DIM; i++)
         sumsq += (int64_t)acc[i] * acc[i];
@@ -95,11 +98,7 @@ void peakvec_embed_text(const char *text, int16_t out[PEAKVEC_DIM]) {
         memset(out, 0, PEAKVEC_DIM * sizeof(int16_t));
         return;
     }
-    /* scale so max component fits int16; approximate sqrt via integer */
-    uint64_t s = (uint64_t)sumsq;
-    uint64_t root = 1;
-    while (root * root < s)
-        root++;
+    uint64_t root = isqrt_u64((uint64_t)sumsq);
     if (root == 0)
         root = 1;
     for (int i = 0; i < PEAKVEC_DIM; i++) {
@@ -185,17 +184,12 @@ static int32_t cosine_milli_roots(const int16_t *query, uint64_t qroot,
     int64_t dot = vec_dot_i16(query, vec);
     if (early_out) {
         /* score = (dot * 1000) / denom; need score > worst to enter top-k. */
-        if (worst >= 0 && dot <= 0) {
+        if (dot <= 0 && worst >= 0) {
             if (skipped)
                 *skipped = 1;
             return 0;
         }
         if (worst > 0 && (dot * 1000) <= (int64_t)worst * denom) {
-            if (skipped)
-                *skipped = 1;
-            return 0;
-        }
-        if (worst == 0 && dot <= 0) {
             if (skipped)
                 *skipped = 1;
             return 0;
@@ -499,6 +493,7 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
         return -1;
     if (topk > PEAKVEC_TOPK_MAX)
         topk = PEAKVEC_TOPK_MAX;
+    uint32_t t0 = sysmon_now_us();
     for (int i = 0; i < topk; i++) {
         hits[i].key[0] = '\0';
         hits[i].meta[0] = '\0';
@@ -509,9 +504,8 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
     uint64_t qroot = isqrt_u64((uint64_t)qnorm);
     int found = 0;
     int32_t worst = -1000000;
+    /* Dense packing: swap-remove keeps [0, count) live — no in_use scan. */
     for (uint32_t i = 0; i < count; i++) {
-        if (!entries[i].in_use)
-            continue;
         uint64_t vroot = entry_nroot ? entry_nroot[i] : 0;
         int early = (found >= topk);
         int skipped = 0;
@@ -538,6 +532,7 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
             found++;
         worst = hits[topk - 1].score_milli;
     }
+    sysmon_note_peakvec_us(sysmon_now_us() - t0);
     return found;
 }
 
