@@ -1,4 +1,5 @@
 #include "tls_internal.h"
+#include "tls_session.h"
 #include "net.h"
 #include "serial.h"
 #include "timer.h"
@@ -571,7 +572,6 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
 
     {
         uint8_t type;
-        /* Reuse hs_reasm: reassembly finished; tickets are discarded. */
         size_t n = 0;
         start = timer_ticks();
         int got_ccs = 0;
@@ -583,8 +583,21 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                     tls_set_err_code(TLS_E_ALERT, "Server alert after Finished (bad keys?)");
                     goto fail;
                 }
-                if (type == TLS_CONTENT_HS)
-                    continue; /* NewSessionTicket etc. */
+                if (type == TLS_CONTENT_HS) {
+                    /* NewSessionTicket (type 4): lifetime(4) + ticket. */
+                    if (n >= 10 && hs_reasm[0] == 4) {
+                        uint32_t hslen = tls_rd24(hs_reasm + 1);
+                        if (4 + hslen <= n && hslen >= 6) {
+                            uint16_t tlen = tls_rd16(hs_reasm + 8);
+                            if (10 + tlen <= 4 + hslen && tlen > 0 &&
+                                tlen <= TLS_SESSION_TICKET_MAX) {
+                                struct tls_session_meta meta = {.cipher = cs, .tls13 = 0};
+                                tls_session_put(sni_host, hs_reasm + 10, tlen, &meta);
+                            }
+                        }
+                    }
+                    continue;
+                }
                 if (type == TLS_CONTENT_CCS) {
                     got_ccs = 1;
                     continue;

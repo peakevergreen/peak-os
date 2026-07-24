@@ -98,7 +98,7 @@ Root DER/PEM files live under `certs/webpki/`; regenerate with
 | SKE / CertVerify | ECDSA-P256, RSA-PSS/PKCS1 | ECDSA-P256, RSA-PSS-SHA256 |
 | Finished check | PRF verify_data | HMAC-finished |
 | GREASE ClientHello | yes | yes |
-| Session tickets / PSK | — | — (later) |
+| Session tickets / PSK | cache+offer (1.2 NST) | — (PSK later) |
 | ECH | — | — (later) |
 | HTTP/2 ALPN `h2` | — | — (later) |
 

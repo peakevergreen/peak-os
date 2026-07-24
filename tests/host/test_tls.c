@@ -7,11 +7,13 @@
 #include "random.h"
 #include "crypto.h"
 #include "tls.h"
+#include "tls_session.h"
 #include "x509.h"
 #include "../../kernel/include/tls_util.h"
 #include "../../kernel/net/tls_internal.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 void tls_host_reset_trust(void);
@@ -570,12 +572,97 @@ static void test_clienthello_goldens(void) {
     expect(ch_find_ext(ch, n, 0x0000, &ed, &el), "has sni");
     expect(ch_find_ext(ch, n, 0x000a, &ed, &el), "has groups");
     expect(el == 8 && ed[0] == 0x00 && ed[1] == 0x06, "groups len with grease");
+    expect(ch_find_ext(ch, n, 0x0023, &ed, &el), "has session_ticket");
+    expect(el == 0, "empty ticket without cache");
 
     /* Determinism under fixed timer + seeded DRBG: same structure length. */
     size_t n2 = 0;
     uint8_t ch2[768];
     expect(tls_build_client_hello(ch2, sizeof(ch2), "example.com", &n2) == 0, "ch build 2");
     expect(n2 == n, "ch length stable");
+}
+
+static void test_session_resume_cache(void) {
+    tls_session_clear();
+    uint8_t t1[16], t2[16], t3[16], t4[16], t5[16];
+    memset(t1, 1, sizeof(t1));
+    memset(t2, 2, sizeof(t2));
+    memset(t3, 3, sizeof(t3));
+    memset(t4, 4, sizeof(t4));
+    memset(t5, 5, sizeof(t5));
+    struct tls_session_meta m = {.cipher = 0xC02F, .tls13 = 0};
+    expect(tls_session_put("a.example", t1, sizeof(t1), &m) == 0, "put a");
+    expect(tls_session_put("b.example", t2, sizeof(t2), &m) == 0, "put b");
+    expect(tls_session_put("c.example", t3, sizeof(t3), &m) == 0, "put c");
+    expect(tls_session_put("d.example", t4, sizeof(t4), &m) == 0, "put d");
+    expect(tls_session_slot_count() == 4, "full slots");
+    expect(tls_session_put("e.example", t5, sizeof(t5), &m) == 0, "put e evicts");
+    expect(tls_session_slot_count() == 4, "still 4");
+    uint8_t out[32];
+    size_t olen = sizeof(out);
+    expect(tls_session_get("a.example", out, &olen, NULL) == 0, "a evicted");
+    olen = sizeof(out);
+    expect(tls_session_get("e.example", out, &olen, NULL) == 1, "e present");
+    expect(olen == 16 && out[0] == 5, "e ticket bytes");
+
+    /* Resume roundtrip: cached ticket appears in ClientHello. */
+    tls_session_clear();
+    expect(tls_session_put("example.com", t1, sizeof(t1), &m) == 0, "put example");
+    uint8_t seed[64];
+    memset(seed, 0xB7, sizeof(seed));
+    random_absorb_trusted(seed, sizeof(seed));
+    uint8_t ch[768];
+    size_t n = 0;
+    expect(tls_build_client_hello(ch, sizeof(ch), "example.com", &n) == 0, "ch resume");
+    const uint8_t *ed;
+    uint16_t el;
+    expect(ch_find_ext(ch, n, 0x0023, &ed, &el), "ticket ext");
+    expect(el == 16 && !memcmp(ed, t1, 16), "ticket body matches cache");
+    tls_session_clear();
+}
+
+/* Wycheproof-style AES-GCM: roundtrip + fail-closed on tag flip (empty AAD). */
+static void test_wycheproof_aead(void) {
+    static const uint8_t key[16] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+    static const uint8_t iv[12] = {
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb};
+    static const uint8_t pt[16] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+    uint8_t ct[16], tag[16], plain[16];
+    expect(aes128_gcm_encrypt(key, iv, NULL, 0, pt, 16, ct, tag) == 0, "gcm enc");
+    expect(aes128_gcm_decrypt(key, iv, NULL, 0, ct, 16, tag, plain) == 0, "gcm dec");
+    expect(!memcmp(plain, pt, 16), "gcm pt");
+    tag[0] ^= 1;
+    expect(aes128_gcm_decrypt(key, iv, NULL, 0, ct, 16, tag, plain) != 0, "gcm bad tag");
+    /* Empty plaintext vector */
+    expect(aes128_gcm_encrypt(key, iv, NULL, 0, pt, 0, ct, tag) == 0, "gcm empty enc");
+    expect(aes128_gcm_decrypt(key, iv, NULL, 0, ct, 0, tag, plain) == 0, "gcm empty dec");
+    tag[3] ^= 0xff;
+    expect(aes128_gcm_decrypt(key, iv, NULL, 0, ct, 0, tag, plain) != 0, "gcm empty bad tag");
+}
+
+static int fuzz_tls(unsigned seed, int iters) {
+    unsigned s = seed ? seed : 1u;
+    for (int i = 0; i < iters; i++) {
+        s = s * 1664525u + 1013904223u;
+        uint8_t buf[512];
+        size_t len = (s % 480) + 1;
+        for (size_t j = 0; j < len; j++) {
+            s = s * 1664525u + 1013904223u;
+            buf[j] = (uint8_t)(s >> 24);
+        }
+        struct x509_cert c;
+        (void)x509_parse_der(buf, len, &c);
+        if ((i & 7) == 0) {
+            uint8_t ch[768];
+            size_t n = 0;
+            char sni[16];
+            snprintf(sni, sizeof(sni), "f%u.test", s & 0xffff);
+            (void)tls_build_client_hello(ch, sizeof(ch), sni, &n);
+        }
+    }
+    return 0;
 }
 
 static void test_crypto_hardening(void) {
@@ -666,7 +753,22 @@ static void test_webpki_path(void) {
     settings_set_tls_tofu(1); /* restore host default for other tests */
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc >= 2 && !strcmp(argv[1], "--fuzz")) {
+        unsigned seed = 1;
+        int iters = 200;
+        if (argc >= 3)
+            iters = atoi(argv[2]);
+        if (argc >= 5 && !strcmp(argv[3], "--seed"))
+            seed = (unsigned)atoi(argv[4]);
+        uint8_t seedb[64];
+        memset(seedb, (int)(seed & 0xff), sizeof(seedb));
+        random_absorb_trusted(seedb, sizeof(seedb));
+        fuzz_tls(seed, iters);
+        printf("test_tls fuzz: ok (%d iters)\n", iters);
+        return 0;
+    }
+
     settings_set_tls_tofu(1);
     test_util_helpers();
     test_pin_and_tofu_fail_closed();
@@ -676,6 +778,8 @@ int main(void) {
     test_hostname_and_pin_extras();
     test_ske_sig_verify();
     test_clienthello_goldens();
+    test_session_resume_cache();
+    test_wycheproof_aead();
     test_crypto_hardening();
     test_x509_parser();
     test_webpki_path();
