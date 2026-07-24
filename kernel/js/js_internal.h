@@ -46,6 +46,7 @@ struct js_object {
     int marked;
     int is_array;
     int is_func;
+    int is_async; /* async function: RET wraps in Promise.resolve */
     int is_native;
     int is_dom;
     uint32_t arr_len;
@@ -83,6 +84,7 @@ enum js_op {
     OP_SET_IDX,
     OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_MOD,
     OP_NEG, OP_NOT, OP_TYPEOF,
+    OP_AWAIT, /* unwrap Promise.resolve / thenables with __v; else identity */
     OP_EQ, OP_NE, OP_LT, OP_LE, OP_GT, OP_GE,
     OP_AND, OP_OR,
     OP_JMP,         /* i16 */
@@ -93,7 +95,7 @@ enum js_op {
     OP_NEW_OBJ,
     OP_NEW_ARR,
     OP_ARR_PUSH,
-    OP_MAKE_FUNC,   /* u16 code_off, u8 arity, u8 locals */
+    OP_MAKE_FUNC,   /* u16 code_off, u8 arity, u8 locals, u8 flags (bit0=async) */
     OP_THIS,
     OP_THROW,
     OP_TRY_PUSH,    /* i16 catch */
@@ -123,6 +125,7 @@ struct js_frame {
     struct js_object *env;
     struct js_value this_v;
     int catch_ip; /* -1 none */
+    int is_async;
 };
 
 struct js_timer {
@@ -163,10 +166,18 @@ struct js_runtime {
     struct js_value micro[32];
     int micro_n;
     int aborted;
+    /* Named module exports for `import {x} from "name"` (max 8). */
+    struct {
+        char name[48];
+        struct js_value exports;
+        int used;
+    } modules[8];
 };
 
 /* compile */
 int js_compile(struct js_runtime *rt, const char *src, const char *filename);
+int js_compile_ex(struct js_runtime *rt, const char *src, const char *filename,
+                  int module_mode);
 
 /* vm */
 int js_vm_run(struct js_runtime *rt, uint32_t entry_ip);
@@ -182,6 +193,7 @@ int js_obj_get(struct js_runtime *rt, struct js_object *o, const char *key,
                struct js_value *out);
 void js_gc(struct js_runtime *rt);
 void js_install_builtins(struct js_runtime *rt);
+void js_drain_microtasks(struct js_runtime *rt);
 
 static inline struct js_value js_undef(void) {
     struct js_value v;

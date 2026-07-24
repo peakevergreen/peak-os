@@ -21,7 +21,7 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 ### Browser / JS
 
 - Full **ring-3** script isolation (validated DOM/net handles)
-- ES modules / `async`/`await` depth + more public-site fixtures
+- [x] ES modules / `async`/`await` depth + more public-site fixtures
 
 ### Userspace & networking
 

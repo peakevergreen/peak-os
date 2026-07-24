@@ -70,6 +70,9 @@ static struct js_string *typeof_cached(struct js_runtime *rt, unsigned idx, cons
     return s;
 }
 
+static int nat_promise_then(struct js_runtime *rt, int argc, void *argv, void *ret,
+                            void *ud);
+
 static int do_call(struct js_runtime *rt, int argc) {
     if (rt->sp < (uint32_t)argc + 1) {
         snprintf(rt->err, sizeof(rt->err), "call stack");
@@ -100,6 +103,7 @@ static int do_call(struct js_runtime *rt, int argc) {
     fr->ip = fn->code_off;
     fr->catch_ip = -1;
     fr->this_v = js_undef();
+    fr->is_async = fn->is_async;
     /* Env allocated lazily on MAKE_FUNC — avoids per-call object churn. */
     fr->env = NULL;
     fr->local_count = fn->local_count;
@@ -520,6 +524,29 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
                 return -1;
             break;
         }
+        case OP_AWAIT: {
+            fr->ip = ip;
+            struct js_value a;
+            if (pop(rt, &a))
+                return -1;
+            /* Settled Promise.resolve shape: object with __v (+ optional then). */
+            if (a.type == JT_OBJ && a.u.o) {
+                struct js_value thenv, vv;
+                int has_then = js_obj_get(rt, a.u.o, "then", &thenv) == 0 &&
+                               js_val_is_function(&thenv);
+                int has_v = js_obj_get(rt, a.u.o, "__v", &vv) == 0;
+                if (has_then && has_v) {
+                    js_drain_microtasks(rt);
+                    a = vv;
+                } else if (has_then && !has_v) {
+                    snprintf(rt->err, sizeof(rt->err), "await: unsettled promise");
+                    return -1;
+                }
+            }
+            if (push(rt, a))
+                return -1;
+            break;
+        }
         case OP_EQ: case OP_NE: case OP_LT: case OP_LE: case OP_GT: case OP_GE: {
             fr->ip = ip;
             struct js_value b, a;
@@ -587,9 +614,29 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             struct js_value ret = js_undef();
             if (rt->sp > fr->bp + fr->local_count)
                 pop(rt, &ret);
+            int was_async = fr->is_async;
             /* pop locals */
             rt->sp = fr->bp;
             rt->fp--;
+            if (was_async) {
+                /* Wrap return in Promise.resolve(ret). */
+                struct js_value obj;
+                if (js_val_new_object(rt, &obj) != 0)
+                    return -1;
+                js_val_set_prop(rt, &obj, "__v", &ret);
+                struct js_object *th = js_obj_new(rt, 0);
+                if (th) {
+                    th->is_native = 1;
+                    th->is_func = 1;
+                    th->native = nat_promise_then;
+                    th->userdata = obj.u.o;
+                    struct js_value tv;
+                    tv.type = JT_NATIVE;
+                    tv.u.o = th;
+                    js_val_set_prop(rt, &obj, "then", &tv);
+                }
+                ret = obj;
+            }
             if (push(rt, ret))
                 return -1;
             if (rt->fp <= stop_at)
@@ -640,11 +687,13 @@ int js_vm_run(struct js_runtime *rt, uint32_t entry_ip) {
             ip += 2;
             uint8_t arity = rt->code[ip++];
             uint8_t locals = rt->code[ip++];
+            uint8_t flags = rt->code[ip++];
             fr->ip = ip;
             struct js_object *o = js_obj_new(rt, 0);
             if (!o)
                 return -1;
             o->is_func = 1;
+            o->is_async = (flags & 1) ? 1 : 0;
             o->code_off = off;
             o->arity = arity;
             o->local_count = locals;

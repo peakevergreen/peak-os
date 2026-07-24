@@ -60,6 +60,31 @@ static int scope_find(const char *name, int *depth_out) {
 static int parse_stmt(struct js_compiler *c);
 static int parse_expr(struct js_compiler *c);
 
+static int emit_make_func(struct js_compiler *c, uint32_t body, uint8_t arity,
+                          uint8_t locals, int is_async) {
+    if (js_emit_op(c, OP_MAKE_FUNC) || js_emit_u16(c, (uint16_t)body) ||
+        js_emit_u8(c, arity) || js_emit_u8(c, locals) ||
+        js_emit_u8(c, is_async ? 1 : 0))
+        return -1;
+    return 0;
+}
+
+static int export_bind(struct js_compiler *c, const char *name) {
+    if (!c->module_mode)
+        return 0;
+    int eid = js_intern_str(c, "exports");
+    int nid = js_intern_str(c, name);
+    if (eid < 0 || nid < 0)
+        return -1;
+    if (js_emit_op(c, OP_GET_GLOBAL) || js_emit_u16(c, (uint16_t)eid))
+        return -1;
+    if (js_emit_op(c, OP_GET_GLOBAL) || js_emit_u16(c, (uint16_t)nid))
+        return -1;
+    if (js_emit_op(c, OP_SET_PROP) || js_emit_u16(c, (uint16_t)nid))
+        return -1;
+    return js_emit_op(c, OP_POP);
+}
+
 /* Compact lexer checkpoint for assignment / arrow lookahead (avoids 256B memcpy). */
 struct lex_save {
     const char *p;
@@ -96,8 +121,14 @@ static int expect(struct js_compiler *c, enum js_tok t, const char *msg) {
 
 static int parse_primary(struct js_compiler *c) {
     if (c->tok == T_ASYNC) {
-        /* async function / async arrow — deferred with full ES modules. */
+        js_lex_next(c);
+        c->pending_async = 1;
+        if (c->tok == T_FUNCTION)
+            return parse_primary(c); /* fall into function with pending_async */
+        if (c->tok == T_LPAREN)
+            return parse_primary(c); /* arrow () => with pending_async */
         js_lex_error(c, "async unsupported");
+        c->pending_async = 0;
         return -1;
     }
     if (c->tok == T_NUM) {
@@ -193,13 +224,12 @@ static int parse_primary(struct js_compiler *c) {
                 scope_pop();
                 uint32_t after = js_emit_here(c);
                 js_emit_patch_i16(c, jmp_over + 1, (int16_t)(after - (jmp_over + 3)));
-                js_emit_op(c, OP_MAKE_FUNC);
-                js_emit_u16(c, (uint16_t)body);
-                js_emit_u8(c, 0);
-                js_emit_u8(c, (uint8_t)locals);
-                return 0;
+                int asy = c->pending_async;
+                c->pending_async = 0;
+                return emit_make_func(c, body, 0, (uint8_t)locals, asy);
             }
             js_lex_error(c, "empty ()");
+            c->pending_async = 0;
             return -1;
         }
         /* look ahead for arrow params: ident , ... ) => */
@@ -246,15 +276,14 @@ static int parse_primary(struct js_compiler *c) {
                     scope_pop();
                     uint32_t after = js_emit_here(c);
                     js_emit_patch_i16(c, jmp_over + 1, (int16_t)(after - (jmp_over + 3)));
-                    js_emit_op(c, OP_MAKE_FUNC);
-                    js_emit_u16(c, (uint16_t)body);
-                    js_emit_u8(c, (uint8_t)np);
-                    js_emit_u8(c, (uint8_t)locals);
-                    return 0;
+                    int asy = c->pending_async;
+                    c->pending_async = 0;
+                    return emit_make_func(c, body, (uint8_t)np, (uint8_t)locals, asy);
                 }
             }
             /* restore and parse as grouped expr */
             lex_restore(c, &save);
+            c->pending_async = 0;
         }
         if (parse_expr(c))
             return -1;
@@ -340,10 +369,10 @@ static int parse_primary(struct js_compiler *c) {
         scope_pop();
         uint32_t after = js_emit_here(c);
         js_emit_patch_i16(c, jmp_over + 1, (int16_t)(after - (jmp_over + 3)));
-        js_emit_op(c, OP_MAKE_FUNC);
-        js_emit_u16(c, (uint16_t)body);
-        js_emit_u8(c, (uint8_t)np);
-        js_emit_u8(c, (uint8_t)locals);
+        int asy = c->pending_async;
+        c->pending_async = 0;
+        if (emit_make_func(c, body, (uint8_t)np, (uint8_t)locals, asy))
+            return -1;
         if (fname[0]) {
             js_emit_op(c, OP_DUP);
             int id = js_intern_str(c, fname);
@@ -418,9 +447,10 @@ static int parse_unary(struct js_compiler *c) {
         return js_emit_op(c, OP_TYPEOF);
     }
     if (c->tok == T_AWAIT) {
-        /* No async context / Promise runtime — reject rather than strip await. */
-        js_lex_error(c, "await unsupported");
-        return -1;
+        js_lex_next(c);
+        if (parse_unary(c))
+            return -1;
+        return js_emit_op(c, OP_AWAIT);
     }
     return parse_postfix(c);
 }
@@ -632,7 +662,19 @@ static int parse_stmt(struct js_compiler *c) {
         return 0;
     }
     if (c->tok == T_ASYNC) {
+        js_lex_next(c);
+        c->pending_async = 1;
+        if (c->tok == T_FUNCTION) {
+            /* async function as statement: parse as expression stmt */
+            if (parse_expr(c))
+                return -1;
+            js_emit_op(c, OP_POP);
+            if (c->tok == T_SEMI)
+                js_lex_next(c);
+            return 0;
+        }
         js_lex_error(c, "async unsupported");
+        c->pending_async = 0;
         return -1;
     }
     if (c->tok == T_LBRACE)
@@ -848,6 +890,119 @@ static int parse_stmt(struct js_compiler *c) {
         js_emit_patch_i16(c, jmp_end + 1, (int16_t)(end - (jmp_end + 3)));
         return 0;
     }
+    if (c->tok == T_IMPORT) {
+        /* import { name } from "mod"; */
+        js_lex_next(c);
+        if (expect(c, T_LBRACE, "'{'"))
+            return -1;
+        if (c->tok != T_IDENT) {
+            js_lex_error(c, "import name");
+            return -1;
+        }
+        char iname[48];
+        snprintf(iname, sizeof(iname), "%s", c->text);
+        js_lex_next(c);
+        if (expect(c, T_RBRACE, "'}'") || expect(c, T_FROM, "'from'"))
+            return -1;
+        if (c->tok != T_STR) {
+            js_lex_error(c, "module name");
+            return -1;
+        }
+        char mname[48];
+        snprintf(mname, sizeof(mname), "%s", c->text);
+        js_lex_next(c);
+        if (c->tok == T_SEMI)
+            js_lex_next(c);
+        /* Resolve from rt->modules at runtime via OP_GET_GLOBAL __import hack:
+         * push module exports by scanning — use dedicated OP or native.
+         * Emit: get bound export as global binding. */
+        int found = -1;
+        if (c->rt) {
+            for (int i = 0; i < 8; i++) {
+                if (c->rt->modules[i].used &&
+                    !strcmp(c->rt->modules[i].name, mname)) {
+                    found = i;
+                    break;
+                }
+            }
+        }
+        if (found < 0) {
+            js_lex_error(c, "module not found");
+            return -1;
+        }
+        /* At compile time bind: load export value onto stack via a temp global
+         * set before eval — inject as PUSH of property from stored exports.
+         * Use runtime helper: set global name from module exports. */
+        {
+            struct js_value exp = c->rt->modules[found].exports;
+            struct js_value v = js_undef();
+            if (exp.type == JT_OBJ && exp.u.o)
+                js_obj_get(c->rt, exp.u.o, iname, &v);
+            if (js_obj_set(c->rt, c->rt->global, iname, v) != 0) {
+                js_lex_error(c, "import bind");
+                return -1;
+            }
+        }
+        return 0;
+    }
+    if (c->tok == T_EXPORT) {
+        if (!c->module_mode) {
+            js_lex_error(c, "export outside module");
+            return -1;
+        }
+        js_lex_next(c);
+        if (c->tok == T_ASYNC) {
+            js_lex_next(c);
+            c->pending_async = 1;
+        }
+        if (c->tok == T_FUNCTION) {
+            /* Parse function expression; capture name for exports binding. */
+            struct lex_save save;
+            lex_checkpoint(c, &save);
+            js_lex_next(c); /* function */
+            char fname[48] = "";
+            if (c->tok == T_IDENT) {
+                snprintf(fname, sizeof(fname), "%s", c->text);
+            }
+            lex_restore(c, &save);
+            if (parse_expr(c))
+                return -1;
+            js_emit_op(c, OP_POP);
+            if (fname[0] && export_bind(c, fname))
+                return -1;
+            return 0;
+        }
+        if (c->tok == T_VAR || c->tok == T_LET || c->tok == T_CONST) {
+            js_lex_next(c);
+            if (c->tok != T_IDENT) {
+                js_lex_error(c, "name");
+                return -1;
+            }
+            char name[48];
+            snprintf(name, sizeof(name), "%s", c->text);
+            js_lex_next(c);
+            if (c->tok == T_EQ) {
+                js_lex_next(c);
+                if (parse_expr(c))
+                    return -1;
+            } else {
+                js_emit_op(c, OP_PUSH_UNDEF);
+            }
+            int id = js_intern_str(c, name);
+            if (id < 0)
+                return -1;
+            js_emit_op(c, OP_SET_GLOBAL);
+            js_emit_u16(c, (uint16_t)id);
+            js_emit_op(c, OP_POP);
+            if (c->tok == T_SEMI)
+                js_lex_next(c);
+            if (export_bind(c, name))
+                return -1;
+            return 0;
+        }
+        js_lex_error(c, "export form");
+        return -1;
+    }
     if (c->tok == T_CLASS) {
         /* class Name { constructor(){} method(){} } — compile as function ctor */
         js_lex_next(c);
@@ -872,10 +1027,8 @@ static int parse_stmt(struct js_compiler *c) {
         js_emit_op(c, OP_RET);
         uint32_t after = js_emit_here(c);
         js_emit_patch_i16(c, jmp_over + 1, (int16_t)(after - (jmp_over + 3)));
-        js_emit_op(c, OP_MAKE_FUNC);
-        js_emit_u16(c, (uint16_t)body);
-        js_emit_u8(c, 0);
-        js_emit_u8(c, 0);
+        if (emit_make_func(c, body, 0, 0, 0))
+            return -1;
         int id = js_intern_str(c, cname);
         js_emit_op(c, OP_SET_GLOBAL);
         js_emit_u16(c, (uint16_t)id);

@@ -22,6 +22,8 @@ void js_rt_reset(struct js_runtime *rt);
 /* Evaluate source. Returns 0 on success. out_json may receive a short JSON-ish result. */
 int js_eval(struct js_runtime *rt, const char *source, const char *filename,
             char *out_json, size_t out_cap);
+int js_eval_module(struct js_runtime *rt, const char *source, const char *name,
+                   char *out_json, size_t out_cap);
 const char *js_last_error(struct js_runtime *rt);
 
 /* Host bindings registration (C functions callable from JS). */
