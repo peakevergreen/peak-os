@@ -5,6 +5,7 @@
 #include "shell.h"
 #include "console.h"
 #include "net.h"
+#include "random.h"
 #include "timer.h"
 #include "util.h"
 
@@ -28,6 +29,15 @@ int uifconfig_main(int argc, char **argv) {
     console_printf("  inet %s  netmask %s  (%s)\n", ip, mask,
                    ni.addr_mode ? ni.addr_mode : "?");
     console_printf("  gateway %s  dns %s\n", gw, dns);
+    {
+        uint32_t rf = random_status_flags();
+        console_printf("  rng flags=0x%x%s%s%s%s\n",
+                       (unsigned)rf,
+                       (rf & RANDOM_READY_CRYPTO) ? " CRYPTO" : "",
+                       (rf & RANDOM_READY_ANY) ? " ANY" : "",
+                       (rf & RANDOM_FLAG_WEAK) ? " WEAK" : "",
+                       (rf & RANDOM_FLAG_HW) ? " HW" : "");
+    }
     return 0;
 }
 

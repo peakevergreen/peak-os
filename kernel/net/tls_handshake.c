@@ -16,9 +16,10 @@ static void transcript_add(const uint8_t *hs_msg, size_t len) {
     sha256_ctx_update(&transcript, hs_msg, len);
 }
 
+/* 0 ok; -1 crypto RNG not ready; -2 message exceeds cap (post-serialize). */
 static int build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *out_len) {
     if (crypto_random(client_random, 32) != 0)
-        return -1;
+        return -1; /* RNG */
     /* TLS 1.2: first 4 bytes are GMT unix time; remaining 28 stay random. */
     uint32_t t = (uint32_t)timer_ticks();
     client_random[0] = (uint8_t)(t >> 24);
@@ -116,7 +117,7 @@ static int build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t 
     tls_wr16(out + ext_len_at, (uint16_t)(o - ext_start));
     tls_wr24(out + 1, (uint32_t)(o - 4));
     if (o > cap)
-        return -1;
+        return -2; /* too large */
     *out_len = o;
     return 0;
 }
@@ -281,9 +282,16 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
 
     uint8_t ch[640];
     size_t ch_len = 0;
-    if (build_client_hello(ch, sizeof(ch), sni_host, &ch_len) != 0) {
-        tls_set_err("ClientHello build failed");
-        goto fail;
+    {
+        int ch_rc = build_client_hello(ch, sizeof(ch), sni_host, &ch_len);
+        if (ch_rc == -1) {
+            tls_set_err("RNG not ready (crypto domain)");
+            goto fail;
+        }
+        if (ch_rc != 0) {
+            tls_set_err("ClientHello too large");
+            goto fail;
+        }
     }
     transcript_add(ch, ch_len);
     if (tls_send_record(TLS_CONTENT_HS, ch, ch_len, 0) != 0) {

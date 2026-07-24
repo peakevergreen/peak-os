@@ -120,6 +120,7 @@ tight spin loops; the stack remains synchronous (no async rewrite).
 
 | Symptom | Check |
 |---------|--------|
+| `RNG not ready (crypto domain)` / HTTPS fails at ClientHello | Boot line or `ifconfig` `rng flags=` — need `CRYPTO` (HW RDRAND/RDSEED, EFI RNG, or virtio-rng). `WEAK` alone is not enough in release. |
 | `ifconfig` shows `fallback` | DHCP timed out; confirm bridged iface / DHCP server |
 | LAN curl times out | Guest listening? `ctr ps` shows `Up/listen`. Same subnet? AP client isolation? |
 | QEMU refuses vmnet | Run with permissions; set `PEAK_NET_IFACE` to the Wi‑Fi/Ethernet device |
