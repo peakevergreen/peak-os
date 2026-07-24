@@ -7,14 +7,14 @@
 static const struct peak_theme themes[] = {
     {
         .name = "evergreen",
-        .bg = 0x000B1A12, .fg = 0x00E8ECF0, .dim = 0x009AC4AE,
+        .bg = 0x000B1A12, .fg = 0x00E8ECF0, .dim = 0x00A8D0BC,
         .accent = 0x003DA36A, .danger = 0x00C45C5C,
         .surface = 0x000E1F16, .border = 0x002A4A3A,
         .title = 0x001A3D2C, .cursor = 0x003DA36A,
     },
     {
         .name = "midnight",
-        .bg = 0x000A0E1A, .fg = 0x00D8DEE9, .dim = 0x00889BB5,
+        .bg = 0x000A0E1A, .fg = 0x00D8DEE9, .dim = 0x009AAAC4,
         .accent = 0x005E81AC, .danger = 0x00BF616A,
         .surface = 0x00111827, .border = 0x003B4252,
         .title = 0x001E2A3A, .cursor = 0x0088C0D0,
