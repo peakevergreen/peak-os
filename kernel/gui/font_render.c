@@ -3,7 +3,7 @@
 extern const uint8_t font8x16[256][16];
 
 /* Small MRU glyph span cache: geometry only (fg is applied at draw). */
-#define FONT_GLYPH_SLOTS 4
+#define FONT_GLYPH_SLOTS 16
 #define FONT_INK_SPANS   16 /* font8x16 coalesces to ≤11 spans */
 
 struct ink_span {
@@ -141,11 +141,11 @@ static void draw_spans(const struct glyph_slot *slot, uint32_t x, uint32_t y,
         uint32_t py = y + (uint32_t)s->row * scale;
         uint32_t rw = (uint32_t)s->run * scale;
         uint32_t rh = (uint32_t)s->rows * scale;
-        if (scale <= 2) {
+        if (scale == 1) {
             uint32_t hx = px + 1;
             uint32_t hy = py + 1;
             if (hx + rw <= x + cw && hy + rh <= y + gh)
-                fill(hx, hy, rw, rh, 0x00000000);
+                fill(hx, hy, rw, rh, 0x00181818);
         }
         fill(px, py, rw, rh, fg);
     }
@@ -170,11 +170,11 @@ static void draw_glyph_uncached(char c, uint32_t x, uint32_t y, uint32_t fg,
             uint32_t py = y + (uint32_t)row * scale;
             uint32_t rw = (uint32_t)(col - start) * scale;
             uint32_t rh = scale;
-            if (scale <= 2) {
+            if (scale == 1) {
                 uint32_t hx = px + 1;
                 uint32_t hy = py + 1;
                 if (hx + rw <= x + cw && hy + rh <= y + gh)
-                    fill(hx, hy, rw, rh, 0x00000000);
+                    fill(hx, hy, rw, rh, 0x00181818);
             }
             fill(px, py, rw, rh, fg);
         }

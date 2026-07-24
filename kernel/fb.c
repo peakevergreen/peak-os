@@ -115,6 +115,8 @@ uint32_t fb_recommend_scale(void) {
     uint32_t h = (uint32_t)g_fb.height;
     uint32_t w = (uint32_t)g_fb.width;
     /* Prefer readable text on high-res guests; keep room for ~80-col CLI. */
+    if (h >= 1440 || w >= 2560)
+        return 4;
     if (h >= 1080 || w >= 1800)
         return 3;
     if (h >= 800 || w >= 1280)
