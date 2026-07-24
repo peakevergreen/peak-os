@@ -116,6 +116,57 @@ int main(void) {
         expect(shell_split_args(buf, av, 1) == 0, "max < 2");
     }
 
+    /* Pipeline / redirect parse */
+    {
+        char buf[] = "echo hello | grep hello";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) == 0, "pipe parse");
+        expect(pl.nstages == 2, "pipe stages");
+        expect(pl.stages[0].argc == 2, "stage0 argc");
+        expect(strcmp(pl.stages[0].argv[0], "echo") == 0, "stage0 cmd");
+        expect(strcmp(pl.stages[0].argv[1], "hello") == 0, "stage0 arg");
+        expect(pl.stages[1].argc == 2, "stage1 argc");
+        expect(strcmp(pl.stages[1].argv[0], "grep") == 0, "stage1 cmd");
+    }
+    {
+        char buf[] = "echo hi > out.txt";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) == 0, "redir out parse");
+        expect(pl.nstages == 1, "redir stages");
+        expect(pl.stages[0].argc == 2, "redir argc");
+        expect(pl.stages[0].redir_out.kind == SHELL_REDIR_OUT, "redir kind");
+        expect(strcmp(pl.stages[0].redir_out.path, "out.txt") == 0, "redir path");
+    }
+    {
+        char buf[] = "cat <in.txt >>out.txt";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) == 0, "redir in/append");
+        expect(pl.stages[0].redir_in.kind == SHELL_REDIR_IN, "redir in");
+        expect(strcmp(pl.stages[0].redir_in.path, "in.txt") == 0, "in path");
+        expect(pl.stages[0].redir_out.kind == SHELL_REDIR_APPEND, "append");
+        expect(strcmp(pl.stages[0].redir_out.path, "out.txt") == 0, "append path");
+    }
+    {
+        char buf[] = "echo>f";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) == 0, "abut >");
+        expect(pl.stages[0].argc == 1, "abut argc");
+        expect(pl.stages[0].redir_out.kind == SHELL_REDIR_OUT, "abut kind");
+        expect(strcmp(pl.stages[0].redir_out.path, "f") == 0, "abut path");
+    }
+    {
+        char buf[] = "echo a |";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) != 0, "bare pipe fail");
+    }
+    {
+        char buf[] = "echo \"a | b\" > x";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) == 0, "quoted pipe");
+        expect(pl.nstages == 1, "quoted no split");
+        expect(strcmp(pl.stages[0].argv[1], "a | b") == 0, "quoted keeps |");
+    }
+
     if (fails) {
         fprintf(stderr, "%d shell_split test(s) failed\n", fails);
         return 1;

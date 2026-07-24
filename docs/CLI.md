@@ -11,7 +11,22 @@ ask "create fib.c"
 js -e '1+2*3'
 ```
 
-Unclosed quotes treat the remainder of the line as one argument. Max 16 argv slots; no pipes or redirection yet.
+Unclosed quotes treat the remainder of the line as one argument. Max 16 argv slots.
+
+## Pipes and redirection
+
+Operators `|`, `>`, `>>`, and `<` work outside quotes (spaces optional around them):
+
+```
+echo hello > out.txt
+echo more >> out.txt
+cat < out.txt
+echo hello world | grep hello
+seq 1 5 | wc
+```
+
+Limits: up to 4 pipeline stages; captured pipe/redirect buffers are capped at 8 KiB.
+`cat` / `head` / `tail` / `wc` / `grep` accept `-` (or omit the path) to read shell stdin from `<` or a pipe.
 
 ## Navigation
 | Command | Notes |

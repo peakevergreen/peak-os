@@ -23,6 +23,10 @@ const char *shell_getcwd(void);
 int  shell_chdir(const char *path);
 int  shell_resolve_path(const char *in, char *out, size_t out_len);
 
+/* Stdin path for `<` / pipe (NULL if none). "-" in utils reads this. */
+void shell_set_stdin_path(const char *path);
+const char *shell_stdin_path(void);
+
 /* env */
 int  shell_env_set(const char *name, const char *val);
 const char *shell_env_get(const char *name);

@@ -12,6 +12,29 @@ static uint32_t cursor_row, cursor_col;
 static uint32_t cols, rows;
 static uint32_t fg_color, bg_color;
 
+static char *capture_buf;
+static size_t capture_cap;
+static size_t capture_len;
+static int capture_on;
+
+void console_capture_begin(char *buf, size_t cap) {
+    capture_buf = buf;
+    capture_cap = cap ? cap : 0;
+    capture_len = 0;
+    capture_on = buf && cap > 0;
+    if (capture_on && capture_cap)
+        capture_buf[0] = '\0';
+}
+
+size_t console_capture_end(void) {
+    size_t n = capture_len;
+    capture_on = 0;
+    capture_buf = 0;
+    capture_cap = 0;
+    capture_len = 0;
+    return n;
+}
+
 void console_init(void) {
     struct framebuffer *fb = fb_get();
     uint32_t cw = fb_cell_w();
@@ -106,6 +129,13 @@ static void console_putc_screen(char c) {
 }
 
 void console_putc(char c) {
+    if (capture_on) {
+        if (capture_len + 1 < capture_cap) {
+            capture_buf[capture_len++] = c;
+            capture_buf[capture_len] = '\0';
+        }
+        return;
+    }
     serial_write(c);
     console_putc_screen(c);
 }

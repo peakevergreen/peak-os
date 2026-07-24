@@ -7,6 +7,9 @@ void console_init(void);
 void console_clear(void);
 void console_putc(char c);
 void console_write(const char *s);
+/* Capture console_putc/write into buf (no screen/serial while active). */
+void console_capture_begin(char *buf, size_t cap);
+size_t console_capture_end(void); /* bytes written (NUL not counted) */
 void console_printf(const char *fmt, ...);
 /* Screen/GUI only — does not mirror to COM1 (agent chatter / privacy). */
 void console_write_ui(const char *s);
