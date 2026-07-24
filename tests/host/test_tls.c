@@ -328,6 +328,27 @@ static void test_crypto_edges(void) {
         expect(out_a[0] != 0 || out_a[31] != 0, "x25519_base non-zero");
     }
 
+    /* P-256 ECDH agreement. */
+    {
+        struct peak_bootinfo info;
+        memset(&info, 0, sizeof(info));
+        info.magic = PEAK_BOOT_MAGIC;
+        info.version = PEAK_BOOT_VERSION;
+        info.entropy_len = 32;
+        info.flags = PEAK_BOOT_FLAG_ENTROPY_OK;
+        for (int i = 0; i < 32; i++)
+            info.entropy[i] = (uint8_t)(0xA5 ^ i);
+        random_init(&info);
+
+        uint8_t a_priv[32], a_pub[65], b_priv[32], b_pub[65], s1[32], s2[32];
+        expect(p256_keygen(a_priv, a_pub) == 0, "p256 keygen a");
+        expect(p256_keygen(b_priv, b_pub) == 0, "p256 keygen b");
+        expect(a_pub[0] == 0x04 && b_pub[0] == 0x04, "p256 uncompressed");
+        expect(p256_ecdh(s1, a_priv, b_pub) == 0, "p256 ecdh a");
+        expect(p256_ecdh(s2, b_priv, a_pub) == 0, "p256 ecdh b");
+        expect(!memcmp(s1, s2, 32), "p256 shared agree");
+    }
+
     /* TLS PRF length: request 48 bytes of key material. */
     {
         uint8_t secret[16], seed[16], out[48];
