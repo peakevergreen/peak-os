@@ -8,6 +8,7 @@
 static uint32_t gui_scale = 3;
 static int show_brand = 1;
 static int show_clock = 1;
+static int tls_tofu = 0; /* opt-in; WebPKI is default */
 
 static void clamp_scale(void) {
     if (gui_scale < 1)
@@ -20,6 +21,7 @@ void settings_init(void) {
     gui_scale = fb_recommend_scale();
     show_brand = 1;
     show_clock = 1;
+    tls_tofu = 0;
 
     char buf[128];
     size_t n = 0;
@@ -45,6 +47,8 @@ void settings_init(void) {
             show_brand = (line[6] != '0');
         } else if (!strncmp(line, "clock=", 6)) {
             show_clock = (line[6] != '0');
+        } else if (!strncmp(line, "tls_tofu=", 9)) {
+            tls_tofu = (line[9] != '0');
         }
     }
     clamp_scale();
@@ -52,8 +56,8 @@ void settings_init(void) {
 
 void settings_persist(void) {
     char buf[96];
-    snprintf(buf, sizeof(buf), "scale=%u\nbrand=%d\nclock=%d\n",
-             (unsigned)gui_scale, show_brand ? 1 : 0, show_clock ? 1 : 0);
+    snprintf(buf, sizeof(buf), "scale=%u\nbrand=%d\nclock=%d\ntls_tofu=%d\n",
+             (unsigned)gui_scale, show_brand ? 1 : 0, show_clock ? 1 : 0, tls_tofu ? 1 : 0);
     vfs_write_file(SETTINGS_PATH, buf, strlen(buf));
 }
 
@@ -82,3 +86,9 @@ void settings_toggle_brand(void) { show_brand = !show_brand; }
 int settings_show_clock(void) { return show_clock; }
 
 void settings_toggle_clock(void) { show_clock = !show_clock; }
+
+int settings_tls_tofu(void) { return tls_tofu; }
+
+void settings_set_tls_tofu(int on) { tls_tofu = on ? 1 : 0; }
+
+void settings_toggle_tls_tofu(void) { tls_tofu = !tls_tofu; }

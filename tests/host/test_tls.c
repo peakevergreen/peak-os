@@ -17,6 +17,7 @@
 void tls_host_reset_trust(void);
 void tls_host_seed_tofu(const char *store);
 const char *tls_host_tofu_store(void);
+void settings_set_tls_tofu(int on);
 
 static int fails;
 
@@ -599,7 +600,56 @@ static void test_x509_parser(void) {
     expect(x509_parse_der(junk, sizeof(junk), &c) != 0, "reject tiny");
 }
 
+static size_t build_chain_cert_msg(uint8_t *out, size_t cap, const uint8_t *const *ders,
+                                   const size_t *lens, int n) {
+    size_t body = 3;
+    for (int i = 0; i < n; i++)
+        body += 3 + lens[i];
+    size_t total = 4 + body;
+    if (total > cap)
+        return 0;
+    out[0] = HS_CERTIFICATE;
+    out[1] = (uint8_t)((body >> 16) & 0xff);
+    out[2] = (uint8_t)((body >> 8) & 0xff);
+    out[3] = (uint8_t)(body & 0xff);
+    size_t list = body - 3;
+    out[4] = (uint8_t)((list >> 16) & 0xff);
+    out[5] = (uint8_t)((list >> 8) & 0xff);
+    out[6] = (uint8_t)(list & 0xff);
+    size_t o = 7;
+    for (int i = 0; i < n; i++) {
+        out[o++] = (uint8_t)((lens[i] >> 16) & 0xff);
+        out[o++] = (uint8_t)((lens[i] >> 8) & 0xff);
+        out[o++] = (uint8_t)(lens[i] & 0xff);
+        memcpy(out + o, ders[i], lens[i]);
+        o += lens[i];
+    }
+    return total;
+}
+
+static void test_webpki_path(void) {
+#include "webpki_chain_vectors.h"
+    settings_set_tls_tofu(0);
+    tls_host_reset_trust();
+    const uint8_t *ders[] = {webpki_site, webpki_mid, webpki_root};
+    size_t lens[] = {sizeof(webpki_site), sizeof(webpki_mid), sizeof(webpki_root)};
+    uint8_t msg[4096];
+    size_t n = build_chain_cert_msg(msg, sizeof(msg), ders, lens, 3);
+    expect(n > 0, "chain msg built");
+    expect(tls_verify_cert_chain(msg, n, "example.com") == 1, "webpki accepts valid chain");
+    expect(tls_hostname_matched(), "webpki hostname matched");
+    expect(tls_verify_cert_chain(msg, n, "evil.com") == 0, "webpki rejects wrong host");
+
+    const uint8_t *leaf_only[] = {webpki_site};
+    size_t leaf_lens[] = {sizeof(webpki_site)};
+    n = build_chain_cert_msg(msg, sizeof(msg), leaf_only, leaf_lens, 1);
+    expect(tls_verify_cert_chain(msg, n, "example.com") == 0, "webpki rejects unknown leaf-only");
+
+    settings_set_tls_tofu(1); /* restore host default for other tests */
+}
+
 int main(void) {
+    settings_set_tls_tofu(1);
     test_util_helpers();
     test_pin_and_tofu_fail_closed();
     test_truncated_cert_records();
@@ -609,6 +659,7 @@ int main(void) {
     test_ske_sig_verify();
     test_clienthello_goldens();
     test_x509_parser();
+    test_webpki_path();
 
     if (fails) {
         fprintf(stderr, "%d failure(s)\n", fails);

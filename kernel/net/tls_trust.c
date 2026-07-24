@@ -5,6 +5,8 @@
 #include "vfs.h"
 #include "x509.h"
 #include "rtc.h"
+#include "webpki.h"
+#include "settings.h"
 
 /*
  * Trust-on-first-use store: /etc/peak/tls-tofu holds "host:hex64" lines
@@ -142,11 +144,8 @@ static int verify_cert_hostname(const uint8_t *cert_msg, size_t len, const char 
 
 /*
  * Verify the server Certificate message.
- * 1. If it matches an explicit trust pin → verified.
- * 2. Otherwise trust-on-first-use per SNI host: remember the digest on
- *    first contact, and fail closed if a known host's digest changes.
- * Full X.509 chain validation is out of scope for the in-guest client;
- * TOFU gives continuity (detects cert swaps) without a CA store.
+ * Order: explicit pins → WebPKI path to embedded roots → optional TOFU
+ * (settings_tls_tofu). Hostname must match. Validity enforced under WebPKI.
  */
 int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_host) {
     cert_fail_reason = NULL;
@@ -158,77 +157,105 @@ int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_h
     }
     uint8_t digest[32];
     sha256(cert_msg, len, digest);
-    int trusted = 0;
+
+    /* 1. Explicit pins win. */
     for (int i = 0; i < trust_pin_count; i++) {
         if (!memcmp(digest, trust_pins[i], 32)) {
-            trusted = 1;
-            break;
+            int hn = verify_cert_hostname(cert_msg, len, sni_host);
+            if (hn == 0) {
+                cert_fail_reason = "Certificate hostname mismatch";
+                return 0;
+            }
+            if (hn == -2) {
+                cert_fail_reason = "Malformed Certificate message";
+                return 0;
+            }
+            hostname_matched = 1;
+            if (hn < 0)
+                hostname_parse_skipped = 1;
+            return 1;
         }
     }
-    if (!trusted) {
+
+    /* 2. WebPKI path build (default). */
+    {
+        const uint8_t *certs[8];
+        size_t lens[8];
+        int n = 0;
+        size_t off = 4;
+        if (off + 3 > len)
+            goto webpki_fail;
+        size_t list_len = ((size_t)cert_msg[off] << 16) | ((size_t)cert_msg[off + 1] << 8) |
+                          cert_msg[off + 2];
+        off += 3;
+        size_t list_end = off + list_len;
+        if (list_end > len)
+            goto webpki_fail;
+        while (off + 3 <= list_end && n < 8) {
+            size_t clen = ((size_t)cert_msg[off] << 16) | ((size_t)cert_msg[off + 1] << 8) |
+                          cert_msg[off + 2];
+            off += 3;
+            if (off + clen > list_end)
+                goto webpki_fail;
+            certs[n] = cert_msg + off;
+            lens[n] = clen;
+            n++;
+            off += clen;
+            /* Skip TLS 1.3 per-cert extensions if present (2-byte length). Detect by
+             * remaining bytes that look like ext len after a cert — for 1.2 list there
+             * are none. Heuristic: if next bytes are not a 3-byte cert len pattern inside
+             * list, stop. Standard 1.2 has only certs. */
+        }
+        if (n > 0 && webpki_verify_chain(certs, lens, n, sni_host)) {
+            hostname_matched = 1;
+            serial_log(SERIAL_LOG_INFO, "tls: WebPKI path verified\n");
+            return 1;
+        }
+    }
+webpki_fail:
+
+    /* 3. Opt-in TOFU continuity. */
+    if (settings_tls_tofu()) {
         char hexd[65];
         tls_hex_encode(digest, 32, hexd);
         int t = tofu_check(sni_host, hexd);
-        if (t == 1)
-            trusted = 1;
-        else if (t < 0) {
-            serial_log(SERIAL_LOG_WARN,
-                       "tls: certificate changed for known host (rejecting)\n");
+        if (t == 1) {
+            int hn = verify_cert_hostname(cert_msg, len, sni_host);
+            if (hn == 0) {
+                cert_fail_reason = "Certificate hostname mismatch";
+                return 0;
+            }
+            if (hn == -2) {
+                cert_fail_reason = "Malformed Certificate message";
+                return 0;
+            }
+            hostname_matched = 1;
+            if (hn < 0)
+                hostname_parse_skipped = 1;
+            return 1;
+        }
+        if (t < 0) {
             cert_fail_reason = "Cert changed for known host; rm /etc/peak/tls-tofu to re-trust";
             return 0;
-        } else {
-            tofu_remember(sni_host, hexd);
-            serial_log(SERIAL_LOG_INFO,
-                       "tls: first contact — certificate remembered (tofu)\n");
-            trusted = 1;
         }
-    }
-    if (!trusted)
-        return 0;
-
-    /* Soft time check when RTC is available (hard fail deferred to WebPKI pass). */
-    {
-        const uint8_t *leaf;
-        size_t leaf_len;
-        struct x509_cert xc;
-        if (leaf_cert_from_msg(cert_msg, len, &leaf, &leaf_len) == 0 &&
-            x509_parse_der(leaf, leaf_len, &xc) == 0 && xc.has_validity) {
-            struct rtc_time rt;
-            if (rtc_read(&rt) == 0) {
-                struct x509_time now = {
-                    .year = rt.year < 100 ? (uint16_t)(2000 + rt.year) : rt.year,
-                    .month = rt.month,
-                    .day = rt.day,
-                    .hour = rt.hour,
-                    .minute = rt.min,
-                    .second = rt.sec,
-                };
-                if (x509_cert_time_valid(&xc, &now) == 0) {
-                    cert_fail_reason = "Certificate expired or not yet valid";
-                    serial_log(SERIAL_LOG_WARN, "tls: certificate outside validity window\n");
-                    return 0;
-                }
-            }
+        tofu_remember(sni_host, hexd);
+        serial_log(SERIAL_LOG_INFO, "tls: TOFU remembered (opt-in)\n");
+        int hn = verify_cert_hostname(cert_msg, len, sni_host);
+        if (hn == 0) {
+            cert_fail_reason = "Certificate hostname mismatch";
+            return 0;
         }
-    }
-
-    int hn = verify_cert_hostname(cert_msg, len, sni_host);
-    if (hn == 1) {
+        if (hn == -2) {
+            cert_fail_reason = "Malformed Certificate message";
+            return 0;
+        }
         hostname_matched = 1;
+        if (hn < 0)
+            hostname_parse_skipped = 1;
         return 1;
     }
-    if (hn == 0) {
-        cert_fail_reason = "Certificate hostname mismatch";
-        serial_log(SERIAL_LOG_WARN, "tls: certificate hostname mismatch\n");
-        return 0;
-    }
-    if (hn == -2) {
-        cert_fail_reason = "Malformed Certificate message";
-        serial_log(SERIAL_LOG_WARN, "tls: truncated or malformed certificate\n");
-        return 0;
-    }
-    hostname_matched = 1;
-    hostname_parse_skipped = 1;
-    serial_log(SERIAL_LOG_DEBUG, "tls: hostname parse skipped (tofu only)\n");
-    return 1;
+
+    cert_fail_reason = "Untrusted certificate (WebPKI path failed)";
+    serial_log(SERIAL_LOG_WARN, "tls: WebPKI verify failed\n");
+    return 0;
 }

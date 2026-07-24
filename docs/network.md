@@ -61,12 +61,10 @@ wget https://example.com/
 ctr build … && ctr run -p 8080 …
 ```
 
-Browser: open a tab, type a URL, press Enter (no unsolicited TLS on `gui`).
-Local JS demo: `peak://demo` (no network). HTTPS trust is **explicit SHA-256
-pins** or **trust-on-first-use** (`/etc/peak/tls-tofu`) plus hostname match when
-the leaf certificate can be parsed (`tls_hostname_matched`). There is **no X.509
-chain validation** (no CA store, no path building, no CRL/OCSP) — by design for
-this minimal in-guest client; TOFU/pins provide continuity, not WebPKI assurance.
+HTTPS trust is **WebPKI** (embedded roots + path build + hostname/time) by default.
+**Pins** override; **TOFU** is opt-in via Settings (`tls_tofu=1` in `/etc/peak/display`).
+Root DER/PEM files live under `certs/webpki/`; regenerate with
+`python3 scripts/gen-webpki-roots.py`.
 
 ## Stack
 

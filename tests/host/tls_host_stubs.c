@@ -95,3 +95,9 @@ int rtc_read(struct rtc_time *out) {
     out->year = 2026;
     return 0;
 }
+
+static int host_tls_tofu = 1; /* host tests default TOFU on for legacy fixtures */
+
+int settings_tls_tofu(void) { return host_tls_tofu; }
+void settings_set_tls_tofu(int on) { host_tls_tofu = on ? 1 : 0; }
+void settings_toggle_tls_tofu(void) { host_tls_tofu = !host_tls_tofu; }
