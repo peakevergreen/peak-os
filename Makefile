@@ -136,6 +136,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/user/utils_file.c \
 	kernel/user/utils_text.c \
 	kernel/user/utils_text2.c \
+	kernel/user/utils_text3.c \
 	kernel/user/utils_sys.c \
 	kernel/user/utils_agent.c \
 	kernel/user/utils_net.c \

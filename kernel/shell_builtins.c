@@ -150,6 +150,11 @@ static const struct help_entry help_table[] = {
     { "uniq", "text", "drop adjacent dup lines" },
     { "cut", "text", "cut -f N [-d delim]" },
     { "tr", "text", "translate chars" },
+    { "sed", "text", "sed-lite s/// d p -n" },
+    { "cmp", "text", "byte compare files" },
+    { "basename", "file", "strip directory" },
+    { "dirname", "file", "strip basename" },
+    { "realpath", "file", "normalize path" },
     { "hexdump", "text", "hex dump" },
     { "strings", "text", "printable runs" },
     { "echo", "text", "print arguments" },
@@ -160,6 +165,7 @@ static const struct help_entry help_table[] = {
     { "top", "sys", "live system monitor" },
     { "sysmon", "sys", "alias for top" },
     { "ps", "sys", "list kernel tasks/threads" },
+    { "kill", "sys", "kill task by pid or name" },
     { "env", "sys", "list/set env" },
     { "export", "sys", "set NAME=val" },
     { "which", "sys", "resolve /bin path" },
@@ -195,9 +201,9 @@ static const struct help_entry help_table[] = {
 void shell_help_topics(void) {
     console_write("Peak CLI — categories:\n");
     console_write("  nav   pwd cd ls tree find\n");
-    console_write("  file  mkdir touch rm cp mv ln stat du df truncate\n");
-    console_write("  text  cat head tail wc grep diff sort uniq cut tr hexdump strings echo edit\n");
-    console_write("  sys   date free top sysmon ps env which seq sleep theme wallpaper scale\n");
+    console_write("  file  mkdir touch rm cp mv ln stat du df truncate basename dirname realpath\n");
+    console_write("  text  cat head tail wc grep diff sort uniq cut tr sed cmp hexdump strings echo edit\n");
+    console_write("  sys   date free top sysmon ps kill env which seq sleep theme wallpaper scale\n");
     console_write("        uname true false sh reboot help man js\n");
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
     console_write("  net   ctr ctrd ifconfig ping wget\n");

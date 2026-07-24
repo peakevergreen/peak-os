@@ -168,3 +168,47 @@ int ups_main(int argc, char **argv) {
     console_printf("tasks %d  ctx %lu\n", n, (unsigned long)sched_ctx_switches());
     return 0;
 }
+
+int ukill_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("kill", "<pid|name>");
+        return argc < 2 ? 1 : 0;
+    }
+    const char *arg = argv[1];
+    int pid = 0;
+    int numeric = 1;
+    for (const char *p = arg; *p; p++) {
+        if (*p < '0' || *p > '9') {
+            numeric = 0;
+            break;
+        }
+        pid = pid * 10 + (*p - '0');
+    }
+    if (numeric) {
+        int rc = sched_kill(pid);
+        if (rc == -1) {
+            peak_perror("kill", "no such pid");
+            return 1;
+        }
+        if (rc == -2) {
+            peak_perror("kill", "refused");
+            return 1;
+        }
+        return 0;
+    }
+    struct task list[MAX_TASKS];
+    int n = sched_list_tasks(list, MAX_TASKS);
+    int killed = 0;
+    for (int i = 0; i < n; i++) {
+        if (!strcmp(list[i].name, arg)) {
+            int rc = sched_kill(list[i].pid);
+            if (rc == 0)
+                killed++;
+        }
+    }
+    if (!killed) {
+        peak_perror("kill", "no matching task");
+        return 1;
+    }
+    return 0;
+}
