@@ -1,3 +1,7 @@
+/*
+ * crypto_hash.c — SHA-256, HMAC-SHA256, TLS 1.2 PRF (SHA-256).
+ * See also crypto_aead.c, crypto_x25519.c, crypto.c (RNG glue).
+ */
 #include "crypto.h"
 #include "util.h"
 
