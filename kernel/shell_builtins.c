@@ -193,7 +193,9 @@ static const struct help_entry help_table[] = {
     { "ctrd", "net", "ping Peak ctr staging helper" },
     { "ifconfig", "net", "show e1000 IPv4 config" },
     { "ping", "net", "DNS + TCP reachability probe" },
-    { "wget", "net", "HTTP GET via in-guest TCP stack" },
+    { "wget", "net", "HTTP GET (-O path); TLS errors named" },
+    { "curl", "net", "alias for wget (-o path)" },
+    { "tar", "file", "ustar create/extract (-c/-x)" },
     { "js", "sys", "Peak JS: js -e 'code' | js file.js" },
     { NULL, NULL, NULL },
 };
@@ -206,9 +208,10 @@ void shell_help_topics(void) {
     console_write("  sys   date free top sysmon ps kill env which seq sleep theme wallpaper scale\n");
     console_write("        uname true false sh reboot help man js\n");
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
-    console_write("  net   ctr ctrd ifconfig ping wget\n");
+    console_write("  net   ctr ctrd ifconfig ping wget curl\n");
+    console_write("  file  … tar basename dirname realpath\n");
     console_write("Shell: quotes, globs (* ?), pipes |, redirects > >> <\n");
-    console_write("Try: man <cmd>   ls *.c   echo hi | wc   theme list   gui\n");
+    console_write("Try: man <cmd>   ls *.c   echo hi | wc   tar -c a.tar f   gui\n");
 }
 
 void shell_help_cmd(const char *cmd) {

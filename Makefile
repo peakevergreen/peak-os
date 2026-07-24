@@ -140,6 +140,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/user/utils_sys.c \
 	kernel/user/utils_agent.c \
 	kernel/user/utils_net.c \
+	kernel/user/utils_tar.c \
 	kernel/user/utils_monitor.c \
 	kernel/user/utils_ctr.c \
 	kernel/user/utils_js.c \

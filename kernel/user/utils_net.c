@@ -8,6 +8,7 @@
 #include "random.h"
 #include "timer.h"
 #include "util.h"
+#include "vfs.h"
 
 int uifconfig_main(int argc, char **argv) {
     (void)argc;
@@ -74,24 +75,58 @@ int uping_main(int argc, char **argv) {
 int uwget_main(int argc, char **argv) {
     privacy_grant_net_client(0);
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("wget", "<url>");
+        peak_usage("wget", "[-O path] <url>");
         return argc < 2 ? 1 : 0;
     }
     if (!net_ready()) {
         peak_perror("wget", "network down");
         return 1;
     }
+    const char *url = 0;
+    const char *out_path = 0;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-O") && i + 1 < argc) {
+            out_path = argv[++i];
+            continue;
+        }
+        if (argv[i][0] != '-')
+            url = argv[i];
+    }
+    if (!url) {
+        peak_usage("wget", "[-O path] <url>");
+        return 1;
+    }
     char body[8192];
     int st = 0;
-    console_printf("GET %s\n", argv[1]);
-    if (net_http_get(argv[1], body, sizeof(body), &st) != 0) {
-        console_printf("failed (status %d)\n", st);
-        if (body[0])
+    console_printf("GET %s\n", url);
+    if (net_http_get(url, body, sizeof(body), &st) != 0) {
+        const char *tls = net_http_tls_reject_name();
+        if (tls && tls[0])
+            console_printf("failed: TLS %s (HTTP status %d)\n", tls, st);
+        else if (st > 0)
+            console_printf("failed: HTTP %d\n", st);
+        else
+            console_printf("failed: connect/DNS/TLS error (status %d)\n", st);
+        if (body[0]) {
             console_write(body);
-        console_write("\n");
+            console_write("\n");
+        }
         return 1;
     }
     console_printf("HTTP %d  %lu bytes\n", st, (unsigned long)strlen(body));
+    if (out_path) {
+        char abs[256];
+        if (shell_resolve_path(out_path, abs, sizeof(abs))) {
+            peak_perror("wget", "bad -O path");
+            return 1;
+        }
+        if (vfs_write_file(abs, body, strlen(body)) != 0) {
+            peak_perror("wget", "cannot write -O file");
+            return 1;
+        }
+        console_printf("saved %s\n", abs);
+        return 0;
+    }
     size_t show = strlen(body);
     if (show > 1500)
         show = 1500;
@@ -102,4 +137,26 @@ int uwget_main(int argc, char **argv) {
     else
         console_write("\n");
     return 0;
+}
+
+/* curl-shaped alias: curl URL  or  curl -o path URL */
+int ucurl_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("curl", "[-o path] <url>");
+        return argc < 2 ? 1 : 0;
+    }
+    /* Rewrite -o → -O for wget. */
+    char *av[16];
+    int ac = 0;
+    av[ac++] = (char *)"wget";
+    for (int i = 1; i < argc && ac < 15; i++) {
+        if (!strcmp(argv[i], "-o") && i + 1 < argc) {
+            av[ac++] = (char *)"-O";
+            av[ac++] = argv[++i];
+            continue;
+        }
+        av[ac++] = argv[i];
+    }
+    av[ac] = 0;
+    return uwget_main(ac, av);
 }
