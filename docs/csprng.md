@@ -15,7 +15,8 @@ Kernel random service: `kernel/random.c` / `kernel/include/random.h`.
 1. UEFI `EFI_RNG_PROTOCOL` (when present)
 2. `RDSEED` (CPUID leaf 7)
 3. Health-checked `RDRAND`
-4. Timing jitter + RTC + mmap salt (supplemental; marks entropy weak)
+4. **virtio-rng-pci** (QEMU: `-device virtio-rng-pci` in `run-qemu.sh` / smoke) — calls `random_absorb_trusted`
+5. Timing jitter + RTC + mmap salt (supplemental; marks entropy weak)
 
 BootInfo v4 carries `entropy[64]`, `entropy_len`, and quality flags (`PEAK_BOOT_FLAG_ENTROPY_OK` / `PEAK_BOOT_FLAG_ENTROPY_WEAK`).
 

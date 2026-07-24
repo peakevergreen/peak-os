@@ -181,7 +181,8 @@ KERNEL_ARCH_SRCS := \
 	kernel/platform/pc.c \
 	kernel/drivers/block/ata_bd.c \
 	kernel/drivers/net/e1000_nd.c \
-	kernel/drivers/net/virtio_net.c
+	kernel/drivers/net/virtio_net.c \
+	kernel/drivers/virtio_rng.c
 
 KERNEL_ARCH_ASMS := \
 	kernel/arch/x86_64/isr.S \

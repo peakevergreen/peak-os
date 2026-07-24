@@ -5,6 +5,7 @@
 #include "pci.h"
 #include "peak_boot.h"
 #include "util.h"
+#include "virtio_rng.h"
 
 void platform_gpio_set_output(unsigned pin) { (void)pin; }
 void platform_gpio_write(unsigned pin, int val) { (void)pin; (void)val; }
@@ -13,6 +14,7 @@ int  platform_gpio_read(unsigned pin) { (void)pin; return 0; }
 int platform_init(struct peak_bootinfo *info) {
     (void)info;
     blockdev_register_ata();
+    (void)virtio_rng_init();
     /* Prefer virtio-net; e1000 if virtio PCI missing or init fails. */
     netdev_register_virtio_net();
     netdev_register_e1000_fallback();

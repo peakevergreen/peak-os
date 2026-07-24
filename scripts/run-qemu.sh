@@ -163,6 +163,7 @@ ARGS=("$QEMU" \
   -drive "file=${DISK},format=raw,if=ide" \
   -boot d \
   -serial stdio \
+  -device virtio-rng-pci \
   "${NET_ARGS[@]}" \
   -no-reboot)
 if [[ -n "$FW_DRIVE" ]]; then
