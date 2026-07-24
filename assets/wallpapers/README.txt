@@ -1,2 +1,5 @@
-evergreen.ppm — compact evergreen forest wallpaper (320x180 P6 embed; seed for /usr/share/peak/wallpapers/).
-Format: binary PPM P6. Set with: wallpaper set /usr/share/peak/wallpapers/evergreen.ppm
+# Peak wallpapers
+
+evergreen.ppm — embedded default desktop wallpaper (P6, 160x90 slim).
+Scaled at draw time; keep small so kernel.elf stays within size budgets.
+evergreens-night.png — reference art (not embedded).
