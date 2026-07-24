@@ -160,6 +160,25 @@ void desktop_draw_cursor(int32_t x, int32_t y) {
     cursor_shape_paint(x, y, size, 0);
 }
 
+static int rects_overlap(uint32_t ax, uint32_t ay, uint32_t aw, uint32_t ah,
+                         uint32_t bx, uint32_t by, uint32_t bw, uint32_t bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+/* True when a saved cursor sprite overlaps any soft-damage rect. */
+static int cursor_hits_damage(void) {
+    if (!cursor_saved || last_csize == 0)
+        return 0;
+    uint32_t cx = (uint32_t)last_cx, cy = (uint32_t)last_cy, cs = last_csize;
+    for (int i = 0; i < damage_count; i++) {
+        if (rects_overlap(cx, cy, cs, cs,
+                          damage_list[i].x, damage_list[i].y,
+                          damage_list[i].w, damage_list[i].h))
+            return 1;
+    }
+    return 0;
+}
+
 static void present_scene(int full_present) {
     if (!fb_backbuffer_ok())
         return;
@@ -168,40 +187,46 @@ static void present_scene(int full_present) {
     if (!full_present && damage_count == 0)
         return;
 
-    desktop_cursor_erase_front();
-
     uint32_t t0 = gfx_now_us();
+    struct framebuffer *fb = fb_get();
+    uint32_t fw = (uint32_t)fb->width;
+    uint32_t fh = (uint32_t)fb->height;
+
     int use_full = full_present;
     if (!use_full) {
         uint64_t dmg_px = 0;
-        uint64_t screen_px = (uint64_t)fb_get()->width * (uint64_t)fb_get()->height;
+        uint64_t screen_px = (uint64_t)fw * (uint64_t)fh;
         for (int i = 0; i < damage_count; i++)
             dmg_px += (uint64_t)damage_list[i].w * (uint64_t)damage_list[i].h;
-        /* Dense damage (≥25% of screen pixels): full present is cheaper. */
-        if (screen_px && dmg_px * 4 >= screen_px)
+        /* Many rects after coalesce, or dense (≥25% of screen): full present. */
+        if (damage_count > 8 || (screen_px && dmg_px * 4 >= screen_px))
             use_full = 1;
     }
+
+    if (use_full || cursor_hits_damage())
+        desktop_cursor_erase_front();
+
     if (use_full) {
         display_frame_begin();
         display_present_full(fb_back_buf());
         display_frame_end();
     } else {
-        uint32_t fw = (uint32_t)fb_get()->width;
+        /* Multi-rect: one VBlank (x86) / hidden buffer + one flip (aarch64). */
+        int batch = damage_count > 1;
+        if (batch)
+            display_frame_begin();
         for (int i = 0; i < damage_count; i++) {
             uint32_t x = damage_list[i].x, y = damage_list[i].y;
             uint32_t w = damage_list[i].w, h = damage_list[i].h;
-            if (x >= fw || y >= (uint32_t)fb_get()->height)
+            if (x >= fw || y >= fh)
                 continue;
             display_present_rect(x, y, w, h, fb_back_buf() + (uint64_t)y * fw + x, fw);
         }
+        if (batch)
+            display_frame_end();
     }
     sysmon_note_present_us(gfx_now_us() - t0);
     sysmon_note_surf_pressure((uint32_t)surface_pressure_pct());
-}
-
-static int rects_overlap(uint32_t ax, uint32_t ay, uint32_t aw, uint32_t ah,
-                         uint32_t bx, uint32_t by, uint32_t bw, uint32_t bh) {
-    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
 static int win_unobscured(int idx) {
