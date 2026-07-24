@@ -19,7 +19,7 @@ static void tls_fail_page(char *body, size_t body_cap, const char *host, const c
              "<h1>TLS handshake failed</h1>"
              "<p>Host: <code>%s</code></p>"
              "<p>%s</p>"
-             "<p>Peak TLS 1.2: ECDHE + AES-128-GCM or ChaCha20-Poly1305 (X25519).</p>"
+             "<p>Peak TLS 1.2/1.3: ECDHE (X25519) + AES-GCM or ChaCha20-Poly1305.</p>"
              "</body></html>",
              host, why ? why : "unknown error");
 }

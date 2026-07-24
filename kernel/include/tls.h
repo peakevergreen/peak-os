@@ -4,7 +4,7 @@
 #include "types.h"
 
 /*
- * Minimal TLS 1.2 client: ECDHE (X25519) + AES-128-GCM / ChaCha20-Poly1305.
+ * Minimal TLS 1.2/1.3 client: ECDHE (X25519) + AES-GCM / ChaCha20-Poly1305.
  * Certificate trust: explicit SHA-256 pins when registered, otherwise
  * trust-on-first-use per SNI host (persisted at /etc/peak/tls-tofu).
  * A changed certificate for a known host fails closed.

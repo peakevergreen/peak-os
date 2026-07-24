@@ -44,6 +44,14 @@ static void seq_bytes(uint8_t out[8], uint64_t seq) {
         out[i] = (uint8_t)((seq >> (56 - 8 * i)) & 0xFF);
 }
 
+static void tls13_nonce(uint8_t nonce[12], const uint8_t iv[12], uint64_t seq) {
+    memcpy(nonce, iv, 12);
+    uint8_t seqb[8];
+    seq_bytes(seqb, seq);
+    for (int i = 0; i < 8; i++)
+        nonce[4 + i] ^= seqb[i];
+}
+
 int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted) {
     uint8_t rec[16600];
     if (!encrypted) {
@@ -55,6 +63,43 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
         tls_wr16(rec + 3, (uint16_t)len);
         memcpy(rec + 5, data, len);
         return net_tcp_send(rec, 5 + len);
+    }
+
+    if (tls13) {
+        /* TLS 1.3: outer type application_data; inner type trailing byte. */
+        if (len + 1 > sizeof(rec) - 5 - 16)
+            return -1;
+        uint8_t plain[16001];
+        memcpy(plain, data, len);
+        plain[len] = type;
+        size_t plen = len + 1;
+        uint8_t aad[5];
+        aad[0] = TLS_CONTENT_APP;
+        aad[1] = 0x03;
+        aad[2] = 0x03;
+        tls_wr16(aad + 3, (uint16_t)(plen + 16));
+        uint8_t cipher[16016];
+        uint8_t tag[16];
+        uint8_t nonce[12];
+        tls13_nonce(nonce, client_iv, client_seq);
+        int enc_rc;
+        if (cipher_kind == CIPHER_CHACHA20)
+            enc_rc = chacha20_poly1305_encrypt(client_key, nonce, aad, 5, plain, plen, cipher, tag);
+        else if (cipher_kind == CIPHER_AES256_GCM)
+            enc_rc = aes256_gcm_encrypt(client_key, nonce, aad, 5, plain, plen, cipher, tag);
+        else
+            enc_rc = aes128_gcm_encrypt(client_key, nonce, aad, 5, plain, plen, cipher, tag);
+        if (enc_rc != 0)
+            return -1;
+        size_t payload = plen + 16;
+        rec[0] = TLS_CONTENT_APP;
+        rec[1] = 0x03;
+        rec[2] = 0x03;
+        tls_wr16(rec + 3, (uint16_t)payload);
+        memcpy(rec + 5, cipher, plen);
+        memcpy(rec + 5 + plen, tag, 16);
+        client_seq++;
+        return net_tcp_send(rec, 5 + payload);
     }
 
     uint8_t aad[13];
@@ -70,7 +115,6 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
         return -1;
 
     if (cipher_kind == CIPHER_CHACHA20) {
-        /* RFC 7905: nonce = IV XOR (0x00000000 || seq); no explicit nonce in record */
         uint8_t nonce[12];
         memcpy(nonce, client_iv, 12);
         uint8_t seqb[8];
@@ -90,7 +134,6 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
         return net_tcp_send(rec, 5 + payload);
     }
 
-    /* AES-GCM: 4-byte fixed IV + 8-byte explicit nonce */
     uint8_t iv[12];
     memcpy(iv, client_iv, 4);
     uint8_t explicit[8];
@@ -122,14 +165,9 @@ int tls_recv_record(uint8_t *type_out, uint8_t *buf, size_t cap, size_t *out_len
         return -1;
     uint8_t type = hdr[0];
     uint16_t len = tls_rd16(hdr + 3);
-    /* TLS 1.2 ciphertext: 16384 plaintext + IV/tag overhead (RFC 5246 §6.2.3).
-     * Static, not stack: the kernel stack is 8 KiB. Single TLS session only. */
     static uint8_t payload[16384 + 512];
     if (len > sizeof(payload))
         return -1;
-    /* Header consumed — we are committed to this record. Bailing out here
-     * desyncs the byte stream and the AEAD sequence, killing the session,
-     * so wait out retransmission stalls (timer resets on progress). */
     uint32_t body_timeout = timeout_ticks > NET_TLS_RECORD_BODY_TICKS
                                 ? timeout_ticks
                                 : NET_TLS_RECORD_BODY_TICKS;
@@ -142,6 +180,55 @@ int tls_recv_record(uint8_t *type_out, uint8_t *buf, size_t cap, size_t *out_len
         memcpy(buf, payload, len);
         *out_len = len;
         *type_out = type;
+        return 0;
+    }
+
+    if (tls13) {
+        if (type == TLS_CONTENT_CCS) {
+            /* Middlebox compatibility CCS — ignore (not encrypted). */
+            *out_len = 0;
+            *type_out = TLS_CONTENT_CCS;
+            return 0;
+        }
+        if (len < 16)
+            return -1;
+        size_t clen = len - 16;
+        uint8_t aad[5];
+        aad[0] = type;
+        aad[1] = hdr[1];
+        aad[2] = hdr[2];
+        tls_wr16(aad + 3, len);
+        uint8_t plain[16384 + 1];
+        if (clen > sizeof(plain))
+            return -1;
+        uint8_t nonce[12];
+        tls13_nonce(nonce, server_iv, server_seq);
+        int dec_rc;
+        if (cipher_kind == CIPHER_CHACHA20)
+            dec_rc = chacha20_poly1305_decrypt(server_key, nonce, aad, 5, payload, clen,
+                                               payload + clen, plain);
+        else if (cipher_kind == CIPHER_AES256_GCM)
+            dec_rc = aes256_gcm_decrypt(server_key, nonce, aad, 5, payload, clen, payload + clen,
+                                        plain);
+        else
+            dec_rc = aes128_gcm_decrypt(server_key, nonce, aad, 5, payload, clen, payload + clen,
+                                        plain);
+        if (dec_rc != 0)
+            return -1;
+        server_seq++;
+        /* TLSInnerPlaintext = content || type || zero padding */
+        size_t i = clen;
+        while (i > 0 && plain[i - 1] == 0)
+            i--;
+        if (i == 0)
+            return -1;
+        uint8_t inner = plain[i - 1];
+        size_t plen = i - 1;
+        if (plen > cap)
+            return -1;
+        memcpy(buf, plain, plen);
+        *out_len = plen;
+        *type_out = inner;
         return 0;
     }
 

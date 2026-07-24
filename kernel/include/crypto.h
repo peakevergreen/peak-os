@@ -21,6 +21,23 @@ void tls_prf_sha256(const uint8_t *secret, size_t secret_len, const char *label,
 void tls_prf_sha384(const uint8_t *secret, size_t secret_len, const char *label,
                     const uint8_t *seed, size_t seed_len, uint8_t *out, size_t out_len);
 
+/* HKDF (RFC 5869) */
+void hkdf_extract_sha256(const uint8_t *salt, size_t salt_len, const uint8_t *ikm, size_t ikm_len,
+                         uint8_t prk[32]);
+void hkdf_extract_sha384(const uint8_t *salt, size_t salt_len, const uint8_t *ikm, size_t ikm_len,
+                         uint8_t prk[48]);
+void hkdf_expand_sha256(const uint8_t prk[32], const uint8_t *info, size_t info_len, uint8_t *out,
+                        size_t out_len);
+void hkdf_expand_sha384(const uint8_t prk[48], const uint8_t *info, size_t info_len, uint8_t *out,
+                        size_t out_len);
+/* TLS 1.3 HKDF-Expand-Label / Derive-Secret. sha384=1 selects SHA-384. */
+int tls13_hkdf_expand_label(int sha384, const uint8_t *secret, size_t secret_len, const char *label,
+                            const uint8_t *context, size_t context_len, uint8_t *out,
+                            size_t out_len);
+int tls13_derive_secret(int sha384, const uint8_t *secret, size_t secret_len, const char *label,
+                        const uint8_t *transcript_hash, size_t hash_len, uint8_t *out,
+                        size_t out_len);
+
 void aes128_encrypt_block(const uint8_t key[16], const uint8_t in[16], uint8_t out[16]);
 void aes256_encrypt_block(const uint8_t key[32], const uint8_t in[16], uint8_t out[16]);
 

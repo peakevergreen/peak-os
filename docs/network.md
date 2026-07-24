@@ -76,12 +76,14 @@ this minimal in-guest client; TOFU/pins provide continuity, not WebPKI assurance
 - TCP client and TCP listen/accept
 - HTTP/1.0 GET client with redirect following
 - Container static HTTP server (GET/HEAD)
-- **TLS 1.2**: ECDHE (X25519 or P-256) + AES-128/256-GCM or ChaCha20-Poly1305; ALPN `http/1.1`
-- **Handshake auth**: ServerKeyExchange signatures verified (ECDSA-P256-SHA256, RSA-PSS /
-  RSA-PKCS1-SHA256); server Finished `verify_data` checked against the transcript PRF
+- **TLS 1.2 / 1.3**: ECDHE (X25519 or P-256 on 1.2) + AES-128/256-GCM or ChaCha20-Poly1305;
+  ALPN `http/1.1`; TLS 1.3 via `supported_versions` + `key_share` (X25519)
+- **Handshake auth**: ServerKeyExchange (1.2) / CertificateVerify (1.3) signatures verified;
+  Finished `verify_data` checked against transcript PRF/HMAC
 - **Crypto TUs** (Peak-authored + Apache-2.0 p256-m adapted for P-256): `crypto_hash.c` /
-  `crypto_sha384.c` (SHA-256/384, HMAC, PRF), `crypto_aead.c` (AES-GCM + ChaCha20-Poly1305),
-  `crypto_x25519.c`, `crypto_p256.c`, `crypto_rsa.c` (RSA verify), `crypto.c` (RNG glue).
+  `crypto_sha384.c` (SHA-256/384, HMAC, PRF), `crypto_hkdf.c` (HKDF / TLS 1.3 labels),
+  `crypto_aead.c` (AES-GCM + ChaCha20-Poly1305), `crypto_x25519.c`, `crypto_p256.c`,
+  `crypto_rsa.c` (RSA verify), `crypto.c` (RNG glue).
   Audit: every exported primitive is used by TLS, PeakDisk, or CSPRNG — no dead algos.
 
 ## Limits
