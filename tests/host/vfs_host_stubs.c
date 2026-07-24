@@ -1,13 +1,64 @@
 /*
- * Host stubs for linking kernel/vfs.c + vfs_peakfs.c under PEAK_HOST_TEST.
- * Blobstore is unavailable — tests exercise heap-backed VFS paths only.
+ * Host stubs for linking kernel/vfs.c + vfs_peakfs.c + blobstore.c under
+ * PEAK_HOST_TEST. Heap-backed VFS is default; call vfs_host_blob_reset() to
+ * enable the in-memory blockdev + blobstore for large-file tests.
  */
 #include "heap.h"
 #include "privacy.h"
 #include "blobstore.h"
+#include "blockdev.h"
+#include "cap.h"
 
 #include <stdlib.h>
 #include <string.h>
+
+#define HOST_BD_SECTORS 65536u
+
+static uint8_t *g_disk;
+
+int cap_check(uint32_t need) {
+    (void)need;
+    return 1;
+}
+
+static int host_bd_present(void) {
+    return g_disk != NULL;
+}
+
+static int host_bd_read(uint64_t lba, uint32_t count, void *buf) {
+    if (!g_disk || lba + count > HOST_BD_SECTORS)
+        return -1;
+    memcpy(buf, g_disk + (size_t)lba * BLOCKDEV_SECTOR_SIZE,
+           (size_t)count * BLOCKDEV_SECTOR_SIZE);
+    return 0;
+}
+
+static int host_bd_write(uint64_t lba, uint32_t count, const void *buf) {
+    if (!g_disk || lba + count > HOST_BD_SECTORS)
+        return -1;
+    memcpy(g_disk + (size_t)lba * BLOCKDEV_SECTOR_SIZE, buf,
+           (size_t)count * BLOCKDEV_SECTOR_SIZE);
+    return 0;
+}
+
+static int host_bd_flush(void) {
+    return 0;
+}
+
+static const struct blockdev_ops host_bd = {
+    .name = "host-mem",
+    .present = host_bd_present,
+    .read = host_bd_read,
+    .write = host_bd_write,
+    .flush = host_bd_flush,
+};
+
+void vfs_host_blob_reset(void) {
+    free(g_disk);
+    g_disk = calloc(1, (size_t)HOST_BD_SECTORS * BLOCKDEV_SECTOR_SIZE);
+    blockdev_register(&host_bd);
+    blobstore_init();
+}
 
 static int g_persist_profile = 2; /* full — matches default session */
 
@@ -96,68 +147,3 @@ void privacy_set_listeners_localhost_only(int on) {
     (void)on;
 }
 
-void blobstore_init(void) {}
-
-int blobstore_available(void) {
-    return 0;
-}
-
-int blobstore_create(uint32_t *out_id, size_t size) {
-    (void)out_id;
-    (void)size;
-    return -1;
-}
-
-int blobstore_delete(uint32_t id) {
-    (void)id;
-    return -1;
-}
-
-int blobstore_resize(uint32_t id, size_t new_size) {
-    (void)id;
-    (void)new_size;
-    return -1;
-}
-
-size_t blobstore_size(uint32_t id) {
-    (void)id;
-    return 0;
-}
-
-int blobstore_read(uint32_t id, size_t off, void *buf, size_t len) {
-    (void)id;
-    (void)off;
-    (void)buf;
-    (void)len;
-    return -1;
-}
-
-int blobstore_write(uint32_t id, size_t off, const void *buf, size_t len) {
-    (void)id;
-    (void)off;
-    (void)buf;
-    (void)len;
-    return -1;
-}
-
-int blobstore_sync(void) {
-    return 0;
-}
-
-int blobstore_load(void) {
-    return -1;
-}
-
-uint32_t blobstore_object_count(void) {
-    return 0;
-}
-
-uint32_t blobstore_cache_pages_used(void) {
-    return 0;
-}
-
-int blobstore_cached_at(uint32_t id, size_t off) {
-    (void)id;
-    (void)off;
-    return 0;
-}

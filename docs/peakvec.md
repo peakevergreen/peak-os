@@ -13,11 +13,28 @@ PeakVec is a Peak-authored, in-guest vector index for session/workspace context.
 
 `kernel/blobstore.c` — block-backed object store starting at LBA 8192 (4 MiB), with:
 
-- bump-allocated extents
-- 48×4 KiB LRU page cache
+- bump-allocated extents (grow-in-place only for the tip object)
+- 48×4 KiB LRU page cache (override `BLOBSTORE_CACHE_PAGES` in host tests)
 - sync on PeakDisk save
 
 PeakFS persistence itself is **streamed** (no fixed 512 KiB snapshot cap); see `peakdisk_save` / `vfs_export_ramdisk_size`.
+
+### VFS large files
+
+When blobstore is available, `vfs_create_blob_file` / `vfs_bind_blob` store file bodies on disk (`vfs_node.blob_id`) instead of the heap. Ranged I/O goes through `vfs_read_at` / `vfs_write_at`; PeakFS export materializes blob bytes through the LRU cache (streaming export is future work).
+
+## Limits (honest)
+
+| limit | value | notes |
+|-------|-------|-------|
+| `PEAKVEC_DIM` | 64 | hashed n-gram embedder |
+| `PEAKVEC_MAX_ENTRIES` | 4096 | per index; namespaces share the table |
+| `PEAKVEC_TOPK_MAX` | 8 | query cap |
+| IVF-lite probe | ≥64 live entries | 16 coarse buckets; remainder scanned |
+| Blobstore objects | 256 | bump allocator; 256 MiB data cap |
+| RAM index fallback | `/var/peak/vec` | used when blockdev absent |
+
+PeakVec prefers blobstore on fresh init (`peakvec_init`); a tiny VFS pointer file (`blob:<id>`) remains for discoverability.
 
 ## API
 

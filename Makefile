@@ -426,8 +426,8 @@ $(eval $(call HOST_TEST_RULE,dom,tests/host/test_dom.c tests/host/dom_host_stubs
 	kernel/gui/dom_core.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui))
 $(eval $(call HOST_TEST_RULE,vfs,tests/host/test_vfs.c tests/host/vfs_host_stubs.c \
-	kernel/vfs.c kernel/vfs_peakfs.c kernel/vfs_path_util.c,\
-	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
+	kernel/vfs.c kernel/vfs_peakfs.c kernel/vfs_path_util.c kernel/blobstore.c kernel/blockdev.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DBLOBSTORE_CACHE_PAGES=4 $(HOST_TEST_INC_KERNEL)))
 
 smoke:
 	./scripts/smoke-cli.sh
