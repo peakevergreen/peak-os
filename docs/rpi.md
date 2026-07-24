@@ -89,7 +89,9 @@ Boot page tables identity-map 0–4 GiB only. BCM2712 peripheral windows sit abo
 
 QEMU `-M raspi3b` is expected to reach boot markers (`Boot complete` / `peak:/`) with mailbox FB and DWC2 host init; CI `smoke-aarch64` enforces those markers (not bare `Pk`). Use real Pi 3 silicon for HDMI + USB keyboard/mouse acceptance ([scripts/pi3-hw-checklist.md](../scripts/pi3-hw-checklist.md)).
 
-aarch64 userspace ELF execution is intentionally gated until a real `eret` entry path exists in `kernel/elf.c`; ring-3 binaries are not launched on Pi builds yet.
+aarch64 userspace ELF execution uses `eret` to EL0t from `kernel/elf.c`; ring-3
+binaries can be launched on Pi builds when mapped with user pages. Per-process
+fds: `PROC_FD_MAX` 32.
 
 ## Layout
 

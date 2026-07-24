@@ -12,7 +12,8 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
   - Software preflight landed (HID wheel, FB NC pageflip map, Save UX, strict `smoke-aarch64`); **silicon boxes still open**
 - Finish **USB LAN / GENET / RP1 GEM** datapaths and **SDIO Wi‑Fi** association (after hub path is silicon-validated)
 - Pi 5 high MMIO / peri bring-up when mapped; xHCI rings still absent
-- Enable aarch64 **userspace ELF** (`eret` entry) when ready
+- [x] Enable aarch64 **userspace ELF** (`eret` to EL0t) when ready
+- [x] Deeper ring-3 `/bin/sh` ELF workload + per-process fds (`PROC_FD_MAX` 32)
 
 ### Security (Phase S remainder)
 
@@ -27,7 +28,7 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 ### Userspace & networking
 
-- Deeper ring-3 `/bin/sh` ELF workload + per-process fds
+- [x] Deeper ring-3 `/bin/sh` ELF workload + per-process fds (`PROC_FD_MAX` 32)
 - [x] **virtio-net** (preferred over e1000 on QEMU) + richer socket API (`net_tcp_fd_peer` / `local` / `shutdown`)
 
 ### Agent / storage
