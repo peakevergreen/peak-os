@@ -12,9 +12,13 @@
  *     the lifetime of e1000_init(); the NIC reads/writes them via physical addrs
  *     programmed into RDBAL/TDBAL.
  *   - RX: each slot's buffer stays NIC-owned until DD is set; e1000_recv copies
- *     out, clears DD, advances RDT — the buffer returns to the NIC.
+ *     out, clears DD, and advances the software tail. E1000_REG_RDT is written
+ *     once when a drain burst ends (next descriptor not DD), so net_poll's
+ *     multi-packet loop pays one MMIO poke per burst instead of per frame.
  *   - TX: each slot's buffer is driver-owned until DD is set after transmit;
- *     e1000_send waits for DD, copies payload in, clears DD, posts TDT.
+ *     e1000_send posts the next free ring slot (depth allows multiple
+ *     outstanding), copies payload in, clears DD, posts TDT. Waits only when
+ *     the ring is full.
  *   - Callers of e1000_send/e1000_recv only borrow stack/local memory; they never
  *     touch ring pages directly.
  */
@@ -63,8 +67,10 @@
 #define CMD_RS             (1u << 3)
 
 #define RX_DESC_COUNT 32
-#define TX_DESC_COUNT 8
+#define TX_DESC_COUNT 32
 #define RX_BUF_SIZE   2048
+/* Bounded wait when the TX ring is full (all descriptors in flight). */
+#define TX_FULL_SPINS 10000
 
 #define DESC_DD 1u /* descriptor done — buffer back to driver (TX) or ready (RX) */
 
@@ -97,6 +103,7 @@ struct e1000_tx_ring {
     struct e1000_tx_desc *descs;
     uint8_t *bufs[TX_DESC_COUNT];
     uint32_t tail;                 /* next slot to post on TDT */
+    uint32_t pending;              /* descriptors posted, not yet recycled */
 };
 
 static volatile uint32_t *mmio;
@@ -174,6 +181,7 @@ static int tx_ring_init(uint64_t *ring_phys) {
         tx.descs[i].status = DESC_DD; /* idle — driver may fill buffer */
     }
     tx.tail = 0;
+    tx.pending = 0;
     return 0;
 }
 
@@ -244,14 +252,35 @@ void e1000_get_mac(uint8_t mac[6]) {
         mac[i] = mac_addr[i];
 }
 
+/* Recycle completed TX descriptors from the oldest outstanding slot. */
+static void tx_reclaim(void) {
+    while (tx.pending > 0) {
+        uint32_t oldest = (tx.tail + TX_DESC_COUNT - tx.pending) % TX_DESC_COUNT;
+        if (!(tx.descs[oldest].status & DESC_DD))
+            break;
+        tx.pending--;
+    }
+}
+
 int e1000_send(const void *data, uint16_t len) {
     if (!ready || len == 0 || len > 1518)
         return -1;
 
+    tx_reclaim();
+
+    /* Wait only if every slot is still in flight — otherwise post next free. */
+    if (tx.pending >= TX_DESC_COUNT) {
+        struct e1000_tx_desc *oldest =
+            &tx.descs[(tx.tail + TX_DESC_COUNT - tx.pending) % TX_DESC_COUNT];
+        int spins = TX_FULL_SPINS;
+        while (!(oldest->status & DESC_DD) && spins--)
+            ;
+        tx_reclaim();
+        if (tx.pending >= TX_DESC_COUNT)
+            return -1;
+    }
+
     struct e1000_tx_desc *d = &tx.descs[tx.tail];
-    int spins = 100000;
-    while (!(d->status & DESC_DD) && spins--)
-        ;
     if (!(d->status & DESC_DD))
         return -1;
 
@@ -261,6 +290,7 @@ int e1000_send(const void *data, uint16_t len) {
     d->cmd = CMD_EOP | CMD_IFCS | CMD_RS;
     d->status = 0;
     tx.tail = (tx.tail + 1) % TX_DESC_COUNT;
+    tx.pending++;
     mmio_write(E1000_REG_TDT, tx.tail);
     stat_tx_packets++;
     stat_tx_bytes += len;
@@ -287,11 +317,16 @@ int e1000_recv(void *buf, uint16_t cap) {
     if (len > cap)
         len = cap;
     memcpy(buf, rx.bufs[next], len);
-    d->status = 0; /* hand buffer back to NIC */
+    d->status = 0; /* hand buffer back to NIC (software tail; RDT below) */
     rx.tail = next;
-    mmio_write(E1000_REG_RDT, rx.tail);
     stat_rx_packets++;
     stat_rx_bytes += len;
+
+    /* Batch RDT: one MMIO write when this drain burst has no further DD. */
+    uint32_t peek = (rx.tail + 1) % RX_DESC_COUNT;
+    if (!(rx.descs[peek].status & DESC_DD))
+        mmio_write(E1000_REG_RDT, rx.tail);
+
     return (int)len;
 }
 
