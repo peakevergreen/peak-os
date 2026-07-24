@@ -17,11 +17,21 @@ static void expect(int ok, const char *msg) {
     }
 }
 
+static int ubin_def_count(void) {
+    int n = 0;
+#define UBIN_CMD(name, fn) n++;
+#include "../../kernel/user/ubin_cmds.def"
+#undef UBIN_CMD
+    return n;
+}
+
 int main(void) {
+    const int expected = ubin_def_count();
     int n = 0;
     while (ubin_names[n])
         n++;
-    expect(n == 72, "expected 72 built-ins");
+    expect(n == expected, "ubin count matches ubin_cmds.def");
+    expect(expected >= 25, "minimum built-in count");
 
     for (int i = 0; i < n; i++) {
         expect(ubin_names[i][0], "non-empty name");

@@ -166,6 +166,37 @@ int main(void) {
         expect(pl.nstages == 1, "quoted no split");
         expect(strcmp(pl.stages[0].argv[1], "a | b") == 0, "quoted keeps |");
     }
+    {
+        char buf[] = "echo a | grep a | wc -l";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) == 0, "3-stage pipe");
+        expect(pl.nstages == 3, "3 stages");
+        expect(strcmp(pl.stages[2].argv[0], "wc") == 0, "stage2 cmd");
+        expect(pl.stages[2].argc == 2, "stage2 argc");
+    }
+    {
+        char buf[] = "grep x file | sort > out.txt";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) == 0, "pipe + redir");
+        expect(pl.nstages == 2, "pipe+redir stages");
+        expect(pl.stages[1].redir_out.kind == SHELL_REDIR_OUT, "final redir");
+        expect(strcmp(pl.stages[1].redir_out.path, "out.txt") == 0, "final path");
+    }
+    {
+        char buf[] = "| echo hi";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) != 0, "leading pipe fail");
+    }
+    {
+        char buf[] = "echo hi > a > b";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) != 0, "duplicate out redir");
+    }
+    {
+        char buf[] = "a | b | c | d | e";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) != 0, "pipe max exceeded");
+    }
 
     if (fails) {
         fprintf(stderr, "%d shell_split test(s) failed\n", fails);
