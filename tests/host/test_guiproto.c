@@ -1,5 +1,6 @@
 /*
  * Host tests for userspace GUI protocol dispatch (links kernel/gui/guiproto.c).
+ * Also covers soft surface-budget reclaim (test build uses 512 KiB budget).
  */
 #include "types.h"
 #include "guiproto.h"
@@ -15,6 +16,51 @@ static void expect(int cond, const char *msg) {
         fprintf(stderr, "FAIL: %s\n", msg);
         fails++;
     }
+}
+
+static void test_surface_budget_reclaim(void) {
+    struct win_surface a, b, c;
+
+    surface_init();
+    memset(&a, 0, sizeof(a));
+    memset(&b, 0, sizeof(b));
+    memset(&c, 0, sizeof(c));
+
+    expect(surface_budget() == SURFACE_BUDGET_BYTES, "budget constant");
+    expect(surface_bytes_used() == 0, "bytes used starts empty");
+    expect(surface_ensure(NULL, 16, 16) == SURFACE_ERR_INVAL, "null surface");
+    expect(surface_ensure(&a, 0, 16) == SURFACE_ERR_INVAL, "zero width");
+
+    /* 256x256 ARGB = 256 KiB each; two fit in 512 KiB soft budget. */
+    expect(surface_ensure(&a, 256, 256) == SURFACE_OK, "alloc a");
+    expect(surface_ensure(&b, 256, 256) == SURFACE_OK, "alloc b");
+    expect(surface_bytes_used() == 2ull * 256ull * 256ull * 4ull, "two surfaces tracked");
+    expect(surface_pressure_pct() == 100, "at soft budget");
+
+    /* Third active surface exceeds budget with nothing reclaimable → refuse. */
+    expect(surface_ensure(&c, 256, 256) == SURFACE_ERR_BUDGET, "budget refuse");
+    expect(c.px == NULL, "c not allocated");
+    expect(surface_bytes_used() == 2ull * 256ull * 256ull * 4ull, "usage unchanged");
+
+    /* Mark b unused; next ensure reclaims b and admits c. */
+    surface_set_reclaimable(&b, 1);
+    expect(surface_ensure(&c, 256, 256) == SURFACE_OK, "alloc c after reclaim");
+    expect(c.px != NULL, "c has pixels");
+    expect(b.px == NULL, "b reclaimed");
+    expect(b.reclaimable == 0, "reclaim clears flag");
+    expect(surface_bytes_used() == 2ull * 256ull * 256ull * 4ull, "still two live");
+    expect(c.reclaimable == 0, "active surface not reclaimable");
+
+    /* Explicit reclaim of remaining reclaimable (none) then free. */
+    surface_set_reclaimable(&a, 1);
+    expect(surface_reclaim(0, &c) >= 256ull * 256ull * 4ull, "reclaim all unused");
+    expect(a.px == NULL, "a reclaimed by API");
+    expect(surface_bytes_used() == 256ull * 256ull * 4ull, "only c remains");
+
+    surface_free(&c);
+    surface_free(&b);
+    surface_free(&a);
+    expect(surface_bytes_used() == 0, "freed to zero");
 }
 
 int main(void) {
@@ -82,6 +128,8 @@ int main(void) {
     msg.op = GUI_OP_CREATE;
     expect(guiproto_dispatch(&msg) == -1, "table full");
     expect(guiproto_window_count() == 16, "max windows");
+
+    test_surface_budget_reclaim();
 
     if (fails) {
         fprintf(stderr, "%d guiproto test(s) failed\n", fails);
