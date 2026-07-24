@@ -218,6 +218,22 @@ int main(void) {
         expect(!vfs_exists("/home"), "tree gone");
     }
 
+    /* --- many siblings (bucket collision stress) --- */
+    {
+        reset_vfs();
+        vfs_mkdir("/home");
+        char path[64];
+        for (int i = 0; i < 40; i++) {
+            snprintf(path, sizeof(path), "/home/f%02d", i);
+            expect(vfs_write_file(path, "x", 1) == 0, "sibling write");
+        }
+        for (int i = 0; i < 40; i++) {
+            snprintf(path, sizeof(path), "/home/f%02d", i);
+            expect(vfs_is_file(path), "sibling lookup");
+        }
+        expect(vfs_node_count() > 40, "nodes allocated");
+    }
+
     /* --- walk / readdir errno --- */
     {
         reset_vfs();

@@ -9,7 +9,7 @@ static int node_count;
 static struct vfs_node *root;
 /* First-character child buckets: 0 = empty, else 1-based index into nodes[].
  * 16 buckets (was 32) halves BSS (~128 KiB) with the same first-char probe. */
-#define VFS_CHILD_BUCKETS 16u
+#define VFS_CHILD_BUCKETS 8u
 static uint16_t child_bucket[VFS_MAX_NODES][VFS_CHILD_BUCKETS];
 
 static int node_index(struct vfs_node *n) {
