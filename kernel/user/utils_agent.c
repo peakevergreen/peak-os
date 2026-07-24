@@ -18,15 +18,13 @@ int uask_main(int argc, char **argv) {
         peak_usage("ask", "<prompt...>  (quotes: ask \"create fib.c\")");
         return argc < 2 ? 1 : 0;
     }
-    char buf[512];
-    size_t o = 0;
-    for (int i = 1; i < argc && o + 1 < sizeof(buf); i++) {
-        if (i > 1 && o < sizeof(buf) - 1)
-            buf[o++] = ' ';
-        for (const char *p = argv[i]; *p && o + 1 < sizeof(buf); p++)
-            buf[o++] = *p;
+    /* Quoted prompts arrive as a single argv — skip join copy. */
+    if (argc == 2) {
+        agent_ask(argv[1]);
+        return 0;
     }
-    buf[o] = 0;
+    char buf[512];
+    peak_join_args(argc, argv, 1, buf, sizeof(buf));
     agent_ask(buf);
     return 0;
 }

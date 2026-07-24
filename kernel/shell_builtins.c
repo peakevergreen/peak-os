@@ -22,27 +22,22 @@ const char *shell_getcwd(void) {
 int shell_resolve_path(const char *in, char *out, size_t out_len) {
     if (!in || !out || out_len < 2)
         return -1;
+    /* Absolute: normalize directly — skip the VFS_PATH_MAX temp copy. */
+    if (in[0] == '/')
+        return vfs_normalize(in, out, out_len);
+
     char tmp[VFS_PATH_MAX];
-    if (in[0] == '/') {
-        size_t n = 0;
-        while (in[n] && n + 1 < sizeof(tmp)) {
-            tmp[n] = in[n];
-            n++;
-        }
-        tmp[n] = '\0';
-    } else {
-        size_t o = 0;
-        for (; cwd[o] && o + 1 < sizeof(tmp); o++)
-            tmp[o] = cwd[o];
-        if (!(o == 1 && tmp[0] == '/')) {
-            if (o + 1 >= sizeof(tmp))
-                return -1;
-            tmp[o++] = '/';
-        }
-        for (size_t i = 0; in[i] && o + 1 < sizeof(tmp); i++)
-            tmp[o++] = in[i];
-        tmp[o] = '\0';
+    size_t o = 0;
+    for (; cwd[o] && o + 1 < sizeof(tmp); o++)
+        tmp[o] = cwd[o];
+    if (!(o == 1 && tmp[0] == '/')) {
+        if (o + 1 >= sizeof(tmp))
+            return -1;
+        tmp[o++] = '/';
     }
+    for (size_t i = 0; in[i] && o + 1 < sizeof(tmp); i++)
+        tmp[o++] = in[i];
+    tmp[o] = '\0';
     return vfs_normalize(tmp, out, out_len);
 }
 

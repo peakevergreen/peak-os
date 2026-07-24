@@ -4,27 +4,27 @@
 #include "elf.h"
 #include "util.h"
 
-void shell_execute(const char *cmd_in) {
-    char cmdbuf[256];
-    size_t n = 0;
-    while (cmd_in[n] && n + 1 < sizeof(cmdbuf)) {
-        cmdbuf[n] = cmd_in[n];
-        n++;
-    }
-    cmdbuf[n] = '\0';
-    char *cmd = cmdbuf;
+/*
+ * Mutates cmd in place (quote-split writes NULs). Callers must pass a
+ * writable buffer — avoids a per-command 256B stack copy.
+ */
+void shell_execute(char *cmd) {
+    if (!cmd)
+        return;
     while (*cmd == ' ')
         cmd++;
     if (!*cmd)
         return;
 
-    /* export NAME=val as shorthand */
+    /* export NAME=val as shorthand — rest is one argv, no re-split */
     if (!strncmp(cmd, "export ", 7)) {
         char *rest = cmd + 7;
         while (*rest == ' ')
             rest++;
-        char *argv[4] = { "export", rest, NULL };
-        char path[64] = "/bin/export";
+        if (!*rest)
+            return;
+        char *argv[3] = { "export", rest, NULL };
+        char path[] = "/bin/export";
         proc_exec(path, 2, argv);
         return;
     }
@@ -34,7 +34,12 @@ void shell_execute(const char *cmd_in) {
     if (argc < 1)
         return;
 
-    char path[64] = "/bin/";
+    char path[64];
+    path[0] = '/';
+    path[1] = 'b';
+    path[2] = 'i';
+    path[3] = 'n';
+    path[4] = '/';
     size_t i = 5;
     for (size_t j = 0; argv[0][j] && i + 1 < sizeof(path); j++)
         path[i++] = argv[0][j];

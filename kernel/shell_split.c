@@ -4,6 +4,10 @@
 #include "shell_split.h"
 #endif
 
+/*
+ * In-place argv split. Writes NULs into cmd; argv[] points into cmd.
+ * No heap / scratch allocation — caller supplies argv storage.
+ */
 int shell_split_args(char *cmd, char **argv, int max) {
     int argc = 0;
     char *p = cmd;

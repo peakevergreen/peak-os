@@ -16,5 +16,8 @@ int  peak_atoi(const char *s);
 int  peak_has_flag(int argc, char **argv, const char *flag);
 const char *peak_flag_arg(int argc, char **argv, const char *flag); /* value after -n */
 int  peak_wants_help(int argc, char **argv);
+/* Join argv[start..argc) with single spaces into buf. Returns bytes written
+ * (excluding NUL), or (size_t)-1 on bad args. Empty range writes "". */
+size_t peak_join_args(int argc, char **argv, int start, char *buf, size_t cap);
 
 #endif
