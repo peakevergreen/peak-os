@@ -1,5 +1,6 @@
 #include "agent_internal.h"
 #include "console.h"
+#include "serial.h"
 #include "vfs.h"
 #include "peakvec.h"
 #include "util.h"
@@ -200,8 +201,9 @@ static void set_summary(char *summary, size_t summary_cap, const char *s) {
 }
 
 void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
-    console_write("[agent] planner\n");
-    console_printf("[agent] goal: %s\n", goal);
+    console_write_ui("[agent] planner\n");
+    console_printf_ui("[agent] goal: %s\n", goal);
+    serial_log(SERIAL_LOG_DEBUG, "agent: planner run\n");
 
     char recall[512];
     memory_recall(goal, recall, sizeof(recall));
@@ -307,8 +309,8 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         char listing[512];
         if (agent_tool_fs_list("/home/dev/workspace", listing, sizeof(listing)) == 0) {
             TOOL_NOTE("fs.list");
-            console_write("[agent] workspace:\n");
-            console_write(listing);
+            console_write_ui("[agent] workspace:\n");
+            console_write_ui(listing);
         }
 
         char name[64];
@@ -373,7 +375,8 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             content[o] = '\0';
         }
 
-        console_printf("[agent] tool fs.write %s\n", path);
+        console_printf_ui("[agent] tool fs.write %s\n", path);
+        serial_log(SERIAL_LOG_DEBUG, "agent: fs.write\n");
         int wr = agent_tool_fs_write(path, content, 0);
         TOOL_NOTE("fs.write");
         memcpy(path_used, path, strlen(path) + 1);

@@ -11,10 +11,11 @@ static uint8_t mac[6] = { 0x2c, 0xcf, 0x67, 0x00, 0x00, 0x01 };
 
 static int rp1_init(void) {
     if (rpi_get()->soc != RPI_SOC_BCM2712) {
-        serial_write_str("rp1-eth: wrong SoC (stub)\n");
+        serial_log(SERIAL_LOG_DEBUG, "rp1-eth: wrong SoC (stub)\n");
         return -1;
     }
-    serial_write_str("rp1-eth: stub (not ready; PCIe/GEM datapath deferred)\n");
+    serial_log(SERIAL_LOG_DEBUG,
+               "rp1-eth: stub (not ready; PCIe/GEM datapath deferred)\n");
     return -1;
 }
 

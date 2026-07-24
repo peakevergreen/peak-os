@@ -360,14 +360,12 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
     if (!got_cert || !cert_verified) {
         tls_set_err(cert_fail_reason ? cert_fail_reason
                                      : "TLS certificate unverified");
-        serial_write_str("tls: reject unverified certificate\n");
         goto fail;
     }
 
     uint8_t priv[32], pub[32], premaster[32];
     if (crypto_random(priv, 32) != 0) {
         tls_set_err("RNG not ready for key generation");
-        serial_write_str("tls: crypto RNG not ready\n");
         goto fail;
     }
     x25519_base(pub, priv);
@@ -423,9 +421,10 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                     goto fail;
                 }
                 tls_up = 1;
-                serial_write_str(cipher_kind == CIPHER_CHACHA20
-                                     ? (use_ems ? "tls: ok chacha20+ems\n" : "tls: ok chacha20\n")
-                                     : (use_ems ? "tls: ok aes128-gcm+ems\n" : "tls: ok aes128-gcm\n"));
+                serial_log(SERIAL_LOG_INFO,
+                           cipher_kind == CIPHER_CHACHA20
+                               ? (use_ems ? "tls: ok chacha20+ems\n" : "tls: ok chacha20\n")
+                               : (use_ems ? "tls: ok aes128-gcm+ems\n" : "tls: ok aes128-gcm\n"));
                 return 0;
             }
         }

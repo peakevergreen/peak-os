@@ -67,8 +67,7 @@ static void scroll(void) {
         cursor_row--;
 }
 
-void console_putc(char c) {
-    serial_write(c);
+static void console_putc_screen(char c) {
     if (shell_mode() == MODE_GUI) {
         gui_term_putc(c);
         return;
@@ -106,6 +105,11 @@ void console_putc(char c) {
     }
 }
 
+void console_putc(char c) {
+    serial_write(c);
+    console_putc_screen(c);
+}
+
 void console_backspace(void) {
     if (shell_mode() == MODE_GUI) {
         gui_term_putc('\b');
@@ -127,6 +131,58 @@ void console_backspace(void) {
 void console_write(const char *s) {
     while (*s)
         console_putc(*s++);
+}
+
+void console_write_ui(const char *s) {
+    if (!s)
+        return;
+    while (*s)
+        console_putc_screen(*s++);
+}
+
+static void console_vprintf(void (*putc_fn)(char), void (*write_fn)(const char *),
+                            const char *fmt, va_list ap) {
+    char num[32];
+    for (const char *p = fmt; *p; p++) {
+        if (*p != '%') {
+            putc_fn(*p);
+            continue;
+        }
+        p++;
+        if (*p == 's') {
+            const char *s = va_arg(ap, const char *);
+            write_fn(s ? s : "(null)");
+        } else if (*p == 'c') {
+            putc_fn((char)va_arg(ap, int));
+        } else if (*p == 'd' || *p == 'i') {
+            int v = va_arg(ap, int);
+            if (v < 0) {
+                putc_fn('-');
+                v = -v;
+            }
+            itoa_u((uint64_t)(uint32_t)v, num, 10);
+            write_fn(num);
+        } else if (*p == 'u') {
+            itoa_u(va_arg(ap, uint32_t), num, 10);
+            write_fn(num);
+        } else if (*p == 'x') {
+            itoa_u(va_arg(ap, uint32_t), num, 16);
+            write_fn(num);
+        } else if (*p == 'l' && *(p + 1) == 'u') {
+            p++;
+            itoa_u(va_arg(ap, uint64_t), num, 10);
+            write_fn(num);
+        } else if (*p == 'l' && *(p + 1) == 'x') {
+            p++;
+            itoa_u(va_arg(ap, uint64_t), num, 16);
+            write_fn(num);
+        } else if (*p == '%') {
+            putc_fn('%');
+        } else {
+            putc_fn('%');
+            putc_fn(*p);
+        }
+    }
 }
 
 /* Gentoo brand: purple brackets + green ok (classic emerge/OpenRC feel). */
@@ -197,46 +253,13 @@ void console_status_fail(const char *msg) {
 void console_printf(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    char num[32];
-    for (const char *p = fmt; *p; p++) {
-        if (*p != '%') {
-            console_putc(*p);
-            continue;
-        }
-        p++;
-        if (*p == 's') {
-            const char *s = va_arg(ap, const char *);
-            console_write(s ? s : "(null)");
-        } else if (*p == 'c') {
-            console_putc((char)va_arg(ap, int));
-        } else if (*p == 'd' || *p == 'i') {
-            int v = va_arg(ap, int);
-            if (v < 0) {
-                console_putc('-');
-                v = -v;
-            }
-            itoa_u((uint64_t)(uint32_t)v, num, 10);
-            console_write(num);
-        } else if (*p == 'u') {
-            itoa_u(va_arg(ap, uint32_t), num, 10);
-            console_write(num);
-        } else if (*p == 'x') {
-            itoa_u(va_arg(ap, uint32_t), num, 16);
-            console_write(num);
-        } else if (*p == 'l' && *(p + 1) == 'u') {
-            p++;
-            itoa_u(va_arg(ap, uint64_t), num, 10);
-            console_write(num);
-        } else if (*p == 'l' && *(p + 1) == 'x') {
-            p++;
-            itoa_u(va_arg(ap, uint64_t), num, 16);
-            console_write(num);
-        } else if (*p == '%') {
-            console_putc('%');
-        } else {
-            console_putc('%');
-            console_putc(*p);
-        }
-    }
+    console_vprintf(console_putc, console_write, fmt, ap);
+    va_end(ap);
+}
+
+void console_printf_ui(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    console_vprintf(console_putc_screen, console_write_ui, fmt, ap);
     va_end(ap);
 }

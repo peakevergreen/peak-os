@@ -2,6 +2,7 @@
 #include "agent_internal.h"
 #include "vfs.h"
 #include "console.h"
+#include "serial.h"
 #include "util.h"
 #include "fb.h"
 
@@ -28,7 +29,8 @@ int agent_queue_write_approval(const char *path, const char *content) {
     write_wait = 1;
     write_approved = 0;
     pending++;
-    console_printf("[agent] approval required: fs.write %s (Y/N in Agent)\n", path);
+    console_printf_ui("[agent] approval required: fs.write %s (Y/N in Agent)\n", path);
+    serial_log(SERIAL_LOG_DEBUG, "agent: write approval pending\n");
     return 0;
 }
 

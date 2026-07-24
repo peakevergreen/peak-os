@@ -9,7 +9,8 @@
 static uint8_t mac[6] = { 0xb8, 0x27, 0xeb, 0x00, 0x00, 0x01 };
 
 static int lan_init(void) {
-    serial_write_str("usb-lan: stub (not ready; hub/bulk datapath deferred)\n");
+    serial_log(SERIAL_LOG_DEBUG,
+               "usb-lan: stub (not ready; hub/bulk datapath deferred)\n");
     return -1;
 }
 

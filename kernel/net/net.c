@@ -267,7 +267,7 @@ int net_init(void) {
     local_gw = boot_net.gw;
     local_dns = boot_net.dns;
     if (net_dhcp_try(boot_net.dhcp_timeout_ticks) != 0) {
-        serial_write_str("net: address configuration failed\n");
+        serial_log(SERIAL_LOG_WARN, "net: address configuration failed\n");
         net_up = 0;
         return PEAK_EDHCP;
     }

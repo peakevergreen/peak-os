@@ -67,7 +67,7 @@ int peakdisk_save(void) {
     if (!cap_check(CAP_DISK_PERSIST))
         return -1;
     if (privacy_persist_profile() <= 0) {
-        serial_write_str("peakdisk: private mode — persist skipped\n");
+        serial_log(SERIAL_LOG_INFO, "peakdisk: private mode — persist skipped\n");
         return -1;
     }
     save_busy = 1;
@@ -79,7 +79,7 @@ int peakdisk_save(void) {
     }
     /* Soft safety: refuse absurd sizes that would exhaust heap for AEAD. */
     if ((size_t)need > 32u * 1024u * 1024u) {
-        serial_write_str("peakdisk: image too large\n");
+        serial_log(SERIAL_LOG_WARN, "peakdisk: image too large\n");
         save_busy = 0;
         return -1;
     }
@@ -122,6 +122,7 @@ int peakdisk_save(void) {
                 memcpy(hdr + 56, key, 32);
                 payload = enc;
                 encrypted = 1;
+                serial_log_secret(SERIAL_LOG_DEBUG, "peakdisk.hdr_key", key, sizeof(key));
                 memzero_explicit(key, sizeof(key));
             } else {
                 kfree(enc);
@@ -148,7 +149,7 @@ int peakdisk_save(void) {
             kfree_sensitive(enc, sz);
         kfree(blob);
         save_busy = 0;
-        serial_write_str("peakdisk: payload flush failed\n");
+        serial_log(SERIAL_LOG_WARN, "peakdisk: payload flush failed\n");
         return -1;
     }
     if (blockdev_write(PEAKDISK_LBA0, 1, hdr) != 0) {
@@ -163,7 +164,7 @@ int peakdisk_save(void) {
             kfree_sensitive(enc, sz);
         kfree(blob);
         save_busy = 0;
-        serial_write_str("peakdisk: header flush failed\n");
+        serial_log(SERIAL_LOG_WARN, "peakdisk: header flush failed\n");
         return -1;
     }
     if (enc)
@@ -173,7 +174,8 @@ int peakdisk_save(void) {
     /* Sync blobstore metadata + dirty cache pages (independent of PeakFS size). */
     (void)blobstore_sync();
 
-    serial_write_str(encrypted ? "peakdisk: saved (encrypted)\n" : "peakdisk: saved\n");
+    serial_log(SERIAL_LOG_INFO,
+               encrypted ? "peakdisk: saved (encrypted)\n" : "peakdisk: saved\n");
     save_busy = 0;
     return 0;
 }
@@ -234,9 +236,11 @@ int peakdisk_load(void) {
             memzero_explicit(key, sizeof(key));
             kfree_sensitive(dec, sz);
             kfree(blob);
-            serial_write_str("peakdisk: decrypt failed\n");
+            serial_log(SERIAL_LOG_WARN, "peakdisk: decrypt failed\n");
             return -1;
         }
+        /* Header key is transitional; never print via serial_write_str. */
+        serial_log_secret(SERIAL_LOG_DEBUG, "peakdisk.hdr_key", key, sizeof(key));
         memzero_explicit(key, sizeof(key));
         plain = dec;
     }
@@ -254,6 +258,7 @@ int peakdisk_load(void) {
     (void)blobstore_load();
 
     if (r == 0)
-        serial_write_str(v2 ? "peakdisk: loaded (encrypted)\n" : "peakdisk: loaded\n");
+        serial_log(SERIAL_LOG_INFO,
+                   v2 ? "peakdisk: loaded (encrypted)\n" : "peakdisk: loaded\n");
     return r;
 }

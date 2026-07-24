@@ -35,9 +35,9 @@ void tls_set_err(const char *msg) {
     for (; msg[i] && i + 1 < sizeof(last_err); i++)
         last_err[i] = msg[i];
     last_err[i] = '\0';
-    serial_write_str("tls: ");
-    serial_write_str(last_err);
-    serial_write_str("\n");
+    char line[112];
+    snprintf(line, sizeof(line), "tls: %s\n", last_err);
+    serial_log(SERIAL_LOG_WARN, line);
 }
 
 const char *tls_last_error(void) {

@@ -8,6 +8,9 @@ void console_clear(void);
 void console_putc(char c);
 void console_write(const char *s);
 void console_printf(const char *fmt, ...);
+/* Screen/GUI only — does not mirror to COM1 (agent chatter / privacy). */
+void console_write_ui(const char *s);
+void console_printf_ui(const char *fmt, ...);
 void console_set_color(uint32_t fg, uint32_t bg);
 void console_get_cursor(uint32_t *row, uint32_t *col);
 void console_backspace(void);

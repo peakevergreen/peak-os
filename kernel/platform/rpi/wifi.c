@@ -13,7 +13,8 @@ void rpi_wifi_init(void) {
     case RPI_SOC_BCM2837:
     case RPI_SOC_BCM2711:
     case RPI_SOC_BCM2712:
-        serial_write_str("rpi: wifi stub (not ready; SDIO/firmware deferred)\n");
+        serial_log(SERIAL_LOG_DEBUG,
+                   "rpi: wifi stub (not ready; SDIO/firmware deferred)\n");
         break;
     default:
         break;
