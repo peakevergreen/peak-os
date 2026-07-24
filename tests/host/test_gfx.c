@@ -1,4 +1,5 @@
-/* Host unit tests for GFX helpers (damage merge, pitch copy, glyph span fill). */
+/* Host unit tests for GFX helpers (damage merge, pitch copy, glyph span fill,
+ * font glyph span-cache locality). */
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -247,6 +248,137 @@ static void surf_add_test(struct surface_rect *d, int *count, int *overflow,
     (*count)++;
 }
 
+
+/* --- glyph span-cache locality (mirrors font_render.c) --- */
+#define GGLYPH_SLOTS 4
+#define GINK_SPANS   16
+
+struct gspan { uint8_t row, start, run, rows; };
+struct gslot {
+    char c;
+    uint8_t valid;
+    uint8_t span_n;
+    uint32_t scale;
+    struct gspan spans[GINK_SPANS];
+};
+
+static struct gslot gslots[GGLYPH_SLOTS];
+static uint8_t gage[GGLYPH_SLOTS];
+static uint8_t gclock;
+static int glive;
+static int grebuilds;
+
+static const uint8_t gtiny[4][16] = {
+    {0},
+    {0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0xC0, 0xC0, 0xC0, 0xC0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0x03, 0x03, 0x03, 0x03, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+};
+
+static void gcache_reset(void) {
+    memset(gslots, 0, sizeof(gslots));
+    memset(gage, 0, sizeof(gage));
+    gclock = 0;
+    glive = 0;
+    grebuilds = 0;
+}
+
+static int gtry_coal(struct gslot *slot, uint8_t row, uint8_t start, uint8_t run) {
+    for (int i = (int)slot->span_n - 1; i >= 0; i--) {
+        struct gspan *s = &slot->spans[i];
+        if (s->start == start && s->run == run &&
+            (uint8_t)(s->row + s->rows) == row) {
+            s->rows++;
+            return 1;
+        }
+        if ((uint8_t)(s->row + s->rows) < row)
+            break;
+    }
+    return 0;
+}
+
+static struct gslot *glookup(char c, uint32_t scale) {
+    if (!glive)
+        return NULL;
+    for (int i = 0; i < GGLYPH_SLOTS; i++) {
+        if (gslots[i].valid && gslots[i].c == c && gslots[i].scale == scale) {
+            gage[i] = ++gclock;
+            return &gslots[i];
+        }
+    }
+    return NULL;
+}
+
+static struct gslot *gevict(void) {
+    int victim = 0;
+    if (!glive) {
+        for (int i = 0; i < GGLYPH_SLOTS; i++) {
+            gslots[i].valid = 0;
+            gslots[i].span_n = 0;
+            gage[i] = 0;
+        }
+        gclock = 0;
+        glive = 1;
+        return &gslots[0];
+    }
+    uint8_t oldest = gage[0];
+    for (int i = 1; i < GGLYPH_SLOTS; i++) {
+        if (gage[i] < oldest) {
+            oldest = gage[i];
+            victim = i;
+        }
+    }
+    return &gslots[victim];
+}
+
+static struct gslot *grebuild(char c, uint32_t scale) {
+    struct gslot *slot = gevict();
+    int idx = (int)(c - ' ');
+    if (idx < 0 || idx > 3)
+        idx = 0;
+    const uint8_t *glyph = gtiny[idx];
+    slot->c = c;
+    slot->scale = scale;
+    slot->span_n = 0;
+    slot->valid = 0;
+    for (uint8_t row = 0; row < 16; row++) {
+        uint8_t bits = glyph[row];
+        uint8_t col = 0;
+        while (col < 8) {
+            while (col < 8 && !(bits & (0x80 >> col)))
+                col++;
+            if (col >= 8)
+                break;
+            uint8_t start = col;
+            while (col < 8 && (bits & (0x80 >> col)))
+                col++;
+            uint8_t run = (uint8_t)(col - start);
+            if (gtry_coal(slot, row, start, run))
+                continue;
+            if (slot->span_n >= GINK_SPANS)
+                return NULL;
+            slot->spans[slot->span_n].row = row;
+            slot->spans[slot->span_n].start = start;
+            slot->spans[slot->span_n].run = run;
+            slot->spans[slot->span_n].rows = 1;
+            slot->span_n++;
+        }
+    }
+    slot->valid = 1;
+    gage[(int)(slot - gslots)] = ++gclock;
+    grebuilds++;
+    return slot;
+}
+
+/* Hit path ignores fg — spans are geometry-only (old bug keyed on fg). */
+static struct gslot *gensure(char c, uint32_t fg, uint32_t scale) {
+    (void)fg;
+    struct gslot *s = glookup(c, scale);
+    if (s)
+        return s;
+    return grebuild(c, scale);
+}
+
 int main(void) {
     uint32_t bx, by, bw, bh;
 
@@ -324,6 +456,37 @@ int main(void) {
         surf_add_test(surf_dmg, &surf_count, &surf_overflow, surf_w, surf_h,
                       (uint32_t)(i * 10), 0, 5, 5);
     expect(surf_overflow == 1, "surface overflow flag");
+
+    /* --- glyph span-cache locality --- */
+    gcache_reset();
+    struct gslot *a1 = gensure('!', 0xFFFFFF, 1); /* tiny idx 1 */
+    expect(a1 && a1->valid, "initial glyph rebuild");
+    expect(grebuilds == 1, "one rebuild for first glyph");
+    expect(a1->span_n == 1 && a1->spans[0].rows == 4, "vertical coalesce to one span");
+    expect(a1->spans[0].row == 2 && a1->spans[0].run == 8, "coalesced bar geometry");
+
+    struct gslot *a2 = gensure('!', 0x00FF00, 1); /* different fg, same geometry */
+    expect(a2 == a1 && grebuilds == 1, "fg change does not miss cache");
+
+    struct gslot *b1 = gensure('"', 0xFFFFFF, 1); /* tiny idx 2 */
+    expect(grebuilds == 2, "new glyph rebuilds");
+    expect(b1 && b1->span_n == 1 && b1->spans[0].run == 2, "narrow bar coalesced");
+
+    /* Touch A again, then fill remaining slots and ensure A stays hot. */
+    (void)gensure('!', 0x1, 1);
+    (void)gensure('#', 0x1, 1); /* idx 3 */
+    (void)gensure(' ', 0x1, 1); /* idx 0 empty glyph */
+    expect(grebuilds == 4, "four distinct glyphs fill MRU");
+    expect(gensure('!', 0x1, 1) != NULL && grebuilds == 4, "hot glyph survives MRU fill");
+
+    /* Fifth distinct scale miss should rebuild; scale is part of key. */
+    (void)gensure('!', 0x1, 2);
+    expect(grebuilds == 5, "scale change rebuilds");
+
+    gcache_reset();
+    glive = 0;
+    (void)gensure('!', 0x1, 1);
+    expect(grebuilds == 1, "invalidate/reset forces rebuild");
 
     if (fails) {
         printf("%d failure(s)\n", fails);
