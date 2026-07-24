@@ -146,6 +146,17 @@ void display_wait_vblank(void) {
 #endif
 }
 
+#if defined(__aarch64__)
+/* Copy the visible scanout into the hidden page so a damage batch can flip. */
+static void rpi_sync_hidden_from_visible(void) {
+    uint8_t *vis = g_disp.addr +
+                   (uint64_t)g_flip_page * (uint64_t)g_phys_h * g_disp.pitch;
+    uint8_t *hid = rpi_hidden_base();
+    uint64_t bytes = (uint64_t)g_phys_h * g_disp.pitch;
+    memcpy(hid, vis, (size_t)bytes);
+}
+#endif
+
 void display_frame_begin(void) {
     if (!g_inited)
         return;
@@ -153,11 +164,10 @@ void display_frame_begin(void) {
         return;
     if (g_caps.has_vblank && !g_caps.has_pageflip)
         display_wait_vblank();
-    /* RPi: do not memcpy the full visible page into the hidden page.
-     * Full presents rewrite the entire hidden page; damage presents write
-     * only damaged rects (and flip only from display_frame_end when dirty).
-     * For damage-only without a prior full sync, present_rect targets the
-     * visible scanout when flip is deferred — see display_present_rect. */
+    /* RPi: full presents rewrite the entire hidden page. Soft multi-rect
+     * batches sync visible→hidden lazily on the first present_rect, then
+     * flip once from display_frame_end. Single-rect soft presents still
+     * target the visible scanout (no batch) to avoid a full-page copy. */
     g_batch = 1;
 }
 
@@ -172,8 +182,8 @@ void display_present_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
 
 #if defined(__aarch64__)
     if (g_flip_ok) {
-        /* Damage-only: write the visible page so undamaged pixels stay correct
-         * without a full-page sync. Full frames still page-flip. */
+        /* Damage-only without a batch: write the visible page so undamaged
+         * pixels stay correct without a full-page sync. */
         if (!g_batch) {
             uint8_t *vis = g_disp.addr +
                            (uint64_t)g_flip_page * (uint64_t)g_phys_h * g_disp.pitch;
@@ -181,6 +191,9 @@ void display_present_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                           src, src_stride, w, h);
             return;
         }
+        /* Batched soft present: sync once, then accumulate rects on hidden. */
+        if (!g_flip_dirty)
+            rpi_sync_hidden_from_visible();
         uint8_t *base = rpi_hidden_base();
         copy_u32_rows(base + (uint64_t)y * g_disp.pitch + x * 4, g_disp.pitch,
                       src, src_stride, w, h);
