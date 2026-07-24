@@ -11,6 +11,7 @@
 #include "tls_hsts.h"
 #include "tls_ech.h"
 #include "x509.h"
+#include "Hacl_P384.h"
 #include "../../kernel/include/tls_util.h"
 #include "../../kernel/net/tls_internal.h"
 
@@ -459,6 +460,29 @@ static void test_ske_sig_verify(void) {
         expect(p256_ecdsa_verify(sig, pub, hash, 32) != 0, "ecdsa rejects bad hash");
     }
 
+    /* ECDSA P-384: HACL sign + Peak verify roundtrip; bit-flip rejects. */
+    {
+        uint8_t priv[48], nonce[48], pub[96], hash[48], sig[96], bad[96];
+        int tries;
+        memset(hash, 0x11, sizeof(hash));
+        for (tries = 0; tries < 32; tries++) {
+            expect(crypto_random(priv, 48) == 0, "p384 priv rand");
+            expect(crypto_random(nonce, 48) == 0, "p384 nonce rand");
+            if (Hacl_P384_validate_private_key(priv) && Hacl_P384_validate_private_key(nonce))
+                break;
+        }
+        expect(tries < 32, "p384 found valid priv/nonce");
+        expect(Hacl_P384_dh_initiator(pub, priv), "p384 pub from priv");
+        expect(Hacl_P384_ecdsa_sign_p384_without_hash(sig, 48, hash, priv, nonce),
+               "p384 sign");
+        expect(p384_ecdsa_verify(sig, pub, hash, 48) == 0, "p384 verify ok");
+        memcpy(bad, sig, 96);
+        bad[0] ^= 0x01;
+        expect(p384_ecdsa_verify(bad, pub, hash, 48) != 0, "p384 rejects bad sig");
+        hash[0] ^= 0x01;
+        expect(p384_ecdsa_verify(sig, pub, hash, 48) != 0, "p384 rejects bad hash");
+    }
+
     /* Finished verify_data: PRF output must match expected label binding. */
     {
         uint8_t ms[48], thash[32], good[12], bad[12];
@@ -575,7 +599,8 @@ static void test_clienthello_goldens(void) {
            "alpn h2 then http/1.1");
     expect(ch_find_ext(ch, n, 0x0000, &ed, &el), "has sni");
     expect(ch_find_ext(ch, n, 0x000a, &ed, &el), "has groups");
-    expect(el == 8 && ed[0] == 0x00 && ed[1] == 0x06, "groups len with grease");
+    expect(el == 10 && ed[0] == 0x00 && ed[1] == 0x08, "groups len grease+x25519+p256+p384");
+    expect(ed[8] == 0x00 && ed[9] == 0x18, "advertises secp384r1");
     expect(ch_find_ext(ch, n, 0x0023, &ed, &el), "has session_ticket");
     expect(el == 0, "empty ticket without cache");
 

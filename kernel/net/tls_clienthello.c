@@ -116,17 +116,22 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
         o += sl;
     }
 
+    /* supported_groups / elliptic_curves: X25519 + P-256 for ECDHE, plus
+     * secp384r1 so TLS 1.2 servers with P-384 certs accept the ClientHello
+     * (RFC 8422). ECDHE still prefers X25519 via list order + key_share. */
     wr16(out + o, 0x000a);
     o += 2;
-    wr16(out + o, 8);
+    wr16(out + o, 10);
     o += 2;
-    wr16(out + o, 6);
+    wr16(out + o, 8);
     o += 2;
     wr16(out + o, grease_grp);
     o += 2;
     wr16(out + o, 0x001d);
     o += 2;
     wr16(out + o, 0x0017);
+    o += 2;
+    wr16(out + o, 0x0018); /* secp384r1 — cert curve advertisement */
     o += 2;
 
     wr16(out + o, 0x000b);

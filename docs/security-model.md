@@ -87,9 +87,11 @@ Already addressed earlier in the privacy-first program (see [CHANGELOG.md](../CH
 Browser/`wget` TLS verifies certificates in order: **explicit SHA-256 pins**
 (override), then **WebPKI** (embedded roots + path build with hostname and RTC
 expiry when available), then **opt-in TOFU** (`settings_tls_tofu`, persisted at
-`/etc/peak/tls-tofu`). There is still no OCSP/CRL or Certificate Transparency.
-Pins cover known-good digests; TOFU is continuity for operators who enable it —
-neither replaces enterprise PKI policy beyond the embedded root set.
+`/etc/peak/tls-tofu`). Path signatures supported today: RSA-PKCS1-SHA256 and ECDSA
+P-256/P-384 (SHA-256/SHA-384). There is still no OCSP/CRL or Certificate Transparency.
+Pins cover known-good
+digests; TOFU is continuity for operators who enable it — neither replaces
+enterprise PKI policy beyond the embedded root set.
 
 ## Degraded entropy
 

@@ -81,6 +81,9 @@ int p256_ecdsa_verify(const uint8_t sig[64], const uint8_t pub[64],
                       const uint8_t *hash, size_t hlen);
 int p256_ecdsa_sign(uint8_t sig[64], const uint8_t priv[32], const uint8_t *hash,
                     size_t hlen);
+/* P-384 ECDSA: sig r||s (96 bytes), pub X||Y (96 bytes). */
+int p384_ecdsa_verify(const uint8_t sig[96], const uint8_t pub[96], const uint8_t *hash,
+                      size_t hlen);
 
 /*
  * RSA signature verify over a precomputed SHA-256 digest.

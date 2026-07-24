@@ -118,9 +118,11 @@ static int leaf_p256_pub(const uint8_t *leaf, size_t leaf_len, uint8_t pub_xy[64
             return 0;
         }
     }
-    /* Fallback: first 0x04||64 with non-zero coordinates. */
+    /* Fallback: first 0x04||64 with non-zero coordinates (avoid P-384 0x04||96). */
     for (size_t i = 0; i + 65 <= leaf_len; i++) {
         if (leaf[i] != 0x04)
+            continue;
+        if (i >= 2 && leaf[i - 2] == 0x61) /* P-384 BIT STRING len 97 */
             continue;
         memcpy(pub_xy, leaf + i + 1, 64);
         int nz = 0;
@@ -132,20 +134,73 @@ static int leaf_p256_pub(const uint8_t *leaf, size_t leaf_len, uint8_t pub_xy[64
     return -1;
 }
 
-static int der_ecdsa_sig_to_raw(const uint8_t *der, size_t der_len, uint8_t raw[64]) {
-    /* SEQUENCE { INTEGER r, INTEGER s } */
+static int leaf_is_p384(const uint8_t *leaf, size_t leaf_len) {
+    if (!leaf || leaf_len < 100)
+        return 0;
+    for (size_t i = 2; i + 97 <= leaf_len; i++) {
+        if (leaf[i] == 0x04 && leaf[i - 1] == 0x00 && leaf[i - 2] == 0x61)
+            return 1;
+    }
+    return 0;
+}
+
+static int leaf_p384_pub(const uint8_t *leaf, size_t leaf_len, uint8_t pub_xy[96]) {
+    if (!leaf || leaf_len < 100)
+        return -1;
+    for (size_t i = 2; i + 97 <= leaf_len; i++) {
+        if (leaf[i] == 0x04 && leaf[i - 1] == 0x00 && leaf[i - 2] == 0x61) {
+            memcpy(pub_xy, leaf + i + 1, 96);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static int der_ecdsa_sig_to_raw48(const uint8_t *der, size_t der_len, uint8_t raw[96]) {
     if (der_len < 8 || der[0] != 0x30)
         return -1;
-    size_t off = 2;
-    if (der[1] & 0x80)
-        return -1; /* long form not needed for P-256 */
-    if (der[1] + 2u > der_len)
+    size_t off = 1;
+    uint8_t lb = der[off++];
+    if (lb & 0x80) {
+        uint8_t nbytes = lb & 0x7f;
+        if (nbytes == 0 || nbytes > 2 || off + nbytes > der_len)
+            return -1;
+        off += nbytes;
+    }
+    memset(raw, 0, 96);
+    for (int part = 0; part < 2; part++) {
+        if (off >= der_len || der[off++] != 0x02 || off >= der_len)
+            return -1;
+        uint8_t ilen = der[off++];
+        if (off + ilen > der_len || ilen == 0 || ilen > 49)
+            return -1;
+        const uint8_t *ip = der + off;
+        size_t skip = 0;
+        while (skip < ilen && ip[skip] == 0)
+            skip++;
+        size_t n = ilen - skip;
+        if (n > 48)
+            return -1;
+        memcpy(raw + part * 48 + (48 - n), ip + skip, n);
+        off += ilen;
+    }
+    return 0;
+}
+
+static int der_ecdsa_sig_to_raw(const uint8_t *der, size_t der_len, uint8_t raw[64]) {
+    if (der_len < 8 || der[0] != 0x30)
         return -1;
+    size_t off = 1;
+    uint8_t lb = der[off++];
+    if (lb & 0x80) {
+        uint8_t nbytes = lb & 0x7f;
+        if (nbytes == 0 || nbytes > 2 || off + nbytes > der_len)
+            return -1;
+        off += nbytes;
+    }
     memset(raw, 0, 64);
     for (int part = 0; part < 2; part++) {
-        if (off >= der_len || der[off++] != 0x02)
-            return -1;
-        if (off >= der_len)
+        if (off >= der_len || der[off++] != 0x02 || off >= der_len)
             return -1;
         uint8_t ilen = der[off++];
         if (off + ilen > der_len || ilen == 0 || ilen > 33)
@@ -165,21 +220,39 @@ static int der_ecdsa_sig_to_raw(const uint8_t *der, size_t der_len, uint8_t raw[
 
 static int verify_ske_ecdsa(const uint8_t *params, size_t params_len,
                             const uint8_t *sig_der, size_t sig_len,
-                            const uint8_t *leaf, size_t leaf_len) {
-    uint8_t pub[64], raw[64], hash[32], signed_data[32 + 32 + 256];
+                            const uint8_t *leaf, size_t leaf_len, int use_sha384) {
+    uint8_t signed_data[32 + 32 + 256];
     if (params_len > 256)
-        return -1;
-    if (leaf_p256_pub(leaf, leaf_len, pub) != 0)
-        return -1;
-    if (der_ecdsa_sig_to_raw(sig_der, sig_len, raw) != 0)
         return -1;
     memcpy(signed_data, client_random, 32);
     memcpy(signed_data + 32, server_random, 32);
     memcpy(signed_data + 64, params, params_len);
-    sha256(signed_data, 64 + params_len, hash);
-    if (p256_ecdsa_verify(raw, pub, hash, 32) != 0)
+
+    if (leaf_is_p384(leaf, leaf_len)) {
+        uint8_t pub[96], raw[96], hash48[48], hash32[32];
+        if (leaf_p384_pub(leaf, leaf_len, pub) != 0)
+            return -1;
+        if (der_ecdsa_sig_to_raw48(sig_der, sig_len, raw) != 0)
+            return -1;
+        if (use_sha384) {
+            sha384(signed_data, 64 + params_len, hash48);
+            return p384_ecdsa_verify(raw, pub, hash48, 48) == 0 ? 0 : -1;
+        }
+        sha256(signed_data, 64 + params_len, hash32);
+        return p384_ecdsa_verify(raw, pub, hash32, 32) == 0 ? 0 : -1;
+    }
+
+    uint8_t pub[64], raw[64], hash[48];
+    if (leaf_p256_pub(leaf, leaf_len, pub) != 0)
         return -1;
-    return 0;
+    if (der_ecdsa_sig_to_raw(sig_der, sig_len, raw) != 0)
+        return -1;
+    if (use_sha384) {
+        sha384(signed_data, 64 + params_len, hash);
+        return p256_ecdsa_verify(raw, pub, hash, 48) == 0 ? 0 : -1;
+    }
+    sha256(signed_data, 64 + params_len, hash);
+    return p256_ecdsa_verify(raw, pub, hash, 32) == 0 ? 0 : -1;
 }
 
 static int save_leaf_from_cert(const uint8_t *cert_msg, size_t len) {
@@ -247,9 +320,10 @@ static int parse_server_key_exchange(const uint8_t *msg, size_t len, uint16_t *c
         return -1;
     const uint8_t *sig = p;
 
-    if (hash_alg == 4 && sig_alg == 3) {
-        /* ecdsa_secp256r1_sha256 */
-        if (verify_ske_ecdsa(params, params_len, sig, sig_len, leaf_der, leaf_der_len) != 0)
+    if ((hash_alg == 4 || hash_alg == 5) && sig_alg == 3) {
+        /* ecdsa + sha256/sha384 (TLS 1.2 SignatureAndHashAlgorithm) */
+        if (verify_ske_ecdsa(params, params_len, sig, sig_len, leaf_der, leaf_der_len,
+                             hash_alg == 5) != 0)
             return -1;
     } else if ((hash_alg == 8 && sig_alg == 4) || (hash_alg == 4 && sig_alg == 1)) {
         /* rsa_pss_rsae_sha256 (0x0804) or rsa_pkcs1_sha256 (0x0401) */
@@ -445,7 +519,7 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
         if (tls_recv_record(&type, hs_reasm + hs_reasm_len, room, &n, 200, 0) != 0)
             continue;
         if (type == TLS_CONTENT_ALERT) {
-            tls_set_err_code(TLS_E_ALERT, "Server alert during handshake");
+            tls_set_alert_err(hs_reasm + hs_reasm_len, n);
             goto fail;
         }
         if (type != TLS_CONTENT_HS)

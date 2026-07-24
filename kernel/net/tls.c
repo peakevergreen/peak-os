@@ -86,6 +86,28 @@ void tls_set_err_code(int code, const char *msg) {
     serial_log(SERIAL_LOG_WARN, line);
 }
 
+/* RFC 5246 alert descriptions (common ones). */
+void tls_set_alert_err(const uint8_t *alert, size_t n) {
+    uint8_t level = (n >= 1) ? alert[0] : 0;
+    uint8_t desc = (n >= 2) ? alert[1] : 0;
+    const char *name = "unknown";
+    switch (desc) {
+    case 10: name = "unexpected_message"; break;
+    case 20: name = "bad_record_mac"; break;
+    case 40: name = "handshake_failure"; break;
+    case 42: name = "bad_certificate"; break;
+    case 47: name = "illegal_parameter"; break;
+    case 70: name = "protocol_version"; break;
+    case 71: name = "insufficient_security"; break;
+    case 80: name = "internal_error"; break;
+    case 112: name = "unrecognized_name"; break;
+    default: break;
+    }
+    char buf[96];
+    snprintf(buf, sizeof(buf), "Server alert %s (%u/%u)", name, level, desc);
+    tls_set_err_code(TLS_E_ALERT, buf);
+}
+
 const char *tls_last_error(void) {
     return last_err[0] ? last_err : "no error";
 }

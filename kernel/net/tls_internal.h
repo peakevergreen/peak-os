@@ -88,6 +88,7 @@ extern int tls_alpn_h2;
 /* tls.c */
 void tls_set_err(const char *msg);
 void tls_set_err_code(int code, const char *msg);
+void tls_set_alert_err(const uint8_t *alert, size_t n);
 void tls_scrub_secrets(void);
 void tls_alpn_clear(void);
 int tls_alpn_is_h2(void);
