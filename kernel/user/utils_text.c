@@ -16,18 +16,36 @@ static int read_abs(const char *abs, char *buf, size_t cap, size_t *out) {
     return 0;
 }
 
+/* Resolve path or "-" / missing → shell stdin (pipes / < redirect). */
+static int resolve_in_path(const char *path, char *abs, size_t abs_len) {
+    if (!path || !strcmp(path, "-")) {
+        const char *sin = shell_stdin_path();
+        if (!sin)
+            return -1;
+        size_t i = 0;
+        for (; sin[i] && i + 1 < abs_len; i++)
+            abs[i] = sin[i];
+        abs[i] = '\0';
+        return 0;
+    }
+    return shell_resolve_path(path, abs, abs_len);
+}
+
 static int is_printable(unsigned char c) {
     return c >= 32 && c < 127;
 }
 
 int ucat_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("cat", "<path>");
-        return argc < 2 ? 1 : 0;
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("cat", "[path|-]");
+        return 0;
     }
+    const char *path = argc >= 2 ? argv[1] : "-";
     char abs[VFS_PATH_MAX];
-    if (shell_resolve_path(argv[1], abs, sizeof(abs)))
+    if (resolve_in_path(path, abs, sizeof(abs))) {
+        peak_perror("cat", "cannot open");
         return 1;
+    }
     char data[READ_MAX];
     size_t len = 0;
     if (read_abs(abs, data, sizeof(data), &len) != 0) {
@@ -56,12 +74,10 @@ int uhead_main(int argc, char **argv) {
         if (argv[i][0] != '-')
             path = argv[i];
     }
-    if (!path) {
-        peak_usage("head", "[-n N] <path>");
-        return 1;
-    }
+    if (!path)
+        path = "-";
     char abs[VFS_PATH_MAX];
-    if (shell_resolve_path(path, abs, sizeof(abs)))
+    if (resolve_in_path(path, abs, sizeof(abs)))
         return 1;
     char data[READ_MAX];
     size_t len = 0;
@@ -91,12 +107,10 @@ int utail_main(int argc, char **argv) {
         if (argv[i][0] != '-')
             path = argv[i];
     }
-    if (!path) {
-        peak_usage("tail", "[-n N] <path>");
-        return 1;
-    }
+    if (!path)
+        path = "-";
     char abs[VFS_PATH_MAX];
-    if (shell_resolve_path(path, abs, sizeof(abs)))
+    if (resolve_in_path(path, abs, sizeof(abs)))
         return 1;
     char data[READ_MAX];
     size_t len = 0;
@@ -121,12 +135,13 @@ int utail_main(int argc, char **argv) {
 }
 
 int uwc_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("wc", "<path>");
-        return argc < 2 ? 1 : 0;
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("wc", "[path|-]");
+        return 0;
     }
+    const char *path = argc >= 2 ? argv[1] : "-";
     char abs[VFS_PATH_MAX];
-    if (shell_resolve_path(argv[1], abs, sizeof(abs)))
+    if (resolve_in_path(path, abs, sizeof(abs)))
         return 1;
     char data[READ_MAX];
     size_t len = 0;
@@ -150,13 +165,14 @@ int uwc_main(int argc, char **argv) {
 }
 
 int ugrep_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv) || argc < 3) {
-        peak_usage("grep", "<pattern> <path>");
-        return argc < 3 ? 1 : 0;
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("grep", "<pattern> [path|-]");
+        return argc < 2 ? 1 : 0;
     }
     const char *pat = argv[1];
+    const char *path = argc >= 3 ? argv[2] : "-";
     char abs[VFS_PATH_MAX];
-    if (shell_resolve_path(argv[2], abs, sizeof(abs)))
+    if (resolve_in_path(path, abs, sizeof(abs)))
         return 1;
     char data[READ_MAX];
     size_t len = 0;

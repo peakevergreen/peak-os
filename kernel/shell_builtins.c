@@ -4,6 +4,8 @@
 #include "vfs.h"
 
 static char cwd[VFS_PATH_MAX] = "/home/dev/workspace";
+static char stdin_path_buf[VFS_PATH_MAX];
+static int stdin_path_set;
 
 #define ENV_MAX 32
 #define ENV_KEY 32
@@ -17,6 +19,23 @@ static struct {
 
 const char *shell_getcwd(void) {
     return cwd;
+}
+
+void shell_set_stdin_path(const char *path) {
+    if (!path || !path[0]) {
+        stdin_path_set = 0;
+        stdin_path_buf[0] = '\0';
+        return;
+    }
+    size_t i = 0;
+    for (; path[i] && i + 1 < sizeof(stdin_path_buf); i++)
+        stdin_path_buf[i] = path[i];
+    stdin_path_buf[i] = '\0';
+    stdin_path_set = 1;
+}
+
+const char *shell_stdin_path(void) {
+    return stdin_path_set ? stdin_path_buf : 0;
 }
 
 int shell_resolve_path(const char *in, char *out, size_t out_len) {
