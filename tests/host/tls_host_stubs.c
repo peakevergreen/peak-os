@@ -16,6 +16,11 @@ const char *cert_fail_reason;
 uint8_t trust_pins[TLS_PIN_MAX][32];
 int trust_pin_count;
 
+/* Needed by tls_clienthello.c when linked into host tests. */
+uint8_t client_random[32];
+uint8_t tls13_priv[32];
+uint8_t tls13_client_pub[32];
+
 #define HOST_TOFU_CAP 4096
 static char host_tofu[HOST_TOFU_CAP];
 static size_t host_tofu_len;

@@ -86,6 +86,26 @@ this minimal in-guest client; TOFU/pins provide continuity, not WebPKI assurance
   `crypto_rsa.c` (RSA verify), `crypto.c` (RNG glue).
   Audit: every exported primitive is used by TLS, PeakDisk, or CSPRNG — no dead algos.
 
+## TLS cipher / feature matrix
+
+| Feature | TLS 1.2 | TLS 1.3 |
+|---------|:-------:|:-------:|
+| Offer / accept | yes | yes (`supported_versions`) |
+| X25519 ECDHE | yes | yes (`key_share`) |
+| P-256 ECDHE | yes | — |
+| AES-128-GCM | `0xC02B`/`0xC02F` | `0x1301` |
+| AES-256-GCM | `0xC02C`/`0xC030` | `0x1302` |
+| ChaCha20-Poly1305 | `0xCCA8`/`0xCCA9` | `0x1303` |
+| ALPN `http/1.1` | yes | yes |
+| SKE / CertVerify | ECDSA-P256, RSA-PSS/PKCS1 | ECDSA-P256, RSA-PSS-SHA256 |
+| Finished check | PRF verify_data | HMAC-finished |
+| Session tickets / PSK | — | — (later) |
+| ECH | — | — (later) |
+| HTTP/2 ALPN `h2` | — | — (later) |
+
+Host goldens: `tests/host/test_tls.c` (`test_clienthello_goldens`) asserts suite order and
+extensions. Optional live probe: `make smoke-tls-live` (soft-fail offline).
+
 ## Limits
 
 - Small connection table (`NET_TCP_MAX` = 16 concurrent, `NET_LISTEN_MAX` = 8)

@@ -105,6 +105,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/crypto_rsa.c \
 	kernel/net/crypto_hkdf.c \
 	kernel/net/tls_util.c \
+	kernel/net/tls_clienthello.c \
 	kernel/net/tls.c \
 	kernel/net/tls_record.c \
 	kernel/net/tls_handshake.c \
@@ -297,7 +298,7 @@ UEFI_SRCS := \
 UEFI_OBJS := $(patsubst %.c,$(BUILD)/uefi/%.o,$(notdir $(UEFI_SRCS)))
 
 .PHONY: all iso kernel bootloaders run clean test test-host smoke smoke-qemu \
-        smoke-bios smoke-uefi smoke-peakfs purity doctor pi-image pi-image-check flash-pi \
+        smoke-bios smoke-uefi smoke-peakfs smoke-tls-live purity doctor pi-image pi-image-check flash-pi \
         kernel8 run-aarch64-virt smoke-aarch64 firmware-fetch
 
 ifeq ($(ARCH),x86_64)
@@ -361,7 +362,7 @@ $(eval $(call HOST_TEST_RULE,random,tests/host/test_random.c kernel/random.c \
 	kernel/net/crypto_p256.c kernel/net/crypto_rsa.c kernel/net/crypto_hkdf.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DPEAK_DEV_INSECURE_RNG=1 $(HOST_TEST_INC_HOST_BOOT_KERNEL)))
 $(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c tests/host/tls_host_stubs.c \
-	kernel/net/tls_util.c kernel/net/tls_trust.c kernel/random.c \
+	kernel/net/tls_util.c kernel/net/tls_trust.c kernel/net/tls_clienthello.c kernel/random.c \
 	kernel/net/crypto.c kernel/net/crypto_hash.c kernel/net/crypto_sha384.c kernel/net/crypto_aead.c kernel/net/crypto_x25519.c \
 	kernel/net/crypto_p256.c kernel/net/crypto_rsa.c kernel/net/crypto_hkdf.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_HOST_BOOT_KERNEL) -Ikernel/net))
@@ -422,6 +423,10 @@ smoke-uefi: iso
 smoke-peakfs: iso
 	chmod +x scripts/smoke-peakfs.sh
 	./scripts/smoke-peakfs.sh
+
+smoke-tls-live:
+	chmod +x scripts/smoke-tls-live.sh
+	./scripts/smoke-tls-live.sh
 
 purity:
 	chmod +x scripts/purity-check.sh
