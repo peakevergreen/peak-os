@@ -1,9 +1,11 @@
 /*
  * Host stubs for linking kernel/pmm.c + kernel/heap.c under PEAK_HOST_TEST.
  *
- * PMM tracks page frame numbers up to MAX_PAGES (~16 GiB), so we use a fake
- * physical window above the low-1MiB reserve and map it onto a host arena.
+ * PMM tracks page frame numbers up to MAX_PAGES (~16 GiB) via a two-level
+ * block map, so we use a fake physical window above the low-1MiB reserve and
+ * map it onto a host arena.
  */
+#define _POSIX_C_SOURCE 200112L
 #include "sync.h"
 #include "vmm.h"
 #include "pmm.h"
