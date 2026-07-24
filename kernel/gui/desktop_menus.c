@@ -137,6 +137,22 @@ void desktop_draw_ctx_menu(void) {
                    "Settings", desktop_color_fg(), desktop_color_surface());
 }
 
+/* Damage start-menu / Peak button region so open/close avoid DIRTY_FULL. */
+static void menus_damage_start(void) {
+    struct framebuffer *fb = fb_get();
+    uint32_t th = desktop_taskbar_h();
+    uint32_t mw = desktop_u(180);
+    uint32_t mh = desktop_u(320);
+    uint32_t mx = desktop_u(8);
+    uint32_t my = (uint32_t)fb->height - th - mh - desktop_u(4);
+    damage_add(mx, my, mw, mh);
+    damage_add(desktop_u(8), (uint32_t)fb->height - th, desktop_u(60), th);
+}
+
+static void menus_damage_ctx(void) {
+    damage_add((uint32_t)ctx_x, (uint32_t)ctx_y, desktop_u(140), desktop_u(90));
+}
+
 void desktop_menu_click(int32_t mx, int32_t my) {
     struct framebuffer *fb = fb_get();
     uint32_t th = desktop_taskbar_h();
@@ -146,10 +162,12 @@ void desktop_menu_click(int32_t mx, int32_t my) {
     uint32_t menuy = (uint32_t)fb->height - th - mh - desktop_u(4);
     if (!desktop_point_in(mx, my, menux, menuy, mw, mh)) {
         menu_open = 0;
+        menus_damage_start();
         return;
     }
     int row = (int)((my - (int32_t)menuy - (int32_t)desktop_u(12)) / (int32_t)(fb_cell_h() + desktop_u(4)));
     menu_open = 0;
+    menus_damage_start();
     if (row == 0)
         desktop_open_app(APP_TERM);
     else if (row == 1)
@@ -176,7 +194,7 @@ void desktop_menu_click(int32_t mx, int32_t my) {
             notify_push("Saving to disk…");
         else
             notify_push("Save failed");
-        dirty_bits |= DIRTY_FULL;
+        dirty_bits |= DIRTY_TOAST;
     } else if (row == 10) {
         session_lock = 1;
         dirty_bits |= DIRTY_FULL;
@@ -207,31 +225,39 @@ int desktop_ctx_menu_click(int32_t mx, int32_t my) {
         else if (row == 2)
             desktop_open_app(APP_SETTINGS);
     }
+    menus_damage_ctx();
     ctx_menu = 0;
-    dirty_bits |= DIRTY_FULL;
     return 1;
 }
 
 void desktop_menus_open_ctx(int32_t mx, int32_t my) {
+    if (ctx_menu)
+        menus_damage_ctx();
     ctx_menu = 1;
     ctx_x = mx;
     ctx_y = my;
-    menu_open = 0;
-    dirty_bits |= DIRTY_FULL;
+    if (menu_open) {
+        menu_open = 0;
+        menus_damage_start();
+    }
+    menus_damage_ctx();
 }
 
 int desktop_menus_toggle_start(int32_t mx, int32_t my, uint32_t taskbar_y, uint32_t taskbar_h) {
     if (!desktop_point_in(mx, my, desktop_u(8), taskbar_y, desktop_u(60), taskbar_h))
         return 0;
+    menus_damage_start();
     menu_open = !menu_open;
-    dirty_bits |= DIRTY_FULL;
     return 1;
 }
 
 int desktop_menus_close_popups(void) {
     if (!(menu_open || ctx_menu))
         return 0;
+    if (menu_open)
+        menus_damage_start();
+    if (ctx_menu)
+        menus_damage_ctx();
     menu_open = ctx_menu = 0;
-    dirty_bits |= DIRTY_FULL;
     return 1;
 }

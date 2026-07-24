@@ -414,7 +414,13 @@ static void opaque_move_step(uint32_t old_x, uint32_t old_y,
 
 void desktop_opaque_move_end(void) {
     desktop_opaque_move_free();
-    dirty_bits |= DIRTY_FULL;
+    if (focus >= 0 && wins[focus].open) {
+        damage_add_win(focus);
+        if (move_prev_valid)
+            damage_add(move_prev_x, move_prev_y, move_prev_w, move_prev_h);
+    } else {
+        dirty_bits |= DIRTY_FULL;
+    }
 }
 
 static void draw_rubber_band(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {

@@ -3,6 +3,11 @@
 Run interactively in QEMU after `make iso && ./scripts/run-qemu.sh`.
 Product profile: **1080p @ UI scale 3**.
 
+- [ ] Start menu open/close damages menu + Peak button rects (not full-desktop)
+- [ ] Context menu open/close uses damage rects
+- [ ] Files create/delete/rename/navigate use DIRTY_WIN (Monitor compose_us stays soft)
+- [ ] Opaque move end damages window footprints (not unconditional DIRTY_FULL)
+
 ## Opaque drag / rubber resize
 
 - [ ] Drag Terminal across wallpaper — no swim, no ghost chrome, no full-desktop flash
