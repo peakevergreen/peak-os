@@ -134,7 +134,7 @@ void platform_late_init(struct peak_bootinfo *info) {
     rpi_gpu_init();
     rpi_sound_init();
     rpi_wifi_init();
-    /* USB/net: Pi 3 DWC2 path; Pi 4/5 host controllers stay staged. */
+    /* USB/net: Pi 3 DWC2 path; Pi 4/5 xHCI/net stay staged stubs (not ready). */
     rpi_usb_init();
     rpi_net_init();
 }
