@@ -105,6 +105,14 @@ Root DER/PEM files live under `certs/webpki/`; regenerate with
 Host goldens: `tests/host/test_tls.c` (`test_clienthello_goldens`) asserts suite order and
 extensions. Optional live probe: `make smoke-tls-live` (soft-fail offline).
 
+## Browser HTTPS UX
+
+Dedicated TLS error pages (RNG / alert / expired / hostname mismatch / untrusted)
+replace the generic handshake blob. Address-bar lock: `L` when verified HTTPS,
+`!` when HTTPS without full verify. `fetch()` rejects with stable names:
+`fetch: tls-rng`, `tls-alert`, `tls-expired`, `tls-mismatch`, `tls-untrusted`,
+`tls-handshake`.
+
 ## Limits
 
 - Small connection table (`NET_TCP_MAX` = 16 concurrent, `NET_LISTEN_MAX` = 8)

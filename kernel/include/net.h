@@ -87,6 +87,12 @@ int net_http_get(const char *url, char *body, size_t body_cap, int *status_out);
 /* Non-zero if last failure was because the target needs HTTPS/TLS. */
 int net_http_needs_tls(void);
 
+/* Snapshot from last successful HTTPS handshake (cleared on failure). */
+int net_http_last_tls_secure(void);
+int net_http_last_tls_verified(void);
+/* Stable reject name for last TLS failure (e.g. "fetch: tls-mismatch"). */
+const char *net_http_tls_reject_name(void);
+
 /* Format IPv4 host-order into buf "a.b.c.d" */
 void net_format_ip(uint32_t ip, char *buf, size_t cap);
 

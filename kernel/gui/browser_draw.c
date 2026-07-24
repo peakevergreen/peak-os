@@ -134,15 +134,23 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     if ((int)aw < 40)
         aw = 40;
     fb_fill_rect(ax, bar_y, aw, ch + 4, editing ? th->title : th->surface);
+    /* Trust lock: "L" verified, "!" HTTPS without full verify, blank otherwise. */
+    uint32_t url_x = ax + 4;
+    if (t->tls_secure) {
+        const char *lock = t->tls_verified ? "L" : "!";
+        fb_draw_string(url_x, bar_y + 2, lock, t->tls_verified ? th->accent : th->fg,
+                       editing ? th->title : th->surface);
+        url_x += fb_cell_w() + 2;
+    }
     char show[BR_URL_MAX + 2];
     snprintf(show, sizeof(show), "%s%s", t->url, editing ? "_" : "");
-    uint32_t max_chars = aw / fb_cell_w();
+    uint32_t max_chars = (aw > (url_x - ax)) ? (aw - (url_x - ax)) / fb_cell_w() : 0;
     if (max_chars > 3 && strlen(show) > max_chars) {
         show[max_chars - 1] = '\0';
         show[max_chars - 2] = '.';
         show[max_chars - 3] = '.';
     }
-    fb_draw_string(ax + 4, bar_y + 2, show, th->fg, editing ? th->title : th->surface);
+    fb_draw_string(url_x, bar_y + 2, show, th->fg, editing ? th->title : th->surface);
 
     uint32_t chrome_h = hit_tab_h + ch + pad * 2 + 8;
 
