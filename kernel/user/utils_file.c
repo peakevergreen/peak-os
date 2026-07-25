@@ -169,10 +169,10 @@ int ustat_main(int argc, char **argv) {
     if (st.type == VFS_FILE) {
         struct vfs_node *node = vfs_lookup(abs);
         if (node) {
-            if (node->blob_id)
-                console_printf("backing: blob (id %u)\n", node->blob_id);
-            else
-                console_printf("backing: heap\n");
+            if (node->blob_id) {
+                console_printf("backing: blob (id %u, %lu bytes)\n",
+                               node->blob_id, (uint64_t)blobstore_size(node->blob_id));
+            } else console_printf("backing: heap\n");
         }
     }
     return 0;
@@ -213,9 +213,16 @@ int udf_main(int argc, char **argv) {
     } else {
         console_write("PeakDisk:    no block device\n");
     }
-    if (blobstore_available())
-        console_printf("Blobstore:   %u objects, %u cache pages\n",
-                       blobstore_object_count(), blobstore_cache_pages_used());
+    if (blobstore_available()) {
+        struct blobstore_stats bs;
+        blobstore_stats(&bs);
+        console_printf("Blobstore:   %u objects, %u / %u pages (%lu KiB), cache %u / %u",
+                       (unsigned)bs.objects, (unsigned)bs.pages_used,
+                       (unsigned)bs.pages_total,
+                       (unsigned long)(bs.bytes_used / 1024u),
+                       (unsigned)bs.cache_pages, (unsigned)BLOBSTORE_CACHE_PAGES);
+        console_write(blobstore_check() == 0 ? " ok\n" : " (integrity check failed)\n");
+    }
     if (nodes >= VFS_MAX_NODES - 2)
         console_write("df: warning — VFS inode table nearly full\n");
     return 0;

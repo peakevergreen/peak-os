@@ -83,6 +83,7 @@ extern int uman_main(int argc, char **argv);
 extern int uask_main(int argc, char **argv);
 extern int uaudit_main(int argc, char **argv);
 extern int umemory_main(int argc, char **argv);
+extern int upeakvec_main(int argc, char **argv);
 extern int upolicy_main(int argc, char **argv);
 extern int uprivacy_main(int argc, char **argv);
 extern int udisksave_main(int argc, char **argv);

@@ -236,7 +236,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             agent_tool_console_print(recall_buf);
             TOOL_NOTE("console.print");
         } else {
-            agent_tool_console_print("[agent] no prior memory yet");
+            agent_tool_console_print("[agent] no prior memory — try ask first, or memory / peakvec");
             TOOL_NOTE("console.print");
         }
         set_summary(summary, summary_cap, "recalled session memory");

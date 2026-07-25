@@ -130,6 +130,9 @@ int main(void) {
     expect(blobstore_delete(id) == 0, "delete object");
     expect(blobstore_size(id) == 0, "deleted size zero");
 
+    struct blobstore_stats st; blobstore_stats(&st);
+    expect(st.pages_total > 0, "stats pages total");
+    expect(blobstore_check() == 0, "integrity ok");
     if (fails) {
         fprintf(stderr, "%d test(s) failed\n", fails);
         return 1;

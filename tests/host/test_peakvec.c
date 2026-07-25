@@ -186,6 +186,14 @@ static void test_namespace_isolation(void) {
     expect(peakvec_count("workspace") == 1, "workspace remains");
 }
 
+static void test_stats(void) {
+    peakvec_init(); struct peakvec_stats st;
+    peakvec_stats("agent", &st);
+    expect(st.count == 0, "stats count empty");
+    expect(st.max_entries == 4096u, "stats max entries");
+    upsert_text("s1", "stats probe"); peakvec_stats("agent", &st);
+    expect(st.count == 1, "stats count after upsert");
+}
 static void test_ann_threshold_corpus(void) {
     /* Fill past ANN threshold; self-query must still find needle. */
     peakvec_init();
@@ -213,6 +221,7 @@ int main(void) {
     test_upsert_refreshes_norm();
     test_dense_pack_after_deletes();
     test_namespace_isolation();
+    test_stats();
     test_ann_threshold_corpus();
 
     if (fails) {

@@ -557,7 +557,8 @@ int agent_tool_mem_recall(const char *goal, char *out, size_t out_len) {
         struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
         int n = peakvec_query("agent", q, 3, hits);
         if (n > 0) {
-            const char *hdr = "[recall/PeakVec]\n";
+            char hdr[48];
+            snprintf(hdr, sizeof(hdr), "[recall/PeakVec] %d hit%s\n", n, n == 1 ? "" : "s");
             for (const char *p = hdr; *p && o + 1 < out_len; p++)
                 out[o++] = *p;
             for (int i = 0; i < n; i++) {
@@ -569,8 +570,14 @@ int agent_tool_mem_recall(const char *goal, char *out, size_t out_len) {
                          score / 1000, score % 1000, hits[i].key);
                 for (const char *p = line; *p && o + 1 < out_len; p++)
                     out[o++] = *p;
-                for (const char *p = hits[i].meta; *p && o + 1 < out_len; p++)
+                size_t shown = 0;
+                for (const char *p = hits[i].meta; *p && o + 1 < out_len; p++, shown++) {
+                    if (shown >= 72) {
+                        if (o + 4 < out_len) { out[o++]='.'; out[o++]='.'; out[o++]='.'; }
+                        break;
+                    }
                     out[o++] = *p;
+                }
                 if (o + 1 < out_len)
                     out[o++] = '\n';
             }
