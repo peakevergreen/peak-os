@@ -18,7 +18,13 @@ Per-tab budgets: instruction count, object heap, timers. Scripts never run from 
 
 ## Local demo
 
-Open Browser → `peak://demo` (seeded on reset). Click **Count** to exercise DOM mutation, click listeners, and `setTimeout`.
+Open Browser → `peak://demo` (seeded on reset). Click **Count** to exercise DOM mutation, click listeners, and `setTimeout`. The **Console** panel at the bottom shows `console.log` output; press **c** to toggle it.
+
+## Navigation chrome
+
+- **Back / Forward** (`<` `>` buttons, **b** / **f** keys): one-level history per tab; forward stack clears on a new navigation.
+- **Bookmarks**: saved to `/var/peak/bookmarks` (`title|url` lines). Context menu **Add bookmark**; bookmark bar shows up to four entries; full list in the context menu (max six).
+- **TLS / network errors**: error pages show `tls_last_error()` with `[tag]` from `tls_err_name()`, plus `net_last_error()` for DNS/HTTP failures.
 
 ## Reader fallback
 

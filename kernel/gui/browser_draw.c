@@ -134,12 +134,29 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     uint32_t bar_y = y + hit_tab_h + 4;
     hit_bar_y = hit_tab_h + 4;
     hit_bar_h = ch + 4;
-    hit_go_x = pad;
-    hit_go_w = fb_cell_w() * 4;
-    fb_fill_rect(x + pad, bar_y, hit_go_w, ch + 4, th->accent);
-    fb_draw_string(x + pad + 4, bar_y + 2, "Go", th->bg, th->accent);
+    uint32_t cw = fb_cell_w();
+    uint32_t nav_btn_w = cw * 2 + 8;
 
-    uint32_t ax = x + pad + hit_go_w + 6;
+    hit_back_x = pad;
+    hit_back_w = nav_btn_w;
+    hit_fwd_x = hit_back_x + hit_back_w + 4;
+    hit_fwd_w = nav_btn_w;
+    hit_go_x = hit_fwd_x + hit_fwd_w + 4;
+    hit_go_w = cw * 4;
+
+    uint32_t back_bg = t->prev_url[0] ? th->surface : th->border;
+    uint32_t fwd_bg = t->forward_url[0] ? th->surface : th->border;
+    uint32_t back_fg = t->prev_url[0] ? th->fg : th->dim;
+    uint32_t fwd_fg = t->forward_url[0] ? th->fg : th->dim;
+
+    fb_fill_rect(x + hit_back_x, bar_y, hit_back_w, ch + 4, back_bg);
+    fb_draw_string(x + hit_back_x + 6, bar_y + 2, "<", back_fg, back_bg);
+    fb_fill_rect(x + hit_fwd_x, bar_y, hit_fwd_w, ch + 4, fwd_bg);
+    fb_draw_string(x + hit_fwd_x + 6, bar_y + 2, ">", fwd_fg, fwd_bg);
+    fb_fill_rect(x + hit_go_x, bar_y, hit_go_w, ch + 4, th->accent);
+    fb_draw_string(x + hit_go_x + 4, bar_y + 2, "Go", th->bg, th->accent);
+
+    uint32_t ax = x + hit_go_x + hit_go_w + 6;
     uint32_t aw = w - (ax - x) - pad;
     if ((int)aw < 40)
         aw = 40;
@@ -178,10 +195,50 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         fb_fill_rect(bar_x, prog_y, pct, bar_h, th->accent);
     }
 
-    uint32_t chrome_h = hit_tab_h + ch + pad * 2 + 8;
+    hit_bm_y = hit_bm_h = 0;
+    memset(hit_bm_x, 0, sizeof(hit_bm_x));
+    memset(hit_bm_w, 0, sizeof(hit_bm_w));
+    uint32_t bm_extra = 0;
+    int nbm = browser_bookmark_count();
+    if (nbm > 0) {
+        uint32_t bm_y = bar_y + ch + 8;
+        hit_bm_y = bm_y - y;
+        hit_bm_h = ch + 2;
+        bm_extra = hit_bm_h + 4;
+        fb_fill_rect(x + pad, bm_y, w - pad * 2, hit_bm_h, th->border);
+        uint32_t bx = x + pad + 4;
+        int shown = 0;
+        for (int i = 0; i < nbm && shown < 4; i++) {
+            const char *title = browser_bookmark_title(i);
+            if (!title)
+                continue;
+            char lab[14];
+            size_t li = 0;
+            for (; title[li] && li + 1 < sizeof(lab) && li < 10; li++)
+                lab[li] = title[li];
+            lab[li] = '\0';
+            uint32_t chip_w = (uint32_t)strlen(lab) * cw + 12;
+            if (bx + chip_w > x + w - pad)
+                break;
+            hit_bm_x[shown] = bx - x;
+            hit_bm_w[shown] = chip_w;
+            fb_fill_rect(bx, bm_y + 1, chip_w, ch, th->surface);
+            fb_draw_string(bx + 4, bm_y + 1, lab, th->accent, th->surface);
+            bx += chip_w + 4;
+            shown++;
+        }
+    }
+
+    uint32_t chrome_h = hit_tab_h + ch + pad * 2 + 8 + bm_extra;
+
+    uint32_t console_extra = 0;
+    if (t->jsh.console_n > 0 && (t->show_console || t->js_ok)) {
+        int nlines = t->jsh.console_n < 4 ? t->jsh.console_n : 4;
+        console_extra = (uint32_t)(nlines + 1) * (ch + 2) + 6;
+    }
 
     uint32_t page_y = y + chrome_h;
-    uint32_t page_h = h - chrome_h - ch - pad - 2;
+    uint32_t page_h = h - chrome_h - ch - pad - 2 - console_extra;
     if ((int)page_h < (int)ch * 3)
         page_h = ch * 3;
     fb_fill_rect(x + 2, page_y, w - 4, page_h, t->page_bg);
@@ -266,7 +323,7 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     }
 
     if ((t->nblocks > 0 || t->nboxes > 0) && cy >= max_y - ch)
-        fb_draw_string(cx, max_y - ch, "j/k scroll  [/] tabs  t new  w close",
+        fb_draw_string(cx, max_y - ch, "j/k scroll  b/f back/fwd  c console",
                        t->page_muted, t->page_bg);
 
     hit_retry_w = hit_retry_h = 0;
@@ -283,7 +340,27 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         fb_draw_string(hit_retry_x + 8, hit_retry_y + 3, "Retry", th->bg, th->accent);
     }
 
-    uint32_t st_y = y + h - ch - 4;
+    if (t->jsh.console_n > 0 && (t->show_console || t->js_ok)) {
+        int nlines = t->jsh.console_n < 4 ? t->jsh.console_n : 4;
+        console_extra = (uint32_t)(nlines + 1) * (ch + 2) + 6;
+        uint32_t con_y = y + h - ch - 4 - console_extra;
+        fb_fill_rect(x + 2, con_y, w - 4, console_extra, th->border);
+        fb_draw_string(x + pad, con_y + 2, "Console", th->accent, th->border);
+        uint32_t ly = con_y + ch + 4;
+        int start = t->jsh.console_n - nlines;
+        if (start < 0)
+            start = 0;
+        for (int i = 0; i < nlines; i++) {
+            int slot = (start + i) % 8;
+            fb_draw_string(x + pad + 4, ly, t->jsh.console_log[slot], th->dim, th->border);
+            ly += ch + 2;
+        }
+    } else if (t->jsh.console_n > 0 && !t->show_console) {
+        fb_draw_string(x + w - pad - cw * 10, y + h - ch - 4,
+                       "c:console", th->dim, th->surface);
+    }
+
+    uint32_t st_y = y + h - ch - 4 - console_extra;
     fb_fill_rect(x, st_y - 2, w, ch + 6, th->surface);
     fb_draw_string(x + pad, st_y, t->status, th->dim, th->surface);
 

@@ -59,6 +59,8 @@ struct br_tab {
     uint64_t fetch_start;
     int show_retry;
     char prev_url[BR_URL_MAX];
+    char forward_url[BR_URL_MAX];
+    int show_console;
 };
 
 /* Shared session state (defined in browser.c). */
@@ -70,13 +72,22 @@ extern int needs_redraw;
 extern uint32_t hit_tab_y, hit_tab_h, hit_tab_w;
 extern uint32_t hit_plus_x, hit_go_x, hit_go_w, hit_bar_y, hit_bar_h;
 extern uint32_t hit_retry_x, hit_retry_y, hit_retry_w, hit_retry_h;
+extern uint32_t hit_back_x, hit_back_w, hit_fwd_x, hit_fwd_w;
+extern uint32_t hit_bm_y, hit_bm_h, hit_bm_x[4], hit_bm_w[4];
 
 struct br_tab *browser_cur(void);
 void browser_select_tab(int i);
 int  browser_new_tab(const char *url);
 void browser_close_tab(int i);
 void browser_back(void);
+void browser_forward(void);
 void browser_reload(void);
+void browser_bookmarks_init(void);
+int  browser_bookmark_count(void);
+const char *browser_bookmark_title(int idx);
+const char *browser_bookmark_url(int idx);
+int  browser_bookmark_add(const char *url, const char *title);
+void browser_bookmark_go(int idx);
 int  browser_ctx_menu(struct ctx_menu_item *items, int max_items);
 int  browser_ctx_action(int action_id);
 void browser_tab_teardown_js(struct br_tab *t);

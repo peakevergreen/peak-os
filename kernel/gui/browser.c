@@ -5,6 +5,7 @@
 #include "webapi.h"
 #include "ctr.h"
 #include "net.h"
+#include "tls.h"
 #include "util.h"
 #include "dom.h"
 #include "css.h"
@@ -22,6 +23,8 @@ static char *body_cache;
 uint32_t hit_tab_y, hit_tab_h, hit_tab_w;
 uint32_t hit_plus_x, hit_go_x, hit_go_w, hit_bar_y, hit_bar_h;
 uint32_t hit_retry_x, hit_retry_y, hit_retry_w, hit_retry_h;
+uint32_t hit_back_x, hit_back_w, hit_fwd_x, hit_fwd_w;
+uint32_t hit_bm_y, hit_bm_h, hit_bm_x[4], hit_bm_w[4];
 
 static char *ensure_body_cache(void) {
     if (!body_cache)
@@ -168,6 +171,8 @@ void browser_reset(void) {
     editing = 0;
     needs_redraw = 1;
 
+    browser_bookmarks_init();
+
     browser_new_tab("peak://demo");
     editing = 0;
     load_document(&tabs[0], peak_js_demo_html());
@@ -245,14 +250,36 @@ void browser_error_page(struct br_tab *t, enum br_err_kind kind,
         browser_add_block(t, BR_LI, "ctr build");
         browser_add_block(t, BR_LI, "ctr run");
         browser_add_block(t, BR_LI, "Press Enter to reload");
-    } else if (detail && detail[0] && kind != BR_ERR_TLS) {
+    } else if (kind == BR_ERR_TLS) {
+        const char *tls_err = tls_last_error();
+        int tls_code = tls_last_error_code();
+        if (tls_err && tls_err[0]) {
+            char line[BR_TEXT_MAX];
+            snprintf(line, sizeof(line), "[%s] %s", tls_err_name(tls_code), tls_err);
+            browser_add_block(t, BR_CODE, line);
+        }
+        if (detail && detail[0]) {
+            char line[BR_TEXT_MAX];
+            snprintf(line, sizeof(line), "%s", detail);
+            browser_add_block(t, BR_P, line);
+        }
+    } else if (detail && detail[0]) {
         char line[BR_TEXT_MAX];
         snprintf(line, sizeof(line), "%s", detail);
         browser_add_block(t, BR_P, line);
     }
+    if (kind == BR_ERR_DNS || kind == BR_ERR_NETWORK || kind == BR_ERR_HTTP) {
+        const char *net_err = net_last_error();
+        if (net_err && net_err[0]) {
+            char line[BR_TEXT_MAX];
+            snprintf(line, sizeof(line), "%s", net_err);
+            browser_add_block(t, BR_CODE, line);
+        }
+    }
 
     if (kind == BR_ERR_TLS && detail)
-        snprintf(t->status, sizeof(t->status), "%s", detail);
+        snprintf(t->status, sizeof(t->status), "%s — %s",
+                 detail, tls_last_error() ? tls_last_error() : "TLS error");
     else if (kind == BR_ERR_DNS)
         snprintf(t->status, sizeof(t->status), "DNS failed");
     else if (kind == BR_ERR_NETWORK)
@@ -271,8 +298,10 @@ void browser_go(const char *url) {
     struct br_tab *t = browser_cur();
     char norm[BR_URL_MAX];
     browser_normalize_url(url, norm, sizeof(norm));
-    if (t->url[0] && strcmp(t->url, norm))
+    if (t->url[0] && strcmp(t->url, norm)) {
         snprintf(t->prev_url, sizeof(t->prev_url), "%s", t->url);
+        t->forward_url[0] = '\0';
+    }
     snprintf(t->url, sizeof(t->url), "%s", norm);
     t->scroll_y = 0;
     t->show_retry = 0;
