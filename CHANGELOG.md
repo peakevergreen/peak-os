@@ -32,6 +32,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Settings (Pass 15):** explicit hit rects, context menus for Settings/Agent/Monitor
 - **Browser + notify (Pass 16):** fetch progress bar, error retry CTA, browser context menu, toast damage thrift
 - **Monitor + CLI (Pass 18):** readable compose/present timing, improved `memory`/`audit` output
+- **Pass 29:** Files confirm-delete arm, Home/End + Shift range select, hardened open-with; Notepad line numbers, Ctrl+F find, Ctrl+H replace lite
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
 - CLI boot scroll stays on the front framebuffer (does not wipe via empty backbuffer)
