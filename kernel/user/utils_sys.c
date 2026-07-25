@@ -25,9 +25,20 @@ int upwd_main(int argc, char **argv) {
 
 int ucd_main(int argc, char **argv) {
     const char *p = argc >= 2 ? argv[1] : "/home/dev/workspace";
+    if (argc >= 2 && !strcmp(argv[1], "-")) {
+        p = shell_env_get("OLDPWD");
+        if (!p || !p[0]) {
+            peak_perror("cd", "OLDPWD not set");
+            return 1;
+        }
+    }
     if (shell_chdir(p) != 0) {
         shell_perror_path("cd", p);
         return 1;
+    }
+    if (argc >= 2 && !strcmp(argv[1], "-")) {
+        console_write(shell_getcwd());
+        console_write("\n");
     }
     return 0;
 }
@@ -368,6 +379,41 @@ int uhistory_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
     shell_history_list();
+    return 0;
+}
+
+int ualias_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("alias", "[name[=value]]");
+        return 0;
+    }
+    if (argc < 2) {
+        shell_alias_list();
+        return 0;
+    }
+    const char *eq = strchr(argv[1], '=');
+    if (!eq) {
+        const char *v = shell_alias_lookup(argv[1]);
+        if (!v) {
+            peak_perror("alias", "not found");
+            return 1;
+        }
+        console_write(argv[1]);
+        console_write("='");
+        console_write(v);
+        console_write("'\n");
+        return 0;
+    }
+    char name[32];
+    size_t nlen = (size_t)(eq - argv[1]);
+    if (nlen >= sizeof(name))
+        nlen = sizeof(name) - 1;
+    memcpy(name, argv[1], nlen);
+    name[nlen] = '\0';
+    if (shell_alias_set(name, eq + 1) != 0) {
+        peak_perror("alias", "table full");
+        return 1;
+    }
     return 0;
 }
 

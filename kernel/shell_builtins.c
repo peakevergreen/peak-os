@@ -106,10 +106,12 @@ int shell_chdir(const char *path) {
         last_path_err = vfs_exists(abs) ? PEAK_ENOTDIR : PEAK_ENOENT;
         return last_path_err;
     }
+    shell_env_set("OLDPWD", cwd);
     size_t i = 0;
     for (; abs[i] && i + 1 < sizeof(cwd); i++)
         cwd[i] = abs[i];
     cwd[i] = '\0';
+    shell_env_set("PWD", cwd);
     return 0;
 }
 
@@ -166,7 +168,7 @@ struct help_entry {
 
 static const struct help_entry help_table[] = {
     { "pwd", "nav", "print working directory" },
-    { "cd", "nav", "change directory" },
+    { "cd", "nav", "change directory (cd - = OLDPWD)" },
     { "ls", "nav", "list directory (-l long)" },
     { "tree", "nav", "print directory tree" },
     { "find", "nav", "find -name <name>" },
@@ -249,6 +251,7 @@ static const struct help_entry help_table[] = {
     { "reboot", "sys", "reboot guest" },
     { "help", "sys", "this help" },
     { "history", "sys", "command history" },
+    { "alias", "sys", "list/set aliases (/var/peak/aliases)" },
     { "man", "sys", "command help" },
     { "peak", "meta", "Peak meta info" },
     { "ask", "meta", "peak-agent prompt (run ls …, audit, memory)" },

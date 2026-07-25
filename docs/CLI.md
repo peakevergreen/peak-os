@@ -41,7 +41,13 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 
 ## History
 
-Command lines persist under `/var/peak/history`. **Up/Down** or **Ctrl-P/N** recall prior commands in the line editor. **`history`** prints numbered entries; **`!!`** repeats the last command (optional suffix: `!! | wc`).
+Command lines persist under `/var/peak/history`. **Up/Down** or **Ctrl-P/N** recall prior commands in the line editor. **`history`** prints numbered entries; **`!!`** repeats the last command; **`!n`** expands history entry *n* (optional suffix: `!! | wc`). History is recorded **after** expansion so `!!` does not poison the ring.
+
+**Tab** completes the token under the caret: first-word `/bin` names, otherwise path entries in the current or specified directory.
+
+**`alias`** lists or sets aliases persisted at `/var/peak/aliases` (`alias ll=ls`). Aliases expand the first word before pipeline parse.
+
+**`cd -`** switches to `$OLDPWD` (updated on every successful `cd`).
 
 On failure the prompt shows exit status without changing the cwd prefix: `peak:/home/dev/workspace [1]> ` (success omits the bracket).
 

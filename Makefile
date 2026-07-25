@@ -58,6 +58,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/shell_dispatch.c \
 	kernel/shell_builtins.c \
 	kernel/shell_history.c \
+	kernel/shell_alias.c \
 	kernel/shell_split.c \
 	kernel/theme.c \
 	kernel/wallpaper.c \
