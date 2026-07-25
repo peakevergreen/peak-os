@@ -70,7 +70,7 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 | `diff` `sort` `uniq` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok) |
 | `basename` `dirname` `realpath` | path helpers |
 | `hexdump` `strings` | binary helpers |
-| `echo` `clear` `edit` | misc (`edit` loads file; `:w` `:q` `:wq` `:p`; `/pat`) |
+| `echo` `printf` `tee` `yes` `clear` `edit` | misc (`printf` `%s %d %u %x`; `tee` stdin→stdout+files `-a`; `test`/`[` predicates; `yes` bounded) |
 
 ## System / meta
 | Command | Notes |
@@ -82,7 +82,7 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 | `top` `sysmon` | live system monitor (sparklines; `q` quit, `-n` once) |
 | `ps` | list kernel tasks/threads |
 | `kill <pid or name>` | mark READY/BLOCKED task zombie (not idle/self) |
-| `true` `false` `sh` | exit status helpers; nested `ush>` loop |
+| `true` `false` `test` `[` `sh` | exit status helpers; `test -f/-d/-e/-z/-n`, `= != -eq …`; nested `ush>` loop |
 | `js -e 'code'` / `js file.js` | Peak JS CLI — [browser-js.md](browser-js.md) |
 | `help` `man <cmd>` | categorized help (`-h` / `--help` on most utils) |
 | `ask` `audit` `memory` `policy` `peak` `gui` | agent + desktop |
