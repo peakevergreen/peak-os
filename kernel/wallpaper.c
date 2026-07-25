@@ -2,11 +2,15 @@
 #include "display_clip.h"
 #include "fb.h"
 #include "heap.h"
+#include "settings.h"
 #include "util.h"
 #include "vfs.h"
 
 #define WP_DEFAULT_PATH "/usr/share/peak/wallpapers/evergreen.ppm"
 #define WP_CFG_PATH     "/etc/peak/wallpaper"
+
+struct wallpaper_option { const char *label; const char *path; };
+static const struct wallpaper_option wp_options[] = { {"none","none"}, {"evergreen", WP_DEFAULT_PATH} };
 
 extern const uint8_t wallpaper_evergreen_ppm[];
 extern const uint64_t wallpaper_evergreen_ppm_len;
@@ -195,12 +199,24 @@ int wallpaper_set(const char *path) {
     return 0;
 }
 
-void wallpaper_next(void) {
-    if (wallpaper_enabled())
-        clear_wp();
-    else
-        load_from_vfs(WP_DEFAULT_PATH);
+int wallpaper_option_count(void) { return (int)(sizeof(wp_options)/sizeof(wp_options[0])); }
+int wallpaper_option_index(void) {
+    if (!wallpaper_enabled()) return 0;
+    for (int i = 0; i < wallpaper_option_count(); i++)
+        if (wp_options[i].path && wp_path[0] && !strcmp(wp_options[i].path, wp_path)) return i;
+    return 1;
 }
+const char *wallpaper_option_label(int i) {
+    if (i < 0 || i >= wallpaper_option_count()) return "?";
+    return wp_options[i].label;
+}
+void wallpaper_select_index(int i) {
+    if (i < 0) i = 0;
+    if (i >= wallpaper_option_count()) i = wallpaper_option_count() - 1;
+    const char *p = wp_options[i].path;
+    if (!p || !strcmp(p, "none")) clear_wp(); else load_from_vfs(p);
+}
+void wallpaper_next(void) { wallpaper_select_index((wallpaper_option_index()+1)%wallpaper_option_count()); }
 
 void wallpaper_persist(void) {
     const char *p = wallpaper_enabled() ? wp_path : "none";
@@ -213,6 +229,7 @@ void wallpaper_persist(void) {
     buf[i++] = '\n';
     buf[i] = '\0';
     vfs_write_file(WP_CFG_PATH, buf, i);
+    settings_notify_persist(WP_CFG_PATH, "Wallpaper");
 }
 
 void wallpaper_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
@@ -251,4 +268,26 @@ void wallpaper_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         }
     }
     (void)wp_rgb_len;
+}
+static void wp_draw_rgb_rect(const uint8_t *rgb, uint32_t sw, uint32_t sh, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    if (!rgb||!sw||!sh||!w||!h) return;
+    for (uint32_t dy=0; dy<h; dy++) {
+        uint32_t sy=(dy*sh)/h; if (sy>=sh) sy=sh-1;
+        const uint8_t *row=rgb+(size_t)sy*(size_t)sw*3;
+        for (uint32_t dx=0; dx<w; dx++) {
+            uint32_t sx=(dx*sw)/w; if (sx>=sw) sx=sw-1;
+            const uint8_t *px=row+(size_t)sx*3;
+            fb_put_pixel(x+dx,y+dy,fb_rgb(px[0],px[1],px[2]));
+        }
+    }
+}
+void wallpaper_draw_option(int i, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    if (i<=0||i>=wallpaper_option_count()||!w||!h) return;
+    const char *path=wp_options[i].path; if (!path) return;
+    if (wp_rgb&&wp_path[0]&&!strcmp(wp_path,path)) { wp_draw_rgb_rect(wp_rgb,wp_w,wp_h,x,y,w,h); return; }
+    struct vfs_node *n=vfs_lookup(path);
+    if (!n||n->type!=VFS_FILE||!n->data||n->size<16) return;
+    const uint8_t *rgb; uint32_t sw,sh;
+    if (parse_ppm(n->data,n->size,&rgb,&sw,&sh)!=0) return;
+    wp_draw_rgb_rect(rgb,sw,sh,x,y,w,h);
 }

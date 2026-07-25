@@ -18,8 +18,12 @@ struct peak_theme {
 
 void theme_init(void);
 const struct peak_theme *theme_get(void);
+int  theme_count(void);
+int  theme_index(void);
+const struct peak_theme *theme_at(int i);
 const char *theme_name(void);
 int  theme_set(const char *name); /* 0 ok */
+void theme_set_index(int i);
 void theme_next(void);
 void theme_apply_console(void);
 int  theme_list(char *out, size_t out_len); /* newline-separated names */
