@@ -566,6 +566,8 @@ void desktop_run(void) {
         }
 
         sysmon_poll();
+        if (desktop_find_win(APP_DISKS) >= 0)
+            desktop_disks_tick();
         if (desktop_find_win(APP_MONITOR) >= 0 && timer_ticks() - last_mon_tick >= 50) {
             last_mon_tick = timer_ticks();
             monitor_tick();

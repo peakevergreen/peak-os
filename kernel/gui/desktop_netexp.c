@@ -14,6 +14,7 @@
 static char nx_lines[NETEXP_LINES][NETEXP_COLS + 1];
 static int nx_count;
 static char nx_host[64] = "example.com";
+static uint32_t nx_last_ip;
 
 static void nx_clear(void) {
     memset(nx_lines, 0, sizeof(nx_lines));
@@ -35,7 +36,8 @@ static void nx_mark_dirty(void) {
 
 void desktop_netexp_init(void) {
     nx_clear();
-    nx_append("Net Explorer — enter host, run ping/nslookup");
+    nx_last_ip = 0;
+    nx_append("Net Explorer — Enter=ping  Tab=nslookup");
     struct net_info ni;
     net_get_info(&ni);
     char ip[32], dns[32];
@@ -58,14 +60,19 @@ static void nx_run_ping(void) {
     char line[NETEXP_COLS + 1];
     snprintf(line, sizeof(line), "PING %s", nx_host);
     nx_append(line);
+    nx_append("  resolving…");
+    nx_mark_dirty();
     uint32_t ip = net_dns_resolve(nx_host, 300);
     if (!ip) {
         nx_append("DNS failed");
         nx_mark_dirty();
         return;
     }
+    nx_last_ip = ip;
     net_format_ip(ip, line, sizeof(line));
     nx_append(line);
+    nx_append("  connecting tcp/80…");
+    nx_mark_dirty();
     uint64_t t0 = timer_ticks();
     int cr = net_tcp_connect(ip, 80, 300);
     uint64_t dt = timer_ticks() - t0;
@@ -94,12 +101,15 @@ static void nx_run_nslookup(void) {
     nx_append(line);
     snprintf(line, sizeof(line), "Name: %s", nx_host);
     nx_append(line);
+    nx_append("  querying…");
+    nx_mark_dirty();
     uint32_t ip = net_dns_resolve(nx_host, 400);
     if (!ip) {
         nx_append("DNS failed");
         nx_mark_dirty();
         return;
     }
+    nx_last_ip = ip;
     char addr[32];
     net_format_ip(ip, addr, sizeof(addr));
     snprintf(line, sizeof(line), "Address: %s", addr);
@@ -114,7 +124,7 @@ void desktop_netexp_draw(struct win *w) {
     uint32_t ty = w->y + th + desktop_u(8);
     uint32_t cw = w->w > desktop_u(20) ? w->w - desktop_u(20) : w->w;
     char prompt[80];
-    snprintf(prompt, sizeof(prompt), "host: %s  (edit with keys, Enter=ping)", nx_host);
+    snprintf(prompt, sizeof(prompt), "host: %s  (Enter=ping Tab=nslookup)", nx_host);
     fb_draw_string_fit(tx, ty, cw, prompt, desktop_color_accent(), desktop_color_bg());
     ty += ch + desktop_u(4);
     int vis = NETEXP_LINES;
@@ -159,7 +169,8 @@ int desktop_netexp_ctx_menu(struct ctx_menu_item *items, int max_items) {
     int n = 0;
 #define XADD(l, e, s, a) do { if (n >= max_items) return n; \
     items[n].label=(l); items[n].enabled=(e); items[n].separator=(s); items[n].action_id=(a); n++; } while (0)
-    XADD("Copy IP", 1, 0, CTX_ACT_NX_COPY_IP);
+    XADD("Copy local IP", 1, 0, CTX_ACT_NX_COPY_IP);
+    XADD("Copy resolved IP", nx_last_ip != 0, 0, CTX_ACT_NX_COPY_RESOLVED);
     XADD("Ping host", 1, 0, CTX_ACT_NX_PING);
     XADD("Nslookup", 1, 0, CTX_ACT_NX_NSLOOKUP);
     XADD(NULL, 0, 1, CTX_ACT_NONE);
@@ -178,8 +189,20 @@ int desktop_netexp_ctx_action(int action_id) {
     switch (action_id) {
     case CTX_ACT_NX_COPY_IP:
         clipboard_set(ip, strlen(ip));
-        notify_push("IP copied");
+        notify_push("Local IP copied");
         dirty_bits |= DIRTY_TOAST;
+        return 1;
+    case CTX_ACT_NX_COPY_RESOLVED:
+        if (nx_last_ip) {
+            char addr[32];
+            net_format_ip(nx_last_ip, addr, sizeof(addr));
+            clipboard_set(addr, strlen(addr));
+            notify_push("Resolved IP copied");
+            dirty_bits |= DIRTY_TOAST;
+        } else {
+            notify_push("Run ping or nslookup first");
+            dirty_bits |= DIRTY_TOAST;
+        }
         return 1;
     case CTX_ACT_NX_PING:
         nx_run_ping();

@@ -9,9 +9,11 @@
 #include "util.h"
 
 static int disks_confirm_save;
+static int disks_was_busy;
 
 void desktop_disks_init(void) {
     disks_confirm_save = 0;
+    disks_was_busy = 0;
 }
 
 void desktop_disks_show(void) {
@@ -37,16 +39,17 @@ static void disks_save(void) {
     }
     if (!disks_confirm_save) {
         disks_confirm_save = 1;
-        notify_push("Click Save again to confirm");
+        notify_push("Confirm: press S or Save again");
         dirty_bits |= DIRTY_TOAST;
         dirty_bits |= DIRTY_WIN;
         desktop_mark_focus_surf_dirty();
         return;
     }
     disks_confirm_save = 0;
-    if (peakdisk_save_async() == 0)
+    if (peakdisk_save_async() == 0) {
         notify_push("Saving workspace to disk…");
-    else {
+        disks_was_busy = 1;
+    } else {
         const char *why = peakdisk_last_error();
         char msg[72];
         if (why && why[0])
@@ -58,6 +61,27 @@ static void disks_save(void) {
     dirty_bits |= DIRTY_TOAST;
     dirty_bits |= DIRTY_WIN;
     desktop_mark_focus_surf_dirty();
+}
+
+void desktop_disks_tick(void) {
+    int busy = peakdisk_busy();
+    if (disks_was_busy && !busy) {
+        const char *err = peakdisk_last_error();
+        if (err && err[0]) {
+            char msg[72];
+            snprintf(msg, sizeof(msg), "Save failed: %s", err);
+            notify_push(msg);
+        } else {
+            uint32_t b = peakdisk_last_save_bytes();
+            char msg[56];
+            snprintf(msg, sizeof(msg), "Save complete (%u bytes)", (unsigned)b);
+            notify_push(msg);
+        }
+        dirty_bits |= DIRTY_TOAST;
+        dirty_bits |= DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+    }
+    disks_was_busy = busy;
 }
 
 void desktop_disks_draw(struct win *w) {
@@ -75,8 +99,12 @@ void desktop_disks_draw(struct win *w) {
                    peakdisk_available() ? desktop_color_fg() : desktop_color_dim(), desktop_color_bg());
     ty += row;
     if (peakdisk_busy())
-        fb_draw_string(tx, ty, "Status: saving…", desktop_color_accent(), desktop_color_bg());
-    else
+        fb_draw_string(tx, ty, "Status: saving workspace…", desktop_color_accent(), desktop_color_bg());
+    else if (peakdisk_last_save_bytes() > 0) {
+        snprintf(line, sizeof(line), "Status: idle (last save %u bytes)",
+                 (unsigned)peakdisk_last_save_bytes());
+        fb_draw_string(tx, ty, line, desktop_color_dim(), desktop_color_bg());
+    } else
         fb_draw_string(tx, ty, "Status: idle", desktop_color_dim(), desktop_color_bg());
     ty += row * 2;
     fb_draw_string(tx, ty, "Workspace", desktop_color_accent(), desktop_color_bg());
@@ -107,12 +135,11 @@ void desktop_disks_draw(struct win *w) {
     }
     ty += row;
     if (disks_confirm_save)
-        fb_draw_string_fit(tx, ty, cw, "Save: click again to confirm", theme_get()->danger,
-                           desktop_color_bg());
+        fb_draw_string_fit(tx, ty, cw, "CONFIRM: press S or Save again to write /home",
+                           theme_get()->danger, desktop_color_bg());
     else
-        fb_draw_string_fit(tx, ty, cw, "Right-click for Save / Refresh", desktop_color_dim(),
-                           desktop_color_bg());
-    (void)cw;
+        fb_draw_string_fit(tx, ty, cw, "Save writes /home to disk (needs workspace persist)",
+                           desktop_color_dim(), desktop_color_bg());
 }
 
 int desktop_disks_key(int key) {
@@ -140,7 +167,8 @@ int desktop_disks_ctx_menu(struct ctx_menu_item *items, int max_items) {
 #define DADD(l, e, s, a) do { if (n >= max_items) return n; \
     items[n].label=(l); items[n].enabled=(e); items[n].separator=(s); items[n].action_id=(a); n++; } while (0)
     DADD("Refresh", 1, 0, CTX_ACT_DISK_REFRESH);
-    DADD("Save workspace", peakdisk_available(), 0, CTX_ACT_DISK_SAVE);
+    DADD(disks_confirm_save ? "Confirm save workspace" : "Save workspace",
+         peakdisk_available() && !peakdisk_busy(), 0, CTX_ACT_DISK_SAVE);
     DADD(NULL, 0, 1, CTX_ACT_NONE);
     DADD("Properties", 1, 0, CTX_ACT_DISK_PROPS);
     DADD(NULL, 0, 1, CTX_ACT_NONE);
@@ -161,8 +189,9 @@ int desktop_disks_ctx_action(int action_id) {
         return 1;
     case CTX_ACT_DISK_PROPS: {
         char msg[80];
-        snprintf(msg, sizeof(msg), "nodes=%d disk=%s", vfs_node_count(),
-                 peakdisk_available() ? "yes" : "no");
+        snprintf(msg, sizeof(msg), "nodes=%d disk=%s busy=%s", vfs_node_count(),
+                 peakdisk_available() ? "yes" : "no",
+                 peakdisk_busy() ? "yes" : "no");
         notify_push(msg);
         dirty_bits |= DIRTY_TOAST;
         return 1;

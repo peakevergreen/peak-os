@@ -6,10 +6,12 @@
 #include "random.h"
 #include "timer.h"
 #include "notify.h"
+#include "clipboard.h"
 #include "util.h"
 
 static int nc_kill_arm;
 static int nc_row; /* context target row */
+static char nc_status[48];
 
 static const char *persist_label(int p) {
     switch (p) {
@@ -23,11 +25,28 @@ static const char *persist_label(int p) {
 void desktop_netctl_init(void) {
     nc_kill_arm = 0;
     nc_row = -1;
+    nc_status[0] = '\0';
 }
 
 static void nc_mark_dirty(void) {
     dirty_bits |= DIRTY_WIN;
     desktop_mark_focus_surf_dirty();
+}
+
+static void nc_dhcp_renew(void) {
+    snprintf(nc_status, sizeof(nc_status), "Renewing DHCP…");
+    nc_mark_dirty();
+    notify_push("Renewing DHCP…");
+    dirty_bits |= DIRTY_TOAST;
+    if (net_dhcp_try(300) == 0) {
+        snprintf(nc_status, sizeof(nc_status), "DHCP renew ok");
+        notify_push("DHCP renew ok");
+    } else {
+        snprintf(nc_status, sizeof(nc_status), "DHCP renew failed");
+        notify_push("DHCP renew failed");
+    }
+    dirty_bits |= DIRTY_TOAST;
+    nc_mark_dirty();
 }
 
 void desktop_netctl_draw(struct win *w) {
@@ -83,6 +102,11 @@ void desktop_netctl_draw(struct win *w) {
     ty += row;
     fb_draw_string(tx, ty, "DHCP renew (click)", desktop_color_fg(), desktop_color_bg());
     ty += row;
+    if (nc_status[0])
+        fb_draw_string(tx, ty, nc_status, desktop_color_accent(), desktop_color_bg());
+    else
+        fb_draw_string(tx, ty, "Right-click for copy IP / Settings", desktop_color_dim(), desktop_color_bg());
+    ty += row;
     uint32_t rf = random_status_flags();
     snprintf(line, sizeof(line), "RNG flags=0x%x%s%s", (unsigned)rf,
              (rf & RANDOM_READY_CRYPTO) ? " CRYPTO" : "",
@@ -95,12 +119,7 @@ int desktop_netctl_click(struct win *w, int32_t mx, int32_t my) {
     uint32_t ch = fb_cell_h();
     uint32_t ty = w->y + desktop_title_h() + desktop_u(10) + (ch + desktop_u(6)) * 9;
     if ((uint32_t)my >= ty && (uint32_t)my < ty + ch + desktop_u(6)) {
-        if (net_dhcp_try(300) == 0)
-            notify_push("DHCP renew ok");
-        else
-            notify_push("DHCP renew failed");
-        dirty_bits |= DIRTY_TOAST;
-        nc_mark_dirty();
+        nc_dhcp_renew();
         return 1;
     }
     return 0;
@@ -139,6 +158,9 @@ int desktop_netctl_ctx_menu(struct ctx_menu_item *items, int max_items) {
         CADD("Grant outbound (session)", !privacy_net_client_allowed(), 0, CTX_ACT_NC_ALLOW);
         CADD("DHCP renew", 1, 0, CTX_ACT_NC_DHCP);
     }
+    CADD("Copy IP", 1, 0, CTX_ACT_NC_COPY_IP);
+    CADD(NULL, 0, 1, CTX_ACT_NONE);
+    CADD("Open Settings (Network)", 1, 0, CTX_ACT_NC_SETTINGS);
     CADD(NULL, 0, 1, CTX_ACT_NONE);
     CADD("Close window", 1, 0, CTX_ACT_CLOSE);
     return n;
@@ -184,12 +206,21 @@ int desktop_netctl_ctx_action(int action_id) {
         return 1;
     }
     case CTX_ACT_NC_DHCP:
-        if (net_dhcp_try(300) == 0)
-            notify_push("DHCP renew ok");
-        else
-            notify_push("DHCP renew failed");
+        nc_dhcp_renew();
+        return 1;
+    case CTX_ACT_NC_COPY_IP: {
+        struct net_info ni;
+        net_get_info(&ni);
+        char ip[32];
+        net_format_ip(ni.ip, ip, sizeof(ip));
+        clipboard_set(ip, strlen(ip));
+        notify_push("IP copied");
         dirty_bits |= DIRTY_TOAST;
-        nc_mark_dirty();
+        return 1;
+    }
+    case CTX_ACT_NC_SETTINGS:
+        settings_page = 4;
+        desktop_open_app(APP_SETTINGS);
         return 1;
     default:
         return 0;
