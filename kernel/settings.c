@@ -1,6 +1,10 @@
 #include "settings.h"
 #include "fb.h"
+#include "peakdisk.h"
+#include "privacy.h"
+#include "notify.h"
 #include "util.h"
+#include "vfs_path_util.h"
 #include "vfs.h"
 
 #define SETTINGS_PATH "/etc/peak/display"
@@ -59,6 +63,26 @@ void settings_persist(void) {
     snprintf(buf, sizeof(buf), "scale=%u\nbrand=%d\nclock=%d\ntls_tofu=%d\n",
              (unsigned)gui_scale, show_brand ? 1 : 0, show_clock ? 1 : 0, tls_tofu ? 1 : 0);
     vfs_write_file(SETTINGS_PATH, buf, strlen(buf));
+}
+
+int settings_path_survives_reboot(const char *path) {
+    return peakfs_path_allowed_for_profile(path, privacy_persist_profile());
+}
+
+void settings_notify_persist(const char *path, const char *label) {
+    char msg[72];
+    if (!settings_path_survives_reboot(path)) {
+        snprintf(msg, sizeof(msg), "%s: session only (private/workspace)", label);
+        notify_push(msg);
+        return;
+    }
+    if (!peakdisk_available()) {
+        snprintf(msg, sizeof(msg), "%s: saved in RAM (no disk)", label);
+        notify_push(msg);
+        return;
+    }
+    snprintf(msg, sizeof(msg), "%s: saved (survives disksave)", label);
+    notify_push(msg);
 }
 
 uint32_t settings_gui_scale(void) {

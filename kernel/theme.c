@@ -1,7 +1,10 @@
 #include "theme.h"
 #include "console.h"
 #include "fb.h"
+#include "settings.h"
 #include "vfs.h"
+
+#define THEME_CFG_PATH "/etc/peak/theme"
 #include "util.h"
 
 static const struct peak_theme themes[] = {
@@ -69,9 +72,13 @@ const struct peak_theme *theme_get(void) {
     return &themes[theme_idx];
 }
 
-const char *theme_name(void) {
-    return themes[theme_idx].name;
+int theme_count(void) { return (int)(sizeof(themes)/sizeof(themes[0])); }
+int theme_index(void) { return theme_idx; }
+const struct peak_theme *theme_at(int i) {
+    if (i < 0 || i >= theme_count()) return &themes[0];
+    return &themes[i];
 }
+const char *theme_name(void) { return themes[theme_idx].name; }
 
 int theme_set(const char *name) {
     for (int i = 0; i < (int)(sizeof(themes) / sizeof(themes[0])); i++) {
@@ -84,10 +91,12 @@ int theme_set(const char *name) {
     return -1;
 }
 
-void theme_next(void) {
-    theme_idx = (theme_idx + 1) % (int)(sizeof(themes) / sizeof(themes[0]));
-    theme_apply_console();
+void theme_set_index(int i) {
+    if (i < 0) i = 0;
+    if (i >= theme_count()) i = theme_count() - 1;
+    theme_idx = i; theme_apply_console();
 }
+void theme_next(void) { theme_set_index((theme_idx + 1) % theme_count()); }
 
 int theme_list(char *out, size_t out_len) {
     size_t o = 0;
@@ -117,5 +126,6 @@ void theme_persist(void) {
     }
     buf[i++] = '\n';
     buf[i] = '\0';
-    vfs_write_file("/etc/peak/theme", buf, i);
+    vfs_write_file(THEME_CFG_PATH, buf, i);
+    settings_notify_persist(THEME_CFG_PATH, "Theme");
 }

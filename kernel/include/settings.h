@@ -7,6 +7,9 @@
 
 void settings_init(void);
 void settings_persist(void);
+/* 1 when path survives reboot under current persist profile + disk. */
+int  settings_path_survives_reboot(const char *path);
+void settings_notify_persist(const char *path, const char *label);
 
 uint32_t settings_gui_scale(void);
 void     settings_set_gui_scale(uint32_t scale); /* 1..4 */
