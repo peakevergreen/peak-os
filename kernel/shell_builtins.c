@@ -158,6 +158,17 @@ static const struct help_entry help_table[] = {
     { "hexdump", "text", "hex dump" },
     { "strings", "text", "printable runs" },
     { "echo", "text", "print arguments" },
+    { "printf", "text", "format print (%s %d %u %x)" },
+    { "tee", "text", "copy stdin to files (-a append)" },
+    { "test", "sys", "file/string/int predicates (exit 0/1)" },
+    { "[", "sys", "test alias (requires closing ])" },
+    { "yes", "text", "print line repeatedly (bounded)" },
+    { "sha256sum", "text", "SHA-256 digest (64 KiB cap)" },
+    { "md5sum", "text", "MD5 digest (64 KiB cap)" },
+    { "base64", "text", "base64 encode/decode (-d)" },
+    { "less", "text", "page file (space/q)" },
+    { "more", "text", "page file (space/q)" },
+    { "time", "sys", "time a built-in command" },
     { "edit", "text", "buffer editor (:w/:q/:p /search)" },
     { "clear", "sys", "clear screen" },
     { "date", "sys", "uptime clock" },
@@ -204,9 +215,10 @@ void shell_help_topics(void) {
     console_write("Peak CLI — categories:\n");
     console_write("  nav   pwd cd ls tree find\n");
     console_write("  file  mkdir touch rm cp mv ln stat du df truncate basename dirname realpath\n");
-    console_write("  text  cat head tail wc grep diff sort uniq cut tr sed cmp hexdump strings echo edit\n");
+    console_write("  text  cat head tail wc grep diff sort uniq cut tr sed cmp hexdump strings echo printf tee yes\n");
+    console_write("        sha256sum md5sum base64 less more edit\n");
     console_write("  sys   date free top sysmon ps kill env which seq sleep theme wallpaper scale\n");
-    console_write("        uname true false sh reboot help man js\n");
+    console_write("        uname true false test [ yes time sh reboot help man js\n");
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
     console_write("  net   ctr ctrd ifconfig ping wget curl\n");
     console_write("  file  … tar basename dirname realpath\n");

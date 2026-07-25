@@ -4,6 +4,7 @@
 #include "types.h"
 
 void sha256(const uint8_t *data, size_t len, uint8_t out[32]);
+void md5(const uint8_t *data, size_t len, uint8_t out[16]);
 void sha384(const uint8_t *data, size_t len, uint8_t out[48]);
 
 void hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len,
