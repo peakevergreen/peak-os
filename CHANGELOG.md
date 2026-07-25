@@ -43,6 +43,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - `-h` / `--help` gap-fill on text/sys utils; docs/CLI.md inventory refresh
 - New builtins: `printf`, `tee`, `test`/`[`, `yes` (bounded)
 - **Pass 19:** `fold`, `rev`, `od`, `split`, `paste`, `nl`, `tac`, `xargs`
+- **Pass 20:** `hostname`, `uptime`, `whoami`, `id`, `cal`, `gzip`/`gunzip` (PEAKGZ1), `timeout`, `watch`
 - Hash/pager tools: `sha256sum`, `md5sum`, `base64`, `less`/`more`, `time`
 - Net diag: `nslookup`, `host`, `nc` (TCP connect)
 - Shell history: persistent `/var/peak/history`, Up/Down/Ctrl-P/N recall, `history`, `!!`, exit-status prompt, errno-style path errors
