@@ -30,7 +30,8 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Quote-aware argv split (`ask "…"`, `js -e '…'`); help table synced with registry
 - `-h` / `--help` gap-fill on text/sys utils; docs/CLI.md inventory refresh
 - New builtins: `printf`, `tee`, `test`/`[`, `yes` (bounded)
-- Host tests: `test_libpeak`, `test_shell_split`, `test_console_scroll`
+- Hash/pager tools: `sha256sum`, `md5sum`, `base64`, `less`/`more`, `time`
+- Host tests: `test_libpeak`, `test_shell_split`, `test_console_scroll`, `test_cli_crypto`
 
 ### Agent and PeakVec
 
