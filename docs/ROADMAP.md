@@ -6,11 +6,9 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 ## Enhancement wave (Passes 19–38)
 
-**Shipped on `main` (Passes 19–34):** CLI text/sys tools, shell history/aliases, VFS errno hygiene, net diag + `tlsinfo`, container build clarity, agent tools (`fs.grep`, `net.ping`), desktop chrome through Monitor/sysmon export, browser/notify/clipboard polish, Net Explorer/Control/Disks UX.
+**Shipped on `main` (Passes 19–38):** CLI text/sys tools, shell history/aliases, VFS errno hygiene, net diag + `tlsinfo`, container build clarity, agent tools (`fs.grep`, `net.ping`), desktop chrome through Monitor/sysmon export, browser/notify/clipboard polish, Net Explorer/Control/Disks UX, heap/scheduler hardening, PeakVec/blobstore stats, input/console polish, and S9-lite smoke-cli lock-in.
 
-**Pass 38 (S9-lite):** `smoke-cli.sh` gates for Pass 19–34 markers, host-test coverage, ROADMAP/CHANGELOG sync, security-checklist automation notes — release acceptance without a separate signing ceremony.
-
-**Still near-term (Passes 35–37):** heap/scheduler hardening, PeakVec/blobstore depth, input/console polish — see below.
+**Pass 38 (S9-lite):** `smoke-cli.sh` gates for Pass 19–37 markers, host-test coverage, ROADMAP/CHANGELOG sync, security-checklist automation notes — release acceptance without a separate signing ceremony.
 
 ## Near term
 
@@ -27,7 +25,7 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 - [x] **S8:** verified boot, signed releases, A/B rollback — [verified-boot.md](verified-boot.md)
   - Signing ceremony (`sign-release.py` / `verify-release.py`) + A/B ESP sketch landed; loader-embedded verify still remaining
-- [x] **S9-lite (Pass 38):** smoke-cli Pass 19–34 markers, host tests, checklist sync — CI `host-tests` job
+- [x] **S9-lite (Pass 38):** smoke-cli Pass 19–37 markers, host tests, checklist sync — CI `host-tests` job
 - **S9 remainder:** signed release ceremony on tagged builds, continuous fuzz corpus growth beyond `fuzz-elf-smoke.sh`
 
 ### Browser / JS
@@ -42,11 +40,11 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 - [x] TLS 1.2/1.3 client, WebPKI, HTTP/2 ALPN — [network.md](network.md)
 - ECH: fail-closed when required without config (`tls_ech_*`); full HPKE outer/inner ClientHello still open
 
-### Passes 35–37 (post-wave core polish)
+### Passes 35–37 (shipped)
 
-- **Pass 35:** heap fragmentation / OOM honesty, scheduler fairness in `ps`, usercopy edge hardening
-- **Pass 36:** PeakVec recall UX, blobstore integrity, large-file streaming hooks
-- **Pass 37:** keyboard repeat, mouse acceleration, console scrollback search
+- [x] **Pass 35:** heap fragmentation / OOM honesty, scheduler fairness in `ps`, usercopy edge hardening
+- [x] **Pass 36:** PeakVec recall UX, blobstore integrity, stats CLI
+- [x] **Pass 37:** keyboard repeat, mouse acceleration, console scrollback search
 
 ### Agent / storage
 

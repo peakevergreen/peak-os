@@ -116,6 +116,20 @@ grep -q 'sysmon_snapshot' kernel/sysmon.c
 grep -q 'sysmon_export' kernel/sysmon.c
 grep -q 'sysmon_sparkline_legend' kernel/sysmon.c
 
+echo "==> Pass 35 heap/sched"
+grep -q 'heap_oom_count' kernel/heap.c
+grep -q 'heap_get_freelist_stats' kernel/heap.c
+grep -q 'sched_sort_tasks' kernel/sched.c
+
+echo "==> Pass 36 peakvec/blobstore"
+grep -q 'peakvec' kernel/user/ubin_cmds.def
+grep -q 'peakvec_stats' kernel/peakvec.c
+grep -q 'blobstore_check' kernel/blobstore.c
+
+echo "==> Pass 37 input/console"
+grep -q 'keyboard_set_repeat' kernel/keyboard.c
+grep -q 'console_scroll_find_next' kernel/console_scroll.c
+
 echo "==> theme names"
 grep -q evergreen kernel/theme.c
 grep -q midnight kernel/theme.c
