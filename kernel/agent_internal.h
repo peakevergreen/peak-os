@@ -12,7 +12,7 @@
 #define AGENT_ALLOW_PATH_LEN 96
 #define AGENT_PENDING_CONTENT_MAX 512
 #define AGENT_TOOL_NAME_MAX 32
-#define AGENT_TOOLS_MAX 8
+#define AGENT_TOOLS_MAX 16
 #define AGENT_READ_CONTENT_MAX 1024
 #define AGENT_MEMORY_TAIL_MAX 768
 
@@ -37,6 +37,13 @@ int agent_tool_fs_read(const char *path, char *out, size_t out_len, size_t *out_
 int agent_tool_fs_write(const char *path, const char *content, int auto_ok);
 int agent_tool_fs_list(const char *path, char *out, size_t out_len);
 int agent_tool_fs_exec(const char *line);
+int agent_tool_fs_stat(const char *path, char *out, size_t out_len);
+int agent_tool_fs_mkdir(const char *path);
+int agent_tool_fs_rm(const char *path);
+int agent_tool_fs_search(const char *needle, char *out, size_t out_len);
+int agent_tool_sys_info(char *out, size_t out_len);
+int agent_tool_mem_recall(const char *goal, char *out, size_t out_len);
+int agent_tool_audit_tail(char *out, size_t out_len);
 
 void agent_plan_goal(const char *goal, char *summary, size_t summary_cap);
 

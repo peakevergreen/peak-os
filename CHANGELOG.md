@@ -38,6 +38,8 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 ### Agent and PeakVec
 
 - In-guest planner (`ask`), capabilities, audit, GUI write approval
+- Agent tools expanded: fs.stat, fs.mkdir, fs.rm, fs.search, sys.info, mem.recall, audit.tail; AGENT_TOOLS_MAX 16; fs.exec allowlist widened
+- Policy seed uses `fs.exec` (no phantom `proc.exec` deny)
 - PeakVec embeddings + recall; streamed PeakFS / blobstore
 
 ### Browser and network

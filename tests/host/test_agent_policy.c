@@ -157,8 +157,7 @@ static void test_planner_audit_and_help(void) {
     agent_policy_load_defaults();
     seed_policy(
         "allow_paths=/home/dev/workspace,/var/peak/sessions\n"
-        "allow_tools=fs.read,fs.write,fs.list,console.print\n"
-        "deny_tools=proc.exec\n"
+        "allow_tools=fs.read,fs.write,fs.list,console.print,mem.recall,audit.tail\n"
         "require_approval=0\n");
     agent_policy_reload();
 
@@ -170,6 +169,72 @@ static void test_planner_audit_and_help(void) {
 
     agent_plan_goal("help", summary, sizeof(summary));
     expect(!strcmp(summary, "help"), "help intent summary");
+}
+
+static void test_tool_policy_gates_recall_audit(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace,/var/peak/sessions\n"
+        "allow_tools=fs.read,fs.list,console.print\n"
+        "deny_tools=mem.recall,audit.tail\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+    expect(!agent_policy_tool_allowed("mem.recall"), "deny mem.recall");
+    expect(!agent_policy_tool_allowed("audit.tail"), "deny audit.tail");
+
+    char out[256];
+    expect(agent_tool_mem_recall("test", out, sizeof(out)) != 0, "mem.recall tool denied");
+    expect(agent_tool_audit_tail(out, sizeof(out)) != 0, "audit.tail tool denied");
+
+    char buf[512];
+    size_t n = 0;
+    read_audit(buf, sizeof(buf), &n);
+    expect(strstr(buf, "deny-tool") != NULL, "deny-tool logged for gated tools");
+}
+
+static void test_new_fs_tools(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.stat,fs.mkdir,fs.rm,fs.search,sys.info\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+
+    expect(vfs_write_file("/home/dev/workspace/findme.txt", "needle-here", 11) == 0,
+           "seed search file");
+
+    char out[256];
+    expect(agent_tool_fs_stat("/home/dev/workspace/findme.txt", out, sizeof(out)) == 0,
+           "fs.stat ok");
+    expect(strstr(out, "findme.txt") != NULL, "fs.stat path in output");
+
+    expect(agent_tool_fs_search("needle", out, sizeof(out)) == 0, "fs.search hit");
+    expect(strstr(out, "findme.txt") != NULL, "fs.search match path");
+
+    expect(agent_tool_fs_mkdir("/home/dev/workspace/agent_tmp") == 0, "fs.mkdir ok");
+    expect(vfs_is_dir("/home/dev/workspace/agent_tmp"), "mkdir created dir");
+
+    expect(agent_tool_sys_info(out, sizeof(out)) == 0, "sys.info ok");
+    expect(strstr(out, "uptime=") != NULL, "sys.info uptime");
+
+    expect(agent_tool_fs_rm("/home/dev/workspace/agent_tmp") == 0, "fs.rm dir");
+    expect(agent_tool_fs_rm("/home/dev/workspace/findme.txt") == 0, "fs.rm file");
+}
+
+static void test_fs_exec_allowlist(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.exec\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+    expect(agent_policy_tool_allowed("fs.exec"), "fs.exec allowed");
+    expect(agent_tool_fs_exec("find /home/dev/workspace -name README.md") == 0 ||
+               agent_tool_fs_exec("ls /home/dev/workspace") == 0,
+           "fs.exec runs allowlisted cmd");
 }
 
 static void test_planner_audit_true_tail(void) {
@@ -212,6 +277,9 @@ int main(void) {
     test_deny_audit_write();
     test_planner_audit_and_help();
     test_planner_audit_true_tail();
+    test_tool_policy_gates_recall_audit();
+    test_new_fs_tools();
+    test_fs_exec_allowlist();
 
     if (fails) {
         fprintf(stderr, "%d agent policy test(s) failed\n", fails);
