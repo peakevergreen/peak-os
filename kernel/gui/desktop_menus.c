@@ -11,7 +11,10 @@
 #include "peakdisk.h"
 #include "privacy.h"
 #include "util.h"
-#include "sound.h"
+#include "browser.h"
+#include "monitor.h"
+#include "clipboard.h"
+#include "shell.h"
 
 int menu_open;
 int ctx_menu;
@@ -320,7 +323,12 @@ static void ctx_build_chrome(int win_idx) {
 }
 
 int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int max_items) {
-    (void)kind;
+    switch (kind) {
+    case APP_FILES:
+        return desktop_files_ctx_menu(items, max_items);
+    default:
+        break;
+    }
     if (!items || max_items < 2)
         return 0;
     items[0].label = "Close window";
@@ -334,14 +342,25 @@ int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int ma
     return 2;
 }
 
-static void ctx_build_client(int win_idx) {
+int desktop_app_ctx_action(enum app_kind kind, int action_id) {
+    switch (kind) {
+    case APP_FILES:
+        return desktop_files_ctx_action(action_id);
+    default:
+        return 0;
+    }
+}
+
+static void ctx_build_client(int win_idx, int32_t mx, int32_t my) {
     if (win_idx < 0 || win_idx >= MAX_WINS || !wins[win_idx].open)
         return;
+    if (wins[win_idx].kind == APP_FILES)
+        desktop_files_ctx_prepare(&wins[win_idx], mx, my);
     int n = desktop_app_ctx_menu(wins[win_idx].kind, ctx_items, CTX_MENU_MAX_ITEMS);
     ctx_item_count = n;
 }
 
-static void ctx_build_spec(enum ctx_target target, int win_idx) {
+static void ctx_build_spec(enum ctx_target target, int win_idx, int32_t mx, int32_t my) {
     ctx_item_count = 0;
     ctx_target_kind = target;
     ctx_win = win_idx;
@@ -356,7 +375,7 @@ static void ctx_build_spec(enum ctx_target target, int win_idx) {
         ctx_build_chrome(win_idx);
         break;
     case CTX_CLIENT:
-        ctx_build_client(win_idx);
+        ctx_build_client(win_idx, mx, my);
         break;
     }
     ctx_spec.items = ctx_items;
@@ -367,7 +386,7 @@ static void ctx_build_spec(enum ctx_target target, int win_idx) {
 static void ctx_open_at(int32_t mx, int32_t my, enum ctx_target target, int win_idx) {
     if (ctx_menu)
         menus_damage_ctx();
-    ctx_build_spec(target, win_idx);
+    ctx_build_spec(target, win_idx, mx, my);
     ctx_spec.x = mx;
     ctx_spec.y = my;
     struct framebuffer *fb = fb_get();
@@ -466,12 +485,10 @@ static void ctx_dispatch_action(int action_id) {
         desktop_open_app(APP_FILES);
         break;
     case CTX_ACT_NEW_NOTEPAD:
-        notify_push("Notepad not ready yet");
-        dirty_bits |= DIRTY_TOAST;
+        desktop_open_app(APP_NOTEPAD);
         break;
     case CTX_ACT_NEW_IMAGES:
-        notify_push("Images not ready yet");
-        dirty_bits |= DIRTY_TOAST;
+        desktop_open_app(APP_IMAGES);
         break;
     case CTX_ACT_CHANGE_WALLPAPER:
         wallpaper_next();
@@ -513,6 +530,9 @@ static void ctx_dispatch_action(int action_id) {
         dirty_bits |= DIRTY_FULL;
         break;
     default:
+        if (action_id >= CTX_ACT_APP_BASE && ctx_win >= 0 &&
+            desktop_app_ctx_action(wins[ctx_win].kind, action_id))
+            break;
         break;
     }
 }

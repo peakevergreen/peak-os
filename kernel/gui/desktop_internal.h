@@ -52,6 +52,26 @@ enum ctx_target {
 #define CTX_ACT_MAX_RESTORE      13
 #define CTX_ACT_HELP             14
 #define CTX_ACT_APP_BASE         100
+#define CTX_ACT_FILES_NEW        (CTX_ACT_APP_BASE + 0)
+#define CTX_ACT_FILES_GO_UP      (CTX_ACT_APP_BASE + 1)
+#define CTX_ACT_FILES_COPY_PATH  (CTX_ACT_APP_BASE + 2)
+#define CTX_ACT_FILES_OPEN       (CTX_ACT_APP_BASE + 3)
+#define CTX_ACT_FILES_DELETE     (CTX_ACT_APP_BASE + 4)
+#define CTX_ACT_FILES_RENAME     (CTX_ACT_APP_BASE + 5)
+#define CTX_ACT_FILES_OPEN_NPAD  (CTX_ACT_APP_BASE + 6)
+#define CTX_ACT_FILES_OPEN_IMG   (CTX_ACT_APP_BASE + 7)
+#define CTX_ACT_FILES_OPEN_DISK  (CTX_ACT_APP_BASE + 8)
+#define CTX_ACT_TERM_NEW         (CTX_ACT_APP_BASE + 0)
+#define CTX_ACT_TERM_COPY        (CTX_ACT_APP_BASE + 1)
+#define CTX_ACT_TERM_PASTE       (CTX_ACT_APP_BASE + 2)
+#define CTX_ACT_TERM_CLEAR       (CTX_ACT_APP_BASE + 3)
+#define CTX_ACT_BROWSER_BACK     (CTX_ACT_APP_BASE + 10)
+#define CTX_ACT_BROWSER_RELOAD   (CTX_ACT_APP_BASE + 11)
+#define CTX_ACT_BROWSER_COPY_URL (CTX_ACT_APP_BASE + 12)
+#define CTX_ACT_SETTINGS_DISPLAY (CTX_ACT_APP_BASE + 20)
+#define CTX_ACT_SETTINGS_NET     (CTX_ACT_APP_BASE + 21)
+#define CTX_ACT_AGENT_HELP       (CTX_ACT_APP_BASE + 30)
+#define CTX_ACT_MONITOR_PAUSE    (CTX_ACT_APP_BASE + 40)
 
 struct win {
     int open;
@@ -149,6 +169,7 @@ void desktop_draw_taskbar(void);
 void desktop_draw_start_menu(void);
 void desktop_draw_ctx_menu(void);
 int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int max_items);
+int desktop_app_ctx_action(enum app_kind kind, int action_id);
 void desktop_menus_open_ctx_target(int32_t mx, int32_t my, enum ctx_target target, int win_idx);
 int desktop_menus_ctx_hit_test(int32_t mx, int32_t my, enum ctx_target *target, int *win_idx);
 void desktop_menus_ctx_hover(int32_t mx, int32_t my);
@@ -184,12 +205,20 @@ void desktop_terminal_init(void);
 void desktop_terminal_draw(struct win *w);
 int desktop_terminal_key(int key);
 void desktop_terminal_wheel(int wheel);
+int desktop_terminal_click(struct win *w, int32_t mx, int32_t my, int drag);
+void desktop_terminal_clear(void);
 
 void desktop_files_init(void);
 void desktop_files_draw(struct win *w);
 int desktop_files_key(int key);
 void desktop_files_wheel(int wheel);
 int desktop_files_click(struct win *w, int32_t mx, int32_t my, int dbl);
+void desktop_files_ctx_prepare(struct win *w, int32_t mx, int32_t my);
+int desktop_files_ctx_menu(struct ctx_menu_item *items, int max_items);
+int desktop_files_ctx_action(int action_id);
+void desktop_notepad_open(const char *path);
+void desktop_images_open(const char *path);
+void desktop_disks_show(void);
 
 void desktop_settings_draw(struct win *w);
 int desktop_settings_click(struct win *w, int32_t mx, int32_t my);
