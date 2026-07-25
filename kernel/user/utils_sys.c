@@ -4,6 +4,8 @@
 #include "console.h"
 #include "util.h"
 #include "pmm.h"
+#include "heap.h"
+#include "sysmon.h"
 #include "theme.h"
 #include "wallpaper.h"
 #include "fb.h"
@@ -192,7 +194,25 @@ int udate_main(int argc, char **argv) {
 int ufree_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
-    console_printf("pages free: %lu / %lu\n", pmm_free_pages(), pmm_total_pages());
+    uint64_t free_p = pmm_free_pages();
+    uint64_t total_p = pmm_total_pages();
+    console_printf("pages free: %lu / %lu\n", free_p, total_p);
+    uint64_t used = 0, freeb = 0, blocks = 0;
+    heap_get_stats(&used, &freeb, &blocks);
+    struct heap_freelist_stats fl;
+    heap_get_freelist_stats(&fl);
+    char u[24], f[24], l[24];
+    sysmon_format_bytes(used, u, sizeof(u));
+    sysmon_format_bytes(freeb, f, sizeof(f));
+    sysmon_format_bytes(fl.largest_free, l, sizeof(l));
+    console_printf("heap used:  %s  free: %s  blocks: %lu\n", u, f,
+                   (unsigned long)blocks);
+    console_printf("heap frag:  %u%%  free blocks: %u  freelists: %u  largest: %s\n",
+                   (unsigned)heap_fragmentation_pct(), (unsigned)fl.free_blocks,
+                   (unsigned)fl.freelist_heads, l);
+    if (heap_oom_count())
+        console_printf("heap oom:   %u allocation failure(s)\n",
+                       (unsigned)heap_oom_count());
     return 0;
 }
 

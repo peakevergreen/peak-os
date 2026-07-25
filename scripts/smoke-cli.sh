@@ -25,7 +25,7 @@ test ! -e scripts/peak-ssh
 echo "==> builtin count in ubin registry"
 count=$(grep -c '^UBIN_CMD' kernel/user/ubin_cmds.def || true)
 echo "    registered commands: $count"
-test "$count" -ge 25
+test "$count" -ge 90
 grep -q 'test_ubin_registry' Makefile
 grep -q 'test_agent_tools' Makefile
 grep -q 'test_desktop_titles' Makefile
@@ -34,13 +34,87 @@ grep -q 'SHELL_PIPE_MAX' kernel/include/shell_split.h
 grep -q 'nslookup' kernel/user/ubin_cmds.def
 grep -q 'printf' kernel/user/ubin_cmds.def
 grep -q 'test' kernel/user/ubin_cmds.def
-grep -q 'xargs' kernel/user/ubin_cmds.def
-grep -q 'fold' kernel/user/ubin_cmds.def
-grep -q 'hostname' kernel/user/ubin_cmds.def
-grep -q 'utils_sys2' Makefile
-grep -q 'utils_text5' Makefile
 grep -q 'boot_verify_manifest_sig' boot/common/verify_kernel.c
-grep -q 'SHELL_PIPE_MAX' kernel/include/shell_split.h
+
+echo "==> Pass 19 text utils"
+grep -q 'fold' kernel/user/ubin_cmds.def
+grep -q 'rev' kernel/user/ubin_cmds.def
+grep -q 'od' kernel/user/ubin_cmds.def
+grep -q 'split' kernel/user/ubin_cmds.def
+grep -q 'paste' kernel/user/ubin_cmds.def
+grep -q 'nl' kernel/user/ubin_cmds.def
+grep -q 'tac' kernel/user/ubin_cmds.def
+grep -q 'xargs' kernel/user/ubin_cmds.def
+grep -q 'utils_text5' Makefile
+
+echo "==> Pass 20 sys utils"
+grep -q 'hostname' kernel/user/ubin_cmds.def
+grep -q 'uptime' kernel/user/ubin_cmds.def
+grep -q 'whoami' kernel/user/ubin_cmds.def
+grep -q 'cal' kernel/user/ubin_cmds.def
+grep -q 'gzip' kernel/user/ubin_cmds.def
+grep -q 'timeout' kernel/user/ubin_cmds.def
+grep -q 'watch' kernel/user/ubin_cmds.def
+grep -q 'utils_sys2' Makefile
+
+echo "==> Pass 21 shell UX"
+grep -q 'alias' kernel/user/ubin_cmds.def
+grep -q 'history' kernel/user/ubin_cmds.def
+grep -q 'shell_alias_init' kernel/shell.c
+grep -q 'shell_history_add' kernel/shell_history.c
+
+echo "==> Pass 22 VFS errno"
+grep -q 'vfs_last_error' kernel/vfs.c
+grep -q 'peak_strerror' kernel/util.c
+grep -q 'test_vfs' Makefile
+
+echo "==> Pass 23 net diag"
+grep -q 'traceroute' kernel/user/ubin_cmds.def
+grep -q 'host' kernel/user/ubin_cmds.def
+grep -q 'utraceroute_main' kernel/user/utils_net.c
+
+echo "==> Pass 24 TLS/WebPKI"
+grep -q 'tlsinfo' kernel/user/ubin_cmds.def
+grep -q 'tls_err_name' kernel/net/tls_util.c
+grep -q 'webpki_root_sha256' kernel/net/webpki.c
+
+echo "==> Pass 25 containers"
+grep -q 'ctr_build' kernel/ctr_build.c
+grep -q 'test_ctr_path' Makefile
+
+echo "==> Pass 26 agent tools"
+grep -q 'fs.grep' kernel/agent_tools.c
+grep -q 'net.ping' kernel/agent_tools.c
+
+echo "==> Pass 27 desktop chrome"
+grep -q 'start_filter' kernel/gui/desktop_menus.c
+grep -q 'desktop_snap_hint' kernel/gui/desktop.c
+
+echo "==> Pass 28 terminal UX"
+grep -q 'term_find_next' kernel/gui/desktop_terminal.c
+
+echo "==> Pass 29 files/notepad UX"
+grep -q 'files_del_arm' kernel/gui/desktop_files.c
+
+echo "==> Pass 30 browser JS UX"
+grep -q 'browser_bookmarks_init' kernel/gui/browser_bookmarks.c
+
+echo "==> Pass 31 settings/theme"
+grep -q 'settings_draw_scale_preview' kernel/gui/desktop_settings.c
+grep -q 'test_wallpaper_cache' Makefile
+
+echo "==> Pass 32 notify/clipboard"
+grep -q 'notify_history_count' kernel/notify.c
+grep -q 'clipboard_get_previous' kernel/clipboard.c
+
+echo "==> Pass 33 net/disks apps"
+grep -q 'desktop_netexp_ctx_menu' kernel/gui/desktop_netexp.c
+grep -q 'desktop_netctl_ctx_menu' kernel/gui/desktop_netctl.c
+
+echo "==> Pass 34 sysmon"
+grep -q 'sysmon_snapshot' kernel/sysmon.c
+grep -q 'sysmon_export' kernel/sysmon.c
+grep -q 'sysmon_sparkline_legend' kernel/sysmon.c
 
 echo "==> theme names"
 grep -q evergreen kernel/theme.c

@@ -8,6 +8,7 @@ struct sysmon_sample {
     uint64_t ticks; uint64_t uptime_secs;
     uint64_t mem_used_pages; uint64_t mem_total_pages; uint64_t mem_peak_pages;
     uint64_t heap_used; uint64_t heap_free; uint64_t heap_blocks; uint64_t heap_peak;
+    uint32_t heap_frag_pct; uint32_t heap_free_blocks; uint32_t heap_oom;
     uint64_t vfs_nodes; uint64_t rx_bytes; uint64_t tx_bytes;
     uint64_t rx_packets; uint64_t tx_packets; uint64_t ctx_switches; uint64_t irq_count;
     uint32_t tasks; uint32_t mem_pct; uint32_t heap_pct; uint32_t idle_pct; uint32_t load_pct;

@@ -20,6 +20,7 @@ static const size_t heap_class_size[HEAP_NCLASSES] = {
 static struct heap_block *blocks;
 static struct heap_block *free_lists[HEAP_NCLASSES];
 static struct spinlock heap_lock;
+static uint32_t heap_ooms;
 
 static int heap_size_class(size_t size) {
     for (int i = 0; i < HEAP_NCLASSES; i++) {
@@ -124,8 +125,14 @@ void *kmalloc(size_t size) {
 
     /* Large request or empty freelists: grow from PMM. */
     void *ret = alloc_pages_block(size);
+    if (!ret)
+        heap_ooms++;
     spin_unlock(&heap_lock);
     return ret;
+}
+
+uint32_t heap_oom_count(void) {
+    return heap_ooms;
 }
 
 void *kzalloc(size_t size) {
@@ -258,4 +265,27 @@ void heap_get_stats(uint64_t *used_bytes, uint64_t *free_bytes, uint64_t *blocks
         *free_bytes = freeb;
     if (blocks_out)
         *blocks_out = n;
+}
+
+void heap_get_freelist_stats(struct heap_freelist_stats *out) {
+    if (!out)
+        return;
+    memset(out, 0, sizeof(*out));
+    spin_lock(&heap_lock);
+    for (struct heap_block *b = blocks; b; b = b->next) {
+        if (!b->free)
+            continue;
+        out->free_blocks++;
+        if (b->size > out->largest_free)
+            out->largest_free = b->size;
+    }
+    for (int i = 0; i < HEAP_NCLASSES; i++) {
+        int n = 0;
+        for (struct heap_block *b = free_lists[i]; b; b = b->free_next)
+            n++;
+        out->class_counts[i] = (uint32_t)n;
+        if (n)
+            out->freelist_heads++;
+    }
+    spin_unlock(&heap_lock);
 }

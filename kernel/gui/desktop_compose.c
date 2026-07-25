@@ -244,7 +244,12 @@ static int win_unobscured(int idx) {
 
 static void paint_win_to_surface(int i) {
     struct win *w = &wins[i];
-    if (surface_ensure(&w->surf, w->w, w->h) != 0)
+    int rc = surface_ensure(&w->surf, w->w, w->h);
+    if (rc == SURFACE_ERR_NOMEM)
+        notify_push("Out of memory — window surface");
+    else if (rc == SURFACE_ERR_BUDGET)
+        notify_push("Surface budget exceeded");
+    else if (rc != 0)
         return;
     uint32_t ox = w->x, oy = w->y;
     w->x = 0;
@@ -376,6 +381,7 @@ void desktop_opaque_move_begin(int idx) {
     move_underlay = (uint32_t *)kmalloc(bytes);
     if (!move_pixmap || !move_underlay) {
         desktop_opaque_move_free();
+        notify_push("Out of memory — opaque move");
         return;
     }
     move_pw = w->w;

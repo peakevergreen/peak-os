@@ -364,14 +364,18 @@ int access_ok_write(const void *user_ptr, size_t len) {
 }
 
 int copy_from_user(void *kdst, const void *user_src, size_t len) {
-    if (!access_ok(user_src, len))
+    if (!len)
+        return 0;
+    if (!kdst || !access_ok(user_src, len))
         return -1;
     memcpy(kdst, user_src, len);
     return 0;
 }
 
 int copy_to_user(void *user_dst, const void *ksrc, size_t len) {
-    if (!access_ok(user_dst, len))
+    if (!len)
+        return 0;
+    if (!ksrc || !access_ok_write(user_dst, len))
         return -1;
     memcpy(user_dst, ksrc, len);
     return 0;

@@ -2,6 +2,7 @@
 #include "sysmon.h"
 #include "sched.h"
 #include "heap.h"
+#include "timer.h"
 #include "net.h"
 #include "browser.h"
 #include "fb.h"
@@ -247,7 +248,18 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         snprintf(line, sizeof(line), "used %s  free %s  peak %s  (%lu blk)",
                  mb, tb, pk, (unsigned long)s->heap_blocks);
         fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
-        row += ch + U(4);
+        row += ch + U(2);
+        {
+            struct heap_freelist_stats fl;
+            heap_get_freelist_stats(&fl);
+            char lf[24];
+            sysmon_format_bytes(fl.largest_free, lf, sizeof(lf));
+            snprintf(line, sizeof(line), "frag %u%%  free blk %u  oom %u  largest %s",
+                     (unsigned)s->heap_frag_pct, (unsigned)s->heap_free_blocks,
+                     (unsigned)s->heap_oom, lf);
+            fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
+        }
+        row += ch + U(2);
 
         snprintf(line, sizeof(line), "ctx %lu  irq %lu",
                  (unsigned long)s->ctx_switches, (unsigned long)s->irq_count);
@@ -312,15 +324,26 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
             draw_spark(text_x, row, graph_w, graph_h, g_series_c, hn, t->title, surface);
 
     } else if (page == MON_PAGE_TASKS) {
-        fb_draw_string_fit(text_x, row, inner_w, "PID  STATE   TICKS   NAME", dim, bg);
+        fb_draw_string_fit(text_x, row, inner_w,
+                           "PID  STATE   TICKS   AGE     SHARE  NAME", dim, bg);
         row += ch + U(4);
         int n = sched_list_tasks(g_tasks, MAX_TASKS);
         sched_sort_tasks(g_tasks, n);
         int cur = sched_current_pid();
+        uint64_t total_ticks = 0;
+        for (int i = 0; i < n; i++)
+            total_ticks += g_tasks[i].cpu_ticks;
+        if (!total_ticks)
+            total_ticks = 1;
+        uint64_t now = timer_ticks();
         for (int i = 0; i < n && row + ch < y + h - ch; i++) {
-            snprintf(line, sizeof(line), "%-4d %-7s %-7lu %s%s",
+            uint64_t age = now > g_tasks[i].spawned_at ?
+                           now - g_tasks[i].spawned_at : 0;
+            uint32_t share = (uint32_t)((g_tasks[i].cpu_ticks * 100ull) / total_ticks);
+            snprintf(line, sizeof(line), "%-4d %-7s %-7lu %-7lu %-5u %s%s",
                      g_tasks[i].pid, state_name(g_tasks[i].state),
-                     (unsigned long)g_tasks[i].cpu_ticks, g_tasks[i].name,
+                     (unsigned long)g_tasks[i].cpu_ticks, (unsigned long)age,
+                     (unsigned)share, g_tasks[i].name,
                      g_tasks[i].pid == cur ? " *" : "");
             fb_draw_string_fit(text_x, row, inner_w, line, fg, bg);
             row += ch + U(2);
