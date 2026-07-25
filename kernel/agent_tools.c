@@ -5,10 +5,13 @@
 #include "ubin.h"
 #include "peakvec.h"
 #include "sysmon.h"
+#include "privacy.h"
+#include "net.h"
+#include "timer.h"
 
 static const char tools_catalog[] =
-    "fs.read,fs.write,fs.list,fs.exec,fs.stat,fs.mkdir,fs.rm,fs.search,"
-    "sys.info,mem.recall,audit.tail,console.print";
+    "fs.read,fs.write,fs.list,fs.exec,fs.stat,fs.mkdir,fs.rm,fs.search,fs.grep,"
+    "sys.info,net.ping,mem.recall,audit.tail,console.print";
 
 const char *agent_tools_catalog(void) {
     return tools_catalog;
@@ -23,7 +26,6 @@ int agent_tool_console_print(const char *msg) {
         agent_audit_event("console.print", "-", "deny-tool");
         return -1;
     }
-    /* UI only — goals/paths must not mirror to COM1 (privacy.md). */
     console_write_ui(msg ? msg : "");
     if (msg && msg[0] && msg[strlen(msg) - 1] != '\n')
         console_write_ui("\n");
@@ -321,6 +323,145 @@ int agent_tool_fs_search(const char *needle, char *out, size_t out_len) {
     return sc.matches ? 0 : -1;
 }
 
+struct grep_ctx {
+    const char *needle;
+    char *out;
+    size_t out_len;
+    size_t out_off;
+    int matches;
+    int max_matches;
+};
+
+static int grep_file_lines(const char *path, struct grep_ctx *gc) {
+    char buf[1024];
+    size_t n = 0;
+    if (vfs_read_file(path, buf, sizeof(buf) - 1, &n) != 0 || !n)
+        return 0;
+    size_t nl = gc->needle ? strlen(gc->needle) : 0;
+    if (!nl)
+        return 0;
+    int line_no = 1;
+    const char *line = buf;
+    for (size_t i = 0; i <= n && gc->matches < gc->max_matches; i++) {
+        if (i == n || buf[i] == '\n') {
+            size_t ll = (size_t)(buf + i - line);
+            int hit = 0;
+            for (size_t j = 0; j + nl <= ll; j++) {
+                if (!memcmp(line + j, gc->needle, nl)) {
+                    hit = 1;
+                    break;
+                }
+            }
+            if (hit && gc->out_off + 2 < gc->out_len) {
+                if (gc->matches)
+                    gc->out[gc->out_off++] = '\n';
+                char prefix[160];
+                int pl = snprintf(prefix, sizeof(prefix), "%s:%d:", path, line_no);
+                for (int k = 0; k < pl && gc->out_off + 1 < gc->out_len; k++)
+                    gc->out[gc->out_off++] = prefix[k];
+                size_t show = ll < 72 ? ll : 72;
+                for (size_t j = 0; j < show && gc->out_off + 1 < gc->out_len; j++)
+                    gc->out[gc->out_off++] = line[j];
+                gc->out[gc->out_off] = '\0';
+                gc->matches++;
+            }
+            line = buf + i + 1;
+            line_no++;
+        }
+    }
+    return gc->matches;
+}
+
+static int grep_walk_cb(const char *path, struct vfs_node *node, void *ctx) {
+    struct grep_ctx *gc = ctx;
+    if (!gc || gc->matches >= gc->max_matches || !node || node->type != VFS_FILE)
+        return 0;
+    grep_file_lines(path, gc);
+    return 0;
+}
+
+int agent_tool_fs_grep(const char *needle, char *out, size_t out_len) {
+    if (!agent_policy_tool_allowed("fs.grep")) {
+        agent_audit_event("fs.grep", needle ? needle : "-", "deny-tool");
+        return -1;
+    }
+    if (!needle || !needle[0] || !out || out_len < 4) {
+        agent_audit_event("fs.grep", "-", "fail");
+        return -1;
+    }
+    out[0] = '\0';
+    struct grep_ctx gc;
+    gc.needle = needle;
+    gc.out = out;
+    gc.out_len = out_len;
+    gc.out_off = 0;
+    gc.matches = 0;
+    gc.max_matches = 12;
+    vfs_walk("/home/dev/workspace", grep_walk_cb, &gc);
+    agent_audit_event("fs.grep", needle, gc.matches ? "ok" : "empty");
+    return gc.matches ? 0 : -1;
+}
+
+static void format_session_tail(const char *raw, size_t raw_len, char *out, size_t out_len) {
+    if (!out || out_len < 16) {
+        if (out && out_len)
+            out[0] = '\0';
+        return;
+    }
+    if (!raw || !raw_len) {
+        snprintf(out, out_len, "(empty)");
+        return;
+    }
+    int lines = 0;
+    for (size_t i = 0; i < raw_len; i++)
+        if (raw[i] == '\n')
+            lines++;
+    if (raw_len && raw[raw_len - 1] != '\n')
+        lines++;
+
+    size_t o = 0;
+    char hdr[80];
+    int hl = snprintf(hdr, sizeof(hdr), "(%zu bytes, %d lines)\n--- recent entries ---\n",
+                      raw_len, lines);
+    for (int i = 0; i < hl && o + 1 < out_len; i++)
+        out[o++] = hdr[i];
+
+    const char *start = raw;
+    int tail_lines = 0;
+    for (const char *p = raw + raw_len; p > raw; p--) {
+        if (p[-1] == '\n') {
+            tail_lines++;
+            if (tail_lines > 12) {
+                start = p;
+                break;
+            }
+        }
+    }
+
+    int n = 1;
+    for (const char *p = start; *p && o + 1 < out_len; p++) {
+        if (p == start || p[-1] == '\n') {
+            const char *eol = strchr(p, '\n');
+            size_t ll = eol ? (size_t)(eol - p) : strlen(p);
+            if (ll > 0) {
+                char num[8];
+                int nl = snprintf(num, sizeof(num), "%3d  ", n++);
+                for (int i = 0; i < nl && o + 1 < out_len; i++)
+                    out[o++] = num[i];
+                size_t show = ll < 88 ? ll : 88;
+                for (size_t j = 0; j < show && o + 1 < out_len; j++)
+                    out[o++] = p[j];
+                if (o + 1 < out_len)
+                    out[o++] = '\n';
+            }
+        }
+    }
+    const char *end = "--- end ---\n";
+    for (const char *p = end; *p && o + 1 < out_len; p++)
+        out[o++] = *p;
+    out[o] = '\0';
+}
+
 int agent_tool_sys_info(char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("sys.info")) {
         agent_audit_event("sys.info", "-", "deny-tool");
@@ -334,16 +475,70 @@ int agent_tool_sys_info(char *out, size_t out_len) {
         agent_audit_event("sys.info", "-", "fail");
         return -1;
     }
-    char rx[16], tx[16];
+    char rx[16], tx[16], memu[16], heapu[16], comp[16], pres[16];
     sysmon_format_rate(s->rx_bps, rx, sizeof(rx));
     sysmon_format_rate(s->tx_bps, tx, sizeof(tx));
+    sysmon_format_bytes(s->mem_used_pages * 4096ull, memu, sizeof(memu));
+    sysmon_format_bytes(s->heap_used, heapu, sizeof(heapu));
+    sysmon_format_us(s->compose_us, comp, sizeof(comp));
+    sysmon_format_us(s->present_us, pres, sizeof(pres));
     snprintf(out, out_len,
-             "uptime=%lus mem=%u%% heap=%u%% load=%u%% tasks=%u net_rx=%s net_tx=%s vfs_nodes=%lu",
-             (unsigned long)s->uptime_secs, (unsigned)s->mem_pct, (unsigned)s->heap_pct,
-             (unsigned)s->load_pct, (unsigned)s->tasks, rx, tx,
-             (unsigned long)s->vfs_nodes);
+             "uptime=%lus mem=%u%%(%s) heap=%u%%(%s) load=%u%% idle=%u%% tasks=%u\n"
+             "net_rx=%s net_tx=%s ctx=%llu irq=%llu gui_fps=%u surf=%u%%\n"
+             "vfs_nodes=%lu compose=%s present=%s peakvec=%uus audit=%uus",
+             (unsigned long)s->uptime_secs, (unsigned)s->mem_pct, memu,
+             (unsigned)s->heap_pct, heapu, (unsigned)s->load_pct, (unsigned)s->idle_pct,
+             (unsigned)s->tasks, rx, tx, (unsigned long long)s->ctx_switches,
+             (unsigned long long)s->irq_count, (unsigned)s->gui_fps,
+             (unsigned)s->surf_pressure, (unsigned long)s->vfs_nodes, comp, pres,
+             (unsigned)s->peakvec_us, (unsigned)s->agent_audit_us);
     agent_audit_event("sys.info", "-", "ok");
     return 0;
+}
+
+int agent_tool_net_ping(const char *host, char *out, size_t out_len) {
+    if (!agent_policy_tool_allowed("net.ping")) {
+        agent_audit_event("net.ping", host ? host : "-", "deny-tool");
+        return -1;
+    }
+    if (!privacy_net_client_allowed()) {
+        agent_audit_event("net.ping", host ? host : "-", "deny-privacy");
+        return -1;
+    }
+    if (!host || !host[0] || !out || out_len < 32) {
+        agent_audit_event("net.ping", "-", "fail");
+        return -1;
+    }
+    if (!net_ready()) {
+        snprintf(out, out_len, "network down");
+        agent_audit_event("net.ping", host, "down");
+        return -1;
+    }
+    uint64_t t0 = timer_ticks();
+    uint32_t ip = net_dns_resolve(host, 300);
+    if (!ip) {
+        const char *why = net_last_error();
+        snprintf(out, out_len, "DNS failed%s%s", why && why[0] ? ": " : "", why ? why : "");
+        agent_audit_event("net.ping", host, "dns-fail");
+        return -1;
+    }
+    char ipbuf[32];
+    net_format_ip(ip, ipbuf, sizeof(ipbuf));
+    int cr = net_tcp_connect(ip, 80, 300);
+    uint64_t dt = timer_ticks() - t0;
+    if (cr == 0) {
+        net_tcp_close();
+        snprintf(out, out_len, "PING %s (%s) tcp/:80 open time=%lums",
+                 host, ipbuf, (unsigned long)(dt * 10));
+        agent_audit_event("net.ping", host, "ok");
+        return 0;
+    }
+    const char *why = net_last_error();
+    snprintf(out, out_len, "PING %s (%s) tcp/:80 failed%s%s time=%lums",
+             host, ipbuf, why && why[0] ? ": " : "", why ? why : "",
+             (unsigned long)(dt * 10));
+    agent_audit_event("net.ping", host, "fail");
+    return -1;
 }
 
 int agent_tool_mem_recall(const char *goal, char *out, size_t out_len) {
@@ -385,15 +580,13 @@ int agent_tool_mem_recall(const char *goal, char *out, size_t out_len) {
     char mem[AGENT_MEMORY_TAIL_MAX];
     size_t n = 0;
     if (vfs_read_file(AGENT_MEM_PATH, mem, sizeof(mem) - 1, &n) == 0 && n > 0) {
-        mem[n] = '\0';
         const char *hdr = "[recall/memory]\n";
         for (const char *p = hdr; *p && o + 1 < out_len; p++)
             out[o++] = *p;
-        size_t start = 0;
-        if (n > 400)
-            start = n - 400;
-        for (size_t i = start; i < n && o + 1 < out_len; i++)
-            out[o++] = mem[i];
+        char formatted[512];
+        format_session_tail(mem, n, formatted, sizeof(formatted));
+        for (const char *p = formatted; *p && o + 1 < out_len; p++)
+            out[o++] = *p;
     }
     out[o] = '\0';
     agent_audit_event("mem.recall", goal ? goal : "-", o ? "ok" : "empty");
@@ -412,18 +605,19 @@ int agent_tool_audit_tail(char *out, size_t out_len) {
     struct vfs_stat st;
     if (vfs_stat(AGENT_AUDIT_PATH, &st) == 0 && st.type == VFS_FILE)
         file_sz = st.size;
-    size_t want = out_len > 400 ? 400 : out_len - 1;
+    size_t want = file_sz > 400 ? 400 : file_sz;
     if (file_sz == 0) {
         agent_audit_event("audit.tail", "-", "empty");
         return -1;
     }
     size_t off = file_sz > want ? file_sz - want : 0;
     size_t n = 0;
-    if (vfs_read_at(AGENT_AUDIT_PATH, off, out, want, &n) != 0 || !n) {
+    char raw[512];
+    if (vfs_read_at(AGENT_AUDIT_PATH, off, raw, want, &n) != 0 || !n) {
         agent_audit_event("audit.tail", "-", "fail");
         return -1;
     }
-    out[n < out_len ? n : out_len - 1] = '\0';
+    format_session_tail(raw, n, out, out_len);
     agent_audit_event("audit.tail", "-", "ok");
     return 0;
 }

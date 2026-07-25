@@ -214,7 +214,7 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     fb_fill_rect(x, y, w, 2 * s, acc);
     fb_draw_string(x + 8 * s, y + 8 * s, "Peak Agent", fg, bg);
     fb_draw_string(x + 8 * s, y + 8 * s + line_h,
-                   "tools: read write list exec search stat sys.info", dim, bg);
+                   "tools: read write list exec search grep stat sys.info net.ping", dim, bg);
 
     uint32_t ty = y + 8 * s + 2 * line_h;
     uint32_t body_h = h > 120 * s ? h - 100 * s : h / 2;

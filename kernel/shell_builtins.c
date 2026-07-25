@@ -265,10 +265,11 @@ static const struct help_entry help_table[] = {
     { "ctrd", "net", "ping Peak ctr staging helper" },
     { "ifconfig", "net", "show e1000 IPv4 config" },
     { "ping", "net", "DNS + TCP reachability probe" },
-    { "wget", "net", "HTTP GET (-O path); TLS errors named" },
+    { "wget", "net", "HTTP GET (-O path); TLS detail on fail" },
     { "curl", "net", "alias for wget (-o path)" },
-    { "nslookup", "net", "DNS A lookup" },
-    { "host", "net", "DNS A lookup (short)" },
+    { "nslookup", "net", "DNS A lookup (dig-style)" },
+    { "host", "net", "DNS A lookup (compact dig)" },
+    { "traceroute", "net", "staged TCP reachability probe" },
     { "nc", "net", "TCP connect (+ optional send/recv)" },
     { "tlsinfo", "net", "TLS trust summary, last error, hostname -m test" },
     { "tar", "file", "ustar create/extract (-c/-x)" },
@@ -286,7 +287,7 @@ void shell_help_topics(void) {
     console_write("        hostname uptime whoami id cal gzip gunzip timeout watch\n");
     console_write("        uname true false test [ yes time history sh reboot help man js\n");
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
-    console_write("  net   ctr ctrd ifconfig ping wget curl nslookup host nc tlsinfo\n");
+    console_write("  net   ctr ctrd ifconfig ping wget curl nslookup host traceroute nc tlsinfo\n");
     console_write("  file  … tar basename dirname realpath\n");
     console_write("Shell: quotes, globs (* ?), pipes |, redirects > >> <\n");
     console_write("Try: man <cmd>   ls *.c   echo hi | wc   tar -c a.tar f   gui\n");

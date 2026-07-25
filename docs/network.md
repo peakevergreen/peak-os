@@ -14,9 +14,14 @@ Bootloaders parse [`boot/peak.conf`](../boot/peak.conf) into BootInfo:
 | `net_ip` / `net_mask` / `net_gw` / `net_dns` | Static / fallback addresses |
 | `dhcp_timeout_ticks` | DHCP wait (~100 Hz ticks; default `300`) |
 
-`ifconfig` prints the active mode (`dhcp`, `static`, or `fallback`).
+`ifconfig` prints the active mode (`dhcp`, `static`, or `fallback`) with explicit
+**default route** and **nameserver** lines (A-cache TTL ~30s).
 
-Guest DNS / TCP helpers: `nslookup` / `host` (A record via `net_dns_resolve`), `nc` (TCP connect, optional send + short recv), `tlsinfo` (WebPKI root count, pin/TOFU mode, last TLS error code/name, optional `-r` root SHA-256 list and `-m pattern host` hostname match probe).
+Guest DNS / TCP helpers: `nslookup` / `host` (dig-style A record output via
+`net_dns_resolve`), `traceroute` (staged local→gateway→DNS→destination TCP :80
+probes; no ICMP TTL), `nc` (TCP connect, optional send + short recv), `tlsinfo`
+(WebPKI root count, pin/TOFU mode, last TLS error code/name, optional `-r` root
+SHA-256 list and `-m pattern host` hostname match probe).
 
 **Desktop GUI:** Start menu → **Net Explorer** shows link/IP/DNS, runs ping (TCP :80 probe) and nslookup into a result pane. **Net Control** manages session net-allow, kill switch (double confirm), persist profile, DHCP renew, and RNG readiness; Settings → Network tab includes an **Open Net Control** shortcut.
 
@@ -61,9 +66,14 @@ block peer access.
 ```text
 ifconfig
 ping example.com
+traceroute example.com
+nslookup example.com
 wget https://example.com/
 ctr build … && ctr run -p 8080 …
 ```
+
+`wget` / `curl` print `fetching...` before the transfer and surface
+`tls_last_error()` plus stable reject names (`fetch: tls-*`) on HTTPS failure.
 
 HTTPS trust is **WebPKI** (embedded roots + path build + hostname/time) by default.
 **Pins** override; **TOFU** is opt-in via Settings (`tls_tofu=1` in `/etc/peak/display`).

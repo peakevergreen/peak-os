@@ -8,6 +8,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "privacy.h"
+
 void agent_host_vfs_reset(void);
 
 static int fails;
@@ -223,6 +225,59 @@ static void test_new_fs_tools(void) {
     expect(agent_tool_fs_rm("/home/dev/workspace/findme.txt") == 0, "fs.rm file");
 }
 
+
+static void test_fs_grep_and_net_ping(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.grep,net.ping\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+    expect(vfs_write_file("/home/dev/workspace/grepme.txt", "line1\nneedle here\nline3\n", 24) == 0,
+           "seed grep file");
+    char out[512];
+    expect(agent_tool_fs_grep("needle", out, sizeof(out)) == 0, "fs.grep hit");
+    expect(strstr(out, "grepme.txt:2:") != NULL, "fs.grep line number");
+    expect(agent_tool_net_ping("example.com", out, sizeof(out)) != 0, "net.ping denied without grant");
+    char buf[512]; size_t n = 0;
+    read_audit(buf, sizeof(buf), &n);
+    expect(strstr(buf, "deny-privacy") != NULL, "net.ping privacy gate logged");
+    privacy_grant_net_client(0);
+    expect(agent_tool_net_ping("example.com", out, sizeof(out)) == 0, "net.ping ok with grant");
+    expect(strstr(out, "PING example.com") != NULL, "net.ping output");
+}
+
+static void test_richer_sys_info(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=sys.info\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+    char out[512];
+    expect(agent_tool_sys_info(out, sizeof(out)) == 0, "sys.info ok");
+    expect(strstr(out, "idle=") != NULL, "sys.info idle");
+    expect(strstr(out, "gui_fps=") != NULL, "sys.info gui_fps");
+    expect(strstr(out, "compose=") != NULL, "sys.info compose");
+}
+
+static void test_audit_tail_formatted(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/var/peak\n"
+        "allow_tools=audit.tail\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+    agent_audit_append("agent|fs.read|/home/dev/workspace/a|ok");
+    char out[512];
+    expect(agent_tool_audit_tail(out, sizeof(out)) == 0, "audit.tail ok");
+    expect(strstr(out, "--- recent entries ---") != NULL, "audit.tail formatted header");
+    expect(strstr(out, "fs.read") != NULL, "audit.tail content");
+}
+
 static void test_fs_exec_allowlist(void) {
     agent_host_vfs_reset();
     agent_policy_load_defaults();
@@ -279,6 +334,9 @@ int main(void) {
     test_planner_audit_true_tail();
     test_tool_policy_gates_recall_audit();
     test_new_fs_tools();
+    test_fs_grep_and_net_ping();
+    test_richer_sys_info();
+    test_audit_tail_formatted();
     test_fs_exec_allowlist();
 
     if (fails) {

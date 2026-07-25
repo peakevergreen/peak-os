@@ -10,8 +10,8 @@ int upeak_main(int argc, char **argv) {
     (void)argv;
     console_write("Peak OS 0.2.0-ai — research workstation\n");
     console_write("Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm\n");
-    console_write("             fs.search sys.info mem.recall audit.tail console.print\n");
-    console_write("Try: ask \"summarize workspace\"   ask \"search README\"   audit   memory\n");
+    console_write("             fs.search fs.grep sys.info net.ping mem.recall audit.tail console.print\n");
+    console_write("Try: ask \"summarize workspace\"   ask \"search README\"   audit   memory   policy\n");
     console_write("Desktop: gui → Agent app (approve writes with Y/N)\n");
     return 0;
 }
@@ -21,7 +21,6 @@ int uask_main(int argc, char **argv) {
         peak_usage("ask", "<prompt...>  (quotes: ask \"create fib.c\"  ask \"run ls .\")");
         return argc < 2 ? 1 : 0;
     }
-    /* Quoted prompts arrive as a single argv — skip join copy. */
     if (argc == 2) {
         agent_ask(argv[1]);
         return 0;
@@ -45,6 +44,8 @@ static void print_session_tail(const char *cmd, const char *path, const char *em
     for (size_t i = 0; i < len; i++)
         if (buf[i] == '\n')
             lines++;
+    if (len && buf[len - 1] != '\n')
+        lines++;
 
     console_printf("%s: %s (%zu bytes, %d lines)\n", cmd, path, len, lines);
     console_write("--- recent entries ---\n");
@@ -96,19 +97,85 @@ int umemory_main(int argc, char **argv) {
     return 0;
 }
 
+static void policy_print_csv(const char *label, const char *csv) {
+    console_printf("%s:\n", label);
+    if (!csv || !csv[0]) {
+        console_write("  (none)\n");
+        return;
+    }
+    const char *p = csv;
+    while (*p) {
+        while (*p == ',')
+            p++;
+        if (!*p)
+            break;
+        console_write("  ");
+        while (*p && *p != ',')
+            console_putc(*p++);
+        console_putc('\n');
+    }
+}
+
 int upolicy_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
     char buf[2048];
     size_t len = 0;
-    console_write("policy: /etc/peak/agent.policy\n");
+    console_write("policy: /etc/peak/agent.policy\n\n");
     if (vfs_read_file("/etc/peak/agent.policy", buf, sizeof(buf) - 1, &len) != 0) {
-        console_write("(empty — defaults: workspace paths + fs.read/write/list/exec/search)\n");
+        console_write("(empty — defaults apply)\n\n");
+        console_write("allow_paths:\n");
+        console_write("  /home/dev/workspace\n");
+        console_write("  /var/peak/sessions\n\n");
+        console_write("allow_tools:\n");
+        console_write("  fs.read fs.write fs.list console.print fs.exec\n");
+        console_write("  mem.recall audit.tail fs.stat fs.mkdir fs.rm fs.search fs.grep\n");
+        console_write("  sys.info net.ping\n\n");
+        console_write("deny_tools:\n  (none)\n\n");
+        console_write("require_approval: fs.write\n");
         return 0;
     }
     buf[len] = '\0';
-    console_write(buf);
-    if (len && buf[len - 1] != '\n')
-        console_putc('\n');
+
+    char paths[512] = "";
+    char allow[512] = "";
+    char deny[512] = "";
+    char approval[64] = "fs.write";
+
+    const char *p = buf;
+    while (*p) {
+        if (!strncmp(p, "allow_paths=", 12)) {
+            size_t i = 0;
+            for (p += 12; *p && *p != '\n' && i + 1 < sizeof(paths); p++)
+                paths[i++] = *p;
+            paths[i] = '\0';
+        } else if (!strncmp(p, "allow_tools=", 12)) {
+            size_t i = 0;
+            for (p += 12; *p && *p != '\n' && i + 1 < sizeof(allow); p++)
+                allow[i++] = *p;
+            allow[i] = '\0';
+        } else if (!strncmp(p, "deny_tools=", 11)) {
+            size_t i = 0;
+            for (p += 11; *p && *p != '\n' && i + 1 < sizeof(deny); p++)
+                deny[i++] = *p;
+            deny[i] = '\0';
+        } else if (!strncmp(p, "require_approval=", 17)) {
+            size_t i = 0;
+            for (p += 17; *p && *p != '\n' && i + 1 < sizeof(approval); p++)
+                approval[i++] = *p;
+            approval[i] = '\0';
+        }
+        while (*p && *p != '\n')
+            p++;
+        if (*p == '\n')
+            p++;
+    }
+
+    policy_print_csv("allow_paths", paths);
+    console_putc('\n');
+    policy_print_csv("allow_tools", allow);
+    console_putc('\n');
+    policy_print_csv("deny_tools", deny);
+    console_printf("\nrequire_approval: %s\n", approval[0] ? approval : "(none)");
     return 0;
 }

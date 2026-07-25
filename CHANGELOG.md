@@ -46,10 +46,12 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 20:** `hostname`, `uptime`, `whoami`, `id`, `cal`, `gzip`/`gunzip` (PEAKGZ1), `timeout`, `watch`
 - **Pass 21:** `!n` history, aliases (`/var/peak/aliases`), `cd -`, Tab path/`/bin` completion, clearer redirect/pipe errors
 - **Pass 24:** `tlsinfo` (WebPKI root count, pins/TOFU, last TLS error); `tls_err_name()` / alert desc mapping; `webpki_root_sha256()` for root digest listing
+- **Pass 26:** agent tools `fs.grep`, `net.ping` (privacy-gated); richer `sys.info`; readable `policy` CLI; aligned audit/memory tail formatting
 - **Pass 22:** VFS errno hygiene (`unlink`/`rmdir`/`stat`/`normalize`/`mkdir`), `peak_strerror(EBUSY)`, `stat`/`df` backing hints
 - **Pass 25:** ctr build log line numbers, 0-COPY / 256 KiB cap failures, path sandbox messages name escaped paths; clearer `ctr build` log output
+- **Pass 23:** dig-style `nslookup`/`host`, clearer `ifconfig` route/DNS, `wget`/`curl` TLS detail + progress note, `traceroute` lite
 - Hash/pager tools: `sha256sum`, `md5sum`, `base64`, `less`/`more`, `time`
-- Net diag: `nslookup`, `host`, `nc` (TCP connect)
+- Net diag: `nslookup`, `host`, `nc` (TCP connect); Pass 23 adds dig-style DNS output, `traceroute` staged probe, richer `wget`/`curl` TLS errors
 - Shell history: persistent `/var/peak/history`, Up/Down/Ctrl-P/N recall, `history`, `!!`, exit-status prompt, errno-style path errors
 - Host tests: `test_libpeak`, `test_shell_split`, `test_console_scroll`, `test_cli_crypto`, `test_agent_tools`, `test_desktop_titles`, `test_img_decode`
 - VFS: `vfs_last_error`, `PEAK_EISDIR` on directory write; Pass 22 errno cases in `test_vfs`
@@ -57,7 +59,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 ### Agent and PeakVec
 
 - In-guest planner (`ask`), capabilities, audit, GUI write approval
-- Agent tools expanded: fs.stat, fs.mkdir, fs.rm, fs.search, sys.info, mem.recall, audit.tail; AGENT_TOOLS_MAX 16; fs.exec allowlist widened
+- Agent tools expanded: fs.stat, fs.mkdir, fs.rm, fs.search, fs.grep, sys.info, net.ping, mem.recall, audit.tail; AGENT_TOOLS_MAX 16; fs.exec allowlist widened
 - Policy seed uses `fs.exec` (no phantom `proc.exec` deny)
 - Agent GUI uses theme colors, scrollable transcript, write-approval toasts, search-aware summarize
 - PeakVec embeddings + recall; streamed PeakFS / blobstore
