@@ -24,4 +24,6 @@
 #define PEAK_EDHCP       -16  /* DHCP-only mode failure */
 #define PEAK_EAGAIN      -17  /* try again (non-blocking empty) */
 
+const char *peak_errno_str(int err);
+
 #endif

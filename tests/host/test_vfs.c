@@ -298,6 +298,14 @@ int main(void) {
         expect(got == total, "blob round-trip size");
     }
 
+    /* --- write error messages --- */
+    {
+        expect(vfs_write_file("/home/dev", "x", 1) == PEAK_EISDIR, "reject write to dir");
+        expect(strstr(vfs_last_error(), "directory") != NULL ||
+               strstr(vfs_last_error(), "is a directory") != NULL,
+               "write dir error message");
+    }
+
     if (fails) {
         fprintf(stderr, "%d test(s) failed\n", fails);
         return 1;
