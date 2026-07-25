@@ -12,7 +12,7 @@ static uint32_t line_len;
 static uint32_t caret;
 static int sel_anchor; /* -1 = no selection; else selection is [min(anchor,caret), max) */
 static char clipboard[256];
-static char prompt_buf[VFS_PATH_MAX + 16];
+static char prompt_buf[VFS_PATH_MAX + 24];
 static uint32_t edit_paint_len; /* last MODE_CLI painted prompt+line width */
 
 enum os_mode shell_mode(void) {
@@ -24,7 +24,14 @@ void shell_set_mode(enum os_mode m) {
 }
 
 static void build_prompt(void) {
-    snprintf(prompt_buf, sizeof(prompt_buf), "peak:%s> ", shell_getcwd());
+    int rc = shell_last_status();
+    if (rc != 0) {
+        char num[8];
+        itoa_u((uint64_t)(rc < 0 ? -rc : rc), num, 10);
+        snprintf(prompt_buf, sizeof(prompt_buf), "peak:%s [%s]> ", shell_getcwd(), num);
+    } else {
+        snprintf(prompt_buf, sizeof(prompt_buf), "peak:%s> ", shell_getcwd());
+    }
 }
 
 static void print_prompt(void) {
@@ -135,8 +142,10 @@ void shell_init(void) {
     sel_anchor = -1;
     clipboard[0] = '\0';
     shell_builtins_init();
+    shell_history_init();
     console_write("\n");
     console_write("  PeakOS 0.2 — arrows move  Ctrl+A select-all  Ctrl+C/X/V copy/cut/paste\n");
+    console_write("  Up/Down or Ctrl-P/N history  !! repeats last command\n");
     console_write("  Workspace: /home/dev/workspace  |  ask \"...\"  |  gui  |  theme\n\n");
     print_prompt();
 }
@@ -171,12 +180,34 @@ static void handle_key(int key) {
 
     if (key == '\n' || key == '\r') {
         clear_sel();
+        shell_history_reset_browse();
         console_putc('\n');
         line[line_len] = '\0';
+        if (line_len)
+            shell_history_add(line);
         shell_execute(line);
         line_len = 0;
         caret = 0;
         print_prompt();
+        return;
+    }
+
+    if (key == KEY_UP || key == 16) { /* Up or Ctrl-P */
+        if (shell_history_prev(line, sizeof(line))) {
+            line_len = (uint32_t)strlen(line);
+            caret = line_len;
+            clear_sel();
+            refresh_edit_display();
+        }
+        return;
+    }
+    if (key == KEY_DOWN || key == 14) { /* Down or Ctrl-N */
+        if (shell_history_next(line, sizeof(line))) {
+            line_len = (uint32_t)strlen(line);
+            caret = line_len;
+            clear_sel();
+            refresh_edit_display();
+        }
         return;
     }
 

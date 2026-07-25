@@ -39,6 +39,12 @@ rm /tmp/peak-*.log
 
 No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 
+## History
+
+Command lines persist under `/var/peak/history`. **Up/Down** or **Ctrl-P/N** recall prior commands in the line editor. **`history`** prints numbered entries; **`!!`** repeats the last command (optional suffix: `!! | wc`).
+
+On failure the prompt shows exit status without changing the cwd prefix: `peak:/home/dev/workspace [1]> ` (success omits the bracket).
+
 ## Navigation
 | Command | Notes |
 |---------|-------|
@@ -85,6 +91,7 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 | `ps` | list kernel tasks/threads |
 | `kill <pid or name>` | mark READY/BLOCKED task zombie (not idle/self) |
 | `true` `false` `test` `[` `sh` | exit status helpers; `test -f/-d/-e/-z/-n`, `= != -eq …`; nested `ush>` loop |
+| `history` | numbered command history |
 | `js -e 'code'` / `js file.js` | Peak JS CLI — [browser-js.md](browser-js.md) |
 | `help` `man <cmd>` | categorized help (`-h` / `--help` on most utils) |
 | `ask` `audit` `memory` `policy` `peak` `gui` | agent + desktop |
@@ -101,4 +108,4 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 | `tar -c` / `tar -x` | ustar archive create/extract (64 KiB cap) |
 | `ctr` `ctrd` | Dockerfile staging / static HTTP (not OCI) — [containers.md](containers.md) |
 
-Prompt shows cwd: `peak:/home/dev/workspace> `
+Prompt shows cwd: `peak:/home/dev/workspace> ` (append `[N]` after a non-zero exit).
