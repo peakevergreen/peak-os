@@ -100,6 +100,7 @@ extern int ucurl_main(int argc, char **argv);
 extern int unslookup_main(int argc, char **argv);
 extern int uhost_main(int argc, char **argv);
 extern int unc_main(int argc, char **argv);
+extern int utlsinfo_main(int argc, char **argv);
 extern int utar_main(int argc, char **argv);
 extern int utop_main(int argc, char **argv);
 extern int usysmon_main(int argc, char **argv);

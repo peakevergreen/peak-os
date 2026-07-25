@@ -30,6 +30,13 @@ void tls_set_err_code(int code, const char *msg) {
     last_err_code = code;
     if (!msg)
         msg = "unknown";
+    const char *tag = tls_err_name(code);
+    char buf[sizeof(last_err)];
+    if (code != TLS_E_OK && code != TLS_E_ALERT && tag && strcmp(tag, "unknown") &&
+        msg[0] && msg[0] != '[') {
+        snprintf(buf, sizeof(buf), "[%s] %s", tag, msg);
+        msg = buf;
+    }
     for (; msg[i] && i + 1 < sizeof(last_err); i++)
         last_err[i] = msg[i];
     last_err[i] = '\0';
@@ -42,30 +49,7 @@ void tls_set_err(const char *msg) {
 void tls_set_alert_err(const uint8_t *alert, size_t n) {
     uint8_t level = (n >= 1) ? alert[0] : 0;
     uint8_t desc = (n >= 2) ? alert[1] : 0;
-    const char *name = "unknown";
-    switch (desc) {
-    case 0:  name = "close_notify"; break;
-    case 10: name = "unexpected_message"; break;
-    case 20: name = "bad_record_mac"; break;
-    case 22: name = "record_overflow"; break;
-    case 40: name = "handshake_failure"; break;
-    case 42: name = "bad_certificate"; break;
-    case 43: name = "unsupported_certificate"; break;
-    case 44: name = "certificate_revoked"; break;
-    case 45: name = "certificate_expired"; break;
-    case 46: name = "certificate_unknown"; break;
-    case 47: name = "illegal_parameter"; break;
-    case 48: name = "unknown_ca"; break;
-    case 49: name = "access_denied"; break;
-    case 50: name = "decode_error"; break;
-    case 51: name = "decrypt_error"; break;
-    case 70: name = "protocol_version"; break;
-    case 71: name = "insufficient_security"; break;
-    case 80: name = "internal_error"; break;
-    case 90: name = "user_canceled"; break;
-    case 112: name = "unrecognized_name"; break;
-    default: break;
-    }
+    const char *name = tls_alert_desc_name(desc);
     char buf[96];
     if (desc == 0 && level == 1)
         snprintf(buf, sizeof(buf), "Server alert %s (graceful close)", name);
@@ -80,6 +64,14 @@ const char *tls_last_error(void) {
 
 int tls_last_error_code(void) {
     return last_err_code;
+}
+
+const char *tls_cert_fail_reason(void) {
+    return cert_fail_reason;
+}
+
+int tls_trust_pin_count(void) {
+    return trust_pin_count;
 }
 
 #define HOST_TOFU_CAP 4096

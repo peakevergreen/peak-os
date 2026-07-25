@@ -115,6 +115,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | Command | Notes |
 |---------|-------|
 | `ifconfig` `ping` `wget` `curl` | IPv4 + HTTP — [network.md](network.md) |
+| `tlsinfo` | TLS trust summary, last error, `-r` root digests, `-m` hostname test |
 | `nslookup` `host` | DNS A lookup (dig-style QUESTION/ANSWER) |
 | `traceroute` | Staged reachability: local → gateway → DNS → dest (TCP :80) |
 | `nc` | TCP connect (`host port` or `host:port`; optional send + recv) |

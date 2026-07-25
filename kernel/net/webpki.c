@@ -6,6 +6,7 @@
 #include "crypto.h"
 #include "rtc.h"
 #include "util.h"
+#include "tls_util.h"
 
 /* Set by tls_trust.c path; we assign on expiry. */
 extern const char *cert_fail_reason;
@@ -290,5 +291,14 @@ int webpki_verify_chain(const uint8_t *const *certs, const size_t *lens, int n,
         if (verify_cert_sig(certs[n - 1], lens[n - 1], root.spki, root.spki_len) == 0)
             return 1;
     }
+    return 0;
+}
+
+int webpki_root_sha256(int idx, char *out, size_t cap) {
+    if (idx < 0 || idx >= webpki_root_count || !out || cap < 65)
+        return -1;
+    uint8_t dig[32];
+    sha256(webpki_roots[idx].der, webpki_roots[idx].der_len, dig);
+    tls_hex_encode(dig, 32, out);
     return 0;
 }
