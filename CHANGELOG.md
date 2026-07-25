@@ -37,6 +37,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 32 (notify/clipboard/overlays):** toast history ring, dismiss control, clipboard previous slot, Alt+Tab hints, login splash
 - **Monitor + CLI (Pass 18):** readable compose/present timing, improved `memory`/`audit` output
 - **Pass 34:** Monitor/sysmon sparkline legend + ranges, memory/heap breakdown, task sort, export to `/tmp/sysmon.txt`, CLI/GUI parity via `sysmon_snapshot`
+- **Pass 35:** Heap freelist stats + fragmentation/oom counters in `free`/sysmon; honest OOM toasts in GUI/CLI; `ps` age/wake/share columns; `copy_to_user` write-probe hardening
 - **Pass 29:** Files confirm-delete arm, Home/End + Shift range select, hardened open-with; Notepad line numbers, Ctrl+F find, Ctrl+H replace lite
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
