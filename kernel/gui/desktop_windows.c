@@ -243,7 +243,7 @@ int desktop_open_app(enum app_kind k) {
     memset(&wins[slot], 0, sizeof(wins[slot]));
     wins[slot].kind = k;
     wins[slot].open = 1;
-    wins[slot].w = TERM_COLS * cw / 2 + desktop_u(40);
+    wins[slot].w = TERM_COLS * cw + desktop_u(24);
     if (wins[slot].w < desktop_u(420))
         wins[slot].w = desktop_u(420);
     wins[slot].h = desktop_title_h() + TERM_VIEW * ch + desktop_u(40);

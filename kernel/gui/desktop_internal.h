@@ -6,8 +6,9 @@
 #include "ui_widgets.h"
 
 #define TERM_COLS 64
-#define TERM_ROWS 200
-#define TERM_VIEW 28
+#define TERM_ROWS 512
+#define TERM_VIEW 32
+#define TERM_FIND_MAX 31
 #define CURSOR_MAX 64
 #define FILES_ROWS 24
 #define MAX_WINS 16
@@ -92,6 +93,8 @@ enum ctx_target {
 #define CTX_ACT_TERM_COPY        (CTX_ACT_APP_BASE + 1)
 #define CTX_ACT_TERM_PASTE       (CTX_ACT_APP_BASE + 2)
 #define CTX_ACT_TERM_CLEAR       (CTX_ACT_APP_BASE + 3)
+#define CTX_ACT_TERM_FIND        (CTX_ACT_APP_BASE + 4)
+#define CTX_ACT_TERM_COPYSEL     (CTX_ACT_APP_BASE + 5)
 #define CTX_ACT_BROWSER_BACK     (CTX_ACT_APP_BASE + 10)
 #define CTX_ACT_BROWSER_RELOAD   (CTX_ACT_APP_BASE + 11)
 #define CTX_ACT_BROWSER_COPY_URL (CTX_ACT_APP_BASE + 12)
@@ -251,6 +254,9 @@ void desktop_terminal_copy(void);
 void desktop_terminal_paste(void);
 int desktop_terminal_ctx_menu(struct ctx_menu_item *items, int max_items);
 int desktop_terminal_ctx_action(int action_id);
+int desktop_terminal_find_active(void);
+void desktop_terminal_find_close(void);
+void desktop_terminal_select_end(void);
 
 void desktop_files_init(void);
 void desktop_files_draw(struct win *w);

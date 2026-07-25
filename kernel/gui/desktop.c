@@ -125,7 +125,11 @@ void desktop_run(void) {
             continue;
 
         if (key == 27) {
-            if (keyboard_ctrl_down() && keyboard_alt_down())
+            if (focus >= 0 && wins[focus].open && wins[focus].kind == APP_TERM &&
+                desktop_terminal_find_active()) {
+                desktop_terminal_find_close();
+                key = 0;
+            } else if (keyboard_ctrl_down() && keyboard_alt_down())
                 break;
             desktop_menus_close_popups();
             desktop_overlays_close_popups();
@@ -439,6 +443,8 @@ void desktop_run(void) {
             mouse_clear_clicks();
         }
         if (m.left_released) {
+            if (term_select_drag)
+                desktop_terminal_select_end();
             term_select_drag = 0;
             term_select_win = -1;
             if (dragging) {
