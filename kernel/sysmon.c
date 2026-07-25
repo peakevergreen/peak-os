@@ -356,3 +356,78 @@ void sysmon_sparkline(const uint32_t *series, int n, char *out, int out_cols) {
     }
     out[cols] = '\0';
 }
+
+const char *sysmon_sparkline_legend(void) { return " .:-=+*#%@  (low -> high)"; }
+
+void sysmon_sparkline_range(const uint32_t *series, int n, uint32_t *out_min, uint32_t *out_max) {
+    uint32_t mn = 0, mx = 0;
+    if (series && n > 0) { mn = mx = series[0];
+        for (int i = 1; i < n; i++) { if (series[i] < mn) mn = series[i]; if (series[i] > mx) mx = series[i]; } }
+    if (out_min) *out_min = mn; if (out_max) *out_max = mx;
+}
+
+void sysmon_format_bar(char *buf, size_t cap, uint32_t pct, int width) {
+    if (!buf || cap < 4 || width < 1) return;
+    if (width > (int)cap - 3) width = (int)cap - 3;
+    buf[0] = '['; int filled = (int)((pct * (uint32_t)width) / 100);
+    for (int i = 0; i < width; i++) buf[1 + i] = (i < filled) ? '#' : '-';
+    buf[1 + width] = ']'; buf[2 + width] = '\0';
+}
+
+static const char *task_state_name(enum task_state st) {
+    switch (st) { case TASK_RUNNING: return "run"; case TASK_READY: return "ready";
+    case TASK_BLOCKED: return "block"; case TASK_ZOMBIE: return "zomb"; default: return "?"; }
+}
+
+int sysmon_snapshot(char *buf, size_t cap) {
+    if (!buf || cap < 64) return -1;
+    sysmon_poll(); const struct sysmon_sample *s = sysmon_latest(); size_t off = 0;
+#define SNAP(...) do { int _n = snprintf(buf + off, cap > off ? cap - off : 0, __VA_ARGS__); if (_n < 0) return -1; if ((size_t)_n >= cap - off) return -1; off += (size_t)_n; } while (0)
+    uint64_t mins = s->uptime_secs / 60, secs = s->uptime_secs % 60;
+    SNAP("Peak sysmon — up %lum%02lus  load %u%% idle %u%%  fps %u\n", (unsigned long)mins, (unsigned long)secs, (unsigned)s->load_pct, (unsigned)s->idle_pct, (unsigned)s->gui_fps);
+    char bar[20], a[24], b[24], p[24], f[24];
+    sysmon_format_bar(bar, sizeof(bar), s->mem_pct, 12);
+    sysmon_format_bytes(s->mem_used_pages * 4096ull, a, sizeof(a));
+    sysmon_format_bytes((s->mem_total_pages - s->mem_used_pages) * 4096ull, f, sizeof(f));
+    sysmon_format_bytes(s->mem_total_pages * 4096ull, b, sizeof(b));
+    sysmon_format_bytes(s->mem_peak_pages * 4096ull, p, sizeof(p));
+    SNAP("Mem  %s %3u%%  %s / %s  peak %s\n", bar, (unsigned)s->mem_pct, a, b, p);
+    SNAP("     used %s  free %s  (%lu/%lu pages)\n", a, f, (unsigned long)s->mem_used_pages, (unsigned long)s->mem_total_pages);
+    sysmon_format_bar(bar, sizeof(bar), s->heap_pct, 12);
+    sysmon_format_bytes(s->heap_used, a, sizeof(a)); sysmon_format_bytes(s->heap_free, f, sizeof(f));
+    sysmon_format_bytes(s->heap_used + s->heap_free, b, sizeof(b)); sysmon_format_bytes(s->heap_peak, p, sizeof(p));
+    SNAP("Heap %s %3u%%  %s / %s  peak %s  (%lu blk)\n", bar, (unsigned)s->heap_pct, a, b, p, (unsigned long)s->heap_blocks);
+    SNAP("     used %s  free %s\n", a, f);
+    char rxr[16], txr[16], rxt[16], txt[16];
+    sysmon_format_rate(s->rx_bps, rxr, sizeof(rxr)); sysmon_format_rate(s->tx_bps, txr, sizeof(txr));
+    sysmon_format_bytes(s->rx_bytes, rxt, sizeof(rxt)); sysmon_format_bytes(s->tx_bytes, txt, sizeof(txt));
+    SNAP("Net  RX %s  TX %s\n", rxr, txr);
+    SNAP("     total RX %s TX %s  pkts %lu / %lu\n", rxt, txt, (unsigned long)s->rx_packets, (unsigned long)s->tx_packets);
+    char cu[16], pu[16], pv[16], au[16];
+    sysmon_format_us(s->compose_us, cu, sizeof(cu)); sysmon_format_us(s->present_us, pu, sizeof(pu));
+    sysmon_format_us(s->peakvec_us, pv, sizeof(pv)); sysmon_format_us(s->agent_audit_us, au, sizeof(au));
+    SNAP("Sched tasks %u  ctx %lu  irq %lu  vfs %lu\n", (unsigned)s->tasks, (unsigned long)s->ctx_switches, (unsigned long)s->irq_count, (unsigned long)s->vfs_nodes);
+    SNAP("GFX  compose %s  present %s  surf %u%%\n", cu, pu, (unsigned)s->surf_pressure);
+    SNAP("Agent peakvec %s  audit %s\n\n", pv, au);
+    struct task list[MAX_TASKS]; int tn = sched_list_tasks(list, MAX_TASKS); sched_sort_tasks(list, tn); int cur = sched_current_pid();
+    SNAP("PID  STATE   TICKS   NAME\n");
+    for (int i = 0; i < tn && i < 16; i++) SNAP("%-4d %-7s %-7lu %s%s\n", list[i].pid, task_state_name(list[i].state), (unsigned long)list[i].cpu_ticks, list[i].name, list[i].pid == cur ? " *" : "");
+    SNAP("\n");
+    struct sysmon_sample hist[SYSMON_HISTORY]; int hn = sysmon_history(hist, SYSMON_HISTORY);
+    uint32_t load_s[SYSMON_HISTORY], mem_s[SYSMON_HISTORY], fps_s[SYSMON_HISTORY], net_s[SYSMON_HISTORY];
+    for (int i = 0; i < hn; i++) { load_s[i]=hist[i].load_pct; mem_s[i]=hist[i].mem_pct; fps_s[i]=hist[i].gui_fps; net_s[i]=hist[i].rx_bps+hist[i].tx_bps; }
+    char spark[SYSMON_SPARK_COLS + 1]; uint32_t smin, smax;
+    SNAP("Spark %s\n", sysmon_sparkline_legend());
+    sysmon_sparkline(load_s, hn, spark, SYSMON_SPARK_COLS); sysmon_sparkline_range(load_s, hn, &smin, &smax); SNAP("Load %s  (%u–%u%%)\n", spark, (unsigned)smin, (unsigned)smax);
+    sysmon_sparkline(mem_s, hn, spark, SYSMON_SPARK_COLS); sysmon_sparkline_range(mem_s, hn, &smin, &smax); SNAP("Mem  %s  (%u–%u%%)\n", spark, (unsigned)smin, (unsigned)smax);
+    sysmon_sparkline(fps_s, hn, spark, SYSMON_SPARK_COLS); sysmon_sparkline_range(fps_s, hn, &smin, &smax); SNAP("FPS  %s  (%u–%u)\n", spark, (unsigned)smin, (unsigned)smax);
+    sysmon_sparkline(net_s, hn, spark, SYSMON_SPARK_COLS); sysmon_sparkline_range(net_s, hn, &smin, &smax); SNAP("Net  %s  (%u–%u B/s)\n", spark, (unsigned)smin, (unsigned)smax);
+#undef SNAP
+    return (int)off;
+}
+
+int sysmon_export(const char *path) {
+    static char snap[4096]; int n = sysmon_snapshot(snap, sizeof(snap));
+    if (n < 0) return -1;
+    return vfs_write_file(path && path[0] ? path : SYSMON_EXPORT_PATH, snap, (size_t)n);
+}

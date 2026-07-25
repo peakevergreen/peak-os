@@ -99,7 +99,8 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `hostname` `uptime` `whoami` `id` `cal` | identity + calendar |
 | `gzip` `gunzip` | Peak RLE compress/decompress (PEAKGZ1 `.gz`, 8 KiB cap) |
 | `timeout` `watch` | run once with deadline note; repeat (`-n`, max 32 iters) |
-| `top` `sysmon` | live system monitor (sparklines; `q` quit, `-n` once) |
+| `top` `sysmon` | live system monitor (sparklines, legend; `q` quit, `r` reset, `e` export, `-n` once) |
+| `ps` | task list sorted by CPU ticks |
 | `ps` | list kernel tasks/threads |
 | `kill <pid or name>` | mark READY/BLOCKED task zombie (not idle/self) |
 | `true` `false` `test` `[` `sh` | exit status helpers; `test -f/-d/-e/-z/-n`, `= != -eq …`; nested `ush>` loop |

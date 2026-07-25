@@ -6,6 +6,7 @@
 #include "browser.h"
 #include "fb.h"
 #include "theme.h"
+#include "notify.h"
 #include "util.h"
 
 /*
@@ -77,6 +78,12 @@ void monitor_input(char c) {
     } else if (c == ']' || c == 'l' || c == 'L') {
         if (page < MON_PAGE_NET)
             page++;
+        needs_redraw = 1;
+    } else if (c == 'e' || c == 'E') {
+        if (sysmon_export(SYSMON_EXPORT_PATH) == 0)
+            notify_push("Saved /tmp/sysmon.txt");
+        else
+            notify_push("Export failed");
         needs_redraw = 1;
     }
 }
@@ -167,7 +174,6 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     uint64_t mins = s->uptime_secs / 60;
     uint64_t secs = s->uptime_secs % 60;
 
-    /* Tabs — short labels so they fit at large scale */
     static const char *tabs[] = {"1:Over", "2:Tasks", "3:Net"};
     uint32_t tab_w = inner_w / 3;
     if (tab_w < U(40))
@@ -214,7 +220,7 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     row += ch + U(6);
 
     if (page == MON_PAGE_OVERVIEW) {
-        char mb[24], tb[24], pk[24];
+        char mb[24], tb[24], pk[24], ht[24];
 
         sysmon_format_bytes(s->mem_used_pages * 4096ull, mb, sizeof(mb));
         sysmon_format_bytes(s->mem_total_pages * 4096ull, tb, sizeof(tb));
@@ -222,13 +228,26 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         snprintf(line, sizeof(line), "%s / %s   peak %s", mb, tb, pk);
         draw_meter(text_x, &row, inner_w, "Memory", s->mem_pct, accent, surface,
                    fg, dim, bg, line);
+        sysmon_format_bytes((s->mem_total_pages - s->mem_used_pages) * 4096ull,
+                            tb, sizeof(tb));
+        snprintf(line, sizeof(line), "used %s  free %s  peak %s  (%lu/%lu pg)",
+                 mb, tb, pk,
+                 (unsigned long)s->mem_used_pages,
+                 (unsigned long)s->mem_total_pages);
+        fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
+        row += ch + U(4);
 
         sysmon_format_bytes(s->heap_used, mb, sizeof(mb));
-        sysmon_format_bytes(s->heap_used + s->heap_free, tb, sizeof(tb));
+        sysmon_format_bytes(s->heap_free, tb, sizeof(tb));
         sysmon_format_bytes(s->heap_peak, pk, sizeof(pk));
-        snprintf(line, sizeof(line), "%s / %s   peak %s", mb, tb, pk);
+        sysmon_format_bytes(s->heap_used + s->heap_free, ht, sizeof(ht));
+        snprintf(line, sizeof(line), "%s / %s   peak %s", mb, ht, pk);
         draw_meter(text_x, &row, inner_w, "Heap", s->heap_pct, t->danger, surface,
                    fg, dim, bg, line);
+        snprintf(line, sizeof(line), "used %s  free %s  peak %s  (%lu blk)",
+                 mb, tb, pk, (unsigned long)s->heap_blocks);
+        fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
+        row += ch + U(4);
 
         snprintf(line, sizeof(line), "ctx %lu  irq %lu",
                  (unsigned long)s->ctx_switches, (unsigned long)s->irq_count);
@@ -262,20 +281,32 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         uint32_t graph_h = U(36);
         uint32_t graph_w = inner_w;
         uint32_t foot = y + h - ch - pad;
+        uint32_t smin, smax;
 
-        fb_draw_string_fit(text_x, row, inner_w, "Load %", dim, bg);
+        snprintf(line, sizeof(line), "Load %%  %s", sysmon_sparkline_legend());
+        fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
+        row += ch + U(2);
+        sysmon_sparkline_range(g_series_a, hn, &smin, &smax);
+        snprintf(line, sizeof(line), "range %u–%u%%", (unsigned)smin, (unsigned)smax);
+        fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
         row += ch + U(2);
         if (row + graph_h < foot) {
             draw_spark(text_x, row, graph_w, graph_h, g_series_a, hn, accent, surface);
             row += graph_h + U(4);
         }
-        fb_draw_string_fit(text_x, row, inner_w, "Memory %", dim, bg);
+        sysmon_sparkline_range(g_series_b, hn, &smin, &smax);
+        snprintf(line, sizeof(line), "Memory %%  range %u–%u%%",
+                 (unsigned)smin, (unsigned)smax);
+        fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
         row += ch + U(2);
         if (row + graph_h < foot) {
             draw_spark(text_x, row, graph_w, graph_h, g_series_b, hn, t->danger, surface);
             row += graph_h + U(4);
         }
-        fb_draw_string_fit(text_x, row, inner_w, "GUI FPS", dim, bg);
+        sysmon_sparkline_range(g_series_c, hn, &smin, &smax);
+        snprintf(line, sizeof(line), "GUI FPS  range %u–%u",
+                 (unsigned)smin, (unsigned)smax);
+        fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
         row += ch + U(2);
         if (row + graph_h < foot)
             draw_spark(text_x, row, graph_w, graph_h, g_series_c, hn, t->title, surface);
@@ -284,6 +315,7 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         fb_draw_string_fit(text_x, row, inner_w, "PID  STATE   TICKS   NAME", dim, bg);
         row += ch + U(4);
         int n = sched_list_tasks(g_tasks, MAX_TASKS);
+        sched_sort_tasks(g_tasks, n);
         int cur = sched_current_pid();
         for (int i = 0; i < n && row + ch < y + h - ch; i++) {
             snprintf(line, sizeof(line), "%-4d %-7s %-7lu %s%s",
@@ -299,7 +331,7 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         }
         row += ch;
         fb_draw_string_fit(text_x, row, inner_w,
-                           "Cooperative kthreads + IRQ-safe locks.", dim, bg);
+                           "Sorted by CPU ticks (desc).", dim, bg);
 
     } else {
         char rxr[16], txr[16], rxt[16], txt[16];
@@ -333,13 +365,20 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         uint32_t graph_h = U(48);
         uint32_t graph_w = inner_w;
         uint32_t foot = y + h - ch - pad;
-        fb_draw_string_fit(text_x, row, inner_w, "RX B/s", dim, bg);
+        uint32_t smin, smax;
+        sysmon_sparkline_range(g_series_a, hn, &smin, &smax);
+        snprintf(line, sizeof(line), "RX B/s  range %u–%u",
+                 (unsigned)smin, (unsigned)smax);
+        fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
         row += ch + U(2);
         if (row + graph_h < foot) {
             draw_spark(text_x, row, graph_w, graph_h, g_series_a, hn, accent, surface);
             row += graph_h + U(6);
         }
-        fb_draw_string_fit(text_x, row, inner_w, "TX B/s", dim, bg);
+        sysmon_sparkline_range(g_series_b, hn, &smin, &smax);
+        snprintf(line, sizeof(line), "TX B/s  range %u–%u",
+                 (unsigned)smin, (unsigned)smax);
+        fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
         row += ch + U(2);
         if (row + graph_h < foot)
             draw_spark(text_x, row, graph_w, graph_h, g_series_b, hn, t->danger, surface);
@@ -347,7 +386,8 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
 
     uint32_t foot = y + h - ch - pad;
     fb_draw_string_fit(text_x, foot, inner_w,
-                       paused ? "PAUSED  P resume  1/2/3  R reset" : "1/2/3  P pause  R reset  [/]",
+                       paused ? "PAUSED  P resume  1/2/3  R reset  E export"
+                              : "1/2/3  P pause  R reset  E export  [/]",
                        dim, bg);
     needs_redraw = 0;
 }

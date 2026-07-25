@@ -7,108 +7,15 @@
 #include "sysmon.h"
 #include "util.h"
 
-static void top_draw_bar(char *buf, size_t cap, uint32_t pct) {
-    if (!buf || cap < 14)
-        return;
-    int width = 12;
-    if ((size_t)(width + 2) > cap)
-        width = (int)cap - 2;
-    buf[0] = '[';
-    int filled = (int)((pct * (uint32_t)width) / 100);
-    for (int i = 0; i < width; i++)
-        buf[1 + i] = (i < filled) ? '#' : '-';
-    buf[1 + width] = ']';
-    buf[2 + width] = '\0';
-}
-
 static void top_render_once(int oneshot) {
+    static char snap[4096];
     sysmon_poll();
-    const struct sysmon_sample *s = sysmon_latest();
+    int n = sysmon_snapshot(snap, sizeof(snap));
     console_clear();
-
-    uint64_t mins = s->uptime_secs / 60;
-    uint64_t secs = s->uptime_secs % 60;
-    console_printf("Peak top — up %lum%02lus  load %u%% idle %u%%  fps %u\n",
-                   (unsigned long)mins, (unsigned long)secs,
-                   (unsigned)s->load_pct, (unsigned)s->idle_pct,
-                   (unsigned)s->gui_fps);
+    if (n > 0)
+        console_write(snap);
     if (!oneshot)
-        console_write("q quit  r reset  samples ~0.5s\n");
-    console_write("\n");
-
-    char bar[20];
-    char a[24], b[24], p[24];
-    top_draw_bar(bar, sizeof(bar), s->mem_pct);
-    sysmon_format_bytes(s->mem_used_pages * 4096ull, a, sizeof(a));
-    sysmon_format_bytes(s->mem_total_pages * 4096ull, b, sizeof(b));
-    sysmon_format_bytes(s->mem_peak_pages * 4096ull, p, sizeof(p));
-    console_printf("Mem  %s %3u%%  %s / %s  peak %s\n",
-                   bar, (unsigned)s->mem_pct, a, b, p);
-
-    top_draw_bar(bar, sizeof(bar), s->heap_pct);
-    sysmon_format_bytes(s->heap_used, a, sizeof(a));
-    sysmon_format_bytes(s->heap_used + s->heap_free, b, sizeof(b));
-    sysmon_format_bytes(s->heap_peak, p, sizeof(p));
-    console_printf("Heap %s %3u%%  %s / %s  peak %s  (%lu blk)\n",
-                   bar, (unsigned)s->heap_pct, a, b, p,
-                   (unsigned long)s->heap_blocks);
-
-    char rxr[16], txr[16], rxt[16], txt[16];
-    sysmon_format_rate(s->rx_bps, rxr, sizeof(rxr));
-    sysmon_format_rate(s->tx_bps, txr, sizeof(txr));
-    sysmon_format_bytes(s->rx_bytes, rxt, sizeof(rxt));
-    sysmon_format_bytes(s->tx_bytes, txt, sizeof(txt));
-    console_printf("Net  RX %s  TX %s\n", rxr, txr);
-    console_printf("     total RX %s TX %s  pkts %lu / %lu\n",
-                   rxt, txt,
-                   (unsigned long)s->rx_packets, (unsigned long)s->tx_packets);
-    console_printf("Sched tasks %u  ctx %lu  irq %lu  vfs %lu\n",
-                   (unsigned)s->tasks,
-                   (unsigned long)s->ctx_switches,
-                   (unsigned long)s->irq_count,
-                   (unsigned long)s->vfs_nodes);
-    {
-        char cu[16], pu[16], pv[16], au[16];
-        sysmon_format_us(s->compose_us, cu, sizeof(cu));
-        sysmon_format_us(s->present_us, pu, sizeof(pu));
-        sysmon_format_us(s->peakvec_us, pv, sizeof(pv));
-        sysmon_format_us(s->agent_audit_us, au, sizeof(au));
-        console_printf("GFX  compose %s  present %s  surf %u%%\n",
-                       cu, pu, (unsigned)s->surf_pressure);
-        console_printf("Agent peakvec %s  audit %s\n\n", pv, au);
-    }
-
-    struct task list[MAX_TASKS];
-    int tn = sched_list_tasks(list, MAX_TASKS);
-    int cur = sched_current_pid();
-    console_write("PID  STATE   TICKS   NAME\n");
-    for (int i = 0; i < tn && i < 12; i++) {
-        console_printf("%-4d %-7s %-7lu %s%s\n",
-                       list[i].pid,
-                       list[i].state == TASK_RUNNING ? "run" :
-                       list[i].state == TASK_READY ? "ready" :
-                       list[i].state == TASK_ZOMBIE ? "zombie" : "other",
-                       (unsigned long)list[i].cpu_ticks,
-                       list[i].name,
-                       list[i].pid == cur ? " *" : "");
-    }
-    console_write("\n");
-
-    struct sysmon_sample hist[SYSMON_HISTORY];
-    int hn = sysmon_history(hist, SYSMON_HISTORY);
-    uint32_t load_s[SYSMON_HISTORY], mem_s[SYSMON_HISTORY], net_s[SYSMON_HISTORY];
-    for (int i = 0; i < hn; i++) {
-        load_s[i] = hist[i].load_pct;
-        mem_s[i] = hist[i].mem_pct;
-        net_s[i] = hist[i].rx_bps + hist[i].tx_bps;
-    }
-    char spark[49];
-    sysmon_sparkline(load_s, hn, spark, 48);
-    console_printf("Load %s\n", spark);
-    sysmon_sparkline(mem_s, hn, spark, 48);
-    console_printf("Mem  %s\n", spark);
-    sysmon_sparkline(net_s, hn, spark, 48);
-    console_printf("Net  %s\n", spark);
+        console_write("\nq quit  r reset  e export  samples ~0.5s\n");
 }
 
 int utop_main(int argc, char **argv) {
@@ -117,12 +24,10 @@ int utop_main(int argc, char **argv) {
         if (!strcmp(argv[i], "-n") || !strcmp(argv[i], "--once"))
             oneshot = 1;
     }
-
     if (oneshot) {
         top_render_once(1);
         return 0;
     }
-
     console_write("Peak top (live). Press q to quit.\n");
     uint64_t last = 0;
     for (;;) {
@@ -131,7 +36,12 @@ int utop_main(int argc, char **argv) {
             break;
         if (c == 'r' || c == 'R')
             sysmon_reset_history();
-
+        if (c == 'e' || c == 'E') {
+            if (sysmon_export(SYSMON_EXPORT_PATH) == 0)
+                console_write("exported /tmp/sysmon.txt\n");
+            else
+                console_write("export failed\n");
+        }
         uint64_t now = timer_ticks();
         if (now - last >= 50 || last == 0) {
             last = now;
@@ -156,6 +66,7 @@ int ups_main(int argc, char **argv) {
     (void)argv;
     struct task list[MAX_TASKS];
     int n = sched_list_tasks(list, MAX_TASKS);
+    sched_sort_tasks(list, n);
     int cur = sched_current_pid();
     console_printf("PID  STATE   CPU     NAME\n");
     for (int i = 0; i < n; i++) {
@@ -170,7 +81,8 @@ int ups_main(int argc, char **argv) {
                        list[i].name,
                        list[i].pid == cur ? " *" : "");
     }
-    console_printf("tasks %d  ctx %lu\n", n, (unsigned long)sched_ctx_switches());
+    console_printf("tasks %d  ctx %lu  (sorted by CPU ticks)\n",
+                   n, (unsigned long)sched_ctx_switches());
     return 0;
 }
 
