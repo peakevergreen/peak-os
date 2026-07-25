@@ -6,6 +6,7 @@
 void notify_init(void);
 void notify_clear(void);
 void notify_push(const char *msg);
+void notify_push_clipboard(const char *what);
 /* Draw toast near top-right; returns 1 if something visible. */
 int  notify_draw(uint32_t screen_w, uint32_t screen_h);
 void notify_tick(void); /* age toasts */

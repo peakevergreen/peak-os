@@ -5,6 +5,7 @@
 #include "dom.h"
 #include "css.h"
 #include "browser_js.h"
+#include "ui_widgets.h"
 
 #define BR_URL_MAX    160
 #define BR_BODY_MAX   (128 * 1024)
@@ -54,6 +55,10 @@ struct br_tab {
     int js_ok;
     int use_layout;
     int dom_dirty;
+    int fetching;
+    uint64_t fetch_start;
+    int show_retry;
+    char prev_url[BR_URL_MAX];
 };
 
 /* Shared session state (defined in browser.c). */
@@ -64,11 +69,16 @@ extern int editing;
 extern int needs_redraw;
 extern uint32_t hit_tab_y, hit_tab_h, hit_tab_w;
 extern uint32_t hit_plus_x, hit_go_x, hit_go_w, hit_bar_y, hit_bar_h;
+extern uint32_t hit_retry_x, hit_retry_y, hit_retry_w, hit_retry_h;
 
 struct br_tab *browser_cur(void);
 void browser_select_tab(int i);
 int  browser_new_tab(const char *url);
 void browser_close_tab(int i);
+void browser_back(void);
+void browser_reload(void);
+int  browser_ctx_menu(struct ctx_menu_item *items, int max_items);
+int  browser_ctx_action(int action_id);
 void browser_tab_teardown_js(struct br_tab *t);
 void browser_rebuild_layout(struct br_tab *t, int content_w);
 int  browser_is_local_host(const char *url);

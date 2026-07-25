@@ -4,6 +4,7 @@
 #include "theme.h"
 #include "util.h"
 #include "css.h"
+#include "timer.h"
 
 static uint32_t block_fg(struct br_tab *t, enum br_kind k) {
     switch (k) {
@@ -164,6 +165,19 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     }
     fb_draw_string(url_x, bar_y + 2, show, th->fg, editing ? th->title : th->surface);
 
+    if (t->fetching) {
+        uint32_t bar_x = ax;
+        uint32_t bar_w = aw;
+        uint32_t bar_h = 3;
+        uint32_t prog_y = bar_y + ch + 6;
+        fb_fill_rect(bar_x, prog_y, bar_w, bar_h, th->border);
+        uint64_t elapsed = timer_ticks() - t->fetch_start;
+        uint32_t pct = (uint32_t)((elapsed * 37) % (bar_w > 8 ? bar_w - 8 : 1)) + 4;
+        if (pct > bar_w)
+            pct = bar_w / 3;
+        fb_fill_rect(bar_x, prog_y, pct, bar_h, th->accent);
+    }
+
     uint32_t chrome_h = hit_tab_h + ch + pad * 2 + 8;
 
     uint32_t page_y = y + chrome_h;
@@ -254,6 +268,20 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     if ((t->nblocks > 0 || t->nboxes > 0) && cy >= max_y - ch)
         fb_draw_string(cx, max_y - ch, "j/k scroll  [/] tabs  t new  w close",
                        t->page_muted, t->page_bg);
+
+    hit_retry_w = hit_retry_h = 0;
+    if (t->show_retry) {
+        uint32_t btn_w = fb_cell_w() * 8;
+        uint32_t btn_h = ch + 6;
+        hit_retry_x = cx;
+        hit_retry_y = cy + ch;
+        if (hit_retry_y + btn_h > max_y - ch)
+            hit_retry_y = max_y - ch - btn_h - pad;
+        hit_retry_w = btn_w;
+        hit_retry_h = btn_h;
+        fb_fill_rect(hit_retry_x, hit_retry_y, btn_w, btn_h, th->accent);
+        fb_draw_string(hit_retry_x + 8, hit_retry_y + 3, "Retry", th->bg, th->accent);
+    }
 
     uint32_t st_y = y + h - ch - 4;
     fb_fill_rect(x, st_y - 2, w, ch + 6, th->surface);

@@ -10,6 +10,7 @@
 #include "css.h"
 #include "js.h"
 #include "heap.h"
+#include "timer.h"
 
 struct br_tab tabs[BR_MAX_TABS];
 int ntabs;
@@ -20,6 +21,7 @@ static char *body_cache;
 
 uint32_t hit_tab_y, hit_tab_h, hit_tab_w;
 uint32_t hit_plus_x, hit_go_x, hit_go_w, hit_bar_y, hit_bar_h;
+uint32_t hit_retry_x, hit_retry_y, hit_retry_w, hit_retry_h;
 
 static char *ensure_body_cache(void) {
     if (!body_cache)
@@ -195,6 +197,8 @@ void browser_error_page(struct br_tab *t, enum br_err_kind kind,
     browser_tab_teardown_js(t);
     t->tls_secure = 0;
     t->tls_verified = 0;
+    t->fetching = 0;
+    t->show_retry = 1;
 
     switch (kind) {
     case BR_ERR_NETWORK:
@@ -267,22 +271,29 @@ void browser_go(const char *url) {
     struct br_tab *t = browser_cur();
     char norm[BR_URL_MAX];
     browser_normalize_url(url, norm, sizeof(norm));
+    if (t->url[0] && strcmp(t->url, norm))
+        snprintf(t->prev_url, sizeof(t->prev_url), "%s", t->url);
     snprintf(t->url, sizeof(t->url), "%s", norm);
     t->scroll_y = 0;
+    t->show_retry = 0;
 
     if (!strcmp(t->url, "peak://demo") || !strcmp(t->url, "about:js") ||
         !strcmp(t->url, "peak:demo")) {
         t->http_status = 200;
+        t->fetching = 0;
         load_document(t, peak_js_demo_html());
         snprintf(t->title, sizeof(t->title), "Peak JS Demo");
         return;
     }
 
     snprintf(t->status, sizeof(t->status), "Fetching...");
+    t->fetching = 1;
+    t->fetch_start = timer_ticks();
     needs_redraw = 1;
 
     char *body = ensure_body_cache();
     if (!body) {
+        t->fetching = 0;
         snprintf(t->status, sizeof(t->status), "Out of memory");
         needs_redraw = 1;
         return;
@@ -299,11 +310,13 @@ void browser_go(const char *url) {
         ok = (ctr_http_get(t->url, body, BR_BODY_MAX, &st) == 0);
         if (!ok) {
             t->http_status = st;
+            t->fetching = 0;
             browser_error_page(t, BR_ERR_LOCAL, t->url, st);
             return;
         }
     } else {
         if (!net_ready()) {
+            t->fetching = 0;
             browser_error_page(t, BR_ERR_NETWORK, NULL, 0);
             return;
         }
@@ -312,6 +325,7 @@ void browser_go(const char *url) {
 
         if (!ok) {
             t->http_status = st;
+            t->fetching = 0;
             if (net_http_needs_tls()) {
                 browser_error_page(t, BR_ERR_TLS, net_http_tls_reject_name(), st);
             } else if (body[0] && strstr(body, "DNS failed")) {
@@ -330,6 +344,7 @@ void browser_go(const char *url) {
     }
 
     t->http_status = st;
+    t->fetching = 0;
     load_document(t, body);
 }
 
@@ -338,7 +353,10 @@ int browser_wants_redraw(void) {
 }
 
 void browser_tick(void) {
+    int anim = 0;
     for (int i = 0; i < ntabs; i++) {
+        if (tabs[i].used && tabs[i].fetching)
+            anim = 1;
         if (!tabs[i].used || !tabs[i].js)
             continue;
         js_tick(tabs[i].js);
@@ -350,6 +368,8 @@ void browser_tick(void) {
         if (js_pending_work(tabs[i].js))
             needs_redraw = 1;
     }
+    if (anim)
+        needs_redraw = 1;
 }
 
 void browser_js_metrics(uint32_t *tabs_with_js, uint32_t *objs, uint32_t *timers,
