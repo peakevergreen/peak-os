@@ -7,6 +7,20 @@
 static struct vfs_node nodes[VFS_MAX_NODES];
 static int node_count;
 static struct vfs_node *root;
+static char vfs_errbuf[80];
+
+const char *vfs_last_error(void) {
+    return vfs_errbuf;
+}
+
+static void vfs_set_error(const char *msg) {
+    size_t i = 0;
+    if (!msg)
+        msg = "";
+    for (; msg[i] && i + 1 < sizeof(vfs_errbuf); i++)
+        vfs_errbuf[i] = msg[i];
+    vfs_errbuf[i] = '\0';
+}
 /* First-character child buckets: 0 = empty, else 1-based index into nodes[].
  * 16 buckets (was 32) halves BSS (~128 KiB) with the same first-char probe. */
 #define VFS_CHILD_BUCKETS 8u
@@ -203,12 +217,21 @@ struct vfs_node *vfs_create_file(const char *path) {
 }
 
 int vfs_write_file(const char *path, const void *data, size_t len) {
+    struct vfs_node *existing = vfs_lookup(path);
+    if (existing && existing->type == VFS_DIR) {
+        vfs_set_error("is a directory");
+        return PEAK_EISDIR;
+    }
     struct vfs_node *f = vfs_create_file(path);
-    if (!f || f->type != VFS_FILE)
+    if (!f || f->type != VFS_FILE) {
+        vfs_set_error("cannot create file");
         return PEAK_EINVAL;
+    }
     uint8_t *buf = (uint8_t *)kmalloc(len ? len : 1);
-    if (!buf)
+    if (!buf) {
+        vfs_set_error("out of memory");
         return PEAK_ENOMEM;
+    }
     if (f->data)
         kfree(f->data);
     memcpy(buf, data, len);
@@ -216,6 +239,7 @@ int vfs_write_file(const char *path, const void *data, size_t len) {
     f->size = len;
     f->capacity = len;
     f->blob_id = 0; /* heap wins over any prior blob binding */
+    vfs_set_error("");
     return 0;
 }
 

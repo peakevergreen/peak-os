@@ -80,4 +80,7 @@ int vfs_readdir(const char *path, struct vfs_dirent *ents, int max_ents);
 int vfs_node_count(void);
 uint64_t vfs_tree_bytes(const char *path);
 
+/* Last VFS error detail string (empty if none). Not thread-safe. */
+const char *vfs_last_error(void);
+
 #endif
