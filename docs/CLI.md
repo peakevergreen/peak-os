@@ -69,9 +69,9 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `cp [-r] <src> <dst>` | copy |
 | `mv <src> <dst>` | rename/move |
 | `ln <target> <link>` | hard link |
-| `stat <path>` | metadata |
+| `stat <path>` | metadata (heap vs blob backing for files) |
 | `du [path]` | tree byte size |
-| `df` | VFS node + memory pages |
+| `df` | VFS inodes, RAM pages, PeakDisk/Blobstore status |
 | `truncate <path> <n>` | resize (max 4096) |
 
 ## Text
@@ -115,7 +115,8 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | Command | Notes |
 |---------|-------|
 | `ifconfig` `ping` `wget` `curl` | IPv4 + HTTP — [network.md](network.md) |
-| `nslookup` `host` | DNS A lookup |
+| `nslookup` `host` | DNS A lookup (dig-style QUESTION/ANSWER) |
+| `traceroute` | Staged reachability: local → gateway → DNS → dest (TCP :80) |
 | `nc` | TCP connect (`host port` or `host:port`; optional send + recv) |
 | `tar -c` / `tar -x` | ustar archive create/extract (64 KiB cap) |
 | `ctr` `ctrd` | Dockerfile staging / static HTTP (not OCI) — [containers.md](containers.md) |
