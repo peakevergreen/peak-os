@@ -3,6 +3,7 @@
 #include "agent.h"
 #include "clipboard.h"
 #include "notify.h"
+#include "keyboard.h"
 #include "util.h"
 
 static char agent_input[96];
@@ -35,14 +36,22 @@ void desktop_agent_draw(struct win *w) {
 int desktop_agent_key(int key) {
     if (agent_write_pending() && (key == 'y' || key == 'Y' || key == 'n' || key == 'N')) {
         agent_approve_write(key == 'y' || key == 'Y');
-        notify_push((key == 'y' || key == 'Y') ? "Write approved" : "Write denied");
+    } else if (key == KEY_UP) {
+        if (agent_transcript_scroll(1))
+            dirty_bits |= DIRTY_WIN;
+    } else if (key == KEY_DOWN) {
+        if (agent_transcript_scroll(-1))
+            dirty_bits |= DIRTY_WIN;
     } else if (key == '\n') {
         if (agent_input_len) {
             agent_ask(agent_input);
             clipboard_set(agent_input, agent_input_len);
             agent_input_len = 0;
             agent_input[0] = '\0';
-            notify_push("Agent running");
+            if (agent_write_pending())
+                notify_push("Agent: approve write (Y/N)");
+            else
+                notify_push("Agent finished");
         }
     } else if (key == '\b' && agent_input_len) {
         agent_input[--agent_input_len] = '\0';
@@ -61,7 +70,10 @@ int desktop_agent_click(void) {
         agent_ask(agent_input);
     else
         agent_ask("summarize workspace README");
-    notify_push("Agent running");
+    if (agent_write_pending())
+        notify_push("Agent: approve write (Y/N)");
+    else
+        notify_push("Agent finished");
     dirty_bits |= DIRTY_WIN;
     return 1;
 }

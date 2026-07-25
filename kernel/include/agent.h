@@ -15,4 +15,10 @@ int agent_write_pending(void);
 const char *agent_pending_write_path(void);
 void agent_approve_write(int yes);
 
+/* Transcript scroll: positive = older lines, 0 = follow latest. */
+void agent_transcript_clear(void);
+void agent_transcript_push(const char *line);
+int  agent_transcript_scroll(int delta);
+void agent_transcript_reset_scroll(void);
+
 #endif
