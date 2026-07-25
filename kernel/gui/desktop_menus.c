@@ -16,6 +16,7 @@
 #include "browser.h"
 #include "browser_internal.h"
 #include "monitor.h"
+#include "sysmon.h"
 #include "clipboard.h"
 #include "shell.h"
 
@@ -424,21 +425,25 @@ int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int ma
         items[2].action_id = CTX_ACT_CLOSE;
         return 3;
     case APP_MONITOR:
-        if (!items || max_items < 3)
+        if (!items || max_items < 4)
             return 0;
         items[0].label = "Pause / resume";
         items[0].enabled = 1;
         items[0].separator = 0;
         items[0].action_id = CTX_ACT_MONITOR_PAUSE;
-        items[1].label = NULL;
-        items[1].enabled = 0;
-        items[1].separator = 1;
-        items[1].action_id = CTX_ACT_NONE;
-        items[2].label = "Close window";
-        items[2].enabled = 1;
-        items[2].separator = 0;
-        items[2].action_id = CTX_ACT_CLOSE;
-        return 3;
+        items[1].label = "Export snapshot";
+        items[1].enabled = 1;
+        items[1].separator = 0;
+        items[1].action_id = CTX_ACT_MONITOR_EXPORT;
+        items[2].label = NULL;
+        items[2].enabled = 0;
+        items[2].separator = 1;
+        items[2].action_id = CTX_ACT_NONE;
+        items[3].label = "Close window";
+        items[3].enabled = 1;
+        items[3].separator = 0;
+        items[3].action_id = CTX_ACT_CLOSE;
+        return 4;
     case APP_FILES:
         return desktop_files_ctx_menu(items, max_items);
     case APP_NOTEPAD:
@@ -495,6 +500,15 @@ int desktop_app_ctx_action(enum app_kind kind, int action_id) {
     case APP_MONITOR:
         if (action_id == CTX_ACT_MONITOR_PAUSE) {
             monitor_toggle_pause();
+            dirty_bits |= DIRTY_MONITOR;
+            desktop_mark_win_surf_dirty(desktop_find_win(APP_MONITOR));
+            return 1;
+        }
+        if (action_id == CTX_ACT_MONITOR_EXPORT) {
+            if (sysmon_export(SYSMON_EXPORT_PATH) == 0)
+                notify_push("Saved /tmp/sysmon.txt");
+            else
+                notify_push("Export failed");
             dirty_bits |= DIRTY_MONITOR;
             desktop_mark_win_surf_dirty(desktop_find_win(APP_MONITOR));
             return 1;

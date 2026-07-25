@@ -116,6 +116,21 @@ int sched_list_tasks(struct task *out, int max) {
     return n;
 }
 
+
+void sched_sort_tasks(struct task *list, int n) {
+    if (!list || n <= 1) return;
+    for (int i = 1; i < n; i++) {
+        struct task key = list[i]; int j = i - 1;
+        while (j >= 0) {
+            int swap = list[j].cpu_ticks < key.cpu_ticks ||
+                (list[j].cpu_ticks == key.cpu_ticks && list[j].pid > key.pid);
+            if (!swap) break;
+            list[j + 1] = list[j]; j--;
+        }
+        list[j + 1] = key;
+    }
+}
+
 int sched_zombie_stacks_freed(void) {
     return zombie_stacks_freed;
 }

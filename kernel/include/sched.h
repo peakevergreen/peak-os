@@ -61,6 +61,7 @@ int  sched_current_pid(void);
 int  sched_task_count(void);
 /* Fill out[0..max) with live tasks; returns count */
 int  sched_list_tasks(struct task *out, int max);
+void sched_sort_tasks(struct task *list, int n);
 uint64_t sched_ctx_switches(void);
 /* Mark READY/BLOCKED task zombie by pid. Refuses idle (pid of slot0) and self.
  * Returns 0 ok, -1 not found, -2 refused. */

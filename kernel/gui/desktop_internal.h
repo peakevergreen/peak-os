@@ -109,6 +109,7 @@ enum ctx_target {
 #define CTX_ACT_SETTINGS_NET     (CTX_ACT_APP_BASE + 21)
 #define CTX_ACT_AGENT_HELP       (CTX_ACT_APP_BASE + 30)
 #define CTX_ACT_MONITOR_PAUSE    (CTX_ACT_APP_BASE + 40)
+#define CTX_ACT_MONITOR_EXPORT   (CTX_ACT_APP_BASE + 41)
 
 struct win {
     int open;
