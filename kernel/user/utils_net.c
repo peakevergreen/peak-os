@@ -1,10 +1,11 @@
-/* /bin network utilities: ifconfig, ping, wget. */
+/* /bin network utilities: ifconfig, ping, wget, traceroute-lite. */
 #include "libpeak.h"
 #include "cap.h"
 #include "privacy.h"
 #include "shell.h"
 #include "console.h"
 #include "net.h"
+#include "tls.h"
 #include "random.h"
 #include "timer.h"
 #include "util.h"
@@ -16,6 +17,85 @@ static void net_print_failure(const char *tool, const char *what) {
         console_printf("%s: %s: %s\n", tool, what, detail);
     else
         peak_perror(tool, what);
+}
+
+static int net_tcp_probe(uint32_t ip, uint16_t port, uint32_t timeout_ticks,
+                         unsigned long *ms_out) {
+    uint64_t t0 = timer_ticks();
+    int cr = net_tcp_connect(ip, port, timeout_ticks);
+    uint64_t dt = timer_ticks() - t0;
+    if (ms_out)
+        *ms_out = (unsigned long)(dt * 10);
+    if (cr == 0)
+        net_tcp_close();
+    return cr;
+}
+
+static void wget_print_failure(int st, const char *body) {
+    const char *tls_err = tls_last_error();
+    const char *reject = net_http_tls_reject_name();
+    const char *detail = net_last_error();
+    if (tls_err && tls_err[0]) {
+        console_printf("failed: TLS %s", tls_err);
+        if (reject && reject[0])
+            console_printf(" [%s]", reject);
+        if (st > 0)
+            console_printf(" (HTTP %d)", st);
+        console_write("\n");
+    } else if (reject && reject[0] && net_http_needs_tls()) {
+        console_printf("failed: %s", reject);
+        if (detail && detail[0])
+            console_printf(" — %s", detail);
+        if (st > 0)
+            console_printf(" (HTTP %d)", st);
+        console_write("\n");
+    } else if (st > 0) {
+        console_printf("failed: HTTP %d\n", st);
+    } else if (detail && detail[0]) {
+        console_printf("failed: %s (status %d)\n", detail, st);
+    } else {
+        console_printf("failed: connect/DNS/TLS error (status %d)\n", st);
+    }
+    if (body && body[0]) {
+        console_write(body);
+        console_write("\n");
+    }
+}
+
+static int dns_lookup_dig(const char *tool, const char *hostname, int verbose) {
+    struct net_info ni;
+    net_get_info(&ni);
+    char dns[32];
+    net_format_ip(ni.dns, dns, sizeof(dns));
+    uint64_t t0 = timer_ticks();
+    uint32_t ip = net_dns_resolve(hostname, 400);
+    unsigned long qms = (unsigned long)((timer_ticks() - t0) * 10);
+    if (!ip) {
+        if (verbose) {
+            console_printf(";; <<>> Peak %s %s <<>>\n", tool, hostname);
+            console_printf(";; SERVER: %s#53\n", dns);
+            console_printf(";; QUESTION SECTION:\n");
+            console_printf(";%s.\t\tIN\tA\n\n", hostname);
+            console_printf(";; status: SERVFAIL\n");
+        }
+        net_print_failure(tool, "DNS failed");
+        return 1;
+    }
+    char addr[32];
+    net_format_ip(ip, addr, sizeof(addr));
+    if (verbose) {
+        console_printf(";; <<>> Peak %s %s <<>>\n", tool, hostname);
+        console_printf(";; SERVER: %s#53\n", dns);
+        console_printf(";; Query time: %lu msec\n\n", qms);
+        console_printf(";; QUESTION SECTION:\n");
+        console_printf(";%s.\t\tIN\tA\n\n", hostname);
+        console_printf(";; ANSWER SECTION:\n");
+        console_printf("%s.\t\t30\tIN\tA\t%s\n", hostname, addr);
+    } else {
+        console_printf("%s.\t30\tIN\tA\t%s\n", hostname, addr);
+        console_printf(";; Query time: %lu msec; SERVER: %s#53\n", qms, dns);
+    }
+    return 0;
 }
 
 int uifconfig_main(int argc, char **argv) {
@@ -37,7 +117,14 @@ int uifconfig_main(int argc, char **argv) {
                    ni.mac[0], ni.mac[1], ni.mac[2], ni.mac[3], ni.mac[4], ni.mac[5]);
     console_printf("  inet %s  netmask %s  (%s)\n", ip, mask,
                    ni.addr_mode ? ni.addr_mode : "?");
-    console_printf("  gateway %s  dns %s\n", gw, dns);
+    if (ni.gw)
+        console_printf("  default route via %s\n", gw);
+    else
+        console_write("  default route: (none)\n");
+    if (ni.dns)
+        console_printf("  nameserver %s  (A-cache ~30s)\n", dns);
+    else
+        console_write("  nameserver: (none)\n");
     {
         uint32_t rf = random_status_flags();
         console_printf("  rng flags=0x%x%s%s%s%s\n",
@@ -111,21 +198,9 @@ int uwget_main(int argc, char **argv) {
     char body[8192];
     int st = 0;
     console_printf("GET %s\n", url);
+    console_write("fetching...\n");
     if (net_http_get(url, body, sizeof(body), &st) != 0) {
-        const char *tls = net_http_tls_reject_name();
-        const char *detail = net_last_error();
-        if (tls && tls[0])
-            console_printf("failed: TLS %s (HTTP status %d)\n", tls, st);
-        else if (st > 0)
-            console_printf("failed: HTTP %d\n", st);
-        else if (detail && detail[0])
-            console_printf("failed: %s (status %d)\n", detail, st);
-        else
-            console_printf("failed: connect/DNS/TLS error (status %d)\n", st);
-        if (body[0]) {
-            console_write(body);
-            console_write("\n");
-        }
+        wget_print_failure(st, body);
         return 1;
     }
     console_printf("HTTP %d  %lu bytes\n", st, (unsigned long)strlen(body));
@@ -183,21 +258,7 @@ int unslookup_main(int argc, char **argv) {
         peak_perror("nslookup", "network down");
         return 1;
     }
-    struct net_info ni;
-    net_get_info(&ni);
-    char dns[32];
-    net_format_ip(ni.dns, dns, sizeof(dns));
-    console_printf("Server:\t%s\n", dns);
-    console_printf("Name:\t%s\n", argv[1]);
-    uint32_t ip = net_dns_resolve(argv[1], 400);
-    if (!ip) {
-        net_print_failure("nslookup", "DNS failed");
-        return 1;
-    }
-    char addr[32];
-    net_format_ip(ip, addr, sizeof(addr));
-    console_printf("Address:\t%s\n", addr);
-    return 0;
+    return dns_lookup_dig("nslookup", argv[1], 1);
 }
 
 int uhost_main(int argc, char **argv) {
@@ -209,18 +270,105 @@ int uhost_main(int argc, char **argv) {
         peak_perror("host", "network down");
         return 1;
     }
-    uint32_t ip = net_dns_resolve(argv[1], 400);
-    if (!ip) {
-        net_print_failure("host", "DNS failed");
-        return 1;
-    }
-    char addr[32];
-    net_format_ip(ip, addr, sizeof(addr));
-    console_printf("%s has address %s\n", argv[1], addr);
-    return 0;
+    return dns_lookup_dig("host", argv[1], 0);
 }
 
-/* Parse host:port or host port. Returns 0 and fills ip/port; -2 if net down. */
+int utraceroute_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("traceroute", "<host> [-m max_hops]");
+        return argc < 2 ? 1 : 0;
+    }
+    if (!net_ready()) {
+        peak_perror("traceroute", "network down");
+        return 1;
+    }
+    const char *host = argv[1];
+    int max_hops = 4;
+    for (int i = 2; i < argc; i++) {
+        if (!strcmp(argv[i], "-m") && i + 1 < argc) {
+            max_hops = peak_atoi(argv[++i]);
+            if (max_hops < 2)
+                max_hops = 2;
+            if (max_hops > 8)
+                max_hops = 8;
+        }
+    }
+    struct net_info ni;
+    net_get_info(&ni);
+    char lip[32], gw[32], dest[32];
+    net_format_ip(ni.ip, lip, sizeof(lip));
+    net_format_ip(ni.gw, gw, sizeof(gw));
+    console_printf("traceroute to %s, %d hops max, TCP :80\n", host, max_hops);
+    int hop = 1;
+    int failed = 0;
+    if (hop <= max_hops) {
+        console_printf("%2d  %s  local  <1 ms\n", hop, lip);
+        hop++;
+    }
+    if (hop <= max_hops) {
+        if (ni.gw) {
+            unsigned long ms = 0;
+            int pr = net_tcp_probe(ni.gw, 80, 200, &ms);
+            if (pr == 0)
+                console_printf("%2d  %s  gateway  %lu ms  open\n", hop, gw, ms);
+            else {
+                const char *why = net_last_error();
+                if (why && why[0])
+                    console_printf("%2d  %s  gateway  %lu ms  %s\n", hop, gw, ms, why);
+                else
+                    console_printf("%2d  %s  gateway  %lu ms  no reply\n", hop, gw, ms);
+            }
+        } else {
+            console_printf("%2d  *  no default gateway\n", hop);
+        }
+        hop++;
+    }
+    uint32_t dest_ip = 0;
+    if (hop <= max_hops) {
+        uint64_t t0 = timer_ticks();
+        dest_ip = net_dns_resolve(host, 400);
+        unsigned long ms = (unsigned long)((timer_ticks() - t0) * 10);
+        if (dest_ip) {
+            net_format_ip(dest_ip, dest, sizeof(dest));
+            console_printf("%2d  %s  dns  %lu ms  resolved\n", hop, dest, ms);
+        } else {
+            net_print_failure("traceroute", "DNS failed");
+            failed = 1;
+        }
+        hop++;
+    } else {
+        dest_ip = net_dns_resolve(host, 400);
+        if (dest_ip)
+            net_format_ip(dest_ip, dest, sizeof(dest));
+        else
+            failed = 1;
+    }
+    if (!failed && dest_ip && hop <= max_hops) {
+        unsigned long ms = 0;
+        int pr = net_tcp_probe(dest_ip, 80, 300, &ms);
+        if (pr == 0)
+            console_printf("%2d  %s  destination  %lu ms  open\n", hop, dest, ms);
+        else {
+            const char *why = net_last_error();
+            if (why && why[0])
+                console_printf("%2d  %s  destination  %lu ms  %s\n", hop, dest, ms, why);
+            else
+                console_printf("%2d  %s  destination  %lu ms  closed\n", hop, dest, ms);
+            failed = 1;
+        }
+        hop++;
+    } else if (!failed && dest_ip) {
+        unsigned long ms = 0;
+        if (net_tcp_probe(dest_ip, 80, 300, &ms) != 0)
+            failed = 1;
+    }
+    while (hop <= max_hops) {
+        console_printf("%2d  *  (not probed)\n", hop);
+        hop++;
+    }
+    return failed ? 1 : 0;
+}
+
 static int nc_parse_target(int argc, char **argv, uint32_t *ip, uint16_t *port) {
     char hostbuf[96];
     int port_i = 0;
@@ -279,7 +427,6 @@ int unc_main(int argc, char **argv) {
         net_print_failure("nc", "connect failed");
         return 1;
     }
-    /* Optional one-shot send from remaining argv joined, else stdin path. */
     char payload[512];
     size_t plen = 0;
     int has_colon = 0;
