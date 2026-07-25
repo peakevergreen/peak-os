@@ -9,7 +9,9 @@ void clipboard_init(void);
 void clipboard_clear(void);
 void clipboard_set(const char *text, size_t len);
 size_t clipboard_get(char *buf, size_t cap);
+size_t clipboard_get_previous(char *buf, size_t cap);
 int clipboard_has(void);
 void clipboard_set_ttl_ticks(uint64_t ticks);
+int clipboard_history_count(void);
 
 #endif

@@ -14,6 +14,24 @@ int help_open;
 int session_lock;
 int power_confirm;
 
+static const char *alttab_app_hint(enum app_kind k) {
+    switch (k) {
+    case APP_TERM: return "Shell";
+    case APP_FILES: return "Browse";
+    case APP_SETTINGS: return "Prefs";
+    case APP_AGENT: return "Ask";
+    case APP_GAME: return "Game";
+    case APP_BROWSER: return "Web";
+    case APP_MONITOR: return "Stats";
+    case APP_NOTEPAD: return "Edit";
+    case APP_IMAGES: return "View";
+    case APP_DISKS: return "Volume";
+    case APP_NETEXP: return "Diag";
+    case APP_NETCTL: return "Policy";
+    }
+    return "";
+}
+
 void desktop_draw_session_overlays(void) {
     struct framebuffer *fb = fb_get();
     if (session_lock) {
@@ -59,20 +77,45 @@ void desktop_draw_alttab(void) {
         return;
     if (alttab_sel < 0 || alttab_sel >= n)
         alttab_sel = 0;
-    uint32_t mw = desktop_u(280);
-    uint32_t mh = desktop_u(40) + (uint32_t)n * (fb_cell_h() + desktop_u(6));
+    uint32_t row_h = fb_cell_h() + desktop_u(8);
+    uint32_t footer = fb_cell_h() + desktop_u(10);
+    uint32_t mw = desktop_u(360);
+    uint32_t mh = desktop_u(44) + (uint32_t)n * row_h + footer;
     uint32_t mx = ((uint32_t)fb->width - mw) / 2;
     uint32_t my = ((uint32_t)fb->height - mh) / 3;
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
-    fb_fill_rect(mx, my, mw, desktop_u(2), desktop_color_accent());
-    fb_draw_string(mx + desktop_u(12), my + desktop_u(8), "Switch window", desktop_color_dim(), desktop_color_surface());
+    fb_fill_rect(mx, my, mw, desktop_u(3), desktop_color_accent());
+    fb_draw_string(mx + desktop_u(14), my + desktop_u(10), "Alt+Tab", desktop_color_accent(), desktop_color_surface());
+    fb_draw_string(mx + desktop_u(14) + fb_cell_w() * 7, my + desktop_u(10),
+                   "switch window", desktop_color_dim(), desktop_color_surface());
     for (int i = 0; i < n; i++) {
-        uint32_t bg = (i == alttab_sel) ? desktop_color_accent() : desktop_color_surface();
-        uint32_t fg = (i == alttab_sel) ? desktop_color_bg() : desktop_color_fg();
-        uint32_t ry = my + desktop_u(28) + (uint32_t)i * (fb_cell_h() + desktop_u(6));
-        fb_fill_rect(mx + desktop_u(8), ry, mw - desktop_u(16), fb_cell_h() + desktop_u(2), bg);
-        fb_draw_string(mx + desktop_u(16), ry, desktop_app_title(wins[order[i]].kind), fg, bg);
+        int sel = (i == alttab_sel);
+        uint32_t bg = sel ? desktop_color_accent() : desktop_color_bg();
+        uint32_t fg = sel ? desktop_color_bg() : desktop_color_fg();
+        uint32_t ry = my + desktop_u(36) + (uint32_t)i * row_h;
+        fb_fill_rect(mx + desktop_u(10), ry, mw - desktop_u(20), row_h - desktop_u(2), bg);
+        if (sel)
+            fb_fill_rect(mx + desktop_u(10), ry, desktop_u(3), row_h - desktop_u(2), desktop_color_fg());
+        char badge[4];
+        badge[0] = (char)('1' + (i < 9 ? i : 9));
+        badge[1] = '.';
+        badge[2] = '\0';
+        fb_draw_string(mx + desktop_u(18), ry + desktop_u(4), badge, fg, bg);
+        const char *title = desktop_app_title(wins[order[i]].kind);
+        fb_draw_string(mx + desktop_u(36), ry + desktop_u(4), title, fg, bg);
+        const char *hint = alttab_app_hint(wins[order[i]].kind);
+        if (hint[0]) {
+            uint32_t hx = mx + mw - desktop_u(18) - (uint32_t)strlen(hint) * fb_cell_w();
+            fb_draw_string(hx, ry + desktop_u(4), hint, sel ? desktop_color_surface() : desktop_color_dim(), bg);
+        }
+        if (wins[order[i]].minimized) {
+            fb_draw_string(mx + desktop_u(36), ry + desktop_u(4) + fb_cell_h(),
+                           "minimized", desktop_color_dim(), bg);
+        }
     }
+    uint32_t fy = my + mh - footer;
+    fb_draw_string(mx + desktop_u(14), fy, "Release Alt to switch · Tab next · Esc cancel",
+                   desktop_color_dim(), desktop_color_surface());
 }
 
 void desktop_draw_help(void) {
@@ -80,7 +123,7 @@ void desktop_draw_help(void) {
         return;
     struct framebuffer *fb = fb_get();
     uint32_t mw = desktop_u(460);
-    uint32_t mh = desktop_u(320);
+    uint32_t mh = desktop_u(340);
     uint32_t mx = ((uint32_t)fb->width - mw) / 2;
     uint32_t my = desktop_u(64);
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
@@ -104,11 +147,12 @@ void desktop_draw_help(void) {
         { "Peak menu", "Type to filter apps; Enter to launch" },
         { "Drag title", "Snap left/right/top edges" },
         { "Title _ [] x", "Minimize / maximize / close" },
+        { "Toast x", "Dismiss notification" },
         { "Wheel", "Scroll Files, Terminal, Browser" },
         { "Right-click", "Context menus" },
     };
     uint32_t key_w = desktop_u(100);
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < 12; i++) {
         uint32_t kbg = desktop_color_bg();
         fb_fill_rect(mx + pad, cy, key_w, fb_cell_h() + desktop_u(2), kbg);
         fb_draw_string(mx + pad + desktop_u(6), cy + desktop_u(1), lines[i].key,
@@ -130,7 +174,6 @@ void desktop_overlays_idle_lock(uint64_t last_input_tick) {
     }
 }
 
-/* Returns 1 if input is blocked (caller should continue main loop). */
 int desktop_overlays_block_input(int key) {
     if (session_lock) {
         if (key == '\n' || key == ' ') {
@@ -211,5 +254,13 @@ int desktop_help_click_dismiss(void) {
         return 0;
     help_open = 0;
     dirty_bits |= DIRTY_FULL;
+    return 1;
+}
+
+int desktop_notify_click_dismiss(int32_t mx, int32_t my) {
+    struct framebuffer *fb = fb_get();
+    if (!notify_click(mx, my, (uint32_t)fb->width))
+        return 0;
+    dirty_bits |= DIRTY_TOAST;
     return 1;
 }

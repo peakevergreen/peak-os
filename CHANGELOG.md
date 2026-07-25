@@ -32,6 +32,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Settings (Pass 15):** explicit hit rects, context menus for Settings/Agent/Monitor
 - **Browser + notify (Pass 16):** fetch progress bar, error retry CTA, browser context menu, toast damage thrift
 - **Pass 30:** Browser back/forward chrome, VFS bookmarks (`/var/peak/bookmarks`), JS console panel, TLS/net error detail on error pages
+- **Pass 32 (notify/clipboard/overlays):** toast history ring, dismiss control, clipboard previous slot, Alt+Tab hints, login splash
 - **Monitor + CLI (Pass 18):** readable compose/present timing, improved `memory`/`audit` output
 - **Pass 29:** Files confirm-delete arm, Home/End + Shift range select, hardened open-with; Notepad line numbers, Ctrl+F find, Ctrl+H replace lite
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
@@ -50,6 +51,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 24:** `tlsinfo` (WebPKI root count, pins/TOFU, last TLS error); `tls_err_name()` / alert desc mapping; `webpki_root_sha256()` for root digest listing
 - **Pass 26:** agent tools `fs.grep`, `net.ping` (privacy-gated); richer `sys.info`; readable `policy` CLI; aligned audit/memory tail formatting
 - **Pass 27:** Start menu typeahead filter; edge snap preview (left/right/top maximize); polished shortcuts help overlay; accent focus ring on titlebar
+- **Pass 32:** toast history ring + click dismiss; clipboard history ring with `clipboard_get_previous`; Alt+Tab label polish; login splash polish
 - **Pass 22:** VFS errno hygiene (`unlink`/`rmdir`/`stat`/`normalize`/`mkdir`), `peak_strerror(EBUSY)`, `stat`/`df` backing hints
 - **Pass 25:** ctr build log line numbers, 0-COPY / 256 KiB cap failures, path sandbox messages name escaped paths; clearer `ctr build` log output
 - **Pass 23:** dig-style `nslookup`/`host`, clearer `ifconfig` route/DNS, `wget`/`curl` TLS detail + progress note, `traceroute` lite

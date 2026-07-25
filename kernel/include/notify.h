@@ -7,12 +7,15 @@ void notify_init(void);
 void notify_clear(void);
 void notify_push(const char *msg);
 void notify_push_clipboard(const char *what);
-/* Draw toast near top-right; returns 1 if something visible. */
 int  notify_draw(uint32_t screen_w, uint32_t screen_h);
-void notify_tick(void); /* age toasts */
+void notify_tick(void);
 int  notify_active(void);
-/* Non-zero when a toast was created or expired since last check; clears the flag. */
 int  notify_consume_dirty(void);
 void notify_bounds(uint32_t screen_w, uint32_t *x, uint32_t *y, uint32_t *w, uint32_t *h);
+void notify_dismiss(int display_idx);
+void notify_dismiss_all(void);
+int notify_click(int32_t mx, int32_t my, uint32_t screen_w);
+int notify_history_count(void);
+int notify_history_get(int idx, char *out, size_t cap);
 
 #endif
