@@ -152,14 +152,30 @@ static int write_redir(const char *path, const char *data, size_t len, int appen
         size_t old_n = 0;
         if (vfs_read_file(abs, old, sizeof(old) - 1, &old_n) != 0)
             old_n = 0;
-        if (old_n + len >= sizeof(old))
+        if (old_n + len >= sizeof(old)) {
+            console_write("shell: redirect: append buffer full (8 KiB)\n");
             return -1;
+        }
         memcpy(old + old_n, data, len);
         old_n += len;
         old[old_n] = '\0';
-        return vfs_write_file(abs, old, old_n);
+        int wrc = vfs_write_file(abs, old, old_n);
+        if (wrc != 0) {
+            console_write("shell: redirect: ");
+            console_write(peak_strerror(wrc));
+            console_write("\n");
+            return -1;
+        }
+        return 0;
     }
-    return vfs_write_file(abs, data, len);
+    int wrc = vfs_write_file(abs, data, len);
+    if (wrc != 0) {
+        console_write("shell: redirect: ");
+        console_write(peak_strerror(wrc));
+        console_write("\n");
+        return -1;
+    }
+    return 0;
 }
 
 static int run_stage(struct shell_stage *st, int capture_out, char *cap_buf, size_t cap_sz,
@@ -217,29 +233,41 @@ static int run_stage(struct shell_stage *st, int capture_out, char *cap_buf, siz
 }
 
 /*
- * Mutates cmd in place (quote-split writes NULs). Callers must pass a
- * writable buffer — avoids a per-command 256B stack copy.
+ * Mutates cmd in place. Supports !! and !n (1-based history index).
  */
-static void expand_bangbang(char *cmd, char *scratch, size_t scratch_cap) {
-    if (!cmd || cmd[0] != '!' || cmd[1] != '!')
+static void expand_history(char *cmd, char *scratch, size_t scratch_cap) {
+    if (!cmd || cmd[0] != '!')
         return;
-    const char *last = shell_history_last();
-    if (!last || !last[0]) {
-        console_write("shell: no previous command\n");
+    const char *repl = NULL;
+    const char *suffix = NULL;
+    if (cmd[1] == '!') {
+        repl = shell_history_last();
+        suffix = cmd + 2;
+    } else if (cmd[1] >= '0' && cmd[1] <= '9') {
+        int n = 0;
+        const char *p = cmd + 1;
+        while (*p >= '0' && *p <= '9')
+            n = n * 10 + (*p++ - '0');
+        repl = shell_history_get(n);
+        suffix = p;
+    } else {
+        return;
+    }
+    if (!repl || !repl[0]) {
+        console_write("shell: history expansion failed\n");
         cmd[0] = '\0';
         return;
     }
-    const char *suffix = cmd + 2;
     while (*suffix == ' ')
         suffix++;
-    size_t ln = strlen(last);
+    size_t ln = strlen(repl);
     size_t sn = strlen(suffix);
     if (ln + (sn ? sn + 1 : 0) + 1 > scratch_cap) {
-        console_write("shell: !! expansion too long\n");
+        console_write("shell: history expansion too long\n");
         cmd[0] = '\0';
         return;
     }
-    memcpy(scratch, last, ln);
+    memcpy(scratch, repl, ln);
     if (sn) {
         scratch[ln++] = ' ';
         memcpy(scratch + ln, suffix, sn);
@@ -247,6 +275,39 @@ static void expand_bangbang(char *cmd, char *scratch, size_t scratch_cap) {
     }
     scratch[ln] = '\0';
     memcpy(cmd, scratch, ln + 1);
+    console_write(cmd);
+    console_putc('\n');
+}
+
+/* Expand leading alias: first token only. */
+static void expand_alias(char *cmd, char *scratch, size_t scratch_cap) {
+    if (!cmd || !*cmd)
+        return;
+    char name[32];
+    size_t ni = 0;
+    const char *p = cmd;
+    while (*p && *p != ' ' && ni + 1 < sizeof(name))
+        name[ni++] = *p++;
+    name[ni] = '\0';
+    if (!ni)
+        return;
+    const char *val = shell_alias_lookup(name);
+    if (!val)
+        return;
+    while (*p == ' ')
+        p++;
+    size_t vn = strlen(val);
+    size_t sn = strlen(p);
+    if (vn + (sn ? sn + 1 : 0) + 1 > scratch_cap)
+        return;
+    memcpy(scratch, val, vn);
+    if (sn) {
+        scratch[vn++] = ' ';
+        memcpy(scratch + vn, p, sn);
+        vn += sn;
+    }
+    scratch[vn] = '\0';
+    memcpy(cmd, scratch, vn + 1);
 }
 
 void shell_execute(char *cmd) {
@@ -258,11 +319,14 @@ void shell_execute(char *cmd) {
         return;
 
     char expand_buf[256];
-    expand_bangbang(cmd, expand_buf, sizeof(expand_buf));
+    expand_history(cmd, expand_buf, sizeof(expand_buf));
     if (!*cmd) {
         shell_set_last_status(1);
         return;
     }
+    expand_alias(cmd, expand_buf, sizeof(expand_buf));
+    /* Record after !! / !n / alias so the ring stores the real command. */
+    shell_history_add(cmd);
 
     /* export NAME=val as shorthand — rest is one argv, no re-split */
     if (!strncmp(cmd, "export ", 7)) {
@@ -298,8 +362,11 @@ void shell_execute(char *cmd) {
         int capture_for_pipe = !is_last;
 
         if (s > 0) {
-            if (vfs_write_file(PIPE_PATH, pipe_data, pipe_len) != 0) {
-                console_write("shell: pipe buffer write failed\n");
+            int prc = vfs_write_file(PIPE_PATH, pipe_data, pipe_len);
+            if (prc != 0) {
+                console_write("shell: pipe buffer write failed: ");
+                console_write(peak_strerror(prc));
+                console_write("\n");
                 shell_set_stdin_path(0);
                 shell_set_last_status(1);
                 return;

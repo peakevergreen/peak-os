@@ -88,6 +88,12 @@ const char *shell_history_last(void) {
     return hist[hist_count - 1];
 }
 
+const char *shell_history_get(int one_based) {
+    if (one_based < 1 || one_based > hist_count)
+        return NULL;
+    return hist[one_based - 1];
+}
+
 int shell_history_prev(char *line, size_t line_cap) {
     if (!line || line_cap < 2 || hist_count <= 0)
         return 0;

@@ -5,6 +5,7 @@
 #include "keyboard.h"
 #include "util.h"
 #include "sched.h"
+#include "vfs.h"
 
 static enum os_mode mode = MODE_CLI;
 static char line[256];
@@ -143,9 +144,10 @@ void shell_init(void) {
     clipboard[0] = '\0';
     shell_builtins_init();
     shell_history_init();
+    shell_alias_init();
     console_write("\n");
     console_write("  PeakOS 0.2 — arrows move  Ctrl+A select-all  Ctrl+C/X/V copy/cut/paste\n");
-    console_write("  Up/Down or Ctrl-P/N history  !! repeats last command\n");
+    console_write("  Up/Down history  !! / !n expand  Tab complete  alias  cd -\n");
     console_write("  Workspace: /home/dev/workspace  |  ask \"...\"  |  gui  |  theme\n\n");
     print_prompt();
 }
@@ -184,8 +186,7 @@ static void handle_key(int key) {
         console_putc('\n');
         line[line_len] = '\0';
         if (line_len)
-            shell_history_add(line);
-        shell_execute(line);
+            shell_execute(line); /* records expanded line in history */
         line_len = 0;
         caret = 0;
         print_prompt();
@@ -263,6 +264,154 @@ static void handle_key(int key) {
         } else if (caret < line_len) {
             memmove(line + caret, line + caret + 1, line_len - caret);
             line_len--;
+        }
+        refresh_edit_display();
+        return;
+    }
+
+    if (key == KEY_TAB || key == '\t') {
+        /* Complete token under caret: /bin names or path entries. */
+        int tok_end = (int)caret;
+        int tok_start = tok_end;
+        while (tok_start > 0 && line[tok_start - 1] != ' ')
+            tok_start--;
+        char tok[VFS_PATH_MAX];
+        size_t tn = (size_t)(tok_end - tok_start);
+        if (tn >= sizeof(tok))
+            tn = sizeof(tok) - 1;
+        memcpy(tok, line + tok_start, tn);
+        tok[tn] = '\0';
+
+        int first_tok = 1;
+        for (int i = 0; i < tok_start; i++) {
+            if (line[i] != ' ') {
+                first_tok = 0;
+                break;
+            }
+        }
+
+        char match[VFS_PATH_MAX];
+        match[0] = '\0';
+        int matches = 0;
+
+        if (first_tok && !strchr(tok, '/')) {
+            struct vfs_dirent ents[64];
+            int n = vfs_readdir("/bin", ents, 64);
+            for (int i = 0; i < n; i++) {
+                if (strncmp(ents[i].name, tok, tn) != 0)
+                    continue;
+                matches++;
+                if (matches == 1) {
+                    size_t j = 0;
+                    for (; ents[i].name[j] && j + 1 < sizeof(match); j++)
+                        match[j] = ents[i].name[j];
+                    match[j] = '\0';
+                } else {
+                    if (matches == 2) {
+                        console_putc('\n');
+                        console_write(match);
+                        console_putc(' ');
+                    }
+                    console_write(ents[i].name);
+                    console_putc(' ');
+                }
+            }
+        } else {
+            char dir[VFS_PATH_MAX], prefix[VFS_NAME_MAX];
+            const char *slash = NULL;
+            for (const char *p = tok; *p; p++)
+                if (*p == '/')
+                    slash = p;
+            if (slash) {
+                size_t dlen = (size_t)(slash - tok);
+                if (dlen >= sizeof(dir))
+                    dlen = sizeof(dir) - 1;
+                memcpy(dir, tok, dlen);
+                dir[dlen] = '\0';
+                if (!dir[0]) {
+                    dir[0] = '/';
+                    dir[1] = '\0';
+                }
+                size_t pi = 0;
+                for (const char *p = slash + 1; *p && pi + 1 < sizeof(prefix); p++)
+                    prefix[pi++] = *p;
+                prefix[pi] = '\0';
+            } else {
+                size_t j = 0;
+                const char *cwd = shell_getcwd();
+                for (; cwd[j] && j + 1 < sizeof(dir); j++)
+                    dir[j] = cwd[j];
+                dir[j] = '\0';
+                size_t pi = 0;
+                for (; tok[pi] && pi + 1 < sizeof(prefix); pi++)
+                    prefix[pi] = tok[pi];
+                prefix[pi] = '\0';
+            }
+            char abs[VFS_PATH_MAX];
+            if (shell_resolve_path(dir, abs, sizeof(abs)) == 0) {
+                struct vfs_dirent ents[64];
+                int n = vfs_readdir(abs, ents, 64);
+                size_t plen = strlen(prefix);
+                for (int i = 0; i < n; i++) {
+                    if (strncmp(ents[i].name, prefix, plen) != 0)
+                        continue;
+                    matches++;
+                    char cand[VFS_PATH_MAX];
+                    if (slash) {
+                        size_t o = 0;
+                        size_t dlen = (size_t)(slash - tok + 1);
+                        memcpy(cand, tok, dlen);
+                        o = dlen;
+                        for (size_t j = 0; ents[i].name[j] && o + 1 < sizeof(cand); j++)
+                            cand[o++] = ents[i].name[j];
+                        if (ents[i].type == VFS_DIR && o + 1 < sizeof(cand))
+                            cand[o++] = '/';
+                        cand[o] = '\0';
+                    } else {
+                        size_t o = 0;
+                        for (; ents[i].name[o] && o + 1 < sizeof(cand); o++)
+                            cand[o] = ents[i].name[o];
+                        if (ents[i].type == VFS_DIR && o + 1 < sizeof(cand))
+                            cand[o++] = '/';
+                        cand[o] = '\0';
+                    }
+                    if (matches == 1) {
+                        size_t j = 0;
+                        for (; cand[j] && j + 1 < sizeof(match); j++)
+                            match[j] = cand[j];
+                        match[j] = '\0';
+                    } else {
+                        if (matches == 2) {
+                            console_putc('\n');
+                            console_write(match);
+                            console_putc(' ');
+                        }
+                        console_write(cand);
+                        console_putc(' ');
+                    }
+                }
+            }
+        }
+
+        if (matches == 1 && match[0]) {
+            /* Replace token with match */
+            size_t ml = strlen(match);
+            uint32_t new_len = line_len - (uint32_t)tn + (uint32_t)ml;
+            if (new_len + 1 < sizeof(line)) {
+                memmove(line + tok_start + ml, line + tok_end, line_len - (uint32_t)tok_end + 1);
+                memcpy(line + tok_start, match, ml);
+                line_len = new_len;
+                caret = (uint32_t)tok_start + (uint32_t)ml;
+                clear_sel();
+            }
+        } else if (matches > 1) {
+            console_putc('\n');
+            print_prompt();
+            /* reprint line after listing */
+            for (uint32_t i = 0; i < line_len; i++)
+                console_putc(line[i]);
+            edit_paint_len = (uint32_t)strlen(prompt_buf) + line_len;
+            return;
         }
         refresh_edit_display();
         return;

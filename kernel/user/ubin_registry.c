@@ -78,6 +78,7 @@ extern int uwallpaper_main(int argc, char **argv);
 extern int uscale_main(int argc, char **argv);
 extern int uhelp_main(int argc, char **argv);
 extern int uhistory_main(int argc, char **argv);
+extern int ualias_main(int argc, char **argv);
 extern int uman_main(int argc, char **argv);
 extern int uask_main(int argc, char **argv);
 extern int uaudit_main(int argc, char **argv);

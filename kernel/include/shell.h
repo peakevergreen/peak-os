@@ -44,10 +44,17 @@ void shell_builtins_init(void);
 void shell_history_init(void);
 void shell_history_add(const char *line);
 const char *shell_history_last(void);
+const char *shell_history_get(int one_based); /* 1-based; NULL if missing */
 int  shell_history_prev(char *line, size_t line_cap);
 int  shell_history_next(char *line, size_t line_cap);
 void shell_history_reset_browse(void);
 void shell_history_list(void);
+
+/* Aliases (/var/peak/aliases). */
+void shell_alias_init(void);
+const char *shell_alias_lookup(const char *name);
+int  shell_alias_set(const char *name, const char *val);
+void shell_alias_list(void);
 
 /* Last pipeline exit status (0 = success). */
 void shell_set_last_status(int rc);
