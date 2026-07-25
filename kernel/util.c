@@ -198,7 +198,7 @@ const char *peak_strerror(int code) {
     case PEAK_ENOTCONN:     return "not connected";
     case PEAK_ENOBUFS:      return "buffer too small";
     case PEAK_ENETUNREACH:  return "host unreachable (ARP)";
-    case PEAK_EBUSY:        return "connection table full";
+    case PEAK_EBUSY:        return "busy";
     case PEAK_EDHCP:        return "DHCP failed";
     case PEAK_EAGAIN:       return "try again";
     default:                return "unknown error";
