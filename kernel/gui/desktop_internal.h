@@ -66,6 +66,7 @@ enum ctx_target {
 #define CTX_ACT_NPAD_PASTE       (CTX_ACT_APP_BASE + 22)
 #define CTX_ACT_NPAD_SAVE        (CTX_ACT_APP_BASE + 23)
 #define CTX_ACT_NPAD_SAVEAS      (CTX_ACT_APP_BASE + 24)
+#define CTX_ACT_NPAD_FIND        (CTX_ACT_APP_BASE + 25)
 #define CTX_ACT_IMG_FIT          (CTX_ACT_APP_BASE + 40)
 #define CTX_ACT_IMG_ACTUAL       (CTX_ACT_APP_BASE + 41)
 #define CTX_ACT_IMG_NEXT         (CTX_ACT_APP_BASE + 42)

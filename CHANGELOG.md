@@ -33,6 +33,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Browser + notify (Pass 16):** fetch progress bar, error retry CTA, browser context menu, toast damage thrift
 - **Pass 30:** Browser back/forward chrome, VFS bookmarks (`/var/peak/bookmarks`), JS console panel, TLS/net error detail on error pages
 - **Monitor + CLI (Pass 18):** readable compose/present timing, improved `memory`/`audit` output
+- **Pass 29:** Files confirm-delete arm, Home/End + Shift range select, hardened open-with; Notepad line numbers, Ctrl+F find, Ctrl+H replace lite
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
 - CLI boot scroll stays on the front framebuffer (does not wipe via empty backbuffer)
