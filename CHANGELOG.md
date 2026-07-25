@@ -42,7 +42,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
 - CLI boot scroll stays on the front framebuffer (does not wipe via empty backbuffer)
-- CLI line-edit clears trailing glyphs on shrink; `gui` hints use Ctrl+Alt+Esc
+- **Pass 37:** Keyboard repeat tuning (PS/2 typematic + software repeat for USB), mouse acceleration lite, CLI scrollback search (Ctrl+F, 128 lines), clearer Ctrl+Alt+Esc CLI↔desktop hints
 
 ### CLI /bin builtins
 

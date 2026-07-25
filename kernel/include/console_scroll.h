@@ -20,4 +20,19 @@ int console_scroll_plan(uint32_t fb_height, uint32_t glyph_h, uint32_t *copy_row
 /* Bytes copied when scrolling the CLI front buffer (pitch * copy_rows). */
 uint64_t console_scroll_bytes(uint32_t pitch, uint32_t copy_rows);
 
+int console_scroll_line_find(const char *line, const char *needle, int *col_out);
+int console_scroll_find_next(const char *const *lines, int nlines,
+                             const char *needle, int start_line, int start_col,
+                             int *out_line, int *out_col);
+#ifndef PEAK_HOST_TEST
+#define CONSOLE_SCROLLBACK_LINES 128
+#define CONSOLE_SCROLLBACK_COLS  256
+void console_scrollback_reset(void);
+void console_scrollback_note_char(char c);
+int console_scrollback_line_count(void);
+const char *console_scrollback_line(int idx);
+int console_scrollback_find(const char *needle, int *out_line, int *out_col,
+                             int start_line, int start_col);
+#endif
+
 #endif

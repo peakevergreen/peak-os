@@ -38,6 +38,13 @@ int main(void) {
     expect(console_scroll_bytes(0x10000u, 0x10000u) == (1ull << 32),
            "large scroll bytes stay 64-bit");
 
+    int col = -1;
+    expect(console_scroll_line_find("hello world", "world", &col) == 1 && col == 6, "line find");
+    const char *lines[] = { "alpha", "beta gamma", "alphabet soup" };
+    int ol = -1, oc = -1;
+    expect(console_scroll_find_next(lines, 3, "gamma", 0, -1, &ol, &oc) == 1 && ol == 1, "find first");
+    expect(console_scroll_find_next(lines, 3, "missing", 0, -1, &ol, &oc) == 0, "find none");
+
     if (fails) {
         fprintf(stderr, "%d console_scroll test(s) failed\n", fails);
         return 1;

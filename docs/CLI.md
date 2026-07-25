@@ -109,7 +109,9 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `ask` `audit` `memory` `policy` `peak` `gui` | agent + desktop |
 | `privacy` | `persist` / `net-allow` / `kill-switch on --confirm` — [privacy.md](privacy.md) |
 
-`gui` enters the desktop; **Ctrl+Alt+Esc** returns to CLI.
+`gui` enters the desktop; press **Ctrl+Alt+Esc** anytime to return to CLI.
+
+CLI scrollback search: **Ctrl+F**, type a needle, **Enter** for next match (128 lines retained).
 
 ## Network / containers
 | Command | Notes |

@@ -40,6 +40,8 @@ void desktop_login(void) {
         ty += fb_cell_h() + desktop_u(8);
         fb_draw_string(tx, ty, "Single-user research workstation", desktop_color_dim(), desktop_color_surface());
         ty += fb_cell_h() + desktop_u(6);
+        fb_draw_string(tx, ty, "Ctrl+Alt+Esc returns to CLI", desktop_color_dim(), desktop_color_surface());
+        ty += fb_cell_h() + desktop_u(6);
         fb_draw_string(tx, ty, "Esc skips splash", desktop_color_dim(), desktop_color_surface());
         fb_end_frame();
         int key = keyboard_try_getkey();

@@ -506,10 +506,10 @@ int ugui_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
     if (shell_mode() == MODE_GUI) {
-        console_write("Already in desktop. Ctrl+Alt+Esc returns to CLI.\n");
+        console_write("Already on desktop — press Ctrl+Alt+Esc to return to CLI.\n");
         return 0;
     }
-    console_write("Entering desktop... (Ctrl+Alt+Esc returns to CLI)\n");
+    console_write("Entering desktop... Press Ctrl+Alt+Esc anytime to return to CLI.\n");
     shell_set_mode(MODE_GUI);
     fb_set_ui_scale(settings_gui_scale());
     desktop_run();
@@ -517,7 +517,7 @@ int ugui_main(int argc, char **argv) {
     shell_set_mode(MODE_CLI);
     console_init();
     theme_apply_console();
-    console_write("Back in Peak CLI. Type 'help'.\n");
+    console_write("Back in CLI. Ctrl+Alt+Esc leaves desktop; type 'help' or 'gui'.\n");
     return 0;
 }
 

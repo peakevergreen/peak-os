@@ -306,6 +306,7 @@ void kernel_entry(struct peak_bootinfo *info) {
     shell_init();
 
     for (;;) {
+        keyboard_poll();
         if (shell_mode() == MODE_CLI)
             shell_run_once();
         platform_poll();

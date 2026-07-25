@@ -260,7 +260,7 @@ static const struct help_entry help_table[] = {
     { "policy", "meta", "agent tool/path policy file" },
     { "privacy", "meta", "persist / net-allow / kill-switch" },
     { "disksave", "meta", "save workspace to block device" },
-    { "gui", "meta", "enter desktop (Ctrl+Alt+Esc leaves)" },
+    { "gui", "meta", "enter desktop (Ctrl+Alt+Esc returns to CLI)" },
     { "ctr", "net", "stage Dockerfile subset; serve static HTTP (not OCI)" },
     { "ctrd", "net", "ping Peak ctr staging helper" },
     { "ifconfig", "net", "show e1000 IPv4 config" },

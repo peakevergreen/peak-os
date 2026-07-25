@@ -99,6 +99,7 @@ void desktop_run(void) {
         if (desktop_should_exit)
             break;
 
+        keyboard_poll();
         sound_poll();
         platform_poll();
         browser_tick();

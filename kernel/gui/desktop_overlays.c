@@ -141,7 +141,7 @@ void desktop_draw_help(void) {
         { "1-7", "Open apps (Term, Files, Settings, …)" },
         { "Alt+Tab", "Switch windows" },
         { "Ctrl+W", "Close focused window" },
-        { "Ctrl+Alt+Esc", "Leave desktop" },
+        { "Ctrl+Alt+Esc", "Return to CLI" },
         { "S / T", "Scale / theme" },
         { "Esc", "Close menus & overlays" },
         { "Peak menu", "Type to filter apps; Enter to launch" },
