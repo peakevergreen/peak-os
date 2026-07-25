@@ -29,8 +29,7 @@ static void bookmarks_persist(void) {
         buf[o++] = '|';
         memcpy(buf + o, bookmarks[i].url, un);
         o += un;
-        buf[o++] = '
-';
+        buf[o++] = '\n';
     }
     if (o)
         vfs_write_file(BR_BOOKMARK_PATH, buf, o);
@@ -49,21 +48,18 @@ void browser_bookmarks_init(void) {
     const char *p = buf;
     int slot = 0;
     while (*p && slot < BR_BOOKMARK_MAX) {
-        while (*p == '
-')
+        while (*p == '\n')
             p++;
         if (!*p)
             break;
         char title[BR_TITLE_MAX], url[BR_URL_MAX];
         size_t ti = 0, ui = 0;
-        while (*p && *p != '|' && *p != '
-' && ti + 1 < sizeof(title))
+        while (*p && *p != '|' && *p != '\n' && ti + 1 < sizeof(title))
             title[ti++] = *p++;
         title[ti] = '\0';
         if (*p == '|')
             p++;
-        while (*p && *p != '
-' && ui + 1 < sizeof(url))
+        while (*p && *p != '\n' && ui + 1 < sizeof(url))
             url[ui++] = *p++;
         url[ui] = '\0';
         if (url[0]) {
@@ -74,8 +70,7 @@ void browser_bookmarks_init(void) {
             snprintf(bookmarks[slot].url, sizeof(bookmarks[slot].url), "%s", url);
             slot++;
         }
-        while (*p && *p != '
-')
+        while (*p && *p != '\n')
             p++;
     }
 }

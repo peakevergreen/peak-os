@@ -277,7 +277,7 @@ void browser_back(void) {
         char back[BR_URL_MAX];
         snprintf(back, sizeof(back), "%s", t->prev_url);
         snprintf(t->forward_url, sizeof(t->forward_url), "%s", t->url);
-        t->prev_url[0] = ' ';
+        t->prev_url[0] = '\0';
         browser_go(back);
     } else {
         snprintf(t->status, sizeof(t->status), "No previous page");
@@ -291,7 +291,7 @@ void browser_forward(void) {
         char fwd[BR_URL_MAX];
         snprintf(fwd, sizeof(fwd), "%s", t->forward_url);
         snprintf(t->prev_url, sizeof(t->prev_url), "%s", t->url);
-        t->forward_url[0] = ' ';
+        t->forward_url[0] = '\0';
         browser_go(fwd);
     } else {
         snprintf(t->status, sizeof(t->status), "No forward page");
@@ -310,11 +310,11 @@ int browser_ctx_menu(struct ctx_menu_item *items, int max_items) {
         return 0;
     struct br_tab *t = browser_cur();
     items[0].label = "Back";
-    items[0].enabled = t->prev_url[0] != ' ';
+    items[0].enabled = t->prev_url[0] != '\0';
     items[0].separator = 0;
     items[0].action_id = CTX_ACT_BROWSER_BACK;
     items[1].label = "Forward";
-    items[1].enabled = t->forward_url[0] != ' ';
+    items[1].enabled = t->forward_url[0] != '\0';
     items[1].separator = 0;
     items[1].action_id = CTX_ACT_BROWSER_FORWARD;
     items[2].label = "Reload";
@@ -322,11 +322,11 @@ int browser_ctx_menu(struct ctx_menu_item *items, int max_items) {
     items[2].separator = 0;
     items[2].action_id = CTX_ACT_BROWSER_RELOAD;
     items[3].label = "Add bookmark";
-    items[3].enabled = t->url[0] != ' ';
+    items[3].enabled = t->url[0] != '\0';
     items[3].separator = 0;
     items[3].action_id = CTX_ACT_BROWSER_BOOKMARK;
     items[4].label = "Copy URL";
-    items[4].enabled = t->url[0] != ' ';
+    items[4].enabled = t->url[0] != '\0';
     items[4].separator = 0;
     items[4].action_id = CTX_ACT_BROWSER_COPY_URL;
     items[5].label = "New tab";
