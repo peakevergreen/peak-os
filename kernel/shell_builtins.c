@@ -230,6 +230,15 @@ static const struct help_entry help_table[] = {
     { "which", "sys", "resolve /bin path" },
     { "seq", "sys", "print number sequence" },
     { "sleep", "sys", "sleep seconds" },
+    { "hostname", "sys", "get/set HOSTNAME" },
+    { "uptime", "sys", "pretty uptime" },
+    { "whoami", "sys", "print USER" },
+    { "id", "sys", "uid/gid (single-user)" },
+    { "cal", "sys", "month calendar" },
+    { "gzip", "sys", "Peak RLE compress (.gz PEAKGZ1)" },
+    { "gunzip", "sys", "decompress PEAKGZ1 .gz" },
+    { "timeout", "sys", "run command (deadline note)" },
+    { "watch", "sys", "repeat command (-n secs, bounded)" },
     { "theme", "sys", "list/set/next theme" },
     { "wallpaper", "sys", "set desktop wallpaper (PPM)" },
     { "scale", "sys", "UI scale 1..4" },
@@ -270,6 +279,7 @@ void shell_help_topics(void) {
     console_write("  text  cat head tail wc grep diff sort uniq cut tr sed cmp hexdump strings echo printf tee yes\n");
     console_write("        fold rev od split paste nl tac xargs sha256sum md5sum base64 less more edit\n");
     console_write("  sys   date free top sysmon ps kill env which seq sleep theme wallpaper scale\n");
+    console_write("        hostname uptime whoami id cal gzip gunzip timeout watch\n");
     console_write("        uname true false test [ yes time history sh reboot help man js\n");
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
     console_write("  net   ctr ctrd ifconfig ping wget curl nslookup host nc\n");
@@ -294,6 +304,7 @@ void shell_builtins_init(void) {
     shell_env_set("HOME", "/home/dev");
     shell_env_set("PATH", "/bin");
     shell_env_set("USER", "peak");
+    shell_env_set("HOSTNAME", "peak");
     last_status = 0;
     last_path_err = PEAK_OK;
 }

@@ -90,6 +90,9 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `wallpaper list\|set\|none\|next` | Desktop background (binary PPM P6) |
 | `scale [1-4]` | UI glyph scale |
 | `date` `free` `env` `export` `which` `seq` `sleep` `time` | |
+| `hostname` `uptime` `whoami` `id` `cal` | identity + calendar |
+| `gzip` `gunzip` | Peak RLE compress/decompress (PEAKGZ1 `.gz`, 8 KiB cap) |
+| `timeout` `watch` | run once with deadline note; repeat (`-n`, max 32 iters) |
 | `top` `sysmon` | live system monitor (sparklines; `q` quit, `-n` once) |
 | `ps` | list kernel tasks/threads |
 | `kill <pid or name>` | mark READY/BLOCKED task zombie (not idle/self) |
