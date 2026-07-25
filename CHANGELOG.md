@@ -15,11 +15,13 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - CI gates: UEFI smoke, smoke-cli static gate, host `-Werror`, real ELF fuzz, PeakFS QEMU roundtrip (`smoke_persist`)
 - PeakDisk atomic publish (payload→header) + SDHCI CMD13 flush; DWC2 hub enum/split/hotplug; `/bin/disksave`
 - Quieter boot: status lines only (net IP folded into `e1000 (dhcp …)`; no chatter for JS/PeakVec/disk absence)
+- **S8 loader verify:** kernel SHA-256 vs `peak.conf` / embedded `SHA256SUMS`; optional `verify_sig=1` HMAC-SHA256 of manifest (dev key stub); host `sign-release.py` / `verify-release.py` remain the ceremony gate
 
 ### Desktop / Commercial GFX
 
 - Software FB compositor: opaque move, honest damage, paced presents
 - Per-window ARGB surfaces + budget; rubber-band resize; soft cursor
+- **Desktop shell (Pass 07):** Apps/System Start menu, labeled chrome, `MAX_WINS` 16, hit-tested context-menu framework (`ui_widgets`)
 - **Files app (Pass 08):** name/size columns, breadcrumbs, scroll overflow, copy path, context menus, open-with hooks
 - **Notepad app (Pass 09):** multi-line editor, VFS load/save, dirty flag, clipboard, context menu
 - **Images app (Pass 10):** PPM/BMP decode, fit/1:1/zoom-pan viewer, host test_img_decode
@@ -43,7 +45,8 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Hash/pager tools: `sha256sum`, `md5sum`, `base64`, `less`/`more`, `time`
 - Net diag: `nslookup`, `host`, `nc` (TCP connect)
 - Shell history: persistent `/var/peak/history`, Up/Down/Ctrl-P/N recall, `history`, `!!`, exit-status prompt, errno-style path errors
-- Host tests: `test_libpeak`, `test_shell_split`, `test_console_scroll`, `test_cli_crypto`
+- Host tests: `test_libpeak`, `test_shell_split`, `test_console_scroll`, `test_cli_crypto`, `test_agent_tools`, `test_desktop_titles`, `test_img_decode`
+- VFS: `vfs_last_error`, `PEAK_EISDIR` on directory write
 
 ### Agent and PeakVec
 
@@ -64,10 +67,10 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Software FB + polled DWC2 HID path implemented; **Pi 3 hardware sign-off pending**
 - Pi 4/5 net, xHCI, Wi‑Fi, GPU accel: not ready
 
-### Security (Phases S0–S7)
+### Security (Phases S0–S8)
 
 - CSPRNG, NX/W^X, user-copy hardening, capabilities, encrypted PeakFS modes, ASLR/KASLR/canaries where applicable
-- Verified boot / signed releases: **not shipped** (S8)
+- Verified boot: loader digest verify + optional manifest HMAC (`verify_sig`); host signing ceremony shipped; UEFI Secure Boot enrollment still optional
 
 ## 0.1.0-mvp
 
