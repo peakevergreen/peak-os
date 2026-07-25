@@ -67,11 +67,16 @@ static void top_render_once(int oneshot) {
                    (unsigned long)s->ctx_switches,
                    (unsigned long)s->irq_count,
                    (unsigned long)s->vfs_nodes);
-    console_printf("GFX  compose %uus  present %uus  surf %u%%\n",
-                   (unsigned)s->compose_us, (unsigned)s->present_us,
-                   (unsigned)s->surf_pressure);
-    console_printf("Agent peakvec %uus  audit %uus\n\n",
-                   (unsigned)s->peakvec_us, (unsigned)s->agent_audit_us);
+    {
+        char cu[16], pu[16], pv[16], au[16];
+        sysmon_format_us(s->compose_us, cu, sizeof(cu));
+        sysmon_format_us(s->present_us, pu, sizeof(pu));
+        sysmon_format_us(s->peakvec_us, pv, sizeof(pv));
+        sysmon_format_us(s->agent_audit_us, au, sizeof(au));
+        console_printf("GFX  compose %s  present %s  surf %u%%\n",
+                       cu, pu, (unsigned)s->surf_pressure);
+        console_printf("Agent peakvec %s  audit %s\n\n", pv, au);
+    }
 
     struct task list[MAX_TASKS];
     int tn = sched_list_tasks(list, MAX_TASKS);

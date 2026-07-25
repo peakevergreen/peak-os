@@ -5,6 +5,9 @@
 #include "dom.h"
 #include "fb.h"
 #include "util.h"
+#include "clipboard.h"
+#include "notify.h"
+#include "desktop_internal.h"
 
 static int url_len_of(struct br_tab *t) {
     return (int)strlen(t->url);
@@ -205,6 +208,12 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
     }
 
     struct br_tab *t = browser_cur();
+    if (t->show_retry && hit_retry_w > 0 &&
+        (uint32_t)lx >= hit_retry_x && (uint32_t)lx < hit_retry_x + hit_retry_w &&
+        (uint32_t)ly >= hit_retry_y && (uint32_t)ly < hit_retry_y + hit_retry_h) {
+        browser_reload();
+        return;
+    }
     if (t->use_layout && t->js_ok) {
         uint32_t ch = fb_cell_h();
         uint32_t pad = 6;
@@ -225,4 +234,80 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
         }
     }
     (void)w;
+}
+
+void browser_back(void) {
+    struct br_tab *t = browser_cur();
+    if (t->prev_url[0]) {
+        char back[BR_URL_MAX];
+        snprintf(back, sizeof(back), "%s", t->prev_url);
+        t->prev_url[0] = '\0';
+        browser_go(back);
+    } else {
+        snprintf(t->status, sizeof(t->status), "No previous page");
+        needs_redraw = 1;
+    }
+}
+
+void browser_reload(void) {
+    struct br_tab *t = browser_cur();
+    t->show_retry = 0;
+    browser_go(t->url);
+}
+
+int browser_ctx_menu(struct ctx_menu_item *items, int max_items) {
+    if (!items || max_items < 6)
+        return 0;
+    struct br_tab *t = browser_cur();
+    items[0].label = "Back";
+    items[0].enabled = t->prev_url[0] != '\0';
+    items[0].separator = 0;
+    items[0].action_id = CTX_ACT_BROWSER_BACK;
+    items[1].label = "Reload";
+    items[1].enabled = 1;
+    items[1].separator = 0;
+    items[1].action_id = CTX_ACT_BROWSER_RELOAD;
+    items[2].label = "Copy URL";
+    items[2].enabled = t->url[0] != '\0';
+    items[2].separator = 0;
+    items[2].action_id = CTX_ACT_BROWSER_COPY_URL;
+    items[3].label = "New tab";
+    items[3].enabled = ntabs < BR_MAX_TABS;
+    items[3].separator = 0;
+    items[3].action_id = CTX_ACT_BROWSER_NEW_TAB;
+    items[4].label = NULL;
+    items[4].enabled = 0;
+    items[4].separator = 1;
+    items[4].action_id = CTX_ACT_NONE;
+    items[5].label = "Close window";
+    items[5].enabled = 1;
+    items[5].separator = 0;
+    items[5].action_id = CTX_ACT_CLOSE;
+    return 6;
+}
+
+int browser_ctx_action(int action_id) {
+    struct br_tab *t = browser_cur();
+    switch (action_id) {
+    case CTX_ACT_BROWSER_BACK:
+        browser_back();
+        return 1;
+    case CTX_ACT_BROWSER_RELOAD:
+        browser_reload();
+        return 1;
+    case CTX_ACT_BROWSER_COPY_URL:
+        if (t->url[0]) {
+            clipboard_set(t->url, strlen(t->url));
+            notify_push_clipboard("URL");
+        }
+        return 1;
+    case CTX_ACT_BROWSER_NEW_TAB:
+        if (browser_new_tab("peak://demo") >= 0)
+            return 1;
+        snprintf(t->status, sizeof(t->status), "Max %d tabs", BR_MAX_TABS);
+        needs_redraw = 1;
+        return 1;
+    default:
+        return 0;
+    }
 }

@@ -31,37 +31,67 @@ int uask_main(int argc, char **argv) {
     return 0;
 }
 
+static void print_session_tail(const char *cmd, const char *path, const char *empty_hint) {
+    char buf[2048];
+    size_t len = 0;
+    if (vfs_read_file(path, buf, sizeof(buf) - 1, &len) != 0 || !len) {
+        console_printf("%s: %s\n", cmd, empty_hint);
+        return;
+    }
+    buf[len] = '\0';
+
+    int lines = 0;
+    for (size_t i = 0; i < len; i++)
+        if (buf[i] == '\n')
+            lines++;
+
+    console_printf("%s: %s (%zu bytes, %d lines)\n", cmd, path, len, lines);
+    console_write("--- recent entries ---\n");
+
+    const char *start = buf;
+    int tail_lines = 0;
+    for (const char *p = buf + len; p > buf; p--) {
+        if (p[-1] == '\n') {
+            tail_lines++;
+            if (tail_lines > 12) {
+                start = p;
+                break;
+            }
+        }
+    }
+
+    int n = 1;
+    for (const char *p = start; *p; p++) {
+        if (p == start || p[-1] == '\n') {
+            const char *eol = strchr(p, '\n');
+            size_t ll = eol ? (size_t)(eol - p) : strlen(p);
+            if (ll > 0) {
+                char line[96];
+                size_t show = ll < sizeof(line) - 1 ? ll : sizeof(line) - 1;
+                memcpy(line, p, show);
+                line[show] = '\0';
+                console_printf("%3d  %s\n", n++, line);
+            }
+        }
+    }
+    if (n == 1)
+        console_write("(no printable lines)\n");
+    console_write("--- end ---\n");
+}
+
 int uaudit_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
-    char buf[2048];
-    size_t len = 0;
-    if (vfs_read_file("/var/peak/audit.log", buf, sizeof(buf) - 1, &len) != 0) {
-        console_write("audit: (empty — agent actions appear here after ask)\n");
-        return 0;
-    }
-    buf[len] = '\0';
-    console_write("audit: /var/peak/audit.log\n");
-    console_write(buf[0] ? buf : "(empty)\n");
-    if (len && buf[len - 1] != '\n')
-        console_putc('\n');
+    print_session_tail("audit", "/var/peak/audit.log",
+                       "(empty — agent actions appear here after ask)");
     return 0;
 }
 
 int umemory_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
-    char buf[2048];
-    size_t len = 0;
-    if (vfs_read_file("/var/peak/sessions/memory.txt", buf, sizeof(buf) - 1, &len) != 0) {
-        console_write("memory: (empty — ask records turn summaries here)\n");
-        return 0;
-    }
-    buf[len] = '\0';
-    console_write("memory: /var/peak/sessions/memory.txt\n");
-    console_write(buf[0] ? buf : "(empty)\n");
-    if (len && buf[len - 1] != '\n')
-        console_putc('\n');
+    print_session_tail("memory", "/var/peak/sessions/memory.txt",
+                       "(empty — ask records turn summaries here)");
     return 0;
 }
 

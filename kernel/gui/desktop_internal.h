@@ -91,6 +91,7 @@ enum ctx_target {
 #define CTX_ACT_BROWSER_BACK     (CTX_ACT_APP_BASE + 10)
 #define CTX_ACT_BROWSER_RELOAD   (CTX_ACT_APP_BASE + 11)
 #define CTX_ACT_BROWSER_COPY_URL (CTX_ACT_APP_BASE + 12)
+#define CTX_ACT_BROWSER_NEW_TAB  (CTX_ACT_APP_BASE + 13)
 #define CTX_ACT_SETTINGS_DISPLAY (CTX_ACT_APP_BASE + 20)
 #define CTX_ACT_SETTINGS_NET     (CTX_ACT_APP_BASE + 21)
 #define CTX_ACT_AGENT_HELP       (CTX_ACT_APP_BASE + 30)
@@ -230,6 +231,10 @@ int desktop_terminal_key(int key);
 void desktop_terminal_wheel(int wheel);
 int desktop_terminal_click(struct win *w, int32_t mx, int32_t my, int drag);
 void desktop_terminal_clear(void);
+void desktop_terminal_copy(void);
+void desktop_terminal_paste(void);
+int desktop_terminal_ctx_menu(struct ctx_menu_item *items, int max_items);
+int desktop_terminal_ctx_action(int action_id);
 
 void desktop_files_init(void);
 void desktop_files_draw(struct win *w);

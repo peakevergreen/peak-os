@@ -57,6 +57,7 @@ int  sysmon_history_len(void);
 
 void sysmon_format_rate(uint32_t bps, char *buf, size_t cap);
 void sysmon_format_bytes(uint64_t n, char *buf, size_t cap);
+void sysmon_format_us(uint32_t us, char *buf, size_t cap);
 void sysmon_sparkline(const uint32_t *series, int n, char *out, int out_cols);
 
 #endif

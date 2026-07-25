@@ -4,6 +4,7 @@
 #include "shell.h"
 #include "keyboard.h"
 #include "clipboard.h"
+#include "notify.h"
 #include "util.h"
 
 struct term_state {
@@ -206,6 +207,150 @@ static void term_copy_selection(struct term_state *t) {
     clipboard_set(buf, (size_t)n);
 }
 
+static void term_visible_rows(struct win *w, uint32_t *vis_out) {
+    uint32_t ch = fb_cell_h();
+    uint32_t th = desktop_title_h();
+    uint32_t area_h = w->h > th + desktop_u(16) ? w->h - th - desktop_u(16) : ch;
+    uint32_t vis = area_h / ch;
+    if (vis > TERM_VIEW)
+        vis = TERM_VIEW;
+    if (vis < 1)
+        vis = 1;
+    if (vis_out)
+        *vis_out = vis;
+}
+
+static void term_clamp_scroll(struct term_state *t, uint32_t vis) {
+    int max_scroll = (int)t->row - (int)vis + 1;
+    if (max_scroll < 0)
+        max_scroll = 0;
+    if (t->scroll > max_scroll)
+        t->scroll = max_scroll;
+    if (t->scroll < 0)
+        t->scroll = 0;
+}
+
+static int term_mouse_cell(struct win *w, struct term_state *t, int32_t mx, int32_t my,
+                           int *lr_out, int *col_out) {
+    uint32_t cw = fb_cell_w();
+    uint32_t ch = fb_cell_h();
+    uint32_t th = desktop_title_h();
+    uint32_t tx = w->x + desktop_u(12);
+    uint32_t ty = w->y + th + desktop_u(8);
+    uint32_t vis = 0;
+    term_visible_rows(w, &vis);
+    term_clamp_scroll(t, vis);
+    int start = (int)t->row - (int)vis + 1 - t->scroll;
+    if (start < 0)
+        start = 0;
+    if (mx < (int32_t)tx || my < (int32_t)ty)
+        return 0;
+    int col = (int)((mx - (int32_t)tx) / (int32_t)cw);
+    int lr = start + (int)((my - (int32_t)ty) / (int32_t)ch);
+    if (col < 0 || col >= TERM_COLS || lr < 0 || lr >= (int)TERM_ROWS)
+        return 0;
+    if (lr_out)
+        *lr_out = lr;
+    if (col_out)
+        *col_out = col;
+    return 1;
+}
+
+static void term_paste_clipboard(void) {
+    char buf[CLIPBOARD_MAX];
+    size_t n = clipboard_get(buf, sizeof(buf));
+    if (!n)
+        return;
+    for (size_t i = 0; i < n; i++) {
+        char c = buf[i];
+        if (c == '\r')
+            c = '\n';
+        if (c >= 32 || c == '\n' || c == '\t' || c == '\b')
+            shell_feed_key((unsigned char)c);
+    }
+}
+
+void desktop_terminal_clear(void) {
+    struct term_state *t = term_active();
+    memset(t->lines, 0, sizeof(t->lines));
+    t->row = 0;
+    t->col = 0;
+    t->scroll = 0;
+    t->sel_a = t->sel_b = -1;
+    t->caret_col = 0;
+    t->full_redraw = 1;
+    dirty_bits |= DIRTY_TERM;
+    term_mark_active_surf_dirty();
+}
+
+void desktop_terminal_copy(void) {
+    struct term_state *t = term_active();
+    if (!term_has_selection(t))
+        return;
+    term_copy_selection(t);
+    notify_push_clipboard("selection");
+    dirty_bits |= DIRTY_TOAST;
+}
+
+void desktop_terminal_paste(void) {
+    term_paste_clipboard();
+    term_active()->full_redraw = 1;
+    dirty_bits |= DIRTY_TERM;
+    term_mark_active_surf_dirty();
+}
+
+int desktop_terminal_ctx_menu(struct ctx_menu_item *items, int max_items) {
+    if (!items || max_items < 6)
+        return 0;
+    struct term_state *t = term_active();
+    int has_sel = term_has_selection(t);
+    items[0].label = "Copy selection";
+    items[0].enabled = has_sel;
+    items[0].separator = 0;
+    items[0].action_id = CTX_ACT_TERM_COPY;
+    items[1].label = "Paste";
+    items[1].enabled = clipboard_has();
+    items[1].separator = 0;
+    items[1].action_id = CTX_ACT_TERM_PASTE;
+    items[2].label = "Clear scrollback";
+    items[2].enabled = 1;
+    items[2].separator = 0;
+    items[2].action_id = CTX_ACT_TERM_CLEAR;
+    items[3].label = "New Terminal";
+    items[3].enabled = 1;
+    items[3].separator = 0;
+    items[3].action_id = CTX_ACT_TERM_NEW;
+    items[4].label = NULL;
+    items[4].enabled = 0;
+    items[4].separator = 1;
+    items[4].action_id = CTX_ACT_NONE;
+    items[5].label = "Close window";
+    items[5].enabled = 1;
+    items[5].separator = 0;
+    items[5].action_id = CTX_ACT_CLOSE;
+    return 6;
+}
+
+int desktop_terminal_ctx_action(int action_id) {
+    switch (action_id) {
+    case CTX_ACT_TERM_NEW:
+        desktop_open_app(APP_TERM);
+        return 1;
+    case CTX_ACT_TERM_COPY:
+        desktop_terminal_copy();
+        return 1;
+    case CTX_ACT_TERM_PASTE:
+        desktop_terminal_paste();
+        return 1;
+    case CTX_ACT_TERM_CLEAR:
+        desktop_terminal_clear();
+        shell_redraw_prompt();
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static void term_scroll_up_buf(struct term_state *t) {
     for (uint32_t r = 1; r < TERM_ROWS; r++)
         memcpy(t->lines[r - 1], t->lines[r], TERM_COLS + 1);
@@ -283,6 +428,7 @@ void desktop_terminal_draw(struct win *w) {
         vis = TERM_VIEW;
     if (vis < 1)
         vis = 1;
+    term_clamp_scroll(t, vis);
     int start = (int)t->row - (int)vis + 1 - t->scroll;
     if (start < 0)
         start = 0;
@@ -336,7 +482,13 @@ void desktop_terminal_draw(struct win *w) {
     if (term_has_selection(t)) {
         uint32_t hint_y = ty + vis * ch + desktop_u(2);
         if (hint_y + ch <= w->y + w->h)
-            fb_draw_string(tx, hint_y, "Ctrl+C copy selection", desktop_color_dim(), bg);
+            fb_draw_string(tx, hint_y, "Ctrl+C copy  Ctrl+V paste", desktop_color_dim(), bg);
+    } else if (t->scroll > 0) {
+        char sb[40];
+        snprintf(sb, sizeof(sb), "^ scrollback %d (Dn/latest)", t->scroll);
+        uint32_t hint_y = ty + vis * ch + desktop_u(2);
+        if (hint_y + ch <= w->y + w->h)
+            fb_draw_string(tx, hint_y, sb, desktop_color_dim(), bg);
     }
     t->full_redraw = 0;
     t->cell_dirty = 0;
@@ -344,38 +496,78 @@ void desktop_terminal_draw(struct win *w) {
 
 int desktop_terminal_key(int key) {
     struct term_state *tt = term_active();
+    uint32_t vis = 0;
+    if (active_term >= 0 && active_term < MAX_WINS && wins[active_term].open)
+        term_visible_rows(&wins[active_term], &vis);
     if (key == KEY_TAB)
         key = '\t';
     if (key == KEY_UP) {
         tt->scroll++;
-        tt->full_redraw = 1;
-        dirty_bits |= DIRTY_TERM;
-        term_mark_active_surf_dirty();
+        term_clamp_scroll(tt, vis);
     } else if (key == KEY_DOWN) {
         if (tt->scroll > 0)
             tt->scroll--;
-        tt->full_redraw = 1;
-        dirty_bits |= DIRTY_TERM;
-        term_mark_active_surf_dirty();
-    } else if (key == 3 && term_has_selection(tt)) { /* Ctrl+C — copy selection */
-        term_copy_selection(tt);
-        tt->full_redraw = 1;
-        dirty_bits |= DIRTY_TERM;
-        term_mark_active_surf_dirty();
+        term_clamp_scroll(tt, vis);
+    } else if (key == 3 && term_has_selection(tt)) {
+        desktop_terminal_copy();
+    } else if (key == 22) {
+        desktop_terminal_paste();
+    } else if (key == 12) {
+        desktop_terminal_clear();
+        shell_redraw_prompt();
+        return 1;
     } else {
+        if (key >= 32 || key == '\b' || key == '\n' || key == '\t')
+            tt->scroll = 0;
         shell_feed_key(key);
-        dirty_bits |= DIRTY_TERM;
-        term_mark_active_surf_dirty();
     }
+    tt->full_redraw = 1;
+    dirty_bits |= DIRTY_TERM;
+    term_mark_active_surf_dirty();
     return 1;
 }
 
 void desktop_terminal_wheel(int wheel) {
     struct term_state *tt = term_active();
+    uint32_t vis = 0;
+    if (active_term >= 0 && active_term < MAX_WINS && wins[active_term].open)
+        term_visible_rows(&wins[active_term], &vis);
     tt->scroll += wheel > 0 ? 3 : -3;
-    if (tt->scroll < 0)
-        tt->scroll = 0;
+    term_clamp_scroll(tt, vis);
     tt->full_redraw = 1;
     dirty_bits |= DIRTY_TERM;
     term_mark_active_surf_dirty();
+}
+
+int desktop_terminal_click(struct win *w, int32_t mx, int32_t my, int drag) {
+    int slot = (int)(w - wins);
+    if (slot < 0 || slot >= MAX_WINS)
+        return 0;
+    struct term_state *t = &terms[slot];
+    if (!t->inited)
+        desktop_term_reset_slot(slot);
+    desktop_term_activate(slot);
+    int lr = 0, col = 0;
+    if (!term_mouse_cell(w, t, mx, my, &lr, &col))
+        return 0;
+    if (lr != (int)t->row) {
+        if (!drag)
+            t->sel_a = t->sel_b = -1;
+    } else if (drag) {
+        if (t->sel_a < 0) {
+            t->sel_a = col;
+            t->sel_b = col;
+        } else if (col < t->sel_a) {
+            t->sel_a = col;
+        } else {
+            t->sel_b = col;
+        }
+    } else {
+        t->sel_a = col;
+        t->sel_b = col;
+    }
+    t->full_redraw = 1;
+    dirty_bits |= DIRTY_TERM;
+    term_mark_surf_dirty(slot, t);
+    return 1;
 }

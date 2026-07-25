@@ -29,15 +29,28 @@ void notify_clear(void) {
 void notify_push(const char *msg) {
     if (!msg)
         return;
+    for (int i = 0; i < NOTIFY_MAX; i++) {
+        if (toasts[i].used && !strcmp(toasts[i].msg, msg)) {
+            toasts[i].until = timer_ticks() + NOTIFY_TTL;
+            toast_dirty = 1;
+            return;
+        }
+    }
     int slot = -1;
+    uint64_t oldest = (uint64_t)-1;
+    int oldest_i = 0;
     for (int i = 0; i < NOTIFY_MAX; i++) {
         if (!toasts[i].used) {
             slot = i;
             break;
         }
+        if (toasts[i].until < oldest) {
+            oldest = toasts[i].until;
+            oldest_i = i;
+        }
     }
     if (slot < 0)
-        slot = 0;
+        slot = oldest_i;
     size_t i = 0;
     for (; msg[i] && i + 1 < NOTIFY_MSG; i++)
         toasts[slot].msg[i] = msg[i];
@@ -45,6 +58,15 @@ void notify_push(const char *msg) {
     toasts[slot].until = timer_ticks() + NOTIFY_TTL;
     toasts[slot].used = 1;
     toast_dirty = 1;
+}
+
+void notify_push_clipboard(const char *what) {
+    char msg[NOTIFY_MSG];
+    if (what && what[0])
+        snprintf(msg, sizeof(msg), "Copied %s to clipboard", what);
+    else
+        snprintf(msg, sizeof(msg), "Copied to clipboard");
+    notify_push(msg);
 }
 
 void notify_tick(void) {
@@ -81,7 +103,6 @@ void notify_bounds(uint32_t screen_w, uint32_t *x, uint32_t *y, uint32_t *w, uin
     for (int i = 0; i < NOTIFY_MAX; i++)
         if (toasts[i].used)
             n++;
-    /* When the last toast clears, keep prior strip height so erase covers all. */
     if (n < 1)
         n = last_n > 0 ? last_n : 1;
     else

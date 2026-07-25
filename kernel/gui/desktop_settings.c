@@ -12,6 +12,49 @@
 
 static int privacy_kill_arm;
 
+enum settings_hit_act {
+    SHIT_NONE = 0,
+    SHIT_TAB,
+    SHIT_SCALE,
+    SHIT_THEME,
+    SHIT_WALLPAPER,
+    SHIT_BRAND,
+    SHIT_CLOCK,
+    SHIT_PERSIST,
+    SHIT_KILLSW,
+    SHIT_CLEAR_SESSION,
+    SHIT_TLS_TOFU,
+    SHIT_TLS_FORGET,
+    SHIT_NETCTL,
+};
+
+struct settings_hit {
+    uint32_t x, y, w, h;
+    enum settings_hit_act act;
+    int param;
+};
+
+#define SETTINGS_HIT_MAX 20
+static struct settings_hit settings_hits[SETTINGS_HIT_MAX];
+static int settings_hit_n;
+
+static void settings_hits_reset(void) {
+    settings_hit_n = 0;
+}
+
+static void settings_hit_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
+                             enum settings_hit_act act, int param) {
+    if (settings_hit_n >= SETTINGS_HIT_MAX)
+        return;
+    settings_hits[settings_hit_n].x = x;
+    settings_hits[settings_hit_n].y = y;
+    settings_hits[settings_hit_n].w = w;
+    settings_hits[settings_hit_n].h = h;
+    settings_hits[settings_hit_n].act = act;
+    settings_hits[settings_hit_n].param = param;
+    settings_hit_n++;
+}
+
 static const char *persist_profile_label(int profile) {
     switch (profile) {
     case 0: return "private (RAM only)";
@@ -33,6 +76,8 @@ static const char *general_disk_summary(void) {
 }
 
 void desktop_settings_draw(struct win *w) {
+    settings_hits_reset();
+
     uint32_t ch = fb_cell_h();
     uint32_t th = desktop_title_h();
     uint32_t pad = desktop_u(12);
@@ -53,6 +98,7 @@ void desktop_settings_draw(struct win *w) {
         uint32_t fg = (i == settings_page) ? desktop_color_bg() : desktop_color_fg();
         fb_fill_rect(tabx, ty, tab_w - desktop_u(4), ch + desktop_u(6), bg);
         fb_draw_string_fit(tabx + desktop_u(4), ty + desktop_u(3), tab_w - desktop_u(8), tabs[i], fg, bg);
+        settings_hit_add(tabx, ty, tab_w - desktop_u(4), ch + desktop_u(6), SHIT_TAB, i);
     }
 
     uint32_t cy = ty + ch + desktop_u(16);
@@ -60,6 +106,7 @@ void desktop_settings_draw(struct win *w) {
 
     if (settings_page == 0) {
         fb_draw_string(tx, cy, "UI scale (click):", desktop_color_fg(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row * 2, SHIT_SCALE, 0);
         cy += row;
         snprintf(line, sizeof(line), "%ux  (recommended %ux)",
                  (unsigned)settings_gui_scale(),
@@ -81,10 +128,12 @@ void desktop_settings_draw(struct win *w) {
         fb_draw_string(tx, cy, "Drag the title bar to move.", desktop_color_fg(), desktop_color_bg());
     } else if (settings_page == 1) {
         fb_draw_string(tx, cy, "Theme (click):", desktop_color_fg(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row * 2, SHIT_THEME, 0);
         cy += row;
         fb_draw_string(tx, cy, theme_name(), desktop_color_accent(), desktop_color_bg());
         cy += row * 2;
         fb_draw_string(tx, cy, "Wallpaper (click):", desktop_color_fg(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row * 2, SHIT_WALLPAPER, 0);
         cy += row;
         const char *wp = wallpaper_enabled() ? wallpaper_path() : "none (solid theme)";
         const char *wp_show = wp;
@@ -94,10 +143,12 @@ void desktop_settings_draw(struct win *w) {
         fb_draw_string(tx, cy, wp_show, desktop_color_accent(), desktop_color_bg());
         cy += row * 2;
         fb_draw_string(tx, cy, "Desktop brand label (click):", desktop_color_fg(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row * 2, SHIT_BRAND, 0);
         cy += row;
         fb_draw_string(tx, cy, settings_show_brand() ? "on" : "off", desktop_color_accent(), desktop_color_bg());
     } else if (settings_page == 2) {
         fb_draw_string(tx, cy, "Taskbar clock (click):", desktop_color_fg(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row * 2, SHIT_CLOCK, 0);
         cy += row;
         fb_draw_string(tx, cy, settings_show_clock() ? "on" : "off", desktop_color_accent(), desktop_color_bg());
         cy += row * 2;
@@ -114,6 +165,7 @@ void desktop_settings_draw(struct win *w) {
         fb_draw_string(tx, cy, "Change profile on Privacy tab.", desktop_color_dim(), desktop_color_bg());
     } else if (settings_page == 3) {
         fb_draw_string(tx, cy, "Persistence profile (click):", desktop_color_fg(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row * 2, SHIT_PERSIST, 0);
         cy += row;
         fb_draw_string(tx, cy, persist_profile_label(privacy_persist_profile()),
                        desktop_color_accent(), desktop_color_bg());
@@ -122,6 +174,7 @@ void desktop_settings_draw(struct win *w) {
                        desktop_color_bg());
         cy += row * 2;
         fb_draw_string(tx, cy, "Network kill switch (click):", desktop_color_fg(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row * 2, SHIT_KILLSW, 0);
         cy += row;
         if (privacy_kill_arm && !privacy_net_kill_switch()) {
             fb_draw_string(tx, cy, "click again to ENABLE (blocks all net)",
@@ -133,6 +186,7 @@ void desktop_settings_draw(struct win *w) {
         }
         cy += row * 2;
         fb_draw_string(tx, cy, "Clear session (click)", desktop_color_accent(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row * 2, SHIT_CLEAR_SESSION, 0);
         cy += row;
         fb_draw_string(tx, cy, "Revokes net grants, caps, clipboard, toasts.", desktop_color_dim(),
                        desktop_color_bg());
@@ -159,93 +213,101 @@ void desktop_settings_draw(struct win *w) {
         snprintf(line, sizeof(line), "Trust on first use (click): %s",
                  settings_tls_tofu() ? "on" : "off");
         fb_draw_string(tx, cy, line, desktop_color_accent(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row, SHIT_TLS_TOFU, 0);
         cy += row;
         fb_draw_string(tx, cy, "Forget saved TLS certificates (click)", desktop_color_accent(),
                        desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row, SHIT_TLS_FORGET, 0);
         cy += row * 2;
         fb_draw_string(tx, cy, "Clears certificate pins, TOFU cache, and HSTS.", desktop_color_dim(),
                        desktop_color_bg());
         cy += row * 2;
         fb_draw_string(tx, cy, "Open Net Control (click)", desktop_color_accent(), desktop_color_bg());
+        settings_hit_add(tx, cy, content_w, row * 2, SHIT_NETCTL, 0);
         cy += row;
         fb_draw_string(tx, cy, "Privacy, kill switch, DHCP renew, RNG status.", desktop_color_dim(),
                        desktop_color_bg());
     }
-    (void)content_w;
+}
+
+static void settings_hit_dispatch(enum settings_hit_act act) {
+    switch (act) {
+    case SHIT_TAB:
+        break;
+    case SHIT_SCALE:
+        settings_cycle_gui_scale();
+        settings_persist();
+        desktop_rescale_windows();
+        break;
+    case SHIT_THEME:
+        theme_next();
+        theme_persist();
+        break;
+    case SHIT_WALLPAPER:
+        wallpaper_next();
+        wallpaper_persist();
+        break;
+    case SHIT_BRAND:
+        settings_toggle_brand();
+        settings_persist();
+        break;
+    case SHIT_CLOCK:
+        settings_toggle_clock();
+        settings_persist();
+        break;
+    case SHIT_PERSIST: {
+        int next = (privacy_persist_profile() + 1) % 3;
+        privacy_set_persist_profile(next);
+        break;
+    }
+    case SHIT_KILLSW:
+        if (privacy_net_kill_switch()) {
+            privacy_set_net_kill_switch(0);
+            privacy_kill_arm = 0;
+            notify_push("Kill switch off");
+        } else if (!privacy_kill_arm) {
+            privacy_kill_arm = 1;
+            notify_push("Click kill switch again to confirm");
+        } else {
+            privacy_set_net_kill_switch(1);
+            privacy_kill_arm = 0;
+            notify_push("Kill switch on — network blocked");
+        }
+        break;
+    case SHIT_CLEAR_SESSION:
+        privacy_kill_arm = 0;
+        privacy_clear_session();
+        notify_push("Session cleared");
+        break;
+    case SHIT_TLS_TOFU:
+        settings_toggle_tls_tofu();
+        settings_persist();
+        break;
+    case SHIT_TLS_FORGET:
+        tls_trust_clear_all();
+        break;
+    case SHIT_NETCTL:
+        desktop_open_app(APP_NETCTL);
+        break;
+    default:
+        break;
+    }
 }
 
 int desktop_settings_click(struct win *w, int32_t mx, int32_t my) {
-    uint32_t ch = fb_cell_h();
-    uint32_t pad = desktop_u(12);
-    uint32_t row_h = ch + desktop_u(4);
-    uint32_t content_w = w->w > pad * 2 ? w->w - pad * 2 : w->w;
-    uint32_t tab_w = content_w / SETTINGS_PAGES;
-    if (tab_w < desktop_u(56))
-        tab_w = desktop_u(56);
-    uint32_t tabs_y = w->y + desktop_title_h() + pad;
-    uint32_t tabs_h = ch + desktop_u(6);
-    uint32_t body_y = tabs_y + ch + desktop_u(16);
-    if (desktop_point_in(mx, my, w->x + pad, tabs_y, tab_w * SETTINGS_PAGES, tabs_h)) {
-        int tab = (int)((mx - (int32_t)(w->x + pad)) / (int32_t)tab_w);
-        if (tab >= 0 && tab < SETTINGS_PAGES)
-            settings_page = tab;
-    } else if (settings_page == 0) {
-        if (my >= (int32_t)body_y && my < (int32_t)(body_y + row_h * 2)) {
-            settings_cycle_gui_scale();
-            settings_persist();
-            desktop_rescale_windows();
-        }
-    } else if (settings_page == 1) {
-        int row = (int)((my - (int32_t)body_y) / (int32_t)row_h);
-        if (row <= 1) {
-            theme_next();
-            theme_persist();
-        } else if (row <= 4) {
-            wallpaper_next();
-            wallpaper_persist();
+    for (int i = 0; i < settings_hit_n; i++) {
+        struct settings_hit *h = &settings_hits[i];
+        if (!desktop_point_in(mx, my, h->x, h->y, h->w, h->h))
+            continue;
+        if (h->act == SHIT_TAB) {
+            if (h->param >= 0 && h->param < SETTINGS_PAGES)
+                settings_page = h->param;
         } else {
-            settings_toggle_brand();
-            settings_persist();
+            settings_hit_dispatch(h->act);
         }
-    } else if (settings_page == 2) {
-        if (my >= (int32_t)body_y && my < (int32_t)(body_y + row_h * 2)) {
-            settings_toggle_clock();
-            settings_persist();
-        }
-    } else if (settings_page == 3) {
-        int row = (int)((my - (int32_t)body_y) / (int32_t)row_h);
-        if (row <= 1) {
-            int next = (privacy_persist_profile() + 1) % 3;
-            privacy_set_persist_profile(next);
-        } else if (row <= 4) {
-            if (privacy_net_kill_switch()) {
-                privacy_set_net_kill_switch(0);
-                privacy_kill_arm = 0;
-                notify_push("Kill switch off");
-            } else if (!privacy_kill_arm) {
-                privacy_kill_arm = 1;
-                notify_push("Click kill switch again to confirm");
-            } else {
-                privacy_set_net_kill_switch(1);
-                privacy_kill_arm = 0;
-                notify_push("Kill switch on — network blocked");
-            }
-        } else if (row >= 6) {
-            privacy_kill_arm = 0;
-            privacy_clear_session();
-            notify_push("Session cleared");
-        }
-    } else if (settings_page == 4) {
-        int row = (int)((my - (int32_t)body_y) / (int32_t)row_h);
-        if (row == 6) {
-            settings_toggle_tls_tofu();
-            settings_persist();
-        } else if (row == 7) {
-            tls_trust_clear_all();
-        } else if (row == 9) {
-            desktop_open_app(APP_NETCTL);
-        }
+        dirty_bits |= DIRTY_FULL;
+        return 1;
     }
-    dirty_bits |= DIRTY_FULL;
-    return 1;
+    (void)w;
+    return 0;
 }

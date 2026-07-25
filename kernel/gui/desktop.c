@@ -88,6 +88,8 @@ void desktop_run(void) {
     uint64_t last_click_tick = 0;
     uint64_t last_input_tick = timer_ticks();
     int32_t last_click_x = -1, last_click_y = -1;
+    int term_select_drag = 0;
+    int term_select_win = -1;
     struct framebuffer *fb = fb_get();
 
     for (;;) {
@@ -394,6 +396,10 @@ void desktop_run(void) {
                                 move_prev_valid = 1;
                                 desktop_opaque_move_begin(i);
                             }
+                        } else if (w->kind == APP_TERM) {
+                            desktop_terminal_click(w, m.x, m.y, 0);
+                            term_select_drag = 1;
+                            term_select_win = i;
                         } else if (w->kind == APP_SETTINGS) {
                             desktop_settings_click(w, m.x, m.y);
                         } else if (w->kind == APP_FILES) {
@@ -422,6 +428,8 @@ void desktop_run(void) {
             mouse_clear_clicks();
         }
         if (m.left_released) {
+            term_select_drag = 0;
+            term_select_win = -1;
             if (dragging) {
                 if (focus >= 0 && m.x < (int32_t)desktop_u(8)) {
                     wins[focus].x = 0;
@@ -463,6 +471,10 @@ void desktop_run(void) {
             band_live = 0;
             move_prev_valid = 0;
             mouse_clear_clicks();
+        }
+        if (term_select_drag && term_select_win >= 0 && (m.buttons & 1) &&
+            wins[term_select_win].open && wins[term_select_win].kind == APP_TERM) {
+            desktop_terminal_click(&wins[term_select_win], m.x, m.y, 1);
         }
         if (dragging && focus >= 0 && (m.buttons & 1)) {
             int32_t nx = m.x - drag_off_x;
