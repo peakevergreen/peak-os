@@ -173,3 +173,152 @@ int ucurl_main(int argc, char **argv) {
     av[ac] = 0;
     return uwget_main(ac, av);
 }
+
+int unslookup_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("nslookup", "<hostname>");
+        return argc < 2 ? 1 : 0;
+    }
+    if (!net_ready()) {
+        peak_perror("nslookup", "network down");
+        return 1;
+    }
+    struct net_info ni;
+    net_get_info(&ni);
+    char dns[32];
+    net_format_ip(ni.dns, dns, sizeof(dns));
+    console_printf("Server:\t%s\n", dns);
+    console_printf("Name:\t%s\n", argv[1]);
+    uint32_t ip = net_dns_resolve(argv[1], 400);
+    if (!ip) {
+        net_print_failure("nslookup", "DNS failed");
+        return 1;
+    }
+    char addr[32];
+    net_format_ip(ip, addr, sizeof(addr));
+    console_printf("Address:\t%s\n", addr);
+    return 0;
+}
+
+int uhost_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("host", "<hostname>");
+        return argc < 2 ? 1 : 0;
+    }
+    if (!net_ready()) {
+        peak_perror("host", "network down");
+        return 1;
+    }
+    uint32_t ip = net_dns_resolve(argv[1], 400);
+    if (!ip) {
+        net_print_failure("host", "DNS failed");
+        return 1;
+    }
+    char addr[32];
+    net_format_ip(ip, addr, sizeof(addr));
+    console_printf("%s has address %s\n", argv[1], addr);
+    return 0;
+}
+
+/* Parse host:port or host port. Returns 0 and fills ip/port; -2 if net down. */
+static int nc_parse_target(int argc, char **argv, uint32_t *ip, uint16_t *port) {
+    char hostbuf[96];
+    int port_i = 0;
+    hostbuf[0] = '\0';
+    if (argc >= 3 && argv[1][0] != '-') {
+        size_t hl = strlen(argv[1]);
+        if (hl >= sizeof(hostbuf))
+            return -1;
+        memcpy(hostbuf, argv[1], hl + 1);
+        port_i = peak_atoi(argv[2]);
+    } else if (argc >= 2) {
+        const char *s = argv[1];
+        const char *colon = s;
+        while (*colon && *colon != ':')
+            colon++;
+        if (!*colon || colon == s)
+            return -1;
+        size_t hl = (size_t)(colon - s);
+        if (hl >= sizeof(hostbuf))
+            return -1;
+        memcpy(hostbuf, s, hl);
+        hostbuf[hl] = '\0';
+        port_i = peak_atoi(colon + 1);
+    } else {
+        return -1;
+    }
+    if (!hostbuf[0] || port_i <= 0 || port_i >= 65536)
+        return -1;
+    if (!net_ready())
+        return -2;
+    *ip = net_dns_resolve(hostbuf, 400);
+    *port = (uint16_t)port_i;
+    return *ip ? 0 : -1;
+}
+
+int unc_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("nc", "<host> <port> | <host:port>");
+        return argc < 2 ? 1 : 0;
+    }
+    uint32_t ip = 0;
+    uint16_t port = 0;
+    int pr = nc_parse_target(argc, argv, &ip, &port);
+    if (pr == -2) {
+        peak_perror("nc", "network down");
+        return 1;
+    }
+    if (pr != 0) {
+        peak_perror("nc", "bad host/port or DNS failed");
+        return 1;
+    }
+    char addr[32];
+    net_format_ip(ip, addr, sizeof(addr));
+    console_printf("nc: connect %s:%u\n", addr, (unsigned)port);
+    if (net_tcp_connect(ip, port, 400) != 0) {
+        net_print_failure("nc", "connect failed");
+        return 1;
+    }
+    /* Optional one-shot send from remaining argv joined, else stdin path. */
+    char payload[512];
+    size_t plen = 0;
+    int has_colon = 0;
+    for (const char *p = argv[1]; *p; p++) {
+        if (*p == ':') {
+            has_colon = 1;
+            break;
+        }
+    }
+    if (argc >= 4 && argv[1][0] != '-' && !has_colon) {
+        plen = peak_join_args(argc, argv, 3, payload, sizeof(payload));
+        if (plen == (size_t)-1)
+            plen = 0;
+    } else {
+        const char *sin = shell_stdin_path();
+        if (sin) {
+            size_t n = 0;
+            if (vfs_read_file(sin, payload, sizeof(payload) - 1, &n) == 0) {
+                payload[n] = '\0';
+                plen = n;
+            }
+        }
+    }
+    if (plen > 0) {
+        if (net_tcp_send(payload, plen) != 0) {
+            net_print_failure("nc", "send failed");
+            net_tcp_close();
+            return 1;
+        }
+    }
+    char rbuf[1024];
+    size_t got = 0;
+    if (net_tcp_recv(rbuf, sizeof(rbuf) - 1, &got, 200) == 0 && got > 0) {
+        rbuf[got] = '\0';
+        for (size_t i = 0; i < got; i++)
+            console_putc(rbuf[i]);
+        if (rbuf[got - 1] != '\n')
+            console_write("\n");
+    }
+    net_tcp_close();
+    return 0;
+}

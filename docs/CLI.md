@@ -96,6 +96,8 @@ No match leaves the pattern unchanged. Max 16 argv slots after expansion.
 | Command | Notes |
 |---------|-------|
 | `ifconfig` `ping` `wget` `curl` | IPv4 + HTTP — [network.md](network.md) |
+| `nslookup` `host` | DNS A lookup |
+| `nc` | TCP connect (`host port` or `host:port`; optional send + recv) |
 | `tar -c` / `tar -x` | ustar archive create/extract (64 KiB cap) |
 | `ctr` `ctrd` | Dockerfile staging / static HTTP (not OCI) — [containers.md](containers.md) |
 

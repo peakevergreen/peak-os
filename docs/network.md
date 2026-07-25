@@ -16,6 +16,8 @@ Bootloaders parse [`boot/peak.conf`](../boot/peak.conf) into BootInfo:
 
 `ifconfig` prints the active mode (`dhcp`, `static`, or `fallback`).
 
+Guest DNS / TCP helpers: `nslookup` / `host` (A record via `net_dns_resolve`), `nc` (TCP connect, optional send + short recv).
+
 ## QEMU modes
 
 ### User-net (default — CI / smoke)
