@@ -41,7 +41,9 @@ int agent_tool_fs_stat(const char *path, char *out, size_t out_len);
 int agent_tool_fs_mkdir(const char *path);
 int agent_tool_fs_rm(const char *path);
 int agent_tool_fs_search(const char *needle, char *out, size_t out_len);
+int agent_tool_fs_grep(const char *needle, char *out, size_t out_len);
 int agent_tool_sys_info(char *out, size_t out_len);
+int agent_tool_net_ping(const char *host, char *out, size_t out_len);
 int agent_tool_mem_recall(const char *goal, char *out, size_t out_len);
 int agent_tool_audit_tail(char *out, size_t out_len);
 

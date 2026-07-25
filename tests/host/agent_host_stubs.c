@@ -9,6 +9,9 @@
 #include "ubin.h"
 #include "util.h"
 #include "sysmon.h"
+#include "privacy.h"
+#include "net.h"
+#include "timer.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +29,7 @@ struct host_file {
 static struct host_file g_files[HOST_VFS_FILES];
 static char g_dirs[16][VFS_PATH_MAX];
 static int g_dir_count;
+static int g_net_client_grant;
 
 void agent_host_vfs_reset(void) {
     for (int i = 0; i < HOST_VFS_FILES; i++) {
@@ -33,6 +37,7 @@ void agent_host_vfs_reset(void) {
         memset(&g_files[i], 0, sizeof(g_files[i]));
     }
     g_dir_count = 0;
+    g_net_client_grant = 0;
 }
 
 static struct host_file *host_find(const char *path) {
@@ -317,10 +322,21 @@ void sysmon_poll(void) {
     g_sysmon_sample.mem_pct = 50;
     g_sysmon_sample.heap_pct = 25;
     g_sysmon_sample.load_pct = 10;
+    g_sysmon_sample.idle_pct = 90;
     g_sysmon_sample.tasks = 3;
     g_sysmon_sample.rx_bps = 1024;
     g_sysmon_sample.tx_bps = 512;
     g_sysmon_sample.vfs_nodes = 12;
+    g_sysmon_sample.mem_used_pages = 32;
+    g_sysmon_sample.heap_used = 4096;
+    g_sysmon_sample.ctx_switches = 100;
+    g_sysmon_sample.irq_count = 50;
+    g_sysmon_sample.gui_fps = 60;
+    g_sysmon_sample.surf_pressure = 30;
+    g_sysmon_sample.compose_us = 1200;
+    g_sysmon_sample.present_us = 500;
+    g_sysmon_sample.peakvec_us = 100;
+    g_sysmon_sample.agent_audit_us = 50;
 }
 
 const struct sysmon_sample *sysmon_latest(void) {
@@ -333,13 +349,46 @@ void sysmon_format_rate(uint32_t bps, char *buf, size_t cap) {
     snprintf(buf, cap, "%ubps", (unsigned)bps);
 }
 
-void sysmon_note_agent_audit_us(uint32_t us) {
-    (void)us;
+void sysmon_format_bytes(uint64_t n, char *buf, size_t cap) {
+    if (!buf || cap == 0)
+        return;
+    snprintf(buf, cap, "%luB", (unsigned long)n);
 }
 
-void sysmon_note_peakvec_us(uint32_t us) {
-    (void)us;
+void sysmon_format_us(uint32_t us, char *buf, size_t cap) {
+    if (!buf || cap == 0)
+        return;
+    snprintf(buf, cap, "%uus", (unsigned)us);
 }
+
+void sysmon_note_agent_audit_us(uint32_t us) { (void)us; }
+void sysmon_note_peakvec_us(uint32_t us) { (void)us; }
+
+void privacy_init(void) { g_net_client_grant = 0; }
+void privacy_clear_session(void) { g_net_client_grant = 0; }
+int privacy_persist_profile(void) { return 0; }
+void privacy_set_persist_profile(int profile) { (void)profile; }
+int privacy_net_kill_switch(void) { return 0; }
+void privacy_set_net_kill_switch(int on) { (void)on; }
+int privacy_net_client_allowed(void) { return g_net_client_grant; }
+void privacy_grant_net_client(int remember) { (void)remember; g_net_client_grant = 1; }
+int privacy_net_listen_allowed(int lan) { (void)lan; return 0; }
+void privacy_grant_net_listen(int lan, int remember) { (void)lan; (void)remember; }
+int privacy_listeners_localhost_only(void) { return 1; }
+void privacy_set_listeners_localhost_only(int on) { (void)on; }
+int net_ready(void) { return 1; }
+uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
+    (void)hostname; (void)timeout_ticks; return 0x08080808u;
+}
+int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
+    (void)ip; (void)port; (void)timeout_ticks; return 0;
+}
+void net_tcp_close(void) {}
+void net_format_ip(uint32_t ip, char *buf, size_t cap) {
+    (void)ip; if (buf && cap) snprintf(buf, cap, "8.8.8.8");
+}
+const char *net_last_error(void) { return NULL; }
+uint64_t timer_ticks(void) { return 10; }
 
 /* agent_tools fs.exec resolves /bin commands via ubin; host tests only need linkage. */
 int ubin_run(const char *path, int argc, char **argv) {
