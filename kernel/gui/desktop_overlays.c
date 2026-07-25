@@ -98,7 +98,8 @@ void desktop_draw_help(void) {
         "Wheel scrolls Files/Term/Browser",
         "Peak menu: Save disk / Power off",
         "Esc closes menus (not desktop)",
-        "Click title buttons: _ [] x",
+        "Right-click desktop, taskbar, windows",
+        "Title buttons: _ [] x",
     };
     for (int i = 0; i < 11; i++) {
         fb_draw_string(mx + desktop_u(12), cy, lines[i], i == 0 ? desktop_color_accent() : desktop_color_fg(), desktop_color_surface());

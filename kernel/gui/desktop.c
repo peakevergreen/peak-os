@@ -50,6 +50,8 @@ void desktop_init(void) {
     focus = -1;
     menu_open = 0;
     ctx_menu = 0;
+    ctx_item_count = 0;
+    ctx_spec.hover_row = -1;
     dragging = 0;
     resizing = 0;
     resize_edge = 0;
@@ -230,15 +232,22 @@ void desktop_run(void) {
         }
 
         if (m.right_pressed) {
-            desktop_menus_open_ctx(m.x, m.y);
+            enum ctx_target target;
+            int win_idx = -1;
+            if (desktop_menus_ctx_hit_test(m.x, m.y, &target, &win_idx))
+                desktop_menus_open_ctx_target(m.x, m.y, target, win_idx);
             mouse_clear_clicks();
         }
 
+        if (ctx_menu)
+            desktop_menus_ctx_hover(m.x, m.y);
+
         if (m.left_pressed) {
             uint64_t now = timer_ticks();
+            int32_t dbl_slop = (int32_t)desktop_u(8);
             int dbl = (now - last_click_tick < 30) &&
-                      (m.x - last_click_x < 8) && (m.x - last_click_x > -8) &&
-                      (m.y - last_click_y < 8) && (m.y - last_click_y > -8);
+                      (m.x - last_click_x < dbl_slop) && (m.x - last_click_x > -dbl_slop) &&
+                      (m.y - last_click_y < dbl_slop) && (m.y - last_click_y > -dbl_slop);
             last_click_tick = now;
             last_click_x = m.x;
             last_click_y = m.y;
@@ -260,27 +269,22 @@ void desktop_run(void) {
                 /* Peak start button toggled */
             } else if (menu_open) {
                 desktop_menu_click(m.x, m.y);
-                dirty_bits |= DIRTY_FULL;
-            } else if (desktop_point_in(m.x, m.y, desktop_u(70), ty, (uint32_t)fb->width - desktop_u(180), th)) {
-                uint32_t bx = desktop_u(70);
-                uint32_t bw = desktop_taskbar_btn_w();
-                for (int i = 0; i < MAX_WINS; i++) {
-                    if (!wins[i].open)
-                        continue;
-                    if (desktop_point_in(m.x, m.y, bx, ty, bw - desktop_u(4), th)) {
-                        if (wins[i].minimized || focus != i) {
-                            wins[i].minimized = 0;
-                            desktop_raise_win(i);
+            } else {
+                int tb_win = -1;
+                int tb_overflow = 0;
+                if (desktop_taskbar_hit_button(m.x, m.y, &tb_win, &tb_overflow)) {
+                    if (tb_overflow)
+                        desktop_taskbar_raise_overflow();
+                    else if (tb_win >= 0) {
+                        if (wins[tb_win].minimized || focus != tb_win) {
+                            wins[tb_win].minimized = 0;
+                            desktop_raise_win(tb_win);
                         } else {
-                            desktop_minimize_win(i);
+                            desktop_minimize_win(tb_win);
                         }
                         sound_ui_click();
-                        break;
                     }
-                    bx += bw;
-                }
-                dirty_bits |= DIRTY_FULL;
-            } else {
+                } else {
                 int order[MAX_WINS], n = 0;
                 for (int i = 0; i < MAX_WINS; i++)
                     if (wins[i].open && !wins[i].minimized)
@@ -371,6 +375,7 @@ void desktop_run(void) {
                             dirty_bits |= DIRTY_FULL;
                         break;
                     }
+                }
                 }
             }
             mouse_clear_clicks();
