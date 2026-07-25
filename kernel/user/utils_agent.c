@@ -3,6 +3,7 @@
 #include "shell.h"
 #include "console.h"
 #include "agent.h"
+#include "util.h"
 
 int upeak_main(int argc, char **argv) {
     (void)argc;
