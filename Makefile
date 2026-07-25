@@ -178,6 +178,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/browser.c \
 	kernel/gui/browser_draw.c \
 	kernel/gui/browser_nav.c \
+	kernel/gui/browser_bookmarks.c \
 	kernel/gui/monitor.c
 
 KERNEL_COMMON_ASMS := kernel/wallpaper_data.S

@@ -8,6 +8,7 @@ void browser_input(char c);
 void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h);
 void browser_go(const char *url);
 void browser_back(void);
+void browser_forward(void);
 void browser_reload(void);
 /* Click in browser content coords (relative to draw origin). */
 void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h);

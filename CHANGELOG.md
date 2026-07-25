@@ -31,6 +31,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Terminal (Pass 14):** scrollback indicator, select/copy/paste, per-window buffers, context menu
 - **Settings (Pass 15):** explicit hit rects, context menus for Settings/Agent/Monitor
 - **Browser + notify (Pass 16):** fetch progress bar, error retry CTA, browser context menu, toast damage thrift
+- **Pass 30:** Browser back/forward chrome, VFS bookmarks (`/var/peak/bookmarks`), JS console panel, TLS/net error detail on error pages
 - **Monitor + CLI (Pass 18):** readable compose/present timing, improved `memory`/`audit` output
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
@@ -69,6 +70,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Peak JS bytecode VM, DOM/CSS subset, `peak://demo`
 - In-guest IPv4 DHCP/DNS/TCP/TLS/HTTP; e1000 on PC; LAN web-demo containers
 - **Pass 24 (TLS/WebPKI polish):** `tls_err_name()` + RFC alert names; `[tag]` prefixes on structured TLS errors; `tlsinfo` CLI; `webpki_root_sha256()` root listing; ECH full HPKE remains NYI (scaffold fail-closed only)
+- **Pass 30 (Browser + Peak JS UX):** back/forward toolbar + **b**/**f** keys; VFS bookmarks bar + context menu; JS console panel (`console.log` capture); TLS/net error pages use `tls_last_error()` + `net_last_error()`
 
 ### Raspberry Pi
 

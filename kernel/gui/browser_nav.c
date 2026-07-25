@@ -154,6 +154,19 @@ void browser_input(char c) {
             browser_go(t->url);
             return;
         }
+        if (c == 'b' || c == 'B') {
+            browser_back();
+            return;
+        }
+        if (c == 'f' || c == 'F') {
+            browser_forward();
+            return;
+        }
+        if (c == 'c' || c == 'C') {
+            t->show_console = !t->show_console;
+            needs_redraw = 1;
+            return;
+        }
         if (c == 'l' || c == 'L' || c == 'g' || c == 'G') {
             editing = 1;
             needs_redraw = 1;
@@ -197,6 +210,16 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
     }
 
     if ((uint32_t)ly >= hit_bar_y && (uint32_t)ly < hit_bar_y + hit_bar_h) {
+        if (hit_back_w > 0 && (uint32_t)lx >= hit_back_x &&
+            (uint32_t)lx < hit_back_x + hit_back_w) {
+            browser_back();
+            return;
+        }
+        if (hit_fwd_w > 0 && (uint32_t)lx >= hit_fwd_x &&
+            (uint32_t)lx < hit_fwd_x + hit_fwd_w) {
+            browser_forward();
+            return;
+        }
         if ((uint32_t)lx >= hit_go_x && (uint32_t)lx < hit_go_x + hit_go_w) {
             browser_go(browser_cur()->url);
             editing = 0;
@@ -205,6 +228,16 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
         editing = 1;
         needs_redraw = 1;
         return;
+    }
+
+    if (hit_bm_h > 0 && (uint32_t)ly >= hit_bm_y && (uint32_t)ly < hit_bm_y + hit_bm_h) {
+        for (int i = 0; i < 4; i++) {
+            if (hit_bm_w[i] > 0 && (uint32_t)lx >= hit_bm_x[i] &&
+                (uint32_t)lx < hit_bm_x[i] + hit_bm_w[i]) {
+                browser_bookmark_go(i);
+                return;
+            }
+        }
     }
 
     struct br_tab *t = browser_cur();
@@ -218,6 +251,8 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
         uint32_t ch = fb_cell_h();
         uint32_t pad = 6;
         uint32_t chrome_h = hit_tab_h + ch + pad * 2 + 8;
+        if (hit_bm_h > 0)
+            chrome_h += hit_bm_h + 4;
         int32_t py = ly - (int32_t)chrome_h - (int32_t)pad + t->scroll_y;
         int32_t px = lx - (int32_t)pad - 4;
         for (int i = 0; i < t->nboxes; i++) {
@@ -241,10 +276,25 @@ void browser_back(void) {
     if (t->prev_url[0]) {
         char back[BR_URL_MAX];
         snprintf(back, sizeof(back), "%s", t->prev_url);
-        t->prev_url[0] = '\0';
+        snprintf(t->forward_url, sizeof(t->forward_url), "%s", t->url);
+        t->prev_url[0] = ' ';
         browser_go(back);
     } else {
         snprintf(t->status, sizeof(t->status), "No previous page");
+        needs_redraw = 1;
+    }
+}
+
+void browser_forward(void) {
+    struct br_tab *t = browser_cur();
+    if (t->forward_url[0]) {
+        char fwd[BR_URL_MAX];
+        snprintf(fwd, sizeof(fwd), "%s", t->forward_url);
+        snprintf(t->prev_url, sizeof(t->prev_url), "%s", t->url);
+        t->forward_url[0] = ' ';
+        browser_go(fwd);
+    } else {
+        snprintf(t->status, sizeof(t->status), "No forward page");
         needs_redraw = 1;
     }
 }
@@ -256,34 +306,63 @@ void browser_reload(void) {
 }
 
 int browser_ctx_menu(struct ctx_menu_item *items, int max_items) {
-    if (!items || max_items < 6)
+    if (!items || max_items < 8)
         return 0;
     struct br_tab *t = browser_cur();
     items[0].label = "Back";
-    items[0].enabled = t->prev_url[0] != '\0';
+    items[0].enabled = t->prev_url[0] != ' ';
     items[0].separator = 0;
     items[0].action_id = CTX_ACT_BROWSER_BACK;
-    items[1].label = "Reload";
-    items[1].enabled = 1;
+    items[1].label = "Forward";
+    items[1].enabled = t->forward_url[0] != ' ';
     items[1].separator = 0;
-    items[1].action_id = CTX_ACT_BROWSER_RELOAD;
-    items[2].label = "Copy URL";
-    items[2].enabled = t->url[0] != '\0';
+    items[1].action_id = CTX_ACT_BROWSER_FORWARD;
+    items[2].label = "Reload";
+    items[2].enabled = 1;
     items[2].separator = 0;
-    items[2].action_id = CTX_ACT_BROWSER_COPY_URL;
-    items[3].label = "New tab";
-    items[3].enabled = ntabs < BR_MAX_TABS;
+    items[2].action_id = CTX_ACT_BROWSER_RELOAD;
+    items[3].label = "Add bookmark";
+    items[3].enabled = t->url[0] != ' ';
     items[3].separator = 0;
-    items[3].action_id = CTX_ACT_BROWSER_NEW_TAB;
-    items[4].label = NULL;
-    items[4].enabled = 0;
-    items[4].separator = 1;
-    items[4].action_id = CTX_ACT_NONE;
-    items[5].label = "Close window";
-    items[5].enabled = 1;
+    items[3].action_id = CTX_ACT_BROWSER_BOOKMARK;
+    items[4].label = "Copy URL";
+    items[4].enabled = t->url[0] != ' ';
+    items[4].separator = 0;
+    items[4].action_id = CTX_ACT_BROWSER_COPY_URL;
+    items[5].label = "New tab";
+    items[5].enabled = ntabs < BR_MAX_TABS;
     items[5].separator = 0;
-    items[5].action_id = CTX_ACT_CLOSE;
-    return 6;
+    items[5].action_id = CTX_ACT_BROWSER_NEW_TAB;
+    int n = 6;
+    int bm = browser_bookmark_count();
+    if (bm > 0 && n + 1 < max_items) {
+        items[n].label = NULL;
+        items[n].enabled = 0;
+        items[n].separator = 1;
+        items[n].action_id = CTX_ACT_NONE;
+        n++;
+    }
+    for (int i = 0; i < bm && i < 6 && n < max_items - 2; i++) {
+        const char *title = browser_bookmark_title(i);
+        items[n].label = title ? title : "Bookmark";
+        items[n].enabled = 1;
+        items[n].separator = 0;
+        items[n].action_id = CTX_ACT_BROWSER_BM_BASE + i;
+        n++;
+    }
+    if (n < max_items) {
+        items[n].label = NULL;
+        items[n].enabled = 0;
+        items[n].separator = 1;
+        items[n].action_id = CTX_ACT_NONE;
+        n++;
+        items[n].label = "Close window";
+        items[n].enabled = 1;
+        items[n].separator = 0;
+        items[n].action_id = CTX_ACT_CLOSE;
+        n++;
+    }
+    return n;
 }
 
 int browser_ctx_action(int action_id) {
@@ -292,8 +371,20 @@ int browser_ctx_action(int action_id) {
     case CTX_ACT_BROWSER_BACK:
         browser_back();
         return 1;
+    case CTX_ACT_BROWSER_FORWARD:
+        browser_forward();
+        return 1;
     case CTX_ACT_BROWSER_RELOAD:
         browser_reload();
+        return 1;
+    case CTX_ACT_BROWSER_BOOKMARK:
+        if (browser_bookmark_add(t->url, t->title[0] ? t->title : NULL) == 0) {
+            snprintf(t->status, sizeof(t->status), "Bookmark saved");
+            needs_redraw = 1;
+        } else {
+            snprintf(t->status, sizeof(t->status), "Bookmark list full");
+            needs_redraw = 1;
+        }
         return 1;
     case CTX_ACT_BROWSER_COPY_URL:
         if (t->url[0]) {
@@ -308,6 +399,11 @@ int browser_ctx_action(int action_id) {
         needs_redraw = 1;
         return 1;
     default:
+        if (action_id >= CTX_ACT_BROWSER_BM_BASE &&
+            action_id < CTX_ACT_BROWSER_BM_BASE + 16) {
+            browser_bookmark_go(action_id - CTX_ACT_BROWSER_BM_BASE);
+            return 1;
+        }
         return 0;
     }
 }
