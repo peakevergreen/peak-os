@@ -12,7 +12,8 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - BootInfo v4 (HHDM, framebuffer, mmap, optional DTB, net config, entropy flags)
 - `make purity` / CI purity gates
 - CI honesty: hard-fail fuzz/manifest/doctor; require BOOTX64 + kernel.elf PHDR; tighten aarch64 smoke markers; clear `net_up` on DHCP fail
-- CI gates: UEFI smoke, smoke-cli static gate, host `-Werror`, real ELF fuzz, PeakFS QEMU roundtrip (`smoke_persist`)
+- CI gates: UEFI smoke, smoke-cli static gate (Pass 19–34 markers), host `-Werror`, real ELF fuzz, PeakFS QEMU roundtrip (`smoke_persist`)
+- **Pass 38 (S9-lite):** smoke-cli enhancement-wave gates, ROADMAP/CHANGELOG sync, security-checklist automation notes
 - PeakDisk atomic publish (payload→header) + SDHCI CMD13 flush; DWC2 hub enum/split/hotplug; `/bin/disksave`
 - Quieter boot: status lines only (net IP folded into `e1000 (dhcp …)`; no chatter for JS/PeakVec/disk absence)
 - **S8 loader verify:** kernel SHA-256 vs `peak.conf` / embedded `SHA256SUMS`; optional `verify_sig=1` HMAC-SHA256 of manifest (dev key stub); host `sign-release.py` / `verify-release.py` remain the ceremony gate
@@ -37,6 +38,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 32 (notify/clipboard/overlays):** toast history ring, dismiss control, clipboard previous slot, Alt+Tab hints, login splash
 - **Monitor + CLI (Pass 18):** readable compose/present timing, improved `memory`/`audit` output
 - **Pass 34:** Monitor/sysmon sparkline legend + ranges, memory/heap breakdown, task sort, export to `/tmp/sysmon.txt`, CLI/GUI parity via `sysmon_snapshot`
+- **Pass 37:** Keyboard repeat tuning (PS/2 typematic + software repeat for USB), mouse acceleration lite, CLI scrollback search (Ctrl+F, 128 lines), clearer Ctrl+Alt+Esc CLI↔desktop hints
 - **Pass 29:** Files confirm-delete arm, Home/End + Shift range select, hardened open-with; Notepad line numbers, Ctrl+F find, Ctrl+H replace lite
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
