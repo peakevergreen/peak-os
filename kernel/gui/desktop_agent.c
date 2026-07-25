@@ -17,6 +17,8 @@ void desktop_agent_init(void) {
 void desktop_app_opened(enum app_kind k) {
     if (k == APP_AGENT)
         desktop_agent_init();
+    if (k == APP_NOTEPAD)
+        desktop_notepad_init();
 }
 
 void desktop_agent_draw(struct win *w) {
