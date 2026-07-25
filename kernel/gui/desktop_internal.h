@@ -80,11 +80,14 @@ enum ctx_target {
 #define CTX_ACT_NX_PING          (CTX_ACT_APP_BASE + 71)
 #define CTX_ACT_NX_NSLOOKUP      (CTX_ACT_APP_BASE + 72)
 #define CTX_ACT_NX_NETCTL        (CTX_ACT_APP_BASE + 73)
+#define CTX_ACT_NX_COPY_RESOLVED (CTX_ACT_APP_BASE + 74)
 #define CTX_ACT_NC_ALLOW         (CTX_ACT_APP_BASE + 80)
 #define CTX_ACT_NC_REVOKE        (CTX_ACT_APP_BASE + 81)
 #define CTX_ACT_NC_KILLSW        (CTX_ACT_APP_BASE + 82)
 #define CTX_ACT_NC_PERSIST       (CTX_ACT_APP_BASE + 83)
 #define CTX_ACT_NC_DHCP          (CTX_ACT_APP_BASE + 84)
+#define CTX_ACT_NC_COPY_IP       (CTX_ACT_APP_BASE + 85)
+#define CTX_ACT_NC_SETTINGS      (CTX_ACT_APP_BASE + 86)
 #define CTX_ACT_TERM_NEW         (CTX_ACT_APP_BASE + 0)
 #define CTX_ACT_TERM_COPY        (CTX_ACT_APP_BASE + 1)
 #define CTX_ACT_TERM_PASTE       (CTX_ACT_APP_BASE + 2)
@@ -277,6 +280,7 @@ int desktop_images_ctx_action(int action_id);
 void desktop_disks_init(void);
 void desktop_disks_show(void);
 void desktop_disks_draw(struct win *w);
+void desktop_disks_tick(void);
 int desktop_disks_key(int key);
 int desktop_disks_ctx_menu(struct ctx_menu_item *items, int max_items);
 int desktop_disks_ctx_action(int action_id);

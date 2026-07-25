@@ -28,6 +28,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Disks app (Pass 11):** PeakDisk status, VFS/PMM stats, confirmed disksave, context menu
 - **Net Explorer (Pass 12):** link/IP/DNS pane, ping & nslookup, context menu
 - **Net Control (Pass 13):** net-allow, kill switch, persist, DHCP renew, RNG; Settings deep-link
+- **Pass 33:** Net Explorer/Control progress lines, copy local/resolved IP, Settings↔Net Control deep-link; Disks save confirm/progress clarity
 - **Terminal (Pass 14):** scrollback indicator, select/copy/paste, per-window buffers, context menu
 - **Settings (Pass 15):** explicit hit rects, context menus for Settings/Agent/Monitor
 - **Browser + notify (Pass 16):** fetch progress bar, error retry CTA, browser context menu, toast damage thrift
