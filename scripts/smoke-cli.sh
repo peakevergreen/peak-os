@@ -27,7 +27,14 @@ count=$(grep -c '^UBIN_CMD' kernel/user/ubin_cmds.def || true)
 echo "    registered commands: $count"
 test "$count" -ge 25
 grep -q 'test_ubin_registry' Makefile
+grep -q 'test_agent_tools' Makefile
+grep -q 'test_desktop_titles' Makefile
 grep -q 'shell_parse_pipeline' kernel/shell_split.c
+grep -q 'SHELL_PIPE_MAX' kernel/include/shell_split.h
+grep -q 'nslookup' kernel/user/ubin_cmds.def
+grep -q 'printf' kernel/user/ubin_cmds.def
+grep -q 'test' kernel/user/ubin_cmds.def
+grep -q 'boot_verify_manifest_sig' boot/common/verify_kernel.c
 grep -q 'SHELL_PIPE_MAX' kernel/include/shell_split.h
 
 echo "==> theme names"
