@@ -165,6 +165,9 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/desktop_notepad.c \
 	kernel/gui/img_decode.c \
 	kernel/gui/desktop_images.c \
+	kernel/gui/desktop_disks.c \
+	kernel/gui/desktop_netexp.c \
+	kernel/gui/desktop_netctl.c \
 	kernel/gui/desktop_settings.c \
 	kernel/gui/desktop_agent.c \
 	kernel/gui/game.c \

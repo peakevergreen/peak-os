@@ -20,7 +20,7 @@ static int app_kind_ready(enum app_kind k) {
     case APP_DISKS:
     case APP_NETEXP:
     case APP_NETCTL:
-        return 0;
+        return 1;
     default:
         return 1;
     }
@@ -290,10 +290,20 @@ int desktop_open_app(enum app_kind k) {
         wins[slot].h = desktop_title_h() + desktop_u(420);
         desktop_images_init();
     }
-    if (k == APP_DISKS ||
-        k == APP_NETEXP || k == APP_NETCTL) {
+    if (k == APP_DISKS) {
         wins[slot].w = desktop_u(480);
+        wins[slot].h = desktop_title_h() + desktop_u(340);
+        desktop_disks_init();
+    }
+    if (k == APP_NETEXP) {
+        wins[slot].w = desktop_u(520);
         wins[slot].h = desktop_title_h() + desktop_u(320);
+        desktop_netexp_init();
+    }
+    if (k == APP_NETCTL) {
+        wins[slot].w = desktop_u(520);
+        wins[slot].h = desktop_title_h() + desktop_u(380);
+        desktop_netctl_init();
     }
     if (wins[slot].w > fb->width - desktop_u(40))
         wins[slot].w = (uint32_t)fb->width - desktop_u(40);
@@ -388,6 +398,12 @@ void desktop_draw_win_content(int i) {
         desktop_notepad_draw(w);
     else if (w->kind == APP_IMAGES)
         desktop_images_draw(w);
+    else if (w->kind == APP_DISKS)
+        desktop_disks_draw(w);
+    else if (w->kind == APP_NETEXP)
+        desktop_netexp_draw(w);
+    else if (w->kind == APP_NETCTL)
+        desktop_netctl_draw(w);
     else if (w->kind == APP_SETTINGS)
         desktop_settings_draw(w);
     else if (w->kind == APP_AGENT)

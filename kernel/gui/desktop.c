@@ -160,6 +160,12 @@ void desktop_run(void) {
                          wins[focus].kind == APP_NOTEPAD;
         int img_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
                         wins[focus].kind == APP_IMAGES;
+        int disks_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
+                          wins[focus].kind == APP_DISKS;
+        int nx_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
+                       wins[focus].kind == APP_NETEXP;
+        int nc_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
+                       wins[focus].kind == APP_NETCTL;
         int agent_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
                           wins[focus].kind == APP_AGENT;
 
@@ -180,6 +186,21 @@ void desktop_run(void) {
 
         if (key && img_focus) {
             desktop_images_key(key);
+            key = 0;
+        }
+
+        if (key && disks_focus) {
+            desktop_disks_key(key);
+            key = 0;
+        }
+
+        if (key && nx_focus) {
+            desktop_netexp_key(key);
+            key = 0;
+        }
+
+        if (key && nc_focus) {
+            desktop_netctl_key(key);
             key = 0;
         }
 
@@ -379,6 +400,8 @@ void desktop_run(void) {
                             desktop_files_click(w, m.x, m.y, dbl);
                         } else if (w->kind == APP_NOTEPAD) {
                             desktop_notepad_click(w, m.x, m.y);
+                        } else if (w->kind == APP_NETCTL) {
+                            desktop_netctl_click(w, m.x, m.y);
                         } else if (w->kind == APP_BROWSER) {
                             browser_click(m.x - (int32_t)(w->x + desktop_u(4)),
                                           m.y - (int32_t)(w->y + desktop_title_h() + desktop_u(2)),

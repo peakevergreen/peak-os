@@ -165,6 +165,11 @@ void desktop_settings_draw(struct win *w) {
         cy += row * 2;
         fb_draw_string(tx, cy, "Clears certificate pins, TOFU cache, and HSTS.", desktop_color_dim(),
                        desktop_color_bg());
+        cy += row * 2;
+        fb_draw_string(tx, cy, "Open Net Control (click)", desktop_color_accent(), desktop_color_bg());
+        cy += row;
+        fb_draw_string(tx, cy, "Privacy, kill switch, DHCP renew, RNG status.", desktop_color_dim(),
+                       desktop_color_bg());
     }
     (void)content_w;
 }
@@ -237,6 +242,8 @@ int desktop_settings_click(struct win *w, int32_t mx, int32_t my) {
             settings_persist();
         } else if (row == 7) {
             tls_trust_clear_all();
+        } else if (row == 9) {
+            desktop_open_app(APP_NETCTL);
         }
     }
     dirty_bits |= DIRTY_FULL;

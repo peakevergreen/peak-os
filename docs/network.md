@@ -18,6 +18,8 @@ Bootloaders parse [`boot/peak.conf`](../boot/peak.conf) into BootInfo:
 
 Guest DNS / TCP helpers: `nslookup` / `host` (A record via `net_dns_resolve`), `nc` (TCP connect, optional send + short recv).
 
+**Desktop GUI:** Start menu → **Net Explorer** shows link/IP/DNS, runs ping (TCP :80 probe) and nslookup into a result pane. **Net Control** manages session net-allow, kill switch (double confirm), persist profile, DHCP renew, and RNG readiness; Settings → Network tab includes an **Open Net Control** shortcut.
+
 ## QEMU modes
 
 ### User-net (default — CI / smoke)

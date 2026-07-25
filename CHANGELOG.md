@@ -23,6 +23,9 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Files app (Pass 08):** name/size columns, breadcrumbs, scroll overflow, copy path, context menus, open-with hooks
 - **Notepad app (Pass 09):** multi-line editor, VFS load/save, dirty flag, clipboard, context menu
 - **Images app (Pass 10):** PPM/BMP decode, fit/1:1/zoom-pan viewer, host test_img_decode
+- **Disks app (Pass 11):** PeakDisk status, VFS/PMM stats, confirmed disksave, context menu
+- **Net Explorer (Pass 12):** link/IP/DNS pane, ping & nslookup, context menu
+- **Net Control (Pass 13):** net-allow, kill switch, persist, DHCP renew, RNG; Settings deep-link
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
 - CLI boot scroll stays on the front framebuffer (does not wipe via empty backbuffer)

@@ -86,11 +86,6 @@ static void files_format_size(size_t sz, char *buf, size_t cap) {
         snprintf(buf, cap, "%lu", (unsigned long)sz);
 }
 
-void desktop_disks_show(void) {
-    notify_push("Disks not ready yet");
-    dirty_bits |= DIRTY_TOAST;
-}
-
 void desktop_files_draw(struct win *w) {
     files_clamp_sel();
     uint32_t ch = fb_cell_h();

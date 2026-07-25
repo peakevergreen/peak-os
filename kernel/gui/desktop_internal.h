@@ -72,6 +72,18 @@ enum ctx_target {
 #define CTX_ACT_IMG_PREV         (CTX_ACT_APP_BASE + 43)
 #define CTX_ACT_IMG_OPEN_DIR     (CTX_ACT_APP_BASE + 44)
 #define CTX_ACT_IMG_COPY_PATH    (CTX_ACT_APP_BASE + 45)
+#define CTX_ACT_DISK_REFRESH     (CTX_ACT_APP_BASE + 60)
+#define CTX_ACT_DISK_SAVE        (CTX_ACT_APP_BASE + 61)
+#define CTX_ACT_DISK_PROPS       (CTX_ACT_APP_BASE + 62)
+#define CTX_ACT_NX_COPY_IP       (CTX_ACT_APP_BASE + 70)
+#define CTX_ACT_NX_PING          (CTX_ACT_APP_BASE + 71)
+#define CTX_ACT_NX_NSLOOKUP      (CTX_ACT_APP_BASE + 72)
+#define CTX_ACT_NX_NETCTL        (CTX_ACT_APP_BASE + 73)
+#define CTX_ACT_NC_ALLOW         (CTX_ACT_APP_BASE + 80)
+#define CTX_ACT_NC_REVOKE        (CTX_ACT_APP_BASE + 81)
+#define CTX_ACT_NC_KILLSW        (CTX_ACT_APP_BASE + 82)
+#define CTX_ACT_NC_PERSIST       (CTX_ACT_APP_BASE + 83)
+#define CTX_ACT_NC_DHCP          (CTX_ACT_APP_BASE + 84)
 #define CTX_ACT_TERM_NEW         (CTX_ACT_APP_BASE + 0)
 #define CTX_ACT_TERM_COPY        (CTX_ACT_APP_BASE + 1)
 #define CTX_ACT_TERM_PASTE       (CTX_ACT_APP_BASE + 2)
@@ -244,7 +256,26 @@ int desktop_images_click(struct win *w, int32_t mx, int32_t my);
 int desktop_images_ctx_menu(struct ctx_menu_item *items, int max_items);
 int desktop_images_ctx_action(int action_id);
 
+void desktop_disks_init(void);
 void desktop_disks_show(void);
+void desktop_disks_draw(struct win *w);
+int desktop_disks_key(int key);
+int desktop_disks_ctx_menu(struct ctx_menu_item *items, int max_items);
+int desktop_disks_ctx_action(int action_id);
+
+void desktop_netexp_init(void);
+void desktop_netexp_draw(struct win *w);
+int desktop_netexp_key(int key);
+int desktop_netexp_ctx_menu(struct ctx_menu_item *items, int max_items);
+int desktop_netexp_ctx_action(int action_id);
+
+void desktop_netctl_init(void);
+void desktop_netctl_draw(struct win *w);
+int desktop_netctl_key(int key);
+int desktop_netctl_click(struct win *w, int32_t mx, int32_t my);
+void desktop_netctl_ctx_prepare(struct win *w, int32_t mx, int32_t my);
+int desktop_netctl_ctx_menu(struct ctx_menu_item *items, int max_items);
+int desktop_netctl_ctx_action(int action_id);
 
 void desktop_settings_draw(struct win *w);
 int desktop_settings_click(struct win *w, int32_t mx, int32_t my);

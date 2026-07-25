@@ -32,10 +32,6 @@ static int taskbar_overflow;
 
 static int app_kind_ready(enum app_kind k) {
     switch (k) {
-    case APP_DISKS:
-    case APP_NETEXP:
-    case APP_NETCTL:
-        return 0;
     default:
         return 1;
     }
@@ -329,6 +325,12 @@ int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int ma
         return desktop_notepad_ctx_menu(items, max_items);
     case APP_IMAGES:
         return desktop_images_ctx_menu(items, max_items);
+    case APP_DISKS:
+        return desktop_disks_ctx_menu(items, max_items);
+    case APP_NETEXP:
+        return desktop_netexp_ctx_menu(items, max_items);
+    case APP_NETCTL:
+        return desktop_netctl_ctx_menu(items, max_items);
     default:
         break;
     }
@@ -353,6 +355,12 @@ int desktop_app_ctx_action(enum app_kind kind, int action_id) {
         return desktop_notepad_ctx_action(action_id);
     case APP_IMAGES:
         return desktop_images_ctx_action(action_id);
+    case APP_DISKS:
+        return desktop_disks_ctx_action(action_id);
+    case APP_NETEXP:
+        return desktop_netexp_ctx_action(action_id);
+    case APP_NETCTL:
+        return desktop_netctl_ctx_action(action_id);
     default:
         return 0;
     }
@@ -363,6 +371,8 @@ static void ctx_build_client(int win_idx, int32_t mx, int32_t my) {
         return;
     if (wins[win_idx].kind == APP_FILES)
         desktop_files_ctx_prepare(&wins[win_idx], mx, my);
+    if (wins[win_idx].kind == APP_NETCTL)
+        desktop_netctl_ctx_prepare(&wins[win_idx], mx, my);
     int n = desktop_app_ctx_menu(wins[win_idx].kind, ctx_items, CTX_MENU_MAX_ITEMS);
     ctx_item_count = n;
 }
