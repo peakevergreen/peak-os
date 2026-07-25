@@ -13,6 +13,7 @@
 #include "util.h"
 #include "sound.h"
 #include "browser.h"
+#include "browser_internal.h"
 #include "monitor.h"
 #include "clipboard.h"
 #include "shell.h"
@@ -319,6 +320,62 @@ static void ctx_build_chrome(int win_idx) {
 
 int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int max_items) {
     switch (kind) {
+    case APP_TERM:
+        return desktop_terminal_ctx_menu(items, max_items);
+    case APP_BROWSER:
+        return browser_ctx_menu(items, max_items);
+    case APP_SETTINGS:
+        if (!items || max_items < 4)
+            return 0;
+        items[0].label = "Display tab";
+        items[0].enabled = 1;
+        items[0].separator = 0;
+        items[0].action_id = CTX_ACT_SETTINGS_DISPLAY;
+        items[1].label = "Network tab";
+        items[1].enabled = 1;
+        items[1].separator = 0;
+        items[1].action_id = CTX_ACT_SETTINGS_NET;
+        items[2].label = NULL;
+        items[2].enabled = 0;
+        items[2].separator = 1;
+        items[2].action_id = CTX_ACT_NONE;
+        items[3].label = "Close window";
+        items[3].enabled = 1;
+        items[3].separator = 0;
+        items[3].action_id = CTX_ACT_CLOSE;
+        return 4;
+    case APP_AGENT:
+        if (!items || max_items < 3)
+            return 0;
+        items[0].label = "Agent help";
+        items[0].enabled = 1;
+        items[0].separator = 0;
+        items[0].action_id = CTX_ACT_AGENT_HELP;
+        items[1].label = NULL;
+        items[1].enabled = 0;
+        items[1].separator = 1;
+        items[1].action_id = CTX_ACT_NONE;
+        items[2].label = "Close window";
+        items[2].enabled = 1;
+        items[2].separator = 0;
+        items[2].action_id = CTX_ACT_CLOSE;
+        return 3;
+    case APP_MONITOR:
+        if (!items || max_items < 3)
+            return 0;
+        items[0].label = "Pause / resume";
+        items[0].enabled = 1;
+        items[0].separator = 0;
+        items[0].action_id = CTX_ACT_MONITOR_PAUSE;
+        items[1].label = NULL;
+        items[1].enabled = 0;
+        items[1].separator = 1;
+        items[1].action_id = CTX_ACT_NONE;
+        items[2].label = "Close window";
+        items[2].enabled = 1;
+        items[2].separator = 0;
+        items[2].action_id = CTX_ACT_CLOSE;
+        return 3;
     case APP_FILES:
         return desktop_files_ctx_menu(items, max_items);
     case APP_NOTEPAD:
@@ -349,6 +406,37 @@ int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int ma
 
 int desktop_app_ctx_action(enum app_kind kind, int action_id) {
     switch (kind) {
+    case APP_TERM:
+        return desktop_terminal_ctx_action(action_id);
+    case APP_BROWSER:
+        return browser_ctx_action(action_id);
+    case APP_SETTINGS:
+        if (action_id == CTX_ACT_SETTINGS_DISPLAY) {
+            settings_page = 0;
+            dirty_bits |= DIRTY_FULL;
+            return 1;
+        }
+        if (action_id == CTX_ACT_SETTINGS_NET) {
+            settings_page = 4;
+            dirty_bits |= DIRTY_FULL;
+            return 1;
+        }
+        return 0;
+    case APP_AGENT:
+        if (action_id == CTX_ACT_AGENT_HELP) {
+            help_open = 1;
+            dirty_bits |= DIRTY_FULL;
+            return 1;
+        }
+        return 0;
+    case APP_MONITOR:
+        if (action_id == CTX_ACT_MONITOR_PAUSE) {
+            monitor_toggle_pause();
+            dirty_bits |= DIRTY_MONITOR;
+            desktop_mark_win_surf_dirty(desktop_find_win(APP_MONITOR));
+            return 1;
+        }
+        return 0;
     case APP_FILES:
         return desktop_files_ctx_action(action_id);
     case APP_NOTEPAD:
@@ -369,6 +457,8 @@ int desktop_app_ctx_action(enum app_kind kind, int action_id) {
 static void ctx_build_client(int win_idx, int32_t mx, int32_t my) {
     if (win_idx < 0 || win_idx >= MAX_WINS || !wins[win_idx].open)
         return;
+    if (wins[win_idx].kind == APP_TERM)
+        desktop_term_activate(win_idx);
     if (wins[win_idx].kind == APP_FILES)
         desktop_files_ctx_prepare(&wins[win_idx], mx, my);
     if (wins[win_idx].kind == APP_NETCTL)
@@ -489,7 +579,10 @@ void desktop_menus_ctx_hover(int32_t mx, int32_t my) {
 void desktop_draw_ctx_menu(void) {
     if (!ctx_menu)
         return;
-    ctx_menu_draw(&ctx_spec, desktop_u, desktop_color_fg(), desktop_color_surface(),
+    uint32_t bg = desktop_color_surface();
+    if (wallpaper_enabled() && !strcmp(theme_name(), "paper"))
+        bg = desktop_color_title();
+    ctx_menu_draw(&ctx_spec, desktop_u, desktop_color_fg(), bg,
                   desktop_color_accent(), desktop_color_dim());
 }
 
