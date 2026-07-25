@@ -5,13 +5,20 @@
 #include "keyboard.h"
 #include "clipboard.h"
 #include "notify.h"
+#include "settings.h"
 #include "util.h"
 
 struct term_state {
     char lines[TERM_ROWS][TERM_COLS + 1];
     uint32_t row, col;
     int scroll;
+    int sel_row;
     int sel_a, sel_b;
+    char find_needle[TERM_FIND_MAX + 1];
+    int find_len;
+    int find_active;
+    int find_hit_row;
+    int find_hit_col;
     uint32_t caret_col;
     int inited;
     int full_redraw;
@@ -22,6 +29,14 @@ struct term_state {
 
 static struct term_state terms[MAX_WINS];
 static int active_term;
+static int term_copy_on_select;
+
+static void term_clamp_scroll(struct term_state *t, uint32_t vis);
+
+static void term_sync_ui_scale(void) {
+    if (fb_ui_scale() != settings_gui_scale())
+        fb_set_ui_scale(settings_gui_scale());
+}
 
 static void term_mark_cell_surf_dirty(int slot, struct term_state *t) {
     if (slot < 0 || slot >= MAX_WINS || !wins[slot].open)
@@ -67,7 +82,8 @@ static void term_mark_cell_surf_dirty(int slot, struct term_state *t) {
 }
 
 static void term_mark_surf_dirty(int slot, struct term_state *t) {
-    if (t->full_redraw || t->cell_dirty == 0 || t->scroll != 0 || t->sel_a >= 0)
+    if (t->full_redraw || t->cell_dirty == 0 || t->scroll != 0 || t->sel_a >= 0 ||
+        t->find_len > 0 || t->find_active)
         desktop_mark_win_surf_dirty(slot);
     else
         term_mark_cell_surf_dirty(slot, t);
@@ -108,7 +124,8 @@ void desktop_term_reset_slot(int slot) {
     if (slot < 0 || slot >= MAX_WINS)
         return;
     memset(&terms[slot], 0, sizeof(terms[slot]));
-    terms[slot].sel_a = terms[slot].sel_b = -1;
+    terms[slot].sel_row = terms[slot].sel_a = terms[slot].sel_b = -1;
+    terms[slot].find_hit_row = terms[slot].find_hit_col = -1;
     terms[slot].inited = 1;
     terms[slot].full_redraw = 1;
 }
@@ -129,7 +146,11 @@ void gui_term_reset(void) {
     t->row = 0;
     t->col = 0;
     t->scroll = 0;
-    t->sel_a = t->sel_b = -1;
+    t->sel_row = t->sel_a = t->sel_b = -1;
+    t->find_active = 0;
+    t->find_len = 0;
+    t->find_needle[0] = '\0';
+    t->find_hit_row = t->find_hit_col = -1;
     t->caret_col = 0;
     t->inited = 1;
     t->full_redraw = 1;
@@ -168,10 +189,11 @@ void gui_term_set_edit(const char *prompt, const char *text, uint32_t caret,
     t->row = row;
 
     if (sel_a >= 0 && sel_b >= sel_a) {
+        t->sel_row = (int)row;
         t->sel_a = (int)prompt_len + sel_a;
         t->sel_b = (int)prompt_len + sel_b;
     } else {
-        t->sel_a = t->sel_b = -1;
+        t->sel_row = t->sel_a = t->sel_b = -1;
     }
     t->full_redraw = 1;
     dirty_bits |= DIRTY_TERM;
@@ -189,8 +211,8 @@ static int term_has_selection(struct term_state *t) {
 static void term_copy_selection(struct term_state *t) {
     if (!term_has_selection(t))
         return;
-    uint32_t row = t->row;
-    if (row >= TERM_ROWS)
+    int row = t->sel_row;
+    if (row < 0 || row >= (int)TERM_ROWS)
         return;
     int a = t->sel_a;
     int b = t->sel_b;
@@ -205,6 +227,68 @@ static void term_copy_selection(struct term_state *t) {
     memcpy(buf, t->lines[row] + (size_t)a, (size_t)n);
     buf[n] = '\0';
     clipboard_set(buf, (size_t)n);
+}
+
+static char term_fold(char c) {
+    if (c >= 'A' && c <= 'Z')
+        return (char)(c + 32);
+    return c;
+}
+
+static int term_find_match_at(const char *line, int col, const char *needle, int nlen) {
+    if (nlen <= 0 || col < 0)
+        return 0;
+    for (int i = 0; i < nlen; i++) {
+        char a = line[col + i];
+        if (!a)
+            return 0;
+        if (term_fold(a) != term_fold(needle[i]))
+            return 0;
+    }
+    return 1;
+}
+
+static void term_find_from(struct term_state *t, int start_row, int start_col) {
+    if (t->find_len <= 0) {
+        t->find_hit_row = t->find_hit_col = -1;
+        return;
+    }
+    int row = start_row;
+    int col = start_col;
+    if (row < 0)
+        row = 0;
+    if (row >= (int)TERM_ROWS)
+        row = 0;
+    if (col < 0)
+        col = 0;
+    for (int pass = 0; pass < 2; pass++) {
+        for (; row < (int)TERM_ROWS; row++) {
+            const char *line = t->lines[row];
+            for (; col < TERM_COLS; col++) {
+                if (term_find_match_at(line, col, t->find_needle, t->find_len)) {
+                    t->find_hit_row = row;
+                    t->find_hit_col = col;
+                    return;
+                }
+            }
+            col = 0;
+        }
+        row = 0;
+        col = 0;
+    }
+    t->find_hit_row = t->find_hit_col = -1;
+}
+
+static void term_find_next(struct term_state *t) {
+    if (t->find_len <= 0)
+        return;
+    int row = t->find_hit_row;
+    int col = t->find_hit_col + 1;
+    if (row < 0) {
+        row = 0;
+        col = 0;
+    }
+    term_find_from(t, row, col);
 }
 
 static void term_visible_rows(struct win *w, uint32_t *vis_out) {
@@ -228,6 +312,21 @@ static void term_clamp_scroll(struct term_state *t, uint32_t vis) {
         t->scroll = max_scroll;
     if (t->scroll < 0)
         t->scroll = 0;
+}
+
+static void term_scroll_to_row(struct term_state *t, uint32_t vis, int target_row) {
+    if (target_row < 0)
+        return;
+    int max_scroll = (int)t->row - (int)vis + 1;
+    if (max_scroll < 0)
+        max_scroll = 0;
+    int want = (int)t->row - target_row;
+    if (want < 0)
+        want = 0;
+    if (want > max_scroll)
+        want = max_scroll;
+    t->scroll = want;
+    term_clamp_scroll(t, vis);
 }
 
 static int term_mouse_cell(struct win *w, struct term_state *t, int32_t mx, int32_t my,
@@ -276,7 +375,11 @@ void desktop_terminal_clear(void) {
     t->row = 0;
     t->col = 0;
     t->scroll = 0;
-    t->sel_a = t->sel_b = -1;
+    t->sel_row = t->sel_a = t->sel_b = -1;
+    t->find_active = 0;
+    t->find_len = 0;
+    t->find_needle[0] = '\0';
+    t->find_hit_row = t->find_hit_col = -1;
     t->caret_col = 0;
     t->full_redraw = 1;
     dirty_bits |= DIRTY_TERM;
@@ -300,10 +403,13 @@ void desktop_terminal_paste(void) {
 }
 
 int desktop_terminal_ctx_menu(struct ctx_menu_item *items, int max_items) {
-    if (!items || max_items < 6)
+    if (!items || max_items < 8)
         return 0;
     struct term_state *t = term_active();
     int has_sel = term_has_selection(t);
+    static char copysel_lbl[28];
+    snprintf(copysel_lbl, sizeof(copysel_lbl), "Copy on select: %s",
+             term_copy_on_select ? "on" : "off");
     items[0].label = "Copy selection";
     items[0].enabled = has_sel;
     items[0].separator = 0;
@@ -312,23 +418,31 @@ int desktop_terminal_ctx_menu(struct ctx_menu_item *items, int max_items) {
     items[1].enabled = clipboard_has();
     items[1].separator = 0;
     items[1].action_id = CTX_ACT_TERM_PASTE;
-    items[2].label = "Clear scrollback";
+    items[2].label = "Find in buffer (Ctrl+F)";
     items[2].enabled = 1;
     items[2].separator = 0;
-    items[2].action_id = CTX_ACT_TERM_CLEAR;
-    items[3].label = "New Terminal";
+    items[2].action_id = CTX_ACT_TERM_FIND;
+    items[3].label = copysel_lbl;
     items[3].enabled = 1;
     items[3].separator = 0;
-    items[3].action_id = CTX_ACT_TERM_NEW;
-    items[4].label = NULL;
-    items[4].enabled = 0;
-    items[4].separator = 1;
-    items[4].action_id = CTX_ACT_NONE;
-    items[5].label = "Close window";
+    items[3].action_id = CTX_ACT_TERM_COPYSEL;
+    items[4].label = "Clear scrollback";
+    items[4].enabled = 1;
+    items[4].separator = 0;
+    items[4].action_id = CTX_ACT_TERM_CLEAR;
+    items[5].label = "New Terminal";
     items[5].enabled = 1;
     items[5].separator = 0;
-    items[5].action_id = CTX_ACT_CLOSE;
-    return 6;
+    items[5].action_id = CTX_ACT_TERM_NEW;
+    items[6].label = NULL;
+    items[6].enabled = 0;
+    items[6].separator = 1;
+    items[6].action_id = CTX_ACT_NONE;
+    items[7].label = "Close window";
+    items[7].enabled = 1;
+    items[7].separator = 0;
+    items[7].action_id = CTX_ACT_CLOSE;
+    return 8;
 }
 
 int desktop_terminal_ctx_action(int action_id) {
@@ -346,9 +460,45 @@ int desktop_terminal_ctx_action(int action_id) {
         desktop_terminal_clear();
         shell_redraw_prompt();
         return 1;
+    case CTX_ACT_TERM_FIND: {
+        struct term_state *ts = term_active();
+        ts->find_active = 1;
+        ts->full_redraw = 1;
+        dirty_bits |= DIRTY_TERM;
+        term_mark_active_surf_dirty();
+        return 1;
+    }
+    case CTX_ACT_TERM_COPYSEL:
+        term_copy_on_select = !term_copy_on_select;
+        return 1;
     default:
         return 0;
     }
+}
+
+int desktop_terminal_find_active(void) {
+    return term_active()->find_active;
+}
+
+void desktop_terminal_find_close(void) {
+    struct term_state *t = term_active();
+    if (!t->find_active)
+        return;
+    t->find_active = 0;
+    t->find_len = 0;
+    t->find_needle[0] = '\0';
+    t->find_hit_row = t->find_hit_col = -1;
+    t->full_redraw = 1;
+    dirty_bits |= DIRTY_TERM;
+    term_mark_active_surf_dirty();
+}
+
+void desktop_terminal_select_end(void) {
+    if (!term_copy_on_select || !term_has_selection(term_active()))
+        return;
+    term_copy_selection(term_active());
+    notify_push_clipboard("selection");
+    dirty_bits |= DIRTY_TOAST;
 }
 
 static void term_scroll_up_buf(struct term_state *t) {
@@ -410,6 +560,7 @@ void desktop_terminal_init(void) {
 }
 
 void desktop_terminal_draw(struct win *w) {
+    term_sync_ui_scale();
     int slot = (int)(w - wins);
     if (slot < 0 || slot >= MAX_WINS)
         return;
@@ -433,7 +584,8 @@ void desktop_terminal_draw(struct win *w) {
     if (start < 0)
         start = 0;
 
-    if (!t->full_redraw && t->cell_dirty && t->scroll == 0 && t->sel_a < 0) {
+    if (!t->full_redraw && t->cell_dirty && t->scroll == 0 && t->sel_a < 0 &&
+        t->find_len == 0 && !t->find_active) {
         int lr = (int)t->dirty_row;
         int caret_row = (int)t->row - start;
         int dirty_vis = lr - start;
@@ -466,10 +618,22 @@ void desktop_terminal_draw(struct win *w) {
         for (uint32_t c = 0; s[c] && c < TERM_COLS; c++) {
             uint32_t fg = desktop_color_fg();
             uint32_t cell_bg = bg;
-            if (lr == (int)t->row && t->sel_a >= 0 &&
-                (int)c >= t->sel_a && (int)c <= t->sel_b) {
+            int selected = term_has_selection(t) && lr == t->sel_row &&
+                           (int)c >= t->sel_a && (int)c <= t->sel_b;
+            int find_hit = t->find_len > 0 &&
+                           term_find_match_at(s, (int)c, t->find_needle, t->find_len);
+            int find_cur = find_hit && lr == t->find_hit_row &&
+                           (int)c >= t->find_hit_col &&
+                           (int)c < t->find_hit_col + t->find_len;
+            if (selected) {
                 cell_bg = desktop_color_accent();
                 fg = desktop_color_bg();
+            } else if (find_cur) {
+                cell_bg = desktop_color_accent();
+                fg = desktop_color_bg();
+            } else if (find_hit) {
+                cell_bg = desktop_color_title();
+                fg = desktop_color_fg();
             }
             fb_draw_char(tx + c * cw, ty + r * ch, s[c], fg, cell_bg);
         }
@@ -479,16 +643,21 @@ void desktop_terminal_draw(struct win *w) {
         uint32_t cx = t->caret_col < TERM_COLS ? t->caret_col : t->col;
         fb_fill_rect(tx + cx * cw, ty + (uint32_t)caret_row * ch, desktop_u(2), ch, desktop_color_accent());
     }
-    if (term_has_selection(t)) {
-        uint32_t hint_y = ty + vis * ch + desktop_u(2);
-        if (hint_y + ch <= w->y + w->h)
+    uint32_t hint_y = ty + vis * ch + desktop_u(2);
+    if (hint_y + ch <= w->y + w->h) {
+        uint32_t hint_w = w->w > desktop_u(24) ? w->w - desktop_u(24) : w->w;
+        if (t->find_active) {
+            char fbar[72];
+            snprintf(fbar, sizeof(fbar), "Find: %s  Enter=next  Esc=close",
+                     t->find_needle);
+            fb_draw_string_fit(tx, hint_y, hint_w, fbar, desktop_color_accent(), bg);
+        } else if (term_has_selection(t)) {
             fb_draw_string(tx, hint_y, "Ctrl+C copy  Ctrl+V paste", desktop_color_dim(), bg);
-    } else if (t->scroll > 0) {
-        char sb[40];
-        snprintf(sb, sizeof(sb), "^ scrollback %d (Dn/latest)", t->scroll);
-        uint32_t hint_y = ty + vis * ch + desktop_u(2);
-        if (hint_y + ch <= w->y + w->h)
+        } else if (t->scroll > 0) {
+            char sb[48];
+            snprintf(sb, sizeof(sb), "^ scrollback %d lines (Dn/latest)", t->scroll);
             fb_draw_string(tx, hint_y, sb, desktop_color_dim(), bg);
+        }
     }
     t->full_redraw = 0;
     t->cell_dirty = 0;
@@ -499,6 +668,58 @@ int desktop_terminal_key(int key) {
     uint32_t vis = 0;
     if (active_term >= 0 && active_term < MAX_WINS && wins[active_term].open)
         term_visible_rows(&wins[active_term], &vis);
+
+    if (key == 6 || (keyboard_ctrl_down() && (key == 'f' || key == 'F'))) {
+        if (!tt->find_active) {
+            tt->find_active = 1;
+            tt->find_len = 0;
+            tt->find_needle[0] = '\0';
+            tt->find_hit_row = tt->find_hit_col = -1;
+        } else if (tt->find_len > 0) {
+            term_find_next(tt);
+            if (tt->find_hit_row >= 0)
+                term_scroll_to_row(tt, vis, tt->find_hit_row);
+        }
+        tt->full_redraw = 1;
+        dirty_bits |= DIRTY_TERM;
+        term_mark_active_surf_dirty();
+        return 1;
+    }
+
+    if (tt->find_active) {
+        if (key == '\n' || key == KEY_TAB) {
+            if (tt->find_len > 0) {
+                term_find_next(tt);
+                if (tt->find_hit_row >= 0)
+                    term_scroll_to_row(tt, vis, tt->find_hit_row);
+            }
+        } else if (key == '\b') {
+            if (tt->find_len > 0) {
+                tt->find_needle[--tt->find_len] = '\0';
+                term_find_from(tt, 0, 0);
+                if (tt->find_hit_row >= 0)
+                    term_scroll_to_row(tt, vis, tt->find_hit_row);
+            }
+        } else if (key >= 32 && key < 127 && tt->find_len < TERM_FIND_MAX) {
+            tt->find_needle[tt->find_len++] = (char)key;
+            tt->find_needle[tt->find_len] = '\0';
+            term_find_from(tt, 0, 0);
+            if (tt->find_hit_row >= 0)
+                term_scroll_to_row(tt, vis, tt->find_hit_row);
+        } else if (key == KEY_UP) {
+            tt->scroll++;
+            term_clamp_scroll(tt, vis);
+        } else if (key == KEY_DOWN) {
+            if (tt->scroll > 0)
+                tt->scroll--;
+            term_clamp_scroll(tt, vis);
+        }
+        tt->full_redraw = 1;
+        dirty_bits |= DIRTY_TERM;
+        term_mark_active_surf_dirty();
+        return 1;
+    }
+
     if (key == KEY_TAB)
         key = '\t';
     if (key == KEY_UP) {
@@ -550,11 +771,9 @@ int desktop_terminal_click(struct win *w, int32_t mx, int32_t my, int drag) {
     int lr = 0, col = 0;
     if (!term_mouse_cell(w, t, mx, my, &lr, &col))
         return 0;
-    if (lr != (int)t->row) {
-        if (!drag)
-            t->sel_a = t->sel_b = -1;
-    } else if (drag) {
-        if (t->sel_a < 0) {
+    if (drag) {
+        if (t->sel_a < 0 || lr != t->sel_row) {
+            t->sel_row = lr;
             t->sel_a = col;
             t->sel_b = col;
         } else if (col < t->sel_a) {
@@ -563,6 +782,7 @@ int desktop_terminal_click(struct win *w, int32_t mx, int32_t my, int drag) {
             t->sel_b = col;
         }
     } else {
+        t->sel_row = lr;
         t->sel_a = col;
         t->sel_b = col;
     }

@@ -29,6 +29,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Net Explorer (Pass 12):** link/IP/DNS pane, ping & nslookup, context menu
 - **Net Control (Pass 13):** net-allow, kill switch, persist, DHCP renew, RNG; Settings deep-link
 - **Terminal (Pass 14):** scrollback indicator, select/copy/paste, per-window buffers, context menu
+- **Terminal (Pass 28):** 512-line scrollback, find-in-buffer (Ctrl+F) with match highlight, copy-on-select toggle, UI-scale glyph sync
 - **Settings (Pass 15):** explicit hit rects, context menus for Settings/Agent/Monitor
 - **Browser + notify (Pass 16):** fetch progress bar, error retry CTA, browser context menu, toast damage thrift
 - **Pass 30:** Browser back/forward chrome, VFS bookmarks (`/var/peak/bookmarks`), JS console panel, TLS/net error detail on error pages
