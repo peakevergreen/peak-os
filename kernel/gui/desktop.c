@@ -49,6 +49,8 @@ void desktop_init(void) {
     memset(wins, 0, sizeof(wins));
     focus = -1;
     menu_open = 0;
+    start_filter[0] = 0;
+    start_sel = 0;
     ctx_menu = 0;
     ctx_item_count = 0;
     ctx_spec.hover_row = -1;
@@ -56,6 +58,7 @@ void desktop_init(void) {
     resizing = 0;
     resize_edge = 0;
     band_live = 0;
+    snap_live = 0;
     settings_page = 0;
     desktop_compose_reset_cursor_cache();
     desktop_files_init();
@@ -116,6 +119,9 @@ void desktop_run(void) {
         desktop_overlays_idle_lock(last_input_tick);
 
         if (desktop_overlays_block_input(key))
+            continue;
+
+        if (menu_open && key && desktop_menus_start_key(key))
             continue;
 
         if (key == 27) {
@@ -431,19 +437,9 @@ void desktop_run(void) {
             term_select_drag = 0;
             term_select_win = -1;
             if (dragging) {
-                if (focus >= 0 && m.x < (int32_t)desktop_u(8)) {
-                    wins[focus].x = 0;
-                    wins[focus].y = 0;
-                    wins[focus].w = (uint32_t)fb->width / 2;
-                    wins[focus].h = (uint32_t)fb->height - desktop_taskbar_h();
-                    wins[focus].maximized = 0;
-                } else if (focus >= 0 && m.x > (int32_t)fb->width - (int32_t)desktop_u(8)) {
-                    wins[focus].x = (uint32_t)fb->width / 2;
-                    wins[focus].y = 0;
-                    wins[focus].w = (uint32_t)fb->width / 2;
-                    wins[focus].h = (uint32_t)fb->height - desktop_taskbar_h();
-                    wins[focus].maximized = 0;
-                }
+                int hint = desktop_snap_hint(m.x, m.y);
+                if (hint)
+                    desktop_snap_apply(focus, hint);
                 if (move_live)
                     desktop_opaque_move_end();
                 else
@@ -469,6 +465,7 @@ void desktop_run(void) {
             resizing = 0;
             resize_edge = 0;
             band_live = 0;
+            snap_live = 0;
             move_prev_valid = 0;
             mouse_clear_clicks();
         }
@@ -485,6 +482,13 @@ void desktop_run(void) {
             wins[focus].y = (uint32_t)ny;
             wins[focus].maximized = 0;
             desktop_clamp_win_geom(&wins[focus]);
+            int hint = desktop_snap_hint(m.x, m.y);
+            if (hint) {
+                snap_live = 1;
+                desktop_snap_zone_rect(hint, &band_x, &band_y, &band_w, &band_h);
+            } else {
+                snap_live = 0;
+            }
             uint64_t now = timer_ticks();
             if (now - last_drag_tick >= 1) {
                 last_drag_tick = now;

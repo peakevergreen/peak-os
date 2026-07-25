@@ -4,6 +4,7 @@ Run interactively in QEMU after `make iso && ./scripts/run-qemu.sh`.
 Product profile: **1080p @ UI scale 3**.
 
 - [ ] Start menu open/close damages menu + Peak button rects (not full-desktop)
+- [ ] Start menu: type to filter apps; Enter launches selection; Up/Down navigates
 - [ ] Context menu open/close uses damage rects
 - [ ] Files create/delete/rename/navigate use DIRTY_WIN (Monitor compose_us stays soft)
 - [ ] Opaque move end damages window footprints (not unconditional DIRTY_FULL)
@@ -14,6 +15,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Serial/display path presents damage rects during drag (not full-screen every tick)
 - [ ] Edge resize shows rubber-band outline; content redraws on release
 - [ ] Snap to left/right half-screen still works
+- [ ] Drag title to top edge maximizes; accent snap preview shows near edges
 
 ## Soft updates
 
@@ -33,6 +35,7 @@ Product profile: **1080p @ UI scale 3**.
 
 - [ ] Click-to-raise / Alt-Tab do not force continuous full-desktop redraw
 - [ ] Min / max / close repeatedly on Terminal and Files
+- [ ] Focused window shows accent titlebar ring; unfocused windows stay dim
 - [ ] Session lock / power confirm: idle does not spin-present every tick; Enter/Y/N still work
 
 ## Pi HID (aarch64)
@@ -71,6 +74,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Start → Lock; Enter unlocks
 - [ ] Start → Reboot / Power off shows Y/N confirm
 - [ ] Help text says `Ctrl+Alt+Esc` leaves desktop
+- [ ] Help overlay shows key/desc columns; click or Esc dismisses
 - [ ] Login remains single-user splash (not a security boundary)
 
 ## Scale / resolution
