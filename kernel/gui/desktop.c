@@ -156,6 +156,8 @@ void desktop_run(void) {
                         wins[focus].kind == APP_MONITOR;
         int files_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
                           wins[focus].kind == APP_FILES;
+        int npad_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
+                         wins[focus].kind == APP_NOTEPAD;
         int agent_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
                           wins[focus].kind == APP_AGENT;
 
@@ -166,6 +168,11 @@ void desktop_run(void) {
 
         if (key && files_focus) {
             desktop_files_key(key);
+            key = 0;
+        }
+
+        if (key && npad_focus) {
+            desktop_notepad_key(key);
             key = 0;
         }
 
@@ -361,6 +368,8 @@ void desktop_run(void) {
                             desktop_settings_click(w, m.x, m.y);
                         } else if (w->kind == APP_FILES) {
                             desktop_files_click(w, m.x, m.y, dbl);
+                        } else if (w->kind == APP_NOTEPAD) {
+                            desktop_notepad_click(w, m.x, m.y);
                         } else if (w->kind == APP_BROWSER) {
                             browser_click(m.x - (int32_t)(w->x + desktop_u(4)),
                                           m.y - (int32_t)(w->y + desktop_title_h() + desktop_u(2)),

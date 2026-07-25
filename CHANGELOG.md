@@ -21,6 +21,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Software FB compositor: opaque move, honest damage, paced presents
 - Per-window ARGB surfaces + budget; rubber-band resize; soft cursor
 - **Files app (Pass 08):** name/size columns, breadcrumbs, scroll overflow, copy path, context menus, open-with hooks
+- **Notepad app (Pass 09):** multi-line editor, VFS load/save, dirty flag, clipboard, context menu
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
 - CLI boot scroll stays on the front framebuffer (does not wipe via empty backbuffer)

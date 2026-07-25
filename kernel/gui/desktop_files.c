@@ -86,12 +86,6 @@ static void files_format_size(size_t sz, char *buf, size_t cap) {
         snprintf(buf, cap, "%lu", (unsigned long)sz);
 }
 
-void desktop_notepad_open(const char *path) {
-    (void)path;
-    notify_push("Notepad not ready yet");
-    dirty_bits |= DIRTY_TOAST;
-}
-
 void desktop_images_open(const char *path) {
     (void)path;
     notify_push("Images not ready yet");

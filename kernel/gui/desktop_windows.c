@@ -14,6 +14,7 @@
 static int app_kind_ready(enum app_kind k) {
     switch (k) {
     case APP_NOTEPAD:
+        return 1;
     case APP_IMAGES:
     case APP_DISKS:
     case APP_NETEXP:
@@ -278,7 +279,12 @@ int desktop_open_app(enum app_kind k) {
         wins[slot].w = desktop_u(480);
         wins[slot].h = desktop_title_h() + desktop_u(360);
     }
-    if (k == APP_NOTEPAD || k == APP_IMAGES || k == APP_DISKS ||
+    if (k == APP_NOTEPAD) {
+        wins[slot].w = desktop_u(520);
+        wins[slot].h = desktop_title_h() + desktop_u(360);
+        desktop_notepad_init();
+    }
+    if (k == APP_IMAGES || k == APP_DISKS ||
         k == APP_NETEXP || k == APP_NETCTL) {
         wins[slot].w = desktop_u(480);
         wins[slot].h = desktop_title_h() + desktop_u(320);
@@ -372,6 +378,8 @@ void desktop_draw_win_content(int i) {
         desktop_terminal_draw(w);
     else if (w->kind == APP_FILES)
         desktop_files_draw(w);
+    else if (w->kind == APP_NOTEPAD)
+        desktop_notepad_draw(w);
     else if (w->kind == APP_SETTINGS)
         desktop_settings_draw(w);
     else if (w->kind == APP_AGENT)
