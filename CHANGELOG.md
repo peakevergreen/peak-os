@@ -32,6 +32,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - New builtins: `printf`, `tee`, `test`/`[`, `yes` (bounded)
 - Hash/pager tools: `sha256sum`, `md5sum`, `base64`, `less`/`more`, `time`
 - Net diag: `nslookup`, `host`, `nc` (TCP connect)
+- Shell history: persistent `/var/peak/history`, Up/Down/Ctrl-P/N recall, `history`, `!!`, exit-status prompt, errno-style path errors
 - Host tests: `test_libpeak`, `test_shell_split`, `test_console_scroll`, `test_cli_crypto`
 
 ### Agent and PeakVec

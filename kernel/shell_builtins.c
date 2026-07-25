@@ -2,10 +2,13 @@
 #include "console.h"
 #include "util.h"
 #include "vfs.h"
+#include "peak_errno.h"
 
 static char cwd[VFS_PATH_MAX] = "/home/dev/workspace";
 static char stdin_path_buf[VFS_PATH_MAX];
 static int stdin_path_set;
+static int last_path_err = PEAK_OK;
+static int last_status;
 
 #define ENV_MAX 32
 #define ENV_KEY 32
@@ -38,34 +41,71 @@ const char *shell_stdin_path(void) {
     return stdin_path_set ? stdin_path_buf : 0;
 }
 
+int shell_last_path_errno(void) {
+    return last_path_err;
+}
+
+void shell_perror_path(const char *ctx, const char *path) {
+    console_write(ctx ? ctx : "shell");
+    console_write(": ");
+    if (path && path[0]) {
+        console_write(path);
+        console_write(": ");
+    }
+    console_write(peak_strerror(last_path_err));
+    console_putc('\n');
+}
+
+void shell_set_last_status(int rc) {
+    last_status = rc;
+}
+
+int shell_last_status(void) {
+    return last_status;
+}
+
 int shell_resolve_path(const char *in, char *out, size_t out_len) {
-    if (!in || !out || out_len < 2)
-        return -1;
+    last_path_err = PEAK_OK;
+    if (!in || !out || out_len < 2) {
+        last_path_err = PEAK_EINVAL;
+        return last_path_err;
+    }
     /* Absolute: normalize directly — skip the VFS_PATH_MAX temp copy. */
-    if (in[0] == '/')
-        return vfs_normalize(in, out, out_len);
+    if (in[0] == '/') {
+        int rc = vfs_normalize(in, out, out_len);
+        if (rc != 0)
+            last_path_err = rc;
+        return rc;
+    }
 
     char tmp[VFS_PATH_MAX];
     size_t o = 0;
     for (; cwd[o] && o + 1 < sizeof(tmp); o++)
         tmp[o] = cwd[o];
     if (!(o == 1 && tmp[0] == '/')) {
-        if (o + 1 >= sizeof(tmp))
-            return -1;
+        if (o + 1 >= sizeof(tmp)) {
+            last_path_err = PEAK_ENOSPC;
+            return last_path_err;
+        }
         tmp[o++] = '/';
     }
     for (size_t i = 0; in[i] && o + 1 < sizeof(tmp); i++)
         tmp[o++] = in[i];
     tmp[o] = '\0';
-    return vfs_normalize(tmp, out, out_len);
+    int rc = vfs_normalize(tmp, out, out_len);
+    if (rc != 0)
+        last_path_err = rc;
+    return rc;
 }
 
 int shell_chdir(const char *path) {
     char abs[VFS_PATH_MAX];
     if (shell_resolve_path(path, abs, sizeof(abs)) != 0)
-        return -1;
-    if (!vfs_is_dir(abs))
-        return -1;
+        return last_path_err;
+    if (!vfs_is_dir(abs)) {
+        last_path_err = vfs_exists(abs) ? PEAK_ENOTDIR : PEAK_ENOENT;
+        return last_path_err;
+    }
     size_t i = 0;
     for (; abs[i] && i + 1 < sizeof(cwd); i++)
         cwd[i] = abs[i];
@@ -191,6 +231,7 @@ static const struct help_entry help_table[] = {
     { "sh", "sys", "nested shell loop" },
     { "reboot", "sys", "reboot guest" },
     { "help", "sys", "this help" },
+    { "history", "sys", "command history" },
     { "man", "sys", "command help" },
     { "peak", "meta", "Peak meta info" },
     { "ask", "meta", "peak-agent prompt (run ls …, audit, memory)" },
@@ -221,7 +262,7 @@ void shell_help_topics(void) {
     console_write("  text  cat head tail wc grep diff sort uniq cut tr sed cmp hexdump strings echo printf tee yes\n");
     console_write("        sha256sum md5sum base64 less more edit\n");
     console_write("  sys   date free top sysmon ps kill env which seq sleep theme wallpaper scale\n");
-    console_write("        uname true false test [ yes time sh reboot help man js\n");
+    console_write("        uname true false test [ yes time history sh reboot help man js\n");
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
     console_write("  net   ctr ctrd ifconfig ping wget curl nslookup host nc\n");
     console_write("  file  … tar basename dirname realpath\n");
@@ -245,4 +286,6 @@ void shell_builtins_init(void) {
     shell_env_set("HOME", "/home/dev");
     shell_env_set("PATH", "/bin");
     shell_env_set("USER", "peak");
+    last_status = 0;
+    last_path_err = PEAK_OK;
 }

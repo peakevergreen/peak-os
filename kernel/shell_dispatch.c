@@ -4,6 +4,7 @@
 #include "elf.h"
 #include "util.h"
 #include "vfs.h"
+#include "peak_errno.h"
 
 static const char PIPE_PATH[] = "/tmp/.peak_pipe";
 
@@ -80,6 +81,7 @@ static int expand_globs(char **argv, int argc, char **out, char name_store[][VFS
         }
         char absdir[VFS_PATH_MAX];
         if (shell_resolve_path(dir, absdir, sizeof(absdir)) != 0) {
+            shell_perror_path("shell: glob", dir);
             if (o >= SHELL_ARGV_MAX - 1)
                 return -1;
             out[o++] = argv[i];
@@ -141,8 +143,10 @@ static int run_simple(char **argv, int argc) {
 
 static int write_redir(const char *path, const char *data, size_t len, int append) {
     char abs[VFS_PATH_MAX];
-    if (shell_resolve_path(path, abs, sizeof(abs)) != 0)
+    if (shell_resolve_path(path, abs, sizeof(abs)) != 0) {
+        shell_perror_path("shell: redirect", path);
         return -1;
+    }
     if (append) {
         char old[SHELL_CAPTURE_MAX];
         size_t old_n = 0;
@@ -171,7 +175,7 @@ static int run_stage(struct shell_stage *st, int capture_out, char *cap_buf, siz
     if (st->redir_in.kind == SHELL_REDIR_IN && st->redir_in.path) {
         char abs[VFS_PATH_MAX];
         if (shell_resolve_path(st->redir_in.path, abs, sizeof(abs)) != 0) {
-            console_write("shell: cannot open input redirect\n");
+            shell_perror_path("shell: input redirect", st->redir_in.path);
             return 1;
         }
         shell_set_stdin_path(abs);
@@ -203,7 +207,8 @@ static int run_stage(struct shell_stage *st, int capture_out, char *cap_buf, siz
     if (st->redir_out.kind != SHELL_REDIR_NONE && st->redir_out.path) {
         int ap = (st->redir_out.kind == SHELL_REDIR_APPEND);
         if (write_redir(st->redir_out.path, cap_buf, n, ap) != 0) {
-            console_write("shell: redirect write failed\n");
+            if (shell_last_path_errno() == PEAK_OK)
+                console_write("shell: redirect write failed\n");
             return 1;
         }
     }
@@ -215,6 +220,35 @@ static int run_stage(struct shell_stage *st, int capture_out, char *cap_buf, siz
  * Mutates cmd in place (quote-split writes NULs). Callers must pass a
  * writable buffer — avoids a per-command 256B stack copy.
  */
+static void expand_bangbang(char *cmd, char *scratch, size_t scratch_cap) {
+    if (!cmd || cmd[0] != '!' || cmd[1] != '!')
+        return;
+    const char *last = shell_history_last();
+    if (!last || !last[0]) {
+        console_write("shell: no previous command\n");
+        cmd[0] = '\0';
+        return;
+    }
+    const char *suffix = cmd + 2;
+    while (*suffix == ' ')
+        suffix++;
+    size_t ln = strlen(last);
+    size_t sn = strlen(suffix);
+    if (ln + (sn ? sn + 1 : 0) + 1 > scratch_cap) {
+        console_write("shell: !! expansion too long\n");
+        cmd[0] = '\0';
+        return;
+    }
+    memcpy(scratch, last, ln);
+    if (sn) {
+        scratch[ln++] = ' ';
+        memcpy(scratch + ln, suffix, sn);
+        ln += sn;
+    }
+    scratch[ln] = '\0';
+    memcpy(cmd, scratch, ln + 1);
+}
+
 void shell_execute(char *cmd) {
     if (!cmd)
         return;
@@ -223,22 +257,32 @@ void shell_execute(char *cmd) {
     if (!*cmd)
         return;
 
+    char expand_buf[256];
+    expand_bangbang(cmd, expand_buf, sizeof(expand_buf));
+    if (!*cmd) {
+        shell_set_last_status(1);
+        return;
+    }
+
     /* export NAME=val as shorthand — rest is one argv, no re-split */
     if (!strncmp(cmd, "export ", 7)) {
         char *rest = cmd + 7;
         while (*rest == ' ')
             rest++;
-        if (!*rest)
+        if (!*rest) {
+            shell_set_last_status(0);
             return;
+        }
         char *argv[3] = { "export", rest, NULL };
         char path[] = "/bin/export";
-        proc_exec(path, 2, argv);
+        shell_set_last_status(proc_exec(path, 2, argv));
         return;
     }
 
     struct shell_pipeline pl;
     if (shell_parse_pipeline(cmd, &pl) != 0) {
         console_write("shell: parse error (pipes/redirects)\n");
+        shell_set_last_status(1);
         return;
     }
 
@@ -247,6 +291,7 @@ void shell_execute(char *cmd) {
     char cap[SHELL_CAPTURE_MAX];
     char pipe_data[SHELL_CAPTURE_MAX];
     size_t pipe_len = 0;
+    int final_rc = 0;
 
     for (int s = 0; s < pl.nstages; s++) {
         int is_last = (s + 1 == pl.nstages);
@@ -256,6 +301,7 @@ void shell_execute(char *cmd) {
             if (vfs_write_file(PIPE_PATH, pipe_data, pipe_len) != 0) {
                 console_write("shell: pipe buffer write failed\n");
                 shell_set_stdin_path(0);
+                shell_set_last_status(1);
                 return;
             }
             shell_set_stdin_path(PIPE_PATH);
@@ -268,8 +314,11 @@ void shell_execute(char *cmd) {
         size_t n = 0;
         int rc = run_stage(&pl.stages[s], capture_for_pipe, cap, sizeof(cap), &n);
         shell_set_stdin_path(0);
-        if (rc == -999)
+        if (rc == -999) {
+            shell_set_last_status(127);
             return;
+        }
+        final_rc = rc;
 
         if (capture_for_pipe) {
             if (n >= sizeof(pipe_data))
@@ -279,4 +328,5 @@ void shell_execute(char *cmd) {
             pipe_len = n;
         }
     }
+    shell_set_last_status(final_rc);
 }

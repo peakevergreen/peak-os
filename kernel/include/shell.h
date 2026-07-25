@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "vfs.h"
+#include "peak_errno.h"
 
 enum os_mode {
     MODE_CLI = 0,
@@ -38,5 +39,22 @@ void shell_help_cmd(const char *cmd);
 
 /* Default env + cwd; called from shell_init(). */
 void shell_builtins_init(void);
+
+/* Command history (/var/peak/history). */
+void shell_history_init(void);
+void shell_history_add(const char *line);
+const char *shell_history_last(void);
+int  shell_history_prev(char *line, size_t line_cap);
+int  shell_history_next(char *line, size_t line_cap);
+void shell_history_reset_browse(void);
+void shell_history_list(void);
+
+/* Last pipeline exit status (0 = success). */
+void shell_set_last_status(int rc);
+int  shell_last_status(void);
+
+/* Path resolve errors (peak_errno codes). */
+int  shell_last_path_errno(void);
+void shell_perror_path(const char *ctx, const char *path);
 
 #endif

@@ -26,7 +26,7 @@ int upwd_main(int argc, char **argv) {
 int ucd_main(int argc, char **argv) {
     const char *p = argc >= 2 ? argv[1] : "/home/dev/workspace";
     if (shell_chdir(p) != 0) {
-        peak_perror("cd", "no such directory");
+        shell_perror_path("cd", p);
         return 1;
     }
     return 0;
@@ -361,6 +361,13 @@ int uhelp_main(int argc, char **argv) {
         shell_help_cmd(argv[1]);
     else
         shell_help_topics();
+    return 0;
+}
+
+int uhistory_main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    shell_history_list();
     return 0;
 }
 
