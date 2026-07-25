@@ -138,6 +138,7 @@ extern uint32_t move_pw, move_ph;
 extern int move_live;
 extern uint32_t band_x, band_y, band_w, band_h;
 extern int band_live;
+extern int snap_live;
 
 extern struct damage_rect damage_list[MAX_DAMAGE];
 extern int damage_count;
@@ -213,7 +214,11 @@ void desktop_login(void);
 void desktop_menu_click(int32_t mx, int32_t my);
 int desktop_ctx_menu_click(int32_t mx, int32_t my);
 int desktop_menus_toggle_start(int32_t mx, int32_t my, uint32_t taskbar_y, uint32_t taskbar_h);
+int desktop_menus_start_key(int key);
 int desktop_menus_close_popups(void);
+int desktop_snap_hint(int32_t mx, int32_t my);
+void desktop_snap_zone_rect(int mode, uint32_t *x, uint32_t *y, uint32_t *w, uint32_t *h);
+void desktop_snap_apply(int idx, int mode);
 
 void desktop_overlays_idle_lock(uint64_t last_input_tick);
 int desktop_overlays_block_input(int key);
@@ -294,6 +299,8 @@ int desktop_agent_click(void);
 void desktop_compose_reset_cursor_cache(void);
 
 extern int menu_open;
+extern char start_filter[24];
+extern int start_sel;
 extern int ctx_menu;
 extern enum ctx_target ctx_target_kind;
 extern int ctx_win;

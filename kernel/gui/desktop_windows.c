@@ -42,6 +42,7 @@ uint32_t move_pw, move_ph;
 int move_live;
 uint32_t band_x, band_y, band_w, band_h;
 int band_live;
+int snap_live;
 
 static uint32_t resize_grip(void) {
     uint32_t g = desktop_u(14);
@@ -336,16 +337,71 @@ void desktop_close_win(int idx) {
     dirty_bits |= DIRTY_FULL;
 }
 
+static uint32_t snap_edge(void) {
+    uint32_t e = desktop_u(16);
+    return e < 8 ? 8 : e;
+}
+
+int desktop_snap_hint(int32_t mx, int32_t my) {
+    struct framebuffer *fb = fb_get();
+    uint32_t edge = snap_edge();
+    if (my < (int32_t)edge)
+        return 3;
+    if (mx < (int32_t)edge)
+        return 1;
+    if (mx > (int32_t)fb->width - (int32_t)edge)
+        return 2;
+    return 0;
+}
+
+void desktop_snap_zone_rect(int mode, uint32_t *x, uint32_t *y, uint32_t *w, uint32_t *h) {
+    struct framebuffer *fb = fb_get();
+    uint32_t tb = desktop_taskbar_h();
+    uint32_t max_h = (uint32_t)fb->height > tb ? (uint32_t)fb->height - tb : (uint32_t)fb->height;
+    switch (mode) {
+    case 1: *x = 0; *y = 0; *w = (uint32_t)fb->width / 2; *h = max_h; break;
+    case 2: *x = (uint32_t)fb->width / 2; *y = 0; *w = (uint32_t)fb->width - *x; *h = max_h; break;
+    case 3: *x = 0; *y = 0; *w = (uint32_t)fb->width; *h = max_h; break;
+    default: *x = *y = *w = *h = 0; break;
+    }
+}
+
+void desktop_snap_apply(int idx, int mode) {
+    if (idx < 0 || mode <= 0)
+        return;
+    struct win *w = &wins[idx];
+    uint32_t ox = w->x, oy = w->y, ow = w->w, oh = w->h;
+    if (mode == 3) {
+        desktop_maximize_win(idx);
+        return;
+    }
+    if (!w->maximized) {
+        w->rx = w->x; w->ry = w->y; w->rw = w->w; w->rh = w->h;
+    }
+    w->maximized = 0;
+    desktop_snap_zone_rect(mode, &w->x, &w->y, &w->w, &w->h);
+    desktop_clamp_win_geom(w);
+    damage_add(ox, oy, ow, oh);
+    damage_add(w->x, w->y, w->w, w->h);
+    surface_ensure(&w->surf, w->w, w->h);
+    surface_mark_dirty(&w->surf);
+    dirty_bits |= DIRTY_MOVE;
+}
+
 static void draw_win_chrome(struct win *w, int focused) {
+    uint32_t th = desktop_title_h();
     window_draw_frame(w->x, w->y, w->w, w->h, desktop_app_title(w->kind),
                       focused ? desktop_color_bg() : desktop_color_surface());
     if (focused) {
-        uint32_t s = desktop_u(2);
+        uint32_t s = desktop_u(3);
+        if (s < 2) s = 2;
         uint32_t a = desktop_color_accent();
         fb_fill_rect(w->x + s, w->y + s, w->w - 2 * s, s, a);
         fb_fill_rect(w->x + s, w->y + w->h - 2 * s, w->w - 2 * s, s, a);
         fb_fill_rect(w->x + s, w->y + s, s, w->h - 2 * s, a);
         fb_fill_rect(w->x + w->w - 2 * s, w->y + s, s, w->h - 2 * s, a);
+        fb_fill_rect(w->x + s, w->y + th - s, w->w - 2 * s, s, a);
+        fb_fill_rect(w->x + s, w->y + s, s, th - 2 * s, a);
     }
     uint32_t by = w->y + desktop_u(6);
     uint32_t bs = desktop_u(14);

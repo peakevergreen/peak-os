@@ -48,6 +48,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 21:** `!n` history, aliases (`/var/peak/aliases`), `cd -`, Tab path/`/bin` completion, clearer redirect/pipe errors
 - **Pass 24:** `tlsinfo` (WebPKI root count, pins/TOFU, last TLS error); `tls_err_name()` / alert desc mapping; `webpki_root_sha256()` for root digest listing
 - **Pass 26:** agent tools `fs.grep`, `net.ping` (privacy-gated); richer `sys.info`; readable `policy` CLI; aligned audit/memory tail formatting
+- **Pass 27:** Start menu typeahead filter; edge snap preview (left/right/top maximize); polished shortcuts help overlay; accent focus ring on titlebar
 - **Pass 22:** VFS errno hygiene (`unlink`/`rmdir`/`stat`/`normalize`/`mkdir`), `peak_strerror(EBUSY)`, `stat`/`df` backing hints
 - **Pass 25:** ctr build log line numbers, 0-COPY / 256 KiB cap failures, path sandbox messages name escaped paths; clearer `ctr build` log output
 - **Pass 23:** dig-style `nslookup`/`host`, clearer `ifconfig` route/DNS, `wget`/`curl` TLS detail + progress note, `traceroute` lite

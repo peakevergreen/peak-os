@@ -79,32 +79,47 @@ void desktop_draw_help(void) {
     if (!help_open)
         return;
     struct framebuffer *fb = fb_get();
-    uint32_t mw = desktop_u(420);
-    uint32_t mh = desktop_u(280);
+    uint32_t mw = desktop_u(460);
+    uint32_t mh = desktop_u(320);
     uint32_t mx = ((uint32_t)fb->width - mw) / 2;
-    uint32_t my = desktop_u(80);
+    uint32_t my = desktop_u(64);
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
-    fb_fill_rect(mx, my, mw, desktop_u(2), desktop_color_accent());
-    uint32_t cy = my + desktop_u(12);
-    uint32_t ch = fb_cell_h() + desktop_u(2);
-    const char *lines[] = {
-        "Peak desktop shortcuts",
-        "1-7  open apps",
-        "Alt+Tab  switch windows",
-        "Ctrl+W  close focused window",
-        "Ctrl+Alt+Esc  leave desktop",
-        "S scale  T theme",
-        "Files: n new  d delete  r rename  u up",
-        "Wheel scrolls Files/Term/Browser",
-        "Peak menu: Save disk / Power off",
-        "Esc closes menus (not desktop)",
-        "Right-click desktop, taskbar, windows",
-        "Title buttons: _ [] x",
+    fb_fill_rect(mx, my, mw, desktop_u(3), desktop_color_accent());
+    fb_fill_rect(mx, my + mh - desktop_u(1), mw, desktop_u(1), desktop_color_dim());
+    uint32_t pad = desktop_u(16);
+    uint32_t cy = my + pad;
+    uint32_t ch = fb_cell_h() + desktop_u(4);
+    fb_draw_string(mx + pad, cy, "Keyboard shortcuts", desktop_color_accent(), desktop_color_surface());
+    cy += ch + desktop_u(4);
+    fb_fill_rect(mx + pad, cy, mw - 2 * pad, desktop_u(1), desktop_color_dim());
+    cy += desktop_u(8);
+    struct help_line { const char *key; const char *desc; };
+    static const struct help_line lines[] = {
+        { "1-7", "Open apps (Term, Files, Settings, …)" },
+        { "Alt+Tab", "Switch windows" },
+        { "Ctrl+W", "Close focused window" },
+        { "Ctrl+Alt+Esc", "Leave desktop" },
+        { "S / T", "Scale / theme" },
+        { "Esc", "Close menus & overlays" },
+        { "Peak menu", "Type to filter apps; Enter to launch" },
+        { "Drag title", "Snap left/right/top edges" },
+        { "Title _ [] x", "Minimize / maximize / close" },
+        { "Wheel", "Scroll Files, Terminal, Browser" },
+        { "Right-click", "Context menus" },
     };
+    uint32_t key_w = desktop_u(100);
     for (int i = 0; i < 11; i++) {
-        fb_draw_string(mx + desktop_u(12), cy, lines[i], i == 0 ? desktop_color_accent() : desktop_color_fg(), desktop_color_surface());
+        uint32_t kbg = desktop_color_bg();
+        fb_fill_rect(mx + pad, cy, key_w, fb_cell_h() + desktop_u(2), kbg);
+        fb_draw_string(mx + pad + desktop_u(6), cy + desktop_u(1), lines[i].key,
+                       desktop_color_accent(), kbg);
+        fb_draw_string(mx + pad + key_w + desktop_u(8), cy + desktop_u(1), lines[i].desc,
+                       desktop_color_fg(), desktop_color_surface());
         cy += ch;
     }
+    cy = my + mh - pad - fb_cell_h();
+    fb_draw_string(mx + pad, cy, "Click anywhere or Esc to close",
+                   desktop_color_dim(), desktop_color_surface());
 }
 
 void desktop_overlays_idle_lock(uint64_t last_input_tick) {

@@ -620,6 +620,25 @@ void desktop_draw(void) {
         return;
     }
 
+    if (snap_live && dragging && focus >= 0) {
+        damage_clear();
+        if (move_prev_valid)
+            damage_add(move_prev_x, move_prev_y, move_prev_w, move_prev_h);
+        damage_add(band_x, band_y, band_w, band_h);
+        compose_damage();
+        fb_begin_frame();
+        draw_rubber_band(band_x, band_y, band_w, band_h);
+        fb_cancel_frame();
+        present_scene(0);
+        move_prev_x = band_x;
+        move_prev_y = band_y;
+        move_prev_w = band_w;
+        move_prev_h = band_h;
+        move_prev_valid = 1;
+        dirty_bits &= ~DIRTY_MOVE;
+        return;
+    }
+
     if (try_partial_present())
         return;
 
@@ -632,6 +651,8 @@ void desktop_draw(void) {
     if (!do_full && damage_count > 0) {
         compose_damage();
         if (band_live && resizing)
+            draw_rubber_band(band_x, band_y, band_w, band_h);
+        if (snap_live && dragging)
             draw_rubber_band(band_x, band_y, band_w, band_h);
         scene_ready = 1;
         present_scene(0);

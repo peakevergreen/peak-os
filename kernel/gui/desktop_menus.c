@@ -1,6 +1,7 @@
 #include "desktop_internal.h"
 #include "ui_widgets.h"
 #include "fb.h"
+#include "keyboard.h"
 #include "theme.h"
 #include "timer.h"
 #include "rtc.h"
@@ -19,6 +20,8 @@
 #include "shell.h"
 
 int menu_open;
+char start_filter[24];
+int start_sel;
 int ctx_menu;
 enum ctx_target ctx_target_kind;
 int ctx_win;
@@ -217,12 +220,69 @@ void desktop_draw_taskbar(void) {
 
 #define START_APPS 12
 #define START_SYS  7
+#define START_SEARCH_H (fb_cell_h() + desktop_u(10))
+
+static int str_icontains(const char *hay, const char *needle) {
+    if (!needle[0])
+        return 1;
+    for (const char *p = hay; *p; p++) {
+        const char *n = needle;
+        const char *h = p;
+        while (*n && *h) {
+            char a = *h, b = *n;
+            if (a >= 'A' && a <= 'Z')
+                a = (char)(a + 32);
+            if (b >= 'A' && b <= 'Z')
+                b = (char)(b + 32);
+            if (a != b)
+                break;
+            h++;
+            n++;
+        }
+        if (!*n)
+            return 1;
+    }
+    return 0;
+}
+
+static const char *start_app_labels[START_APPS] = {
+    "Terminal", "Files", "Notepad", "Images", "Disks", "Net Explorer",
+    "Net Control", "Settings", "Agent", "Peak Runner", "Browser", "Monitor"
+};
+
+static const char *start_sys_labels[START_SYS] = {
+    "Theme", "Help", "Save disk", "Lock", "Exit desktop", "Reboot", "Power off"
+};
+
+static int start_visible_rows;
+static int start_visible_map[START_APPS + START_SYS];
+
+static void start_rebuild_visible(void) {
+    start_visible_rows = 0;
+    for (int i = 0; i < START_APPS; i++) {
+        if (str_icontains(start_app_labels[i], start_filter))
+            start_visible_map[start_visible_rows++] = i;
+    }
+    for (int i = 0; i < START_SYS; i++) {
+        if (str_icontains(start_sys_labels[i], start_filter))
+            start_visible_map[start_visible_rows++] = START_APPS + i;
+    }
+    if (start_sel >= start_visible_rows)
+        start_sel = start_visible_rows > 0 ? start_visible_rows - 1 : 0;
+    if (start_sel < 0)
+        start_sel = 0;
+}
 
 static void start_menu_rect(uint32_t *mx, uint32_t *my, uint32_t *mw, uint32_t *mh) {
     struct framebuffer *fb = fb_get();
     uint32_t th = desktop_taskbar_h();
-    *mw = desktop_u(200);
-    *mh = desktop_u(24) + (uint32_t)(START_APPS + START_SYS + 2) * (fb_cell_h() + desktop_u(4)) + desktop_u(16);
+    start_rebuild_visible();
+    uint32_t row = fb_cell_h() + desktop_u(4);
+    uint32_t rows = (uint32_t)start_visible_rows;
+    if (rows == 0)
+        rows = 1;
+    *mw = desktop_u(220);
+    *mh = START_SEARCH_H + desktop_u(8) + rows * row + desktop_u(12);
     *mx = desktop_u(8);
     *my = (uint32_t)fb->height - th - *mh - desktop_u(4);
 }
@@ -234,28 +294,31 @@ void desktop_draw_start_menu(void) {
     start_menu_rect(&mx, &my, &mw, &mh);
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
     fb_fill_rect(mx, my, mw, desktop_u(2), desktop_color_accent());
-    uint32_t cy = my + desktop_u(10);
+    uint32_t cy = my + desktop_u(6);
     uint32_t row = fb_cell_h() + desktop_u(4);
-    fb_draw_string(mx + desktop_u(12), cy, "Apps", desktop_color_accent(), desktop_color_surface());
-    cy += row;
-    static const char *apps[] = {
-        "Terminal", "Files", "Notepad", "Images", "Disks", "Net Explorer",
-        "Net Control", "Settings", "Agent", "Peak Runner", "Browser", "Monitor"
-    };
-    for (int i = 0; i < START_APPS; i++) {
-        fb_draw_string(mx + desktop_u(12), cy, apps[i], desktop_color_fg(), desktop_color_surface());
-        cy += row;
-    }
-    cy += desktop_u(4);
+    uint32_t search_bg = desktop_color_bg();
+    fb_fill_rect(mx + desktop_u(8), cy, mw - desktop_u(16), START_SEARCH_H - desktop_u(2), search_bg);
     fb_fill_rect(mx + desktop_u(8), cy, mw - desktop_u(16), desktop_u(1), desktop_color_dim());
-    cy += desktop_u(6);
-    fb_draw_string(mx + desktop_u(12), cy, "System", desktop_color_accent(), desktop_color_surface());
-    cy += row;
-    static const char *sys[] = {
-        "Theme", "Help", "Save disk", "Lock", "Exit desktop", "Reboot", "Power off"
-    };
-    for (int i = 0; i < START_SYS; i++) {
-        fb_draw_string(mx + desktop_u(12), cy, sys[i], desktop_color_fg(), desktop_color_surface());
+    if (start_filter[0])
+        fb_draw_string(mx + desktop_u(14), cy + desktop_u(4), start_filter,
+                       desktop_color_fg(), search_bg);
+    else
+        fb_draw_string(mx + desktop_u(14), cy + desktop_u(4), "Type to search…",
+                       desktop_color_dim(), search_bg);
+    cy += START_SEARCH_H + desktop_u(4);
+    if (start_visible_rows == 0) {
+        fb_draw_string(mx + desktop_u(12), cy, "No matches", desktop_color_dim(), desktop_color_surface());
+        return;
+    }
+    for (int vi = 0; vi < start_visible_rows; vi++) {
+        int row_idx = start_visible_map[vi];
+        const char *label = row_idx < START_APPS ? start_app_labels[row_idx]
+                                                 : start_sys_labels[row_idx - START_APPS];
+        uint32_t bg = (vi == start_sel) ? desktop_color_accent() : desktop_color_surface();
+        uint32_t fg = (vi == start_sel) ? desktop_color_bg() : desktop_color_fg();
+        if (vi == start_sel)
+            fb_fill_rect(mx + desktop_u(6), cy, mw - desktop_u(12), row - desktop_u(2), bg);
+        fb_draw_string(mx + desktop_u(12), cy, label, fg, bg);
         cy += row;
     }
 }
@@ -719,28 +782,80 @@ void desktop_menu_click(int32_t mx, int32_t my) {
     start_menu_rect(&mx0, &my0, &mw, &mh);
     if (!desktop_point_in(mx, my, mx0, my0, mw, mh)) {
         menu_open = 0;
+        start_filter[0] = 0;
+        start_sel = 0;
         menus_damage_start();
         dirty_bits |= DIRTY_MOVE;
         return;
     }
     uint32_t row_h = fb_cell_h() + desktop_u(4);
-    uint32_t cy = my0 + desktop_u(10) + row_h;
-    if ((uint32_t)my >= cy && (uint32_t)my < cy + (uint32_t)START_APPS * row_h) {
-        int row = (int)(((uint32_t)my - cy) / row_h);
-        menu_open = 0;
-        menus_damage_start();
-        start_row_action(row);
-        dirty_bits |= DIRTY_MOVE;
-        return;
+    uint32_t cy = my0 + desktop_u(6) + START_SEARCH_H + desktop_u(4);
+    if ((uint32_t)my >= cy && start_visible_rows > 0) {
+        int vi = (int)(((uint32_t)my - cy) / row_h);
+        if (vi >= 0 && vi < start_visible_rows) {
+            int row = start_visible_map[vi];
+            menu_open = 0;
+            start_filter[0] = 0;
+            start_sel = 0;
+            menus_damage_start();
+            start_row_action(row);
+            dirty_bits |= DIRTY_MOVE;
+        }
     }
-    cy += (uint32_t)START_APPS * row_h + desktop_u(4) + desktop_u(6) + row_h;
-    if ((uint32_t)my >= cy) {
-        int row = START_APPS + (int)(((uint32_t)my - cy) / row_h);
-        menu_open = 0;
-        menus_damage_start();
-        start_row_action(row);
-        dirty_bits |= DIRTY_MOVE;
+}
+
+int desktop_menus_start_key(int key) {
+    if (!menu_open)
+        return 0;
+    if (key == '\n') {
+        if (start_visible_rows > 0) {
+            int row = start_visible_map[start_sel];
+            menu_open = 0;
+            start_filter[0] = 0;
+            start_sel = 0;
+            menus_damage_start();
+            start_row_action(row);
+            dirty_bits |= DIRTY_MOVE;
+        }
+        return 1;
     }
+    if (key == 127 || key == '\b') {
+        size_t len = strlen(start_filter);
+        if (len > 0) {
+            start_filter[len - 1] = 0;
+            start_sel = 0;
+            menus_damage_start();
+            dirty_bits |= DIRTY_MOVE;
+        }
+        return 1;
+    }
+    if (key == KEY_UP) {
+        if (start_sel > 0)
+            start_sel--;
+        menus_damage_start();
+        dirty_bits |= DIRTY_MOVE;
+        return 1;
+    }
+    if (key == KEY_DOWN) {
+        start_rebuild_visible();
+        if (start_visible_rows > 0 && start_sel < start_visible_rows - 1)
+            start_sel++;
+        menus_damage_start();
+        dirty_bits |= DIRTY_MOVE;
+        return 1;
+    }
+    if (key >= 32 && key < 127) {
+        size_t len = strlen(start_filter);
+        if (len + 1 < sizeof(start_filter)) {
+            start_filter[len] = (char)key;
+            start_filter[len + 1] = 0;
+            start_sel = 0;
+            menus_damage_start();
+            dirty_bits |= DIRTY_MOVE;
+        }
+        return 1;
+    }
+    return 0;
 }
 
 int desktop_menus_toggle_start(int32_t mx, int32_t my, uint32_t taskbar_y, uint32_t taskbar_h) {
@@ -748,6 +863,10 @@ int desktop_menus_toggle_start(int32_t mx, int32_t my, uint32_t taskbar_y, uint3
         return 0;
     menus_damage_start();
     menu_open = !menu_open;
+    if (menu_open) {
+        start_filter[0] = 0;
+        start_sel = 0;
+    }
     dirty_bits |= DIRTY_MOVE;
     return 1;
 }
@@ -760,6 +879,8 @@ int desktop_menus_close_popups(void) {
     if (ctx_menu)
         menus_damage_ctx();
     menu_open = ctx_menu = 0;
+    start_filter[0] = 0;
+    start_sel = 0;
     dirty_bits |= DIRTY_MOVE;
     return 1;
 }
