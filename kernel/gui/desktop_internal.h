@@ -66,6 +66,12 @@ enum ctx_target {
 #define CTX_ACT_NPAD_PASTE       (CTX_ACT_APP_BASE + 22)
 #define CTX_ACT_NPAD_SAVE        (CTX_ACT_APP_BASE + 23)
 #define CTX_ACT_NPAD_SAVEAS      (CTX_ACT_APP_BASE + 24)
+#define CTX_ACT_IMG_FIT          (CTX_ACT_APP_BASE + 40)
+#define CTX_ACT_IMG_ACTUAL       (CTX_ACT_APP_BASE + 41)
+#define CTX_ACT_IMG_NEXT         (CTX_ACT_APP_BASE + 42)
+#define CTX_ACT_IMG_PREV         (CTX_ACT_APP_BASE + 43)
+#define CTX_ACT_IMG_OPEN_DIR     (CTX_ACT_APP_BASE + 44)
+#define CTX_ACT_IMG_COPY_PATH    (CTX_ACT_APP_BASE + 45)
 #define CTX_ACT_TERM_NEW         (CTX_ACT_APP_BASE + 0)
 #define CTX_ACT_TERM_COPY        (CTX_ACT_APP_BASE + 1)
 #define CTX_ACT_TERM_PASTE       (CTX_ACT_APP_BASE + 2)
@@ -229,7 +235,15 @@ int desktop_notepad_click(struct win *w, int32_t mx, int32_t my);
 int desktop_notepad_ctx_menu(struct ctx_menu_item *items, int max_items);
 int desktop_notepad_ctx_action(int action_id);
 
+void desktop_images_init(void);
 void desktop_images_open(const char *path);
+void desktop_images_draw(struct win *w);
+int desktop_images_key(int key);
+void desktop_images_wheel(int wheel);
+int desktop_images_click(struct win *w, int32_t mx, int32_t my);
+int desktop_images_ctx_menu(struct ctx_menu_item *items, int max_items);
+int desktop_images_ctx_action(int action_id);
+
 void desktop_disks_show(void);
 
 void desktop_settings_draw(struct win *w);
