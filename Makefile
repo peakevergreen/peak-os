@@ -158,6 +158,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/desktop_compose.c \
 	kernel/gui/desktop_login.c \
 	kernel/gui/desktop_menus.c \
+	kernel/gui/ui_widgets.c \
 	kernel/gui/desktop_overlays.c \
 	kernel/gui/desktop_terminal.c \
 	kernel/gui/desktop_files.c \

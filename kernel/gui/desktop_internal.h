@@ -3,13 +3,14 @@
 
 #include "types.h"
 #include "surface.h"
+#include "ui_widgets.h"
 
 #define TERM_COLS 64
 #define TERM_ROWS 200
 #define TERM_VIEW 28
 #define CURSOR_MAX 64
 #define FILES_ROWS 24
-#define MAX_WINS 12
+#define MAX_WINS 16
 #define SETTINGS_PAGES 5
 #define MOVE_PIX_CAP (1920u * 1200u)
 #define MAX_DAMAGE 16
@@ -22,7 +23,35 @@ enum app_kind {
     APP_GAME = 4,
     APP_BROWSER = 5,
     APP_MONITOR = 6,
+    APP_NOTEPAD = 7,
+    APP_IMAGES = 8,
+    APP_DISKS = 9,
+    APP_NETEXP = 10,
+    APP_NETCTL = 11,
 };
+
+enum ctx_target {
+    CTX_DESKTOP = 0,
+    CTX_TASKBAR = 1,
+    CTX_CHROME = 2,
+    CTX_CLIENT = 3,
+};
+
+#define CTX_MENU_MAX_ITEMS 16
+
+#define CTX_ACT_NONE             0
+#define CTX_ACT_NEW_TERM         1
+#define CTX_ACT_NEW_FILES        2
+#define CTX_ACT_NEW_NOTEPAD      3
+#define CTX_ACT_NEW_IMAGES       4
+#define CTX_ACT_CHANGE_WALLPAPER 5
+#define CTX_ACT_DISPLAY_SETTINGS 6
+#define CTX_ACT_RAISE            10
+#define CTX_ACT_MIN_RESTORE      11
+#define CTX_ACT_CLOSE            12
+#define CTX_ACT_MAX_RESTORE      13
+#define CTX_ACT_HELP             14
+#define CTX_ACT_APP_BASE         100
 
 struct win {
     int open;
@@ -119,6 +148,14 @@ void desktop_draw_win_content(int i);
 void desktop_draw_taskbar(void);
 void desktop_draw_start_menu(void);
 void desktop_draw_ctx_menu(void);
+int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int max_items);
+void desktop_menus_open_ctx_target(int32_t mx, int32_t my, enum ctx_target target, int win_idx);
+int desktop_menus_ctx_hit_test(int32_t mx, int32_t my, enum ctx_target *target, int *win_idx);
+void desktop_menus_ctx_hover(int32_t mx, int32_t my);
+int desktop_taskbar_hit_button(int32_t mx, int32_t my, int *win_idx, int *overflow_btn);
+int desktop_taskbar_raise_overflow(void);
+int desktop_taskbar_map_win(int slot, int *win_idx);
+int desktop_taskbar_visible_slots(void);
 void desktop_draw_alttab(void);
 void desktop_draw_help(void);
 void desktop_draw_session_overlays(void);
@@ -130,7 +167,6 @@ uint32_t desktop_taskbar_btn_w(void);
 void desktop_login(void);
 void desktop_menu_click(int32_t mx, int32_t my);
 int desktop_ctx_menu_click(int32_t mx, int32_t my);
-void desktop_menus_open_ctx(int32_t mx, int32_t my);
 int desktop_menus_toggle_start(int32_t mx, int32_t my, uint32_t taskbar_y, uint32_t taskbar_h);
 int desktop_menus_close_popups(void);
 
@@ -168,7 +204,11 @@ void desktop_compose_reset_cursor_cache(void);
 
 extern int menu_open;
 extern int ctx_menu;
-extern int32_t ctx_x, ctx_y;
+extern enum ctx_target ctx_target_kind;
+extern int ctx_win;
+extern struct ctx_menu_spec ctx_spec;
+extern struct ctx_menu_item ctx_items[CTX_MENU_MAX_ITEMS];
+extern int ctx_item_count;
 extern int settings_page;
 extern int alttab_open;
 extern int alttab_sel;

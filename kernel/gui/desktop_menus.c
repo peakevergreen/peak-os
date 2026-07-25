@@ -1,4 +1,5 @@
 #include "desktop_internal.h"
+#include "ui_widgets.h"
 #include "fb.h"
 #include "theme.h"
 #include "timer.h"
@@ -10,10 +11,118 @@
 #include "peakdisk.h"
 #include "privacy.h"
 #include "util.h"
+#include "sound.h"
 
 int menu_open;
 int ctx_menu;
-int32_t ctx_x, ctx_y;
+enum ctx_target ctx_target_kind;
+int ctx_win;
+struct ctx_menu_item ctx_items[CTX_MENU_MAX_ITEMS];
+int ctx_item_count;
+struct ctx_menu_spec ctx_spec;
+
+static int taskbar_all[MAX_WINS];
+static int taskbar_order[MAX_WINS];
+static int taskbar_visible;
+static int taskbar_overflow;
+
+static int app_kind_ready(enum app_kind k) {
+    switch (k) {
+    case APP_NOTEPAD:
+    case APP_IMAGES:
+    case APP_DISKS:
+    case APP_NETEXP:
+    case APP_NETCTL:
+        return 0;
+    default:
+        return 1;
+    }
+}
+
+static void taskbar_rebuild(void) {
+    taskbar_visible = 0;
+    taskbar_overflow = 0;
+    int n = 0;
+    for (int i = 0; i < MAX_WINS; i++)
+        if (wins[i].open)
+            taskbar_all[n++] = i;
+    for (int i = 0; i < n; i++)
+        for (int j = i + 1; j < n; j++)
+            if (wins[taskbar_all[j]].z < wins[taskbar_all[i]].z) {
+                int t = taskbar_all[i];
+                taskbar_all[i] = taskbar_all[j];
+                taskbar_all[j] = t;
+            }
+    struct framebuffer *fb = fb_get();
+    uint32_t bx = desktop_u(70);
+    uint32_t bw = desktop_taskbar_btn_w();
+    uint32_t end = (uint32_t)fb->width - desktop_u(120);
+    int max_slots = bx < end ? (int)((end - bx) / bw) : 0;
+    if (n > max_slots && max_slots > 0)
+        max_slots--;
+    if (max_slots > n)
+        max_slots = n;
+    for (int i = 0; i < max_slots; i++)
+        taskbar_order[i] = taskbar_all[i];
+    taskbar_visible = max_slots;
+    taskbar_overflow = n - max_slots;
+}
+
+int desktop_taskbar_visible_slots(void) {
+    taskbar_rebuild();
+    return taskbar_visible;
+}
+
+int desktop_taskbar_map_win(int slot, int *win_idx) {
+    taskbar_rebuild();
+    if (slot < 0 || slot >= taskbar_visible || !win_idx)
+        return 0;
+    *win_idx = taskbar_order[slot];
+    return 1;
+}
+
+int desktop_taskbar_hit_button(int32_t mx, int32_t my, int *win_idx, int *overflow_btn) {
+    struct framebuffer *fb = fb_get();
+    uint32_t th = desktop_taskbar_h();
+    uint32_t ty = (uint32_t)fb->height - th;
+    if (!desktop_point_in(mx, my, desktop_u(70), ty, (uint32_t)fb->width - desktop_u(180), th))
+        return 0;
+    taskbar_rebuild();
+    uint32_t bx = desktop_u(70);
+    uint32_t bw = desktop_taskbar_btn_w();
+    uint32_t by = ty + desktop_u(4);
+    uint32_t bh = th > desktop_u(8) ? th - desktop_u(8) : th;
+    for (int s = 0; s < taskbar_visible; s++) {
+        if (desktop_point_in(mx, my, bx, by, bw - desktop_u(4), bh)) {
+            if (win_idx)
+                *win_idx = taskbar_order[s];
+            if (overflow_btn)
+                *overflow_btn = 0;
+            return 1;
+        }
+        bx += bw;
+    }
+    if (taskbar_overflow > 0 &&
+        desktop_point_in(mx, my, bx, by, bw - desktop_u(4), bh)) {
+        if (win_idx)
+            *win_idx = -1;
+        if (overflow_btn)
+            *overflow_btn = 1;
+        return 1;
+    }
+    return 0;
+}
+
+int desktop_taskbar_raise_overflow(void) {
+    taskbar_rebuild();
+    if (taskbar_overflow <= 0)
+        return 0;
+    int idx = taskbar_all[taskbar_visible];
+    wins[idx].minimized = 0;
+    desktop_raise_win(idx);
+    sound_ui_click();
+    return 1;
+}
 
 void desktop_draw_desktop_bg(void) {
     struct framebuffer *fb = fb_get();
@@ -75,13 +184,13 @@ void desktop_draw_taskbar(void) {
     fb_fill_rect(0, y, (uint32_t)fb->width, desktop_u(2), desktop_color_accent());
     fb_draw_string(desktop_u(12), y + (th - fb_cell_h()) / 2, "Peak", desktop_color_fg(), desktop_color_surface());
 
+    taskbar_rebuild();
     uint32_t bx = desktop_u(70);
     uint32_t bw = desktop_taskbar_btn_w();
     uint32_t by = y + desktop_u(4);
     uint32_t bh = th > desktop_u(8) ? th - desktop_u(8) : th;
-    for (int i = 0; i < MAX_WINS; i++) {
-        if (!wins[i].open)
-            continue;
+    for (int s = 0; s < taskbar_visible; s++) {
+        int i = taskbar_order[s];
         uint32_t bg = (i == focus && !wins[i].minimized) ? desktop_color_accent() : desktop_color_bg();
         uint32_t fg = (i == focus && !wins[i].minimized) ? desktop_color_bg() : desktop_color_fg();
         if (wins[i].minimized)
@@ -90,8 +199,13 @@ void desktop_draw_taskbar(void) {
         fb_draw_string_fit(bx + desktop_u(4), by + (bh - fb_cell_h()) / 2, bw - desktop_u(12),
                            desktop_app_title(wins[i].kind), fg, bg);
         bx += bw;
-        if (bx + bw > (uint32_t)fb->width - desktop_u(120))
-            break;
+    }
+    if (taskbar_overflow > 0) {
+        fb_fill_rect(bx, by, bw - desktop_u(4), bh, desktop_color_dim());
+        char obuf[8];
+        snprintf(obuf, sizeof(obuf), "+%d", taskbar_overflow);
+        fb_draw_string_fit(bx + desktop_u(4), by + (bh - fb_cell_h()) / 2, bw - desktop_u(12),
+                           obuf, desktop_color_fg(), desktop_color_dim());
     }
 
     struct net_info ni;
@@ -102,95 +216,344 @@ void desktop_draw_taskbar(void) {
     desktop_draw_clock_area();
 }
 
+#define START_APPS 12
+#define START_SYS  7
+
+static void start_menu_rect(uint32_t *mx, uint32_t *my, uint32_t *mw, uint32_t *mh) {
+    struct framebuffer *fb = fb_get();
+    uint32_t th = desktop_taskbar_h();
+    *mw = desktop_u(200);
+    *mh = desktop_u(24) + (uint32_t)(START_APPS + START_SYS + 2) * (fb_cell_h() + desktop_u(4)) + desktop_u(16);
+    *mx = desktop_u(8);
+    *my = (uint32_t)fb->height - th - *mh - desktop_u(4);
+}
+
 void desktop_draw_start_menu(void) {
     if (!menu_open)
         return;
-    struct framebuffer *fb = fb_get();
-    uint32_t th = desktop_taskbar_h();
-    uint32_t mw = desktop_u(180);
-    uint32_t mh = desktop_u(320);
-    uint32_t mx = desktop_u(8);
-    uint32_t my = (uint32_t)fb->height - th - mh - desktop_u(4);
+    uint32_t mx, my, mw, mh;
+    start_menu_rect(&mx, &my, &mw, &mh);
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
     fb_fill_rect(mx, my, mw, desktop_u(2), desktop_color_accent());
-    const char *items[] = {
-        "Terminal", "Files", "Settings", "Agent", "Peak Runner",
-        "Browser", "Monitor", "Theme", "Help", "Save disk",
-        "Lock", "Exit desktop", "Reboot", "Power off"
+    uint32_t cy = my + desktop_u(10);
+    uint32_t row = fb_cell_h() + desktop_u(4);
+    fb_draw_string(mx + desktop_u(12), cy, "Apps", desktop_color_accent(), desktop_color_surface());
+    cy += row;
+    static const char *apps[] = {
+        "Terminal", "Files", "Notepad", "Images", "Disks", "Net Explorer",
+        "Net Control", "Settings", "Agent", "Peak Runner", "Browser", "Monitor"
     };
-    for (int i = 0; i < 14; i++) {
-        fb_draw_string(mx + desktop_u(12), my + desktop_u(12) + (uint32_t)i * (fb_cell_h() + desktop_u(4)),
-                       items[i], desktop_color_fg(), desktop_color_surface());
+    for (int i = 0; i < START_APPS; i++) {
+        fb_draw_string(mx + desktop_u(12), cy, apps[i], desktop_color_fg(), desktop_color_surface());
+        cy += row;
+    }
+    cy += desktop_u(4);
+    fb_fill_rect(mx + desktop_u(8), cy, mw - desktop_u(16), desktop_u(1), desktop_color_dim());
+    cy += desktop_u(6);
+    fb_draw_string(mx + desktop_u(12), cy, "System", desktop_color_accent(), desktop_color_surface());
+    cy += row;
+    static const char *sys[] = {
+        "Theme", "Help", "Save disk", "Lock", "Exit desktop", "Reboot", "Power off"
+    };
+    for (int i = 0; i < START_SYS; i++) {
+        fb_draw_string(mx + desktop_u(12), cy, sys[i], desktop_color_fg(), desktop_color_surface());
+        cy += row;
     }
 }
 
-void desktop_draw_ctx_menu(void) {
-    if (!ctx_menu)
-        return;
-    uint32_t mw = desktop_u(140);
-    uint32_t mh = desktop_u(90);
-    fb_fill_rect((uint32_t)ctx_x, (uint32_t)ctx_y, mw, mh, desktop_color_surface());
-    fb_fill_rect((uint32_t)ctx_x, (uint32_t)ctx_y, mw, desktop_u(2), desktop_color_accent());
-    fb_draw_string((uint32_t)ctx_x + desktop_u(8), (uint32_t)ctx_y + desktop_u(10), "Terminal", desktop_color_fg(), desktop_color_surface());
-    fb_draw_string((uint32_t)ctx_x + desktop_u(8), (uint32_t)ctx_y + desktop_u(10) + fb_cell_h() + desktop_u(4),
-                   "Files", desktop_color_fg(), desktop_color_surface());
-    fb_draw_string((uint32_t)ctx_x + desktop_u(8), (uint32_t)ctx_y + desktop_u(10) + 2 * (fb_cell_h() + desktop_u(4)),
-                   "Settings", desktop_color_fg(), desktop_color_surface());
-}
-
-/* Damage start-menu / Peak button region so open/close avoid DIRTY_FULL. */
 static void menus_damage_start(void) {
+    uint32_t mx, my, mw, mh;
+    start_menu_rect(&mx, &my, &mw, &mh);
     struct framebuffer *fb = fb_get();
     uint32_t th = desktop_taskbar_h();
-    uint32_t mw = desktop_u(180);
-    uint32_t mh = desktop_u(320);
-    uint32_t mx = desktop_u(8);
-    uint32_t my = (uint32_t)fb->height - th - mh - desktop_u(4);
     damage_add(mx, my, mw, mh);
     damage_add(desktop_u(8), (uint32_t)fb->height - th, desktop_u(60), th);
 }
 
 static void menus_damage_ctx(void) {
-    damage_add((uint32_t)ctx_x, (uint32_t)ctx_y, desktop_u(140), desktop_u(90));
+    if (ctx_menu)
+        ctx_menu_damage_rect(&ctx_spec);
 }
 
-void desktop_menu_click(int32_t mx, int32_t my) {
+static void ctx_close(void) {
+    if (!ctx_menu)
+        return;
+    menus_damage_ctx();
+    ctx_menu = 0;
+    ctx_spec.hover_row = -1;
+}
+
+static void ctx_add_item(const char *label, int enabled, int separator, int action_id) {
+    if (ctx_item_count >= CTX_MENU_MAX_ITEMS)
+        return;
+    ctx_items[ctx_item_count].label = label;
+    ctx_items[ctx_item_count].enabled = enabled;
+    ctx_items[ctx_item_count].separator = separator;
+    ctx_items[ctx_item_count].action_id = action_id;
+    ctx_item_count++;
+}
+
+static void ctx_build_desktop(void) {
+    ctx_add_item("New Terminal", 1, 0, CTX_ACT_NEW_TERM);
+    ctx_add_item("Files", 1, 0, CTX_ACT_NEW_FILES);
+    ctx_add_item("Notepad", 1, 0, CTX_ACT_NEW_NOTEPAD);
+    ctx_add_item("Images", 1, 0, CTX_ACT_NEW_IMAGES);
+    ctx_add_item(NULL, 0, 1, CTX_ACT_NONE);
+    ctx_add_item("Change wallpaper", 1, 0, CTX_ACT_CHANGE_WALLPAPER);
+    ctx_add_item("Display settings", 1, 0, CTX_ACT_DISPLAY_SETTINGS);
+}
+
+static void ctx_build_taskbar(int win_idx) {
+    if (win_idx < 0 || win_idx >= MAX_WINS || !wins[win_idx].open)
+        return;
+    ctx_add_item("Raise", 1, 0, CTX_ACT_RAISE);
+    ctx_add_item(wins[win_idx].minimized ? "Restore" : "Minimize", 1, 0, CTX_ACT_MIN_RESTORE);
+    ctx_add_item("Close", 1, 0, CTX_ACT_CLOSE);
+}
+
+static void ctx_build_chrome(int win_idx) {
+    if (win_idx < 0 || win_idx >= MAX_WINS || !wins[win_idx].open)
+        return;
+    ctx_add_item("Minimize", 1, 0, CTX_ACT_MIN_RESTORE);
+    ctx_add_item(wins[win_idx].maximized ? "Restore" : "Maximize", 1, 0, CTX_ACT_MAX_RESTORE);
+    ctx_add_item("Close", 1, 0, CTX_ACT_CLOSE);
+}
+
+int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int max_items) {
+    (void)kind;
+    if (!items || max_items < 2)
+        return 0;
+    items[0].label = "Close window";
+    items[0].enabled = 1;
+    items[0].separator = 0;
+    items[0].action_id = CTX_ACT_CLOSE;
+    items[1].label = "Help";
+    items[1].enabled = 1;
+    items[1].separator = 0;
+    items[1].action_id = CTX_ACT_HELP;
+    return 2;
+}
+
+static void ctx_build_client(int win_idx) {
+    if (win_idx < 0 || win_idx >= MAX_WINS || !wins[win_idx].open)
+        return;
+    int n = desktop_app_ctx_menu(wins[win_idx].kind, ctx_items, CTX_MENU_MAX_ITEMS);
+    ctx_item_count = n;
+}
+
+static void ctx_build_spec(enum ctx_target target, int win_idx) {
+    ctx_item_count = 0;
+    ctx_target_kind = target;
+    ctx_win = win_idx;
+    switch (target) {
+    case CTX_DESKTOP:
+        ctx_build_desktop();
+        break;
+    case CTX_TASKBAR:
+        ctx_build_taskbar(win_idx);
+        break;
+    case CTX_CHROME:
+        ctx_build_chrome(win_idx);
+        break;
+    case CTX_CLIENT:
+        ctx_build_client(win_idx);
+        break;
+    }
+    ctx_spec.items = ctx_items;
+    ctx_spec.count = ctx_item_count;
+    ctx_spec.hover_row = -1;
+}
+
+static void ctx_open_at(int32_t mx, int32_t my, enum ctx_target target, int win_idx) {
+    if (ctx_menu)
+        menus_damage_ctx();
+    ctx_build_spec(target, win_idx);
+    ctx_spec.x = mx;
+    ctx_spec.y = my;
     struct framebuffer *fb = fb_get();
-    uint32_t th = desktop_taskbar_h();
-    uint32_t mw = desktop_u(180);
-    uint32_t mh = desktop_u(320);
-    uint32_t menux = desktop_u(8);
-    uint32_t menuy = (uint32_t)fb->height - th - mh - desktop_u(4);
-    if (!desktop_point_in(mx, my, menux, menuy, mw, mh)) {
+    ctx_menu_clamp(&ctx_spec, (uint32_t)fb->width, (uint32_t)fb->height, desktop_u);
+    ctx_menu = 1;
+    if (menu_open) {
         menu_open = 0;
         menus_damage_start();
-        return;
     }
-    int row = (int)((my - (int32_t)menuy - (int32_t)desktop_u(12)) / (int32_t)(fb_cell_h() + desktop_u(4)));
-    menu_open = 0;
-    menus_damage_start();
-    if (row == 0)
+    menus_damage_ctx();
+    dirty_bits |= DIRTY_MOVE;
+}
+
+static int hit_win_at(int32_t mx, int32_t my, int *win_idx, int *in_client) {
+    int order[MAX_WINS], n = 0;
+    for (int i = 0; i < MAX_WINS; i++)
+        if (wins[i].open && !wins[i].minimized)
+            order[n++] = i;
+    for (int i = 0; i < n; i++)
+        for (int j = i + 1; j < n; j++)
+            if (wins[order[j]].z > wins[order[i]].z) {
+                int t = order[i];
+                order[i] = order[j];
+                order[j] = t;
+            }
+    for (int k = 0; k < n; k++) {
+        int i = order[k];
+        struct win *w = &wins[i];
+        if (!desktop_point_in(mx, my, w->x, w->y, w->w, w->h))
+            continue;
+        *win_idx = i;
+        if (in_client) {
+            uint32_t th = desktop_title_h();
+            *in_client = desktop_point_in(mx, my, w->x, w->y + th, w->w, w->h - th) ? 1 : 0;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+int desktop_menus_ctx_hit_test(int32_t mx, int32_t my, enum ctx_target *target, int *win_idx) {
+    struct framebuffer *fb = fb_get();
+    uint32_t th = desktop_taskbar_h();
+    uint32_t ty = (uint32_t)fb->height - th;
+    int wi = -1;
+    int overflow = 0;
+
+    if (desktop_taskbar_hit_button(mx, my, &wi, &overflow) && !overflow && wi >= 0) {
+        if (target)
+            *target = CTX_TASKBAR;
+        if (win_idx)
+            *win_idx = wi;
+        return 1;
+    }
+    if (desktop_point_in(mx, my, 0, ty, (uint32_t)fb->width, th)) {
+        return 0;
+    }
+    int in_client = 0;
+    if (hit_win_at(mx, my, &wi, &in_client)) {
+        if (target)
+            *target = in_client ? CTX_CLIENT : CTX_CHROME;
+        if (win_idx)
+            *win_idx = wi;
+        return 1;
+    }
+    if (target)
+        *target = CTX_DESKTOP;
+    if (win_idx)
+        *win_idx = -1;
+    return 1;
+}
+
+void desktop_menus_open_ctx_target(int32_t mx, int32_t my, enum ctx_target target, int win_idx) {
+    ctx_open_at(mx, my, target, win_idx);
+}
+
+void desktop_menus_ctx_hover(int32_t mx, int32_t my) {
+    if (!ctx_menu)
+        return;
+    ctx_menu_update_hover(&ctx_spec, mx, my, desktop_u);
+}
+
+void desktop_draw_ctx_menu(void) {
+    if (!ctx_menu)
+        return;
+    ctx_menu_draw(&ctx_spec, desktop_u, desktop_color_fg(), desktop_color_surface(),
+                  desktop_color_accent(), desktop_color_dim());
+}
+
+static void ctx_dispatch_action(int action_id) {
+    switch (action_id) {
+    case CTX_ACT_NEW_TERM:
         desktop_open_app(APP_TERM);
-    else if (row == 1)
+        break;
+    case CTX_ACT_NEW_FILES:
         desktop_open_app(APP_FILES);
-    else if (row == 2)
+        break;
+    case CTX_ACT_NEW_NOTEPAD:
+        notify_push("Notepad not ready yet");
+        dirty_bits |= DIRTY_TOAST;
+        break;
+    case CTX_ACT_NEW_IMAGES:
+        notify_push("Images not ready yet");
+        dirty_bits |= DIRTY_TOAST;
+        break;
+    case CTX_ACT_CHANGE_WALLPAPER:
+        wallpaper_next();
+        wallpaper_persist();
+        dirty_bits |= DIRTY_FULL;
+        break;
+    case CTX_ACT_DISPLAY_SETTINGS:
         desktop_open_app(APP_SETTINGS);
-    else if (row == 3)
-        desktop_open_app(APP_AGENT);
-    else if (row == 4)
-        desktop_open_app(APP_GAME);
-    else if (row == 5)
-        desktop_open_app(APP_BROWSER);
-    else if (row == 6)
-        desktop_open_app(APP_MONITOR);
-    else if (row == 7) {
+        settings_page = 0;
+        break;
+    case CTX_ACT_RAISE:
+        if (ctx_win >= 0) {
+            wins[ctx_win].minimized = 0;
+            desktop_raise_win(ctx_win);
+        }
+        break;
+    case CTX_ACT_MIN_RESTORE:
+        if (ctx_win >= 0) {
+            if (ctx_target_kind == CTX_TASKBAR && wins[ctx_win].minimized)
+                wins[ctx_win].minimized = 0;
+            else if (wins[ctx_win].minimized)
+                wins[ctx_win].minimized = 0;
+            else
+                desktop_minimize_win(ctx_win);
+            if (ctx_target_kind == CTX_TASKBAR && !wins[ctx_win].minimized)
+                desktop_raise_win(ctx_win);
+        }
+        break;
+    case CTX_ACT_MAX_RESTORE:
+        if (ctx_win >= 0)
+            desktop_maximize_win(ctx_win);
+        break;
+    case CTX_ACT_CLOSE:
+        if (ctx_win >= 0)
+            desktop_close_win(ctx_win);
+        break;
+    case CTX_ACT_HELP:
+        help_open = 1;
+        dirty_bits |= DIRTY_FULL;
+        break;
+    default:
+        break;
+    }
+}
+
+int desktop_ctx_menu_click(int32_t mx, int32_t my) {
+    if (!ctx_menu)
+        return 0;
+    int item = ctx_menu_hit_row(&ctx_spec, mx, my, desktop_u);
+    if (item >= 0 && item < ctx_item_count && ctx_items[item].enabled)
+        ctx_dispatch_action(ctx_items[item].action_id);
+    ctx_close();
+    dirty_bits |= DIRTY_MOVE;
+    return 1;
+}
+
+static int start_row_action(int row) {
+    if (row < 0)
+        return -1;
+    if (row < START_APPS) {
+        enum app_kind kinds[START_APPS] = {
+            APP_TERM, APP_FILES, APP_NOTEPAD, APP_IMAGES, APP_DISKS, APP_NETEXP,
+            APP_NETCTL, APP_SETTINGS, APP_AGENT, APP_GAME, APP_BROWSER, APP_MONITOR
+        };
+        enum app_kind k = kinds[row];
+        if (!app_kind_ready(k)) {
+            notify_push("App not ready yet");
+            dirty_bits |= DIRTY_TOAST;
+            return 0;
+        }
+        desktop_open_app(k);
+        return 0;
+    }
+    row -= START_APPS;
+    if (row == 0) {
         theme_next();
         theme_persist();
         dirty_bits |= DIRTY_FULL;
-    } else if (row == 8) {
+    } else if (row == 1) {
         help_open = 1;
         dirty_bits |= DIRTY_FULL;
-    } else if (row == 9) {
+    } else if (row == 2) {
         if (privacy_persist_profile() <= 0) {
             notify_push("Enable Privacy → workspace persist first");
         } else if (peakdisk_save_async() == 0) {
@@ -206,52 +569,48 @@ void desktop_menu_click(int32_t mx, int32_t my) {
             }
         }
         dirty_bits |= DIRTY_TOAST;
-    } else if (row == 10) {
+    } else if (row == 3) {
         session_lock = 1;
         dirty_bits |= DIRTY_FULL;
-    } else if (row == 11) {
+    } else if (row == 4) {
         desktop_should_exit = 1;
-    } else if (row == 12) {
+    } else if (row == 5) {
         power_confirm = 2;
         dirty_bits |= DIRTY_FULL;
-    } else if (row == 13) {
+    } else if (row == 6) {
         power_confirm = 1;
         dirty_bits |= DIRTY_FULL;
     }
+    return 0;
 }
 
-/* Returns 1 if the click was consumed by the context menu. */
-int desktop_ctx_menu_click(int32_t mx, int32_t my) {
-    if (!ctx_menu)
-        return 0;
-    uint32_t mw = desktop_u(140);
-    uint32_t mh = desktop_u(90);
-    if (desktop_point_in(mx, my, (uint32_t)ctx_x, (uint32_t)ctx_y, mw, mh)) {
-        int row = (int)((my - ctx_y - (int32_t)desktop_u(10)) /
-                        (int32_t)(fb_cell_h() + desktop_u(4)));
-        if (row == 0)
-            desktop_open_app(APP_TERM);
-        else if (row == 1)
-            desktop_open_app(APP_FILES);
-        else if (row == 2)
-            desktop_open_app(APP_SETTINGS);
-    }
-    menus_damage_ctx();
-    ctx_menu = 0;
-    return 1;
-}
-
-void desktop_menus_open_ctx(int32_t mx, int32_t my) {
-    if (ctx_menu)
-        menus_damage_ctx();
-    ctx_menu = 1;
-    ctx_x = mx;
-    ctx_y = my;
-    if (menu_open) {
+void desktop_menu_click(int32_t mx, int32_t my) {
+    uint32_t mx0, my0, mw, mh;
+    start_menu_rect(&mx0, &my0, &mw, &mh);
+    if (!desktop_point_in(mx, my, mx0, my0, mw, mh)) {
         menu_open = 0;
         menus_damage_start();
+        dirty_bits |= DIRTY_MOVE;
+        return;
     }
-    menus_damage_ctx();
+    uint32_t row_h = fb_cell_h() + desktop_u(4);
+    uint32_t cy = my0 + desktop_u(10) + row_h;
+    if ((uint32_t)my >= cy && (uint32_t)my < cy + (uint32_t)START_APPS * row_h) {
+        int row = (int)(((uint32_t)my - cy) / row_h);
+        menu_open = 0;
+        menus_damage_start();
+        start_row_action(row);
+        dirty_bits |= DIRTY_MOVE;
+        return;
+    }
+    cy += (uint32_t)START_APPS * row_h + desktop_u(4) + desktop_u(6) + row_h;
+    if ((uint32_t)my >= cy) {
+        int row = START_APPS + (int)(((uint32_t)my - cy) / row_h);
+        menu_open = 0;
+        menus_damage_start();
+        start_row_action(row);
+        dirty_bits |= DIRTY_MOVE;
+    }
 }
 
 int desktop_menus_toggle_start(int32_t mx, int32_t my, uint32_t taskbar_y, uint32_t taskbar_h) {
@@ -259,6 +618,7 @@ int desktop_menus_toggle_start(int32_t mx, int32_t my, uint32_t taskbar_y, uint3
         return 0;
     menus_damage_start();
     menu_open = !menu_open;
+    dirty_bits |= DIRTY_MOVE;
     return 1;
 }
 
@@ -270,5 +630,6 @@ int desktop_menus_close_popups(void) {
     if (ctx_menu)
         menus_damage_ctx();
     menu_open = ctx_menu = 0;
+    dirty_bits |= DIRTY_MOVE;
     return 1;
 }

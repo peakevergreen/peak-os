@@ -11,6 +11,19 @@
 #include "notify.h"
 #include "heap.h"
 
+static int app_kind_ready(enum app_kind k) {
+    switch (k) {
+    case APP_NOTEPAD:
+    case APP_IMAGES:
+    case APP_DISKS:
+    case APP_NETEXP:
+    case APP_NETCTL:
+        return 0;
+    default:
+        return 1;
+    }
+}
+
 struct win wins[MAX_WINS];
 int focus = -1;
 int dragging;
@@ -110,6 +123,11 @@ const char *desktop_app_title(enum app_kind k) {
     case APP_GAME: return "Peak Runner";
     case APP_BROWSER: return "Browser";
     case APP_MONITOR: return "Monitor";
+    case APP_NOTEPAD: return "Notepad";
+    case APP_IMAGES: return "Images";
+    case APP_DISKS: return "Disks";
+    case APP_NETEXP: return "Net Explorer";
+    case APP_NETCTL: return "Net Control";
     }
     return "Window";
 }
@@ -194,6 +212,11 @@ void desktop_minimize_win(int idx) {
 }
 
 int desktop_open_app(enum app_kind k) {
+    if (!app_kind_ready(k)) {
+        notify_push("App not ready yet");
+        dirty_bits |= DIRTY_TOAST;
+        return -1;
+    }
     if (k != APP_TERM) {
         int existing = desktop_find_win(k);
         if (existing >= 0) {
@@ -255,6 +278,11 @@ int desktop_open_app(enum app_kind k) {
         wins[slot].w = desktop_u(480);
         wins[slot].h = desktop_title_h() + desktop_u(360);
     }
+    if (k == APP_NOTEPAD || k == APP_IMAGES || k == APP_DISKS ||
+        k == APP_NETEXP || k == APP_NETCTL) {
+        wins[slot].w = desktop_u(480);
+        wins[slot].h = desktop_title_h() + desktop_u(320);
+    }
     if (wins[slot].w > fb->width - desktop_u(40))
         wins[slot].w = (uint32_t)fb->width - desktop_u(40);
     wins[slot].x = desktop_u(40) + (uint32_t)(slot * 24);
@@ -302,11 +330,27 @@ static void draw_win_chrome(struct win *w, int focused) {
     uint32_t gap = desktop_u(4);
     uint32_t bx = w->x + w->w - desktop_u(22);
     fb_fill_rect(bx, by, bs, bs, theme_get()->danger);
+    fb_draw_string(bx + desktop_u(3), by + desktop_u(1), "x", desktop_color_fg(), theme_get()->danger);
     bx -= bs + gap;
     fb_fill_rect(bx, by, bs, bs, desktop_color_accent());
+    {
+        uint32_t m = desktop_u(3);
+        uint32_t fg = desktop_color_fg();
+        if (w->maximized) {
+            fb_fill_rect(bx + m, by + m + desktop_u(2), bs - 2 * m, desktop_u(1), fg);
+            fb_fill_rect(bx + m, by + m + desktop_u(2), desktop_u(1), bs - 2 * m - desktop_u(2), fg);
+            fb_fill_rect(bx + m + desktop_u(2), by + m, bs - 2 * m - desktop_u(2), desktop_u(1), fg);
+            fb_fill_rect(bx + bs - m - desktop_u(1), by + m, desktop_u(1), bs - 2 * m, fg);
+        } else {
+            fb_fill_rect(bx + m, by + m, bs - 2 * m, desktop_u(1), fg);
+            fb_fill_rect(bx + m, by + bs - m - desktop_u(1), bs - 2 * m, desktop_u(1), fg);
+            fb_fill_rect(bx + m, by + m, desktop_u(1), bs - 2 * m, fg);
+            fb_fill_rect(bx + bs - m - desktop_u(1), by + m, desktop_u(1), bs - 2 * m, fg);
+        }
+    }
     bx -= bs + gap;
     fb_fill_rect(bx, by, bs, bs, desktop_color_dim());
-    fb_fill_rect(bx + desktop_u(2), by + bs / 2, bs - desktop_u(4), desktop_u(2), desktop_color_fg());
+    fb_draw_string(bx + desktop_u(3), by + desktop_u(1), "_", desktop_color_fg(), desktop_color_dim());
 
     if (!w->maximized) {
         uint32_t g = resize_grip();
@@ -341,5 +385,9 @@ void desktop_draw_win_content(int i) {
     } else if (w->kind == APP_MONITOR) {
         monitor_draw(w->x + desktop_u(4), w->y + desktop_title_h() + desktop_u(2),
                      w->w - desktop_u(8), w->h - desktop_title_h() - desktop_u(6));
+    } else {
+        uint32_t ty = w->y + desktop_title_h() + desktop_u(24);
+        fb_draw_string(w->x + desktop_u(16), ty, "Coming soon",
+                       desktop_color_dim(), desktop_color_bg());
     }
 }
