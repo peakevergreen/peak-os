@@ -31,6 +31,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - `-h` / `--help` gap-fill on text/sys utils; docs/CLI.md inventory refresh
 - New builtins: `printf`, `tee`, `test`/`[`, `yes` (bounded)
 - Hash/pager tools: `sha256sum`, `md5sum`, `base64`, `less`/`more`, `time`
+- Net diag: `nslookup`, `host`, `nc` (TCP connect)
 - Host tests: `test_libpeak`, `test_shell_split`, `test_console_scroll`, `test_cli_crypto`
 
 ### Agent and PeakVec
