@@ -19,6 +19,14 @@ static int have_wheel;
 
 void mouse_inject(int32_t dx, int32_t dy, uint8_t btns, int8_t wheel);
 
+static int32_t mouse_accel_delta(int32_t d) {
+    if (d == 0) return 0;
+    int32_t sign = d < 0 ? -1 : 1, m = d < 0 ? -d : d;
+    if (m <= 2) return d;
+    m += m / 3;
+    return sign * (m > 127 ? 127 : m);
+}
+
 #if defined(__x86_64__)
 static void mouse_wait(int type) {
     int timeout = 100000;
@@ -101,8 +109,8 @@ void mouse_inject(int32_t dx, int32_t dy, uint8_t btns, int8_t wheel) {
     if ((buttons & 2) && !(prev & 2)) right_pressed = 1;
     if (!(buttons & 2) && (prev & 2)) right_released = 1;
     wheel_accum += wheel;
-    mx += dx;
-    my += dy;
+    mx += mouse_accel_delta(dx);
+    my += mouse_accel_delta(dy);
     if (mx < 0) mx = 0;
     if (my < 0) my = 0;
     if (fb && fb->addr && fb->width && (uint32_t)mx >= fb->width)

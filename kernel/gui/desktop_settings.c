@@ -259,7 +259,7 @@ void desktop_settings_draw(struct win *w) {
         cy = settings_section(tx, cy, "System");
         fb_draw_string(tx, cy, "PeakOS 0.2 — desktop readiness", desktop_color_fg(), desktop_color_bg());
         cy += row;
-        fb_draw_string(tx, cy, "Ctrl+Alt+Esc leaves desktop.", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(tx, cy, "Ctrl+Alt+Esc — return to CLI", desktop_color_dim(), desktop_color_bg());
         cy += row;
         cy = settings_divider(tx, cy, content_w);
         cy = settings_section(tx, cy, "Storage");

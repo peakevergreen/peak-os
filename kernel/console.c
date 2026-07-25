@@ -48,6 +48,7 @@ void console_init(void) {
     const struct peak_theme *t = theme_get();
     fg_color = t->fg;
     bg_color = t->bg;
+    console_scrollback_reset();
     console_clear();
 }
 
@@ -95,6 +96,7 @@ static void console_putc_screen(char c) {
         gui_term_putc(c);
         return;
     }
+    console_scrollback_note_char(c);
     uint32_t cw = fb_cell_w();
     uint32_t ch = fb_cell_h();
     if (c == '\n') {

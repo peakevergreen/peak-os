@@ -95,13 +95,12 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `theme list\|set\|next` | CLI+GUI themes |
 | `wallpaper list\|set\|none\|next` | Desktop background (binary PPM P6) |
 | `scale [1-4]` | UI glyph scale |
-| `date` `free` `env` `export` `which` `seq` `sleep` `time` | |
+| `date` `free` `env` `export` `which` `seq` `sleep` `time` | (`free`: PMM pages + heap used/free/frag/freelist/oom) |
 | `hostname` `uptime` `whoami` `id` `cal` | identity + calendar |
 | `gzip` `gunzip` | Peak RLE compress/decompress (PEAKGZ1 `.gz`, 8 KiB cap) |
 | `timeout` `watch` | run once with deadline note; repeat (`-n`, max 32 iters) |
 | `top` `sysmon` | live system monitor (sparklines, legend; `q` quit, `r` reset, `e` export, `-n` once) |
-| `ps` | task list sorted by CPU ticks |
-| `ps` | list kernel tasks/threads |
+| `ps` | task list (state, CPU ticks, age, wake, share %) sorted by CPU ticks |
 | `kill <pid or name>` | mark READY/BLOCKED task zombie (not idle/self) |
 | `true` `false` `test` `[` `sh` | exit status helpers; `test -f/-d/-e/-z/-n`, `= != -eq …`; nested `ush>` loop |
 | `history` | numbered command history |
@@ -110,7 +109,9 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `ask` `audit` `memory` `policy` `peak` `gui` | agent + desktop |
 | `privacy` | `persist` / `net-allow` / `kill-switch on --confirm` — [privacy.md](privacy.md) |
 
-`gui` enters the desktop; **Ctrl+Alt+Esc** returns to CLI.
+`gui` enters the desktop; press **Ctrl+Alt+Esc** anytime to return to CLI.
+
+CLI scrollback search: **Ctrl+F**, type a needle, **Enter** for next match (128 lines retained).
 
 ## Network / containers
 | Command | Notes |
