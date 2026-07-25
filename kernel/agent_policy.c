@@ -78,8 +78,10 @@ void agent_policy_load_defaults(void) {
     memcpy(allow_tools[8], "fs.mkdir", 9);
     memcpy(allow_tools[9], "fs.rm", 6);
     memcpy(allow_tools[10], "fs.search", 10);
-    memcpy(allow_tools[11], "sys.info", 9);
-    allow_tool_count = 12;
+    memcpy(allow_tools[11], "fs.grep", 8);
+    memcpy(allow_tools[12], "sys.info", 9);
+    memcpy(allow_tools[13], "net.ping", 9);
+    allow_tool_count = 14;
 }
 
 void agent_policy_reload(void) {

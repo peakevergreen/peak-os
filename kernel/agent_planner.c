@@ -126,6 +126,7 @@ enum agent_intent {
     INTENT_AUDIT,
     INTENT_READ,
     INTENT_SYSINFO,
+    INTENT_PING,
     INTENT_HELP,
 };
 
@@ -139,7 +140,10 @@ static enum agent_intent classify_intent(const char *goal) {
     if (contains_ci(goal, "sysinfo") || contains_ci(goal, "system info") ||
         contains_ci(goal, "uptime"))
         return INTENT_SYSINFO;
-    if (contains_ci(goal, "search ") || contains_ci(goal, "find "))
+    if (contains_ci(goal, "ping "))
+        return INTENT_PING;
+    if (contains_ci(goal, "search ") || contains_ci(goal, "find ") ||
+        contains_ci(goal, "grep "))
         return INTENT_SEARCH;
     if (contains_ci(goal, "summar") || contains_ci(goal, "list workspace") ||
         contains_ci(goal, "what's in") || contains_ci(goal, "whats in"))
@@ -199,9 +203,9 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     if (intent == INTENT_HELP) {
         agent_tool_console_print(
             "Peak Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm "
-            "fs.search sys.info mem.recall audit.tail console.print");
+            "fs.search fs.grep sys.info net.ping mem.recall audit.tail console.print");
         agent_tool_console_print(
-            "Try: ask \"summarize workspace\" | \"search README\" | \"run ls .\" | audit | memory");
+            "Try: ask \"summarize workspace\" | \"grep needle\" | \"ping example.com\" | audit | memory");
         agent_tool_console_print("CLI builtins: man <cmd> or help");
         TOOL_NOTE("console.print");
         set_summary(summary, summary_cap, "help");
@@ -257,7 +261,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     }
 
     if (intent == INTENT_SYSINFO) {
-        char info[256];
+        char info[512];
         if (agent_tool_sys_info(info, sizeof(info)) == 0) {
             TOOL_NOTE("sys.info");
             agent_tool_console_print("[agent] system:");
@@ -273,11 +277,46 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         return;
     }
 
+
+    if (intent == INTENT_PING) {
+        char host[64];
+        host[0] = '\0';
+        const char *p = goal + 5;
+        while (*p == ' ')
+            p++;
+        size_t i = 0;
+        for (; *p && *p != ' ' && i + 1 < sizeof(host); p++)
+            host[i++] = *p;
+        host[i] = '\0';
+        if (!host[0]) {
+            agent_tool_console_print("[agent] ping needs a host");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "ping failed");
+            memory_append_turn(goal, tools_used, NULL);
+            return;
+        }
+        char result[256];
+        if (agent_tool_net_ping(host, result, sizeof(result)) == 0) {
+            TOOL_NOTE("net.ping");
+            agent_tool_console_print(result);
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "ping ok");
+        } else {
+            agent_tool_console_print(result[0] ? result : "[agent] ping failed (tool denied or no net grant)");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "ping failed");
+        }
+        memory_append_turn(goal, tools_used, host);
+        return;
+    }
+
     if (intent == INTENT_SEARCH) {
         char needle[64];
         needle[0] = '\0';
         const char *p = goal;
-        if (contains_ci(goal, "search "))
+        if (contains_ci(goal, "grep "))
+            p = goal + 5;
+        else if (contains_ci(goal, "search "))
             p = goal + 7;
         else if (contains_ci(goal, "find "))
             p = goal + 5;
@@ -295,14 +334,21 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             return;
         }
         char hits[512];
-        if (agent_tool_fs_search(needle, hits, sizeof(hits)) == 0) {
+        int use_grep = contains_ci(goal, "grep ");
+        if (use_grep && agent_tool_fs_grep(needle, hits, sizeof(hits)) == 0) {
+            TOOL_NOTE("fs.grep");
+            agent_tool_console_print("[agent] grep matches:");
+            TOOL_NOTE("console.print");
+            agent_tool_console_print(hits);
+            set_summary(summary, summary_cap, "grep hits");
+        } else if (!use_grep && agent_tool_fs_search(needle, hits, sizeof(hits)) == 0) {
             TOOL_NOTE("fs.search");
             agent_tool_console_print("[agent] search matches:");
             TOOL_NOTE("console.print");
             agent_tool_console_print(hits);
             set_summary(summary, summary_cap, "search results");
         } else {
-            agent_tool_console_print("[agent] no matches");
+            agent_tool_console_print(use_grep ? "[agent] no grep matches" : "[agent] no matches");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "search empty");
         }

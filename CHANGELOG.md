@@ -45,6 +45,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 19:** `fold`, `rev`, `od`, `split`, `paste`, `nl`, `tac`, `xargs`
 - **Pass 20:** `hostname`, `uptime`, `whoami`, `id`, `cal`, `gzip`/`gunzip` (PEAKGZ1), `timeout`, `watch`
 - **Pass 21:** `!n` history, aliases (`/var/peak/aliases`), `cd -`, Tab path/`/bin` completion, clearer redirect/pipe errors
+- **Pass 26:** agent tools `fs.grep`, `net.ping` (privacy-gated); richer `sys.info`; readable `policy` CLI; aligned audit/memory tail formatting
 - **Pass 22:** VFS errno hygiene (`unlink`/`rmdir`/`stat`/`normalize`/`mkdir`), `peak_strerror(EBUSY)`, `stat`/`df` backing hints
 - **Pass 25:** ctr build log line numbers, 0-COPY / 256 KiB cap failures, path sandbox messages name escaped paths; clearer `ctr build` log output
 - Hash/pager tools: `sha256sum`, `md5sum`, `base64`, `less`/`more`, `time`
@@ -56,7 +57,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 ### Agent and PeakVec
 
 - In-guest planner (`ask`), capabilities, audit, GUI write approval
-- Agent tools expanded: fs.stat, fs.mkdir, fs.rm, fs.search, sys.info, mem.recall, audit.tail; AGENT_TOOLS_MAX 16; fs.exec allowlist widened
+- Agent tools expanded: fs.stat, fs.mkdir, fs.rm, fs.search, fs.grep, sys.info, net.ping, mem.recall, audit.tail; AGENT_TOOLS_MAX 16; fs.exec allowlist widened
 - Policy seed uses `fs.exec` (no phantom `proc.exec` deny)
 - Agent GUI uses theme colors, scrollable transcript, write-approval toasts, search-aware summarize
 - PeakVec embeddings + recall; streamed PeakFS / blobstore

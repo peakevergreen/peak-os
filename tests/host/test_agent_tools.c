@@ -26,8 +26,10 @@ int main(void) {
     const char *cat = agent_tools_catalog();
     expect(cat != NULL, "catalog non-null");
     expect(agent_tools_catalog_len() == strlen(cat), "catalog len");
-    expect(count_csv_fields(cat) == 12, "twelve agent tools");
+    expect(count_csv_fields(cat) == 14, "fourteen agent tools");
     expect(strstr(cat, "fs.read") != NULL, "fs.read listed");
+    expect(strstr(cat, "fs.grep") != NULL, "fs.grep listed");
+    expect(strstr(cat, "net.ping") != NULL, "net.ping listed");
     expect(strstr(cat, "mem.recall") != NULL, "mem.recall listed");
     expect(strstr(cat, "audit.tail") != NULL, "audit.tail listed");
 

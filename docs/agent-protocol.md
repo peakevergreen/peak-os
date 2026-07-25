@@ -21,11 +21,13 @@ Tool catalog and handlers live in `kernel/agent_tools.c`; policy in
 | `fs.stat` | implemented | Path metadata (type, size, refs) |
 | `fs.mkdir` | implemented | Create directory under allow_paths |
 | `fs.rm` | implemented | Remove file or tree (audit/memory protected) |
-| `fs.search` | implemented | Capped substring scan of workspace files |
+| `fs.search` | implemented | Capped substring scan of workspace files (paths) |
+| `fs.grep` | implemented | Content grep: `path:line:text` (policy-gated) |
 | `fs.exec` | implemented | Allowlisted `/bin` builtins only (no shell metachar) |
-| `sys.info` | implemented | Uptime, memory, load, network rates |
-| `mem.recall` | implemented | PeakVec + session memory tail (policy-gated) |
-| `audit.tail` | implemented | Last ~400 bytes of audit log (policy-gated) |
+| `sys.info` | implemented | Uptime, memory/heap, load/idle, net rates, GUI timing |
+| `net.ping` | implemented | DNS + TCP/:80 probe; requires `privacy_grant_net_client` |
+| `mem.recall` | implemented | PeakVec + formatted session memory tail (policy-gated) |
+| `audit.tail` | implemented | Formatted tail of audit log (policy-gated) |
 | `console.print` | implemented | Prints to console / agent transcript |
 
 `proc.exec` is **not** a tool — guest execution goes through `fs.exec` with an explicit allowlist (`ls`, `cat`, `find`, `sha256sum`, `head`, `tail`, …).
@@ -36,7 +38,8 @@ Bounded in-guest rule/intent planner (not an LLM):
 
 - create / edit workspace files
 - summarize workspace (`fs.list`)
-- search workspace (`fs.search`)
+- search workspace (`fs.search`) or grep content (`fs.grep`)
+- ping host (`net.ping`, privacy-gated)
 - read a file
 - recall prior goals (`mem.recall`)
 - show audit tail (`audit.tail`)
@@ -49,13 +52,17 @@ Session memory is structured (`turn|goal=…|t=…|p=…`) under `/var/peak/sess
 
 `/etc/peak/agent.policy` — `allow_paths=`, `allow_tools=`, `deny_tools=`, `require_approval=`.
 
-Defaults allow `/home/dev/workspace` and `/var/peak/sessions`. Seeded policy includes `fs.exec`, `mem.recall`, and `audit.tail`.
+Defaults allow `/home/dev/workspace` and `/var/peak/sessions`. Seeded policy includes `fs.exec`, `fs.grep`, `net.ping`, `mem.recall`, and `audit.tail`.
+
+Shell `policy` prints the active policy with labeled sections (paths, tools, approval).
 
 ## Audit / memory / vectors
 
 - `/var/peak/audit.log` — structured `actor|op|target|decision`
 - `/var/peak/sessions/memory.txt` — append-only session turns
 - `/var/peak/vec/` — PeakVec namespace files / blob pointers (see [peakvec.md](peakvec.md))
+
+CLI `audit` and `memory`, plus agent tools `audit.tail` and `mem.recall`, share the same numbered tail format (`--- recent entries ---` / `--- end ---`).
 
 ## Related syscalls
 
