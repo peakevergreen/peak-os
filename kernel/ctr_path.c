@@ -31,6 +31,15 @@ void ctr_log_append(char *log, size_t cap, const char *line) {
     log[n] = '\0';
 }
 
+void ctr_log_line(char *log, size_t cap, int line, const char *msg) {
+    char buf[320];
+    if (line > 0)
+        snprintf(buf, sizeof(buf), "line %d: %s", line, msg);
+    else
+        snprintf(buf, sizeof(buf), "%s", msg);
+    ctr_log_append(log, cap, buf);
+}
+
 void ctr_sanitize_tag(const char *tag, char *out, size_t out_cap) {
     size_t o = 0;
     for (size_t i = 0; tag[i] && o + 1 < out_cap; i++) {

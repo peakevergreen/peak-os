@@ -20,6 +20,7 @@ ifconfig
 
 cd /home/dev/workspace/web-demo
 ctr build -t peak/web:latest
+# build log is line-numbered; fails clearly on 0 COPY or >256 KiB staged
 ctr run -p 8080 --name peak-web peak/web:latest
 ctr ps
 # STATUS should include Up/listen
@@ -51,5 +52,6 @@ Port 8080 should no longer accept connections.
 
 ## Negative checks
 
+- [ ] `ctr build` with a Dockerfile that has no `COPY` fails with a clear log line
 - [ ] `gui` idle does not print TLS certificate warnings on serial
 - [ ] User-net smoke (`make smoke-bios`) still passes without bridged mode

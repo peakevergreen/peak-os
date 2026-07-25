@@ -38,13 +38,15 @@ static int ensure_dir_for_file(const char *path) {
 }
 
 static int copy_into_rootfs(const char *context, const char *src_rel,
-                           const char *dest_abs, const char *rootfs,
-                           char *log, size_t log_cap) {
+                           const char *dest_abs, const char *rootfs, int line_no,
+                           size_t *staged_bytes, char *log, size_t log_cap) {
     char src[CTR_PATH_MAX];
     char dst[CTR_PATH_MAX];
     ctr_join_path(context, src_rel, src, sizeof(src));
     if (!ctr_path_under_rootfs(context, src)) {
-        ctr_log_append(log, log_cap, "COPY src escapes context");
+        char msg[240];
+        snprintf(msg, sizeof(msg), "COPY src escapes context: %s", src);
+        ctr_log_line(log, log_cap, line_no, msg);
         return -1;
     }
 
@@ -63,25 +65,50 @@ static int copy_into_rootfs(const char *context, const char *src_rel,
     }
 
     if (!ctr_path_under_rootfs(rootfs, dst)) {
-        ctr_log_append(log, log_cap, "COPY dest escapes rootfs");
+        char msg[240];
+        snprintf(msg, sizeof(msg), "COPY dest escapes rootfs: %s", dst);
+        ctr_log_line(log, log_cap, line_no, msg);
         return -1;
     }
 
     if (!vfs_is_file(src)) {
-        char msg[160];
+        char msg[240];
         snprintf(msg, sizeof(msg), "COPY miss: %s", src);
-        ctr_log_append(log, log_cap, msg);
+        ctr_log_line(log, log_cap, line_no, msg);
         return -1;
     }
-    if (ensure_dir_for_file(dst) != 0)
+
+    struct vfs_stat st;
+    if (vfs_stat(src, &st) == 0) {
+        size_t next = staged_bytes ? *staged_bytes + st.size : st.size;
+        if (next > CTR_BUILD_SIZE_MAX) {
+            char msg[240];
+            snprintf(msg, sizeof(msg),
+                     "COPY exceeds build size cap (%zu + %zu > %d): %s",
+                     staged_bytes ? *staged_bytes : (size_t)0, st.size,
+                     CTR_BUILD_SIZE_MAX, src);
+            ctr_log_line(log, log_cap, line_no, msg);
+            return -1;
+        }
+        if (staged_bytes)
+            *staged_bytes = next;
+    }
+
+    if (ensure_dir_for_file(dst) != 0) {
+        char msg[240];
+        snprintf(msg, sizeof(msg), "COPY cannot create parent for %s", dst);
+        ctr_log_line(log, log_cap, line_no, msg);
         return -1;
+    }
     if (vfs_copy_file(src, dst) != 0) {
-        ctr_log_append(log, log_cap, "COPY write failed");
+        char msg[240];
+        snprintf(msg, sizeof(msg), "COPY write failed: %s -> %s", src, dst);
+        ctr_log_line(log, log_cap, line_no, msg);
         return -1;
     }
     char msg[200];
     snprintf(msg, sizeof(msg), "COPY %s -> %s", src_rel, dest_abs);
-    ctr_log_append(log, log_cap, msg);
+    ctr_log_line(log, log_cap, line_no, msg);
     return 0;
 }
 
@@ -125,9 +152,12 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
 
     int copies = 0;
     int from_quarantined = 0;
+    size_t staged_bytes = 0;
     char expose_port[16] = "";
+    int line_no = 0;
     const char *p = df;
     while (*p) {
+        line_no++;
         char line[256];
         size_t li = 0;
         while (*p && *p != '\n' && li + 1 < sizeof(line))
@@ -150,13 +180,13 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
                 from_quarantined = 1;
                 snprintf(msg, sizeof(msg),
                          "QUARANTINE FROM %s: no registry pull (COPY-only build)", base);
-                ctr_log_append(log, log_cap, msg);
+                ctr_log_line(log, log_cap, line_no, msg);
                 if (ctr_str_has(base, "nginx")) {
                     char html[CTR_PATH_MAX];
                     snprintf(html, sizeof(html), "%s/usr/share/nginx/html", rootfs);
                     vfs_mkdir(html);
-                    ctr_log_append(log, log_cap,
-                                   "note: mkdir html path only (base image not fetched)");
+                    ctr_log_line(log, log_cap, line_no,
+                                 "note: mkdir html path only (base image not fetched)");
                 }
             }
             continue;
@@ -167,10 +197,11 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
             char src[128], dest[128];
             if (parse_word(&lp, src, sizeof(src)) != 0 ||
                 parse_word(&lp, dest, sizeof(dest)) != 0) {
-                ctr_log_append(log, log_cap, "COPY needs src dest");
+                ctr_log_line(log, log_cap, line_no, "COPY needs src dest");
                 return -1;
             }
-            if (copy_into_rootfs(context_dir, src, dest, rootfs, log, log_cap) != 0)
+            if (copy_into_rootfs(context_dir, src, dest, rootfs, line_no, &staged_bytes,
+                                 log, log_cap) != 0)
                 return -1;
             copies++;
             continue;
@@ -184,8 +215,10 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
                 snprintf(msg, sizeof(msg), "EXPOSE %s", pw);
             } else {
                 snprintf(msg, sizeof(msg), "skip: %s", line);
+                ctr_log_line(log, log_cap, line_no, msg);
+                continue;
             }
-            ctr_log_append(log, log_cap, msg);
+            ctr_log_line(log, log_cap, line_no, msg);
             continue;
         }
 
@@ -193,12 +226,18 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
             !strncmp(lp, "ENV", 3) ||
             !strncmp(lp, "RUN", 3) || !strncmp(lp, "ENTRYPOINT", 10)) {
             snprintf(msg, sizeof(msg), "skip: %s", line);
-            ctr_log_append(log, log_cap, msg);
+            ctr_log_line(log, log_cap, line_no, msg);
             continue;
         }
 
         snprintf(msg, sizeof(msg), "unknown: %s", line);
-        ctr_log_append(log, log_cap, msg);
+        ctr_log_line(log, log_cap, line_no, msg);
+    }
+
+    if (copies == 0) {
+        ctr_log_append(log, log_cap,
+                       "build failed: no COPY steps (nothing staged into rootfs)");
+        return -1;
     }
 
     char meta[CTR_PATH_MAX];
@@ -210,7 +249,8 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
     snprintf(last_image, sizeof(last_image), "%s", tag);
     snprintf(last_port, sizeof(last_port), "%s", expose_port);
 
-    snprintf(msg, sizeof(msg), "ok - %d COPY step(s), image %s", copies, tag);
+    snprintf(msg, sizeof(msg), "ok - %d COPY step(s), %zu bytes staged, image %s",
+             copies, staged_bytes, tag);
     ctr_log_append(log, log_cap, msg);
     if (from_quarantined)
         ctr_log_append(log, log_cap,

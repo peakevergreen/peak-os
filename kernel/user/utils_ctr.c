@@ -37,6 +37,24 @@ static int path_is_web_demo(const char *path) {
     return !strcmp(path, "web-demo") || !strcmp(path, "./web-demo");
 }
 
+static void ctr_print_build_log(const char *log) {
+    if (!log || !log[0])
+        return;
+    console_write("ctr: --- build log ---\n");
+    const char *p = log;
+    while (*p) {
+        const char *e = p;
+        while (*e && *e != '\n')
+            e++;
+        console_write("ctr:   ");
+        for (const char *c = p; c < e; c++)
+            console_putc(*c);
+        console_write("\n");
+        p = *e ? e + 1 : e;
+    }
+    console_write("ctr: --- end log ---\n");
+}
+
 int uctr_main(int argc, char **argv) {
     ctr_init();
 
@@ -96,11 +114,11 @@ int uctr_main(int argc, char **argv) {
         console_printf("ctr: building %s from %s\n", tag, abs);
         char blog[1024];
         if (ctr_build(abs, tag, blog, sizeof(blog)) != 0) {
-            console_write(blog);
-            peak_perror("ctr", "build failed");
+            ctr_print_build_log(blog);
+            peak_perror("ctr", "build failed (see log above)");
             return 1;
         }
-        console_write(blog);
+        ctr_print_build_log(blog);
         console_printf("ctr: built %s\n", tag);
         return 0;
     }
