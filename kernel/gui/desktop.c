@@ -310,6 +310,11 @@ void desktop_run(void) {
                 continue;
             }
 
+            if (desktop_notify_click_dismiss(m.x, m.y)) {
+                mouse_clear_clicks();
+                continue;
+            }
+
             if (desktop_menus_toggle_start(m.x, m.y, ty, th)) {
                 /* Peak start button toggled */
             } else if (menu_open) {

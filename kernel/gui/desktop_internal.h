@@ -233,6 +233,7 @@ void desktop_alttab_advance(void);
 void desktop_alttab_commit_if_open(void);
 int desktop_overlays_close_popups(void);
 int desktop_help_click_dismiss(void);
+int desktop_notify_click_dismiss(int32_t mx, int32_t my);
 
 void desktop_term_reset_slot(int slot);
 void desktop_term_activate(int slot);
