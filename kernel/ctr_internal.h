@@ -13,6 +13,7 @@
 #define CTR_HTTP_BODY_MAX  24576
 #define CTR_HTTP_REQ_MAX   2048
 #define CTR_ROOTFS_CANDS   5
+#define CTR_BUILD_SIZE_MAX (256 * 1024)
 
 struct ctr_container {
     int used;
@@ -34,6 +35,7 @@ extern char last_port[16];
 /* Shared helpers (ctr.c / ctr_path.c). */
 int ctr_str_has(const char *hay, const char *needle);
 void ctr_log_append(char *log, size_t cap, const char *line);
+void ctr_log_line(char *log, size_t cap, int line, const char *msg);
 uint16_t ctr_parse_port(const char *port);
 
 struct ctr_container *ctr_find_by_name(const char *name);

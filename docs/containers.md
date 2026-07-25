@@ -78,4 +78,12 @@ Not a real containerd. No BuildKit, no image pulls, no network namespaces, no
 process isolation. HTTP is a small static-file server (GET/HEAD) bound to the
 container port. Expose only on trusted LANs.
 
+Build staging rules:
+
+- Dockerfile parse errors cite **line numbers** (`line N: …`).
+- Builds **fail** when no `COPY` steps staged any files, or staged bytes exceed
+  **256 KiB** (`CTR_BUILD_SIZE_MAX`).
+- Path sandbox violations name the **offending path** (context escape or rootfs
+  escape).
+
 See [docs/from-scratch.md](from-scratch.md) and [docs/network.md](network.md).

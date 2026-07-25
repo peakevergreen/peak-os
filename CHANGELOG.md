@@ -46,6 +46,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 20:** `hostname`, `uptime`, `whoami`, `id`, `cal`, `gzip`/`gunzip` (PEAKGZ1), `timeout`, `watch`
 - **Pass 21:** `!n` history, aliases (`/var/peak/aliases`), `cd -`, Tab path/`/bin` completion, clearer redirect/pipe errors
 - **Pass 22:** VFS errno hygiene (`unlink`/`rmdir`/`stat`/`normalize`/`mkdir`), `peak_strerror(EBUSY)`, `stat`/`df` backing hints
+- **Pass 25:** ctr build log line numbers, 0-COPY / 256 KiB cap failures, path sandbox messages name escaped paths; clearer `ctr build` log output
 - Hash/pager tools: `sha256sum`, `md5sum`, `base64`, `less`/`more`, `time`
 - Net diag: `nslookup`, `host`, `nc` (TCP connect)
 - Shell history: persistent `/var/peak/history`, Up/Down/Ctrl-P/N recall, `history`, `!!`, exit-status prompt, errno-style path errors
