@@ -4,6 +4,7 @@
 #include "console.h"
 #include "agent.h"
 #include "util.h"
+#include "peakvec.h"
 
 int upeak_main(int argc, char **argv) {
     (void)argc;
@@ -11,7 +12,7 @@ int upeak_main(int argc, char **argv) {
     console_write("Peak OS 0.2.0-ai — research workstation\n");
     console_write("Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm\n");
     console_write("             fs.search fs.grep sys.info net.ping mem.recall audit.tail console.print\n");
-    console_write("Try: ask \"summarize workspace\"   ask \"search README\"   audit   memory   policy\n");
+    console_write("Try: ask \"summarize workspace\"   ask \"search README\"   audit   memory   peakvec   policy\n");
     console_write("Desktop: gui → Agent app (approve writes with Y/N)\n");
     return 0;
 }
@@ -89,11 +90,41 @@ int uaudit_main(int argc, char **argv) {
     return 0;
 }
 
+static void print_peakvec_index_line(const char *ns) {
+    struct peakvec_stats st;
+    peakvec_stats(ns, &st);
+    console_printf("PeakVec [%s]: %u / %u entries (table %u, max %u)",
+                   ns && ns[0] ? ns : "agent",
+                   (unsigned)st.count, (unsigned)st.max_entries,
+                   (unsigned)st.capacity, (unsigned)st.max_entries);
+    if (st.use_blob) console_printf(", blob id %u", (unsigned)st.blob_id);
+    else console_write(", vfs fallback");
+    console_putc('\n');
+}
+
 int umemory_main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    (void)argc; (void)argv;
+    print_peakvec_index_line("agent");
     print_session_tail("memory", "/var/peak/sessions/memory.txt",
                        "(empty — ask records turn summaries here)");
+    return 0;
+}
+
+int upeakvec_main(int argc, char **argv) {
+    const char *ns = "agent";
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("peakvec", "[stats] [namespace]  (default: agent index stats)");
+        return 0;
+    }
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-') continue;
+        if (!strcmp(argv[i], "stats")) {
+            if (i + 1 < argc && argv[i + 1][0] != '-') ns = argv[i + 1];
+            break;
+        }
+        ns = argv[i]; break;
+    }
+    print_peakvec_index_line(ns);
     return 0;
 }
 

@@ -465,3 +465,39 @@ int blobstore_cached_at(uint32_t id, size_t off) {
         return 1;
     return cache_hash_find(page) >= 0;
 }
+
+void blobstore_stats(struct blobstore_stats *out) {
+    if (!out) return;
+    out->objects = super.nobjects;
+    out->pages_used = super.next_page;
+    out->pages_total = super.total_pages;
+    out->cache_pages = cache_live;
+    out->bytes_used = (uint64_t)super.next_page * BLOBSTORE_PAGE_SIZE;
+}
+
+int blobstore_check(void) {
+    if (!blobstore_available()) return -1;
+    if (memcmp(super.magic, BLOB_MAGIC, 8) != 0) return -1;
+    if (super.version != 1 || super.total_pages == 0 || super.total_pages > BLOB_MAX_PAGES) return -1;
+    if (super.next_page > super.total_pages) return -1;
+    uint32_t live = 0;
+    for (uint32_t i = 0; i < BLOBSTORE_MAX_OBJECTS; i++) {
+        if (!objects[i].in_use) continue;
+        live++;
+        struct blob_obj *o = &objects[i];
+        if (o->id == 0 || o->npages == 0) return -1;
+        if (o->start_page + o->npages > super.next_page) return -1;
+        if (o->start_page + o->npages > super.total_pages) return -1;
+        uint32_t need = (uint32_t)((o->size + BLOBSTORE_PAGE_SIZE - 1) / BLOBSTORE_PAGE_SIZE);
+        if (need == 0) need = 1;
+        if (o->npages < need) return -1;
+        for (uint32_t j = i + 1; j < BLOBSTORE_MAX_OBJECTS; j++) {
+            if (!objects[j].in_use) continue;
+            struct blob_obj *q = &objects[j];
+            uint32_t a0 = o->start_page, a1 = o->start_page + o->npages;
+            uint32_t b0 = q->start_page, b1 = q->start_page + q->npages;
+            if (a0 < b1 && b0 < a1) return -1;
+        }
+    }
+    return live == super.nobjects ? 0 : -1;
+}

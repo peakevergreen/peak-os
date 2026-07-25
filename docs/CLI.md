@@ -71,7 +71,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `ln <target> <link>` | hard link |
 | `stat <path>` | metadata (heap vs blob backing for files) |
 | `du [path]` | tree byte size |
-| `df` | VFS inodes, RAM pages, PeakDisk/Blobstore status |
+| `df` | VFS inodes, RAM pages, PeakDisk/Blobstore status (+ integrity) |
 | `truncate <path> <n>` | resize (max 4096) |
 
 ## Text
@@ -106,7 +106,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `history` | numbered command history |
 | `js -e 'code'` / `js file.js` | Peak JS CLI — [browser-js.md](browser-js.md) |
 | `help` `man <cmd>` | categorized help (`-h` / `--help` on most utils) |
-| `ask` `audit` `memory` `policy` `peak` `gui` | agent + desktop |
+| `ask` `audit` `memory` `peakvec` `policy` `peak` `gui` | agent + desktop |
 | `privacy` | `persist` / `net-allow` / `kill-switch on --confirm` — [privacy.md](privacy.md) |
 
 `gui` enters the desktop; press **Ctrl+Alt+Esc** anytime to return to CLI.

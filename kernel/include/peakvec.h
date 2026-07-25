@@ -31,6 +31,16 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
                   int topk, struct peakvec_hit *hits);
 int peakvec_count(const char *ns);
 
+struct peakvec_stats {
+    uint32_t count;
+    uint32_t capacity;
+    uint32_t max_entries;
+    uint8_t  use_blob;
+    uint32_t blob_id;
+};
+
+void peakvec_stats(const char *ns, struct peakvec_stats *out);
+
 /* Syscall surface: op in a0 via peakvec_syscall. */
 int64_t peakvec_syscall(uint64_t op, uint64_t a1, uint64_t a2, uint64_t a3);
 

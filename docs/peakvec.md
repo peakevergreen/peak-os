@@ -17,6 +17,8 @@ PeakVec is a Peak-authored, in-guest vector index for session/workspace context.
 - 48×4 KiB LRU page cache (override `BLOBSTORE_CACHE_PAGES` in host tests)
 - sync on PeakDisk save
 
+`blobstore_stats()` / `blobstore_check()` helpers validate object tables.
+
 PeakFS persistence itself is **streamed** (no fixed 512 KiB snapshot cap); see `peakdisk_save` / `vfs_export_ramdisk_size`.
 
 ### VFS large files
@@ -44,6 +46,7 @@ peakvec_upsert(ns, key, vec, meta)
 peakvec_query(ns, query, topk, hits)
 peakvec_delete(ns, key)
 peakvec_count(ns)
+peakvec_stats(ns, &out)
 ```
 
 Syscall `SYS_peakvec`:
@@ -54,6 +57,12 @@ Syscall `SYS_peakvec`:
 | 2 | query text (a1=text, a2=hits buf, a3=topk) |
 | 3 | count |
 | 4 | delete (a1=key) |
+
+## CLI
+
+| `peakvec` | index stats (count/capacity/backing) |
+| `memory` | PeakVec header + session tail |
+| `df` | blobstore pages + integrity |
 
 ## Privacy
 

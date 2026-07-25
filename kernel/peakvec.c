@@ -650,6 +650,15 @@ int peakvec_count(const char *ns) {
     return n;
 }
 
+void peakvec_stats(const char *ns, struct peakvec_stats *out) {
+    if (!out) return;
+    out->count = (uint32_t)peakvec_count(ns);
+    out->capacity = capacity;
+    out->max_entries = PEAKVEC_MAX_ENTRIES;
+    out->use_blob = (uint8_t)(use_blob && blob_id != 0);
+    out->blob_id = blob_id;
+}
+
 /* op: 1=upsert_text 2=query_text 3=count 4=delete
  * upsert: a1=key ptr, a2=text ptr (kernel pointers when called from agent)
  * query: a1=text, a2=hits ptr, a3=topk

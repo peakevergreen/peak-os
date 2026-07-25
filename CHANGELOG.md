@@ -37,6 +37,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 30:** Browser back/forward chrome, VFS bookmarks (`/var/peak/bookmarks`), JS console panel, TLS/net error detail on error pages
 - **Pass 32 (notify/clipboard/overlays):** toast history ring, dismiss control, clipboard previous slot, Alt+Tab hints, login splash
 - **Monitor + CLI (Pass 18):** readable compose/present timing, improved `memory`/`audit` output
+- **Pass 36:** peakvec stats CLI, blobstore integrity in df, recall UX
 - **Pass 34:** Monitor/sysmon sparkline legend + ranges, memory/heap breakdown, task sort, export to `/tmp/sysmon.txt`, CLI/GUI parity via `sysmon_snapshot`
 - **Pass 35:** Heap freelist stats + fragmentation/oom counters in `free`/sysmon; honest OOM toasts in GUI/CLI; `ps` age/wake/share columns; `copy_to_user` write-probe hardening
 - **Pass 37:** Keyboard repeat tuning (PS/2 typematic + software repeat for USB), mouse acceleration lite, CLI scrollback search (Ctrl+F, 128 lines), clearer Ctrl+Alt+Esc CLI↔desktop hints
@@ -73,6 +74,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Policy seed uses `fs.exec` (no phantom `proc.exec` deny)
 - Agent GUI uses theme colors, scrollable transcript, write-approval toasts, search-aware summarize
 - PeakVec embeddings + recall; streamed PeakFS / blobstore
+- **Pass 36:** peakvec_stats, blobstore_stats/check, peakvec builtin
 
 ### Browser and network
 
