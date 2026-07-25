@@ -320,6 +320,15 @@ void sysmon_format_rate(uint32_t bps, char *buf, size_t cap) {
         snprintf(buf, cap, "%uM/s", (unsigned)(bps / (1024u * 1024)));
 }
 
+void sysmon_format_us(uint32_t us, char *buf, size_t cap) {
+    if (!buf || !cap)
+        return;
+    if (us >= 1000)
+        snprintf(buf, cap, "%u.%01ums", us / 1000, (unsigned)((us % 1000) / 100));
+    else
+        snprintf(buf, cap, "%uus", (unsigned)us);
+}
+
 void sysmon_sparkline(const uint32_t *series, int n, char *out, int out_cols) {
     static const char levels[] = " .:-=+*#%@";
     if (!out || out_cols <= 0)

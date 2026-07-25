@@ -41,6 +41,15 @@ void monitor_clear_redraw(void) {
     needs_redraw = 0;
 }
 
+void monitor_toggle_pause(void) {
+    paused = !paused;
+    needs_redraw = 1;
+}
+
+int monitor_is_paused(void) {
+    return paused;
+}
+
 int monitor_wants_redraw(void) {
     return needs_redraw;
 }
@@ -181,19 +190,28 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
              (unsigned)s->load_pct, (unsigned)s->idle_pct);
     fb_draw_string_fit(text_x, row, inner_w, line, fg, bg);
     row += ch + U(2);
-    snprintf(line, sizeof(line), "fps %u  layout %uus  blit %uus",
-             (unsigned)s->gui_fps, (unsigned)s->compose_us, (unsigned)s->present_us);
+    {
+        char cu[16], pu[16];
+        sysmon_format_us(s->compose_us, cu, sizeof(cu));
+        sysmon_format_us(s->present_us, pu, sizeof(pu));
+        snprintf(line, sizeof(line), "fps %u  compose %s  present %s",
+                 (unsigned)s->gui_fps, cu, pu);
+    }
     fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
     row += ch + U(2);
-    snprintf(line, sizeof(line), "peakvec %uus  audit %uus  surf pressure %u%%",
-             (unsigned)s->peakvec_us, (unsigned)s->agent_audit_us,
-             (unsigned)s->surf_pressure);
+    snprintf(line, sizeof(line), "peakvec %uus (last query)  audit %uus (agent tail)",
+             (unsigned)s->peakvec_us, (unsigned)s->agent_audit_us);
     fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
     row += ch + U(2);
-    snprintf(line, sizeof(line), "tasks %u",
-             (unsigned)s->tasks);
+    snprintf(line, sizeof(line), "surface pressure %u%%  tasks %u",
+             (unsigned)s->surf_pressure, (unsigned)s->tasks);
     fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
-    row += ch + U(8);
+    row += ch + U(2);
+    snprintf(line, sizeof(line), "mem pages %u/%u  heap blocks %lu",
+             (unsigned)s->mem_used_pages, (unsigned)s->mem_total_pages,
+             (unsigned long)s->heap_blocks);
+    fb_draw_string_fit(text_x, row, inner_w, line, dim, bg);
+    row += ch + U(6);
 
     if (page == MON_PAGE_OVERVIEW) {
         char mb[24], tb[24], pk[24];
