@@ -176,6 +176,10 @@ void peak_conf_parse(const char *text, size_t len, struct peak_loader_conf *out)
             uint32_t v = 0;
             if (parse_u32(value, &v) == 0 && v != 0)
                 out->verify_required = 1;
+        } else if (key_eq(key, kl, "verify_sig")) {
+            uint32_t v = 0;
+            if (parse_u32(value, &v) == 0 && v != 0)
+                out->verify_sig = 1;
         } else if (key_eq(key, kl, "kernel_sha256")) {
             size_t n = boot_strlen(value);
             if (n == BOOT_SHA256_DIGEST_LEN * 2) {

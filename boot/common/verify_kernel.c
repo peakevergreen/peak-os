@@ -1,5 +1,7 @@
 #include "boot_verify.h"
 #include "boot_sha256.h"
+#include "boot_hmac.h"
+#include "boot_release.h"
 
 static int hex_nibble(char c) {
     if (c >= '0' && c <= '9')
@@ -138,5 +140,25 @@ int boot_verify_kernel(const struct peak_loader_conf *conf,
     }
 
     boot_serial_write_str("verify: kernel digest ok\n");
+    return 0;
+}
+
+int boot_verify_manifest_sig(const struct peak_loader_conf *conf,
+                             const char *manifest, size_t manifest_len,
+                             const uint8_t *sig, size_t sig_len) {
+    if (!conf || !conf->verify_sig)
+        return 0;
+    if (!manifest || !manifest_len || !sig || sig_len != BOOT_SHA256_DIGEST_LEN) {
+        boot_serial_write_str("verify: manifest sig required but missing/short\n");
+        return -1;
+    }
+    uint8_t expect[BOOT_SHA256_DIGEST_LEN];
+    boot_hmac_sha256(boot_release_hmac_key, BOOT_RELEASE_HMAC_KEY_LEN,
+                     (const uint8_t *)manifest, manifest_len, expect);
+    if (boot_memcmp(expect, sig, BOOT_SHA256_DIGEST_LEN) != 0) {
+        boot_serial_write_str("verify: manifest HMAC mismatch\n");
+        return -1;
+    }
+    boot_serial_write_str("verify: manifest HMAC ok\n");
     return 0;
 }

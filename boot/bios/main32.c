@@ -88,6 +88,15 @@ void bios_main32(uint32_t drive) {
                             &manifest_len);
     manifest_buf[manifest_len] = '\0';
 
+    static uint8_t sig_buf[BOOT_SHA256_DIGEST_LEN];
+    uint32_t sig_len = 0;
+    if (iso_load_file("/boot/SHA256SUMS.sig", sig_buf, sizeof(sig_buf), &sig_len) != 0)
+        (void)iso_load_file("/BOOT/SHA256SUMS.SIG", sig_buf, sizeof(sig_buf), &sig_len);
+    if (boot_verify_manifest_sig(&conf, manifest_buf, manifest_len, sig_buf, sig_len) != 0) {
+        boot_serial_write_str("bios: manifest sig verify failed\n");
+        boot_hang();
+    }
+
     struct boot_elf_image img = {
         .data = (const uint8_t *)(uintptr_t)KERNEL_LOAD_PHYS,
         .size = ksz,

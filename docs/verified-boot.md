@@ -45,9 +45,11 @@ Both [boot/bios/main32.c](../boot/bios/main32.c) and [boot/uefi/efi_main.c](../b
 
 Default installs keep `verify_required` off and log `verify: skip (no expected digest)` — behavior unchanged. Release ISOs may ship `build/SHA256SUMS` (from `mkmanifest.py`) under `/boot/` when present at `make iso` time.
 
-Host tests in `tests/host/test_boot.c` cover the digest helper and verify policy.
+Host tests in `tests/host/test_boot.c` cover the digest helper, verify policy, and optional `verify_sig` HMAC manifest seal (dev key in `boot/include/boot_release.h`).
 
-Until Ed25519/HMAC is embedded in the loader, detached `SHA256SUMS.sig` verification remains a host-side release gate (`verify-release.py`). BIOS software verify is not a hardware root of trust.
+When `verify_sig=1` in `peak.conf`, loaders require a 32-byte `SHA256SUMS.sig` HMAC-SHA256 seal over the manifest bytes (signed with the embedded release HMAC key stub or your ceremony key). `make iso` copies `build/SHA256SUMS.sig` into `/boot/` when present.
+
+Detached Ed25519 `SHA256SUMS.sig` from `sign-release.py` remains a **host-side** release gate (`verify-release.py`) when OpenSSL Ed25519 is available; the in-guest path uses the lighter HMAC stub until Ed25519 lands in the loader.
 
 ## UEFI Secure Boot
 

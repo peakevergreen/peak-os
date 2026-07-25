@@ -243,6 +243,17 @@ efi_status efi_main(efi_handle image_handle, efi_system_table *system_table) {
         (void)efi_load_text((efi_char16 *)L"\\boot\\SHA256SUMS", manifest_buf,
                             sizeof(manifest_buf), &manifest_len);
 
+    static uint8_t sig_buf[32];
+    size_t sig_len = 0;
+    if (efi_load_text((efi_char16 *)L"\\EFI\\PEAK\\SHA256SUMS.sig", (char *)sig_buf,
+                      sizeof(sig_buf), &sig_len) != 0)
+        (void)efi_load_text((efi_char16 *)L"\\boot\\SHA256SUMS.sig", (char *)sig_buf,
+                            sizeof(sig_buf), &sig_len);
+    if (boot_verify_manifest_sig(&conf, manifest_buf, manifest_len, sig_buf, sig_len) != 0) {
+        boot_serial_write_str("uefi: manifest sig verify failed\n");
+        return EFI_LOAD_ERROR;
+    }
+
     if (boot_verify_kernel(&conf, kdata, ksize, manifest_buf, manifest_len) != 0) {
         boot_serial_write_str("uefi: kernel verify failed\n");
         return EFI_LOAD_ERROR;

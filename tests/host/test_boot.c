@@ -8,6 +8,8 @@
 #include "boot_util.h"
 #include "boot_sha256.h"
 #include "boot_verify.h"
+#include "boot_hmac.h"
+#include "boot_release.h"
 #include "peak_conf.h"
 
 static uint8_t arena[1024 * 1024];
@@ -248,6 +250,29 @@ int main(int argc, char **argv) {
         expect(boot_verify_kernel(&conf, (const uint8_t *)payload, sizeof(payload) - 1,
                                   manifest, strlen(manifest)) == 0,
                "verify manifest digest ok");
+    }
+
+    /* HMAC manifest seal when verify_sig=1 */
+    {
+        struct peak_loader_conf conf;
+        peak_conf_defaults(&conf);
+        const char manifest[] = "deadbeef  boot/kernel.elf\n";
+        uint8_t sig[BOOT_SHA256_DIGEST_LEN];
+        boot_hmac_sha256(boot_release_hmac_key, BOOT_RELEASE_HMAC_KEY_LEN,
+                         (const uint8_t *)manifest, sizeof(manifest) - 1, sig);
+        conf.verify_sig = 1;
+        expect(boot_verify_manifest_sig(&conf, manifest, sizeof(manifest) - 1, sig,
+                                        BOOT_SHA256_DIGEST_LEN) == 0,
+               "verify_sig HMAC ok");
+        sig[0] ^= 0xff;
+        expect(boot_verify_manifest_sig(&conf, manifest, sizeof(manifest) - 1, sig,
+                                        BOOT_SHA256_DIGEST_LEN) != 0,
+               "verify_sig HMAC mismatch fails");
+        expect(boot_verify_manifest_sig(&conf, manifest, sizeof(manifest) - 1, NULL, 0) != 0,
+               "verify_sig missing sig fails");
+        conf.verify_sig = 0;
+        expect(boot_verify_manifest_sig(&conf, manifest, sizeof(manifest) - 1, NULL, 0) == 0,
+               "verify_sig off skips");
     }
 
     if (fuzz_iters > 0) {
