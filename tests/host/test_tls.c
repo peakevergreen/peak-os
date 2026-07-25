@@ -627,6 +627,18 @@ static void test_alert_mapping(void) {
     expect(strstr(tls_last_error(), "certificate_expired") != NULL, "cert expired alert");
 }
 
+static void test_err_names(void) {
+    expect(!strcmp(tls_err_name(TLS_E_OK), "ok"), "ok err name");
+    expect(!strcmp(tls_err_name(TLS_E_CERT), "cert"), "cert err name");
+    expect(!strcmp(tls_err_name(TLS_E_ALERT), "alert"), "alert err name");
+    expect(!strcmp(tls_err_name(999), "unknown"), "unknown err code");
+    expect(!strcmp(tls_alert_desc_name(42), "bad_certificate"), "alert desc 42");
+    expect(!strcmp(tls_alert_desc_name(45), "certificate_expired"), "alert desc 45");
+    expect(!strcmp(tls_alert_desc_name(255), "unknown"), "alert desc unknown");
+    tls_set_err_code(TLS_E_HANDSHAKE, "Finished verify failed");
+    expect(strstr(tls_last_error(), "[handshake]") != NULL, "handshake tag prefix");
+}
+
 static void test_session_resume_cache(void) {
     tls_session_clear();
     uint8_t t1[16], t2[16], t3[16], t4[16], t5[16];
@@ -859,6 +871,7 @@ int main(int argc, char **argv) {
     test_ske_sig_verify();
     test_clienthello_goldens();
     test_alert_mapping();
+    test_err_names();
     test_session_resume_cache();
     test_ech_fail_closed();
     test_hsts_and_clear();

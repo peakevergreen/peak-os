@@ -19,7 +19,9 @@ Bootloaders parse [`boot/peak.conf`](../boot/peak.conf) into BootInfo:
 
 Guest DNS / TCP helpers: `nslookup` / `host` (dig-style A record output via
 `net_dns_resolve`), `traceroute` (staged local→gateway→DNS→destination TCP :80
-probes; no ICMP TTL), `nc` (TCP connect, optional send + short recv).
+probes; no ICMP TTL), `nc` (TCP connect, optional send + short recv), `tlsinfo`
+(WebPKI root count, pin/TOFU mode, last TLS error code/name, optional `-r` root
+SHA-256 list and `-m pattern host` hostname match probe).
 
 **Desktop GUI:** Start menu → **Net Explorer** shows link/IP/DNS, runs ping (TCP :80 probe) and nslookup into a result pane. **Net Control** manages session net-allow, kill switch (double confirm), persist profile, DHCP renew, and RNG readiness; Settings → Network tab includes an **Open Net Control** shortcut.
 
@@ -162,7 +164,8 @@ until HPKE lands (interop note).
 - Session secrets scrubbed on `tls_close` and handshake fail
 - ClientHello GREASE (cipher, group, empty extension) per RFC 8701
 - Handshake DoS budgets: max message `TLS_HS_MSG_MAX`, max records `TLS_HS_RECORD_MAX`
-- Structured `tls_last_error_code()` alongside string `tls_last_error()`
+- Structured `tls_last_error_code()` alongside string `tls_last_error()`; `tls_err_name()` maps codes to short tags (`cert`, `alert`, …) and non-alert errors are prefixed `[tag]` in `tls_last_error()`
+- `tlsinfo` CLI: trust summary (embedded WebPKI root count, pin count, TOFU toggle), session verify flags, `cert_fail` reason, last error; `-r` dumps root SHA-256 digests; `-m pattern host` exercises hostname matching
 
 ## Timeouts (100 Hz ticks)
 

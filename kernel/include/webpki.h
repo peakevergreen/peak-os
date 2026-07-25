@@ -19,4 +19,6 @@ extern const int webpki_root_count;
 int webpki_verify_chain(const uint8_t *const *certs, const size_t *lens, int n,
                         const char *sni_host);
 
+int webpki_root_sha256(int idx, char *out, size_t cap);
+
 #endif

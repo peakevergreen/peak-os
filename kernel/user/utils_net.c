@@ -1,4 +1,4 @@
-/* /bin network utilities: ifconfig, ping, wget, traceroute-lite. */
+/* /bin network utilities: ifconfig, ping, wget, traceroute-lite, tlsinfo. */
 #include "libpeak.h"
 #include "cap.h"
 #include "privacy.h"
@@ -6,6 +6,9 @@
 #include "console.h"
 #include "net.h"
 #include "tls.h"
+#include "tls_util.h"
+#include "webpki.h"
+#include "settings.h"
 #include "random.h"
 #include "timer.h"
 #include "util.h"
@@ -469,3 +472,56 @@ int unc_main(int argc, char **argv) {
     net_tcp_close();
     return 0;
 }
+int utlsinfo_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("tlsinfo", "[-r] [-m pattern host]");
+        return 0;
+    }
+    int show_roots = 0;
+    const char *match_pat = NULL;
+    const char *match_host = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-r"))
+            show_roots = 1;
+        else if (!strcmp(argv[i], "-m") && i + 2 < argc) {
+            match_pat = argv[++i];
+            match_host = argv[++i];
+        } else {
+            peak_usage("tlsinfo", "[-r] [-m pattern host]");
+            return 1;
+        }
+    }
+    if (match_pat && match_host) {
+        int m = tls_hostname_matches_sni(match_pat, match_host);
+        console_printf("hostname_match %s %s => %s\n", match_pat, match_host,
+                       m ? "yes" : "no");
+        return m ? 0 : 1;
+    }
+    console_printf("trust: webpki_roots=%d pins=%d tofu=%s\n",
+                   webpki_root_count, tls_trust_pin_count(),
+                   settings_tls_tofu() ? "on" : "off");
+    console_printf("session: connected=%d cert_verified=%d hostname_matched=%d\n",
+                   tls_ready(), tls_cert_verified(), tls_hostname_matched());
+    {
+        const char *fail = tls_cert_fail_reason();
+        if (fail && fail[0])
+            console_printf("cert_fail: %s\n", fail);
+    }
+    {
+        int code = tls_last_error_code();
+        console_printf("last_error: code=%d (%s) msg=%s\n",
+                       code, tls_err_name(code), tls_last_error());
+    }
+    if (show_roots) {
+        console_printf("webpki roots (%d):\n", webpki_root_count);
+        for (int i = 0; i < webpki_root_count; i++) {
+            char hex[65];
+            if (webpki_root_sha256(i, hex, sizeof(hex)) == 0)
+                console_printf("  [%d] sha256=%s\n", i, hex);
+        }
+    } else if (webpki_root_count > 0) {
+        console_write("hint: tlsinfo -r lists embedded root SHA-256 digests\n");
+    }
+    return 0;
+}
+
