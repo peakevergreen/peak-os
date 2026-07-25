@@ -72,7 +72,14 @@ void agent_policy_load_defaults(void) {
     memcpy(allow_tools[2], "fs.list", 8);
     memcpy(allow_tools[3], "console.print", 14);
     memcpy(allow_tools[4], "fs.exec", 8);
-    allow_tool_count = 5;
+    memcpy(allow_tools[5], "mem.recall", 11);
+    memcpy(allow_tools[6], "audit.tail", 11);
+    memcpy(allow_tools[7], "fs.stat", 8);
+    memcpy(allow_tools[8], "fs.mkdir", 9);
+    memcpy(allow_tools[9], "fs.rm", 6);
+    memcpy(allow_tools[10], "fs.search", 10);
+    memcpy(allow_tools[11], "sys.info", 9);
+    allow_tool_count = 12;
 }
 
 void agent_policy_reload(void) {

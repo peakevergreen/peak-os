@@ -72,45 +72,8 @@ static void memory_append_turn(const char *goal, const char *tools, const char *
 }
 
 static void memory_recall(const char *goal, char *out, size_t out_len) {
-    if (!out || out_len < 8)
-        return;
-    out[0] = '\0';
-    size_t o = 0;
-
-    {
-        int16_t q[PEAKVEC_DIM];
-        peakvec_embed_text(goal, q);
-        struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
-        int n = peakvec_query("agent", q, 3, hits);
-        if (n > 0) {
-            const char *hdr = "[recall/vec]\n";
-            for (const char *p = hdr; *p && o + 1 < out_len; p++)
-                out[o++] = *p;
-            for (int i = 0; i < n; i++) {
-                if (!hits[i].key[0])
-                    continue;
-                for (const char *p = hits[i].meta; *p && o + 1 < out_len; p++)
-                    out[o++] = *p;
-                if (o + 1 < out_len)
-                    out[o++] = '\n';
-            }
-        }
-    }
-
-    char mem[AGENT_MEMORY_TAIL_MAX];
-    size_t n = 0;
-    if (vfs_read_file(AGENT_MEM_PATH, mem, sizeof(mem) - 1, &n) == 0 && n > 0) {
-        mem[n] = '\0';
-        const char *hdr = "[recall/memory]\n";
-        for (const char *p = hdr; *p && o + 1 < out_len; p++)
-            out[o++] = *p;
-        size_t start = 0;
-        if (n > 400)
-            start = n - 400;
-        for (size_t i = start; i < n && o + 1 < out_len; i++)
-            out[o++] = mem[i];
-    }
-    out[o] = '\0';
+    if (agent_tool_mem_recall(goal, out, out_len) != 0 && out && out_len)
+        out[0] = '\0';
 }
 
 static int contains_ci(const char *hay, const char *needle) {
@@ -158,9 +121,11 @@ enum agent_intent {
     INTENT_CREATE = 1,
     INTENT_EDIT,
     INTENT_SUMMARIZE,
+    INTENT_SEARCH,
     INTENT_RECALL,
     INTENT_AUDIT,
     INTENT_READ,
+    INTENT_SYSINFO,
     INTENT_HELP,
 };
 
@@ -171,6 +136,11 @@ static enum agent_intent classify_intent(const char *goal) {
         return INTENT_RECALL;
     if (contains_ci(goal, "audit"))
         return INTENT_AUDIT;
+    if (contains_ci(goal, "sysinfo") || contains_ci(goal, "system info") ||
+        contains_ci(goal, "uptime"))
+        return INTENT_SYSINFO;
+    if (contains_ci(goal, "search ") || contains_ci(goal, "find "))
+        return INTENT_SEARCH;
     if (contains_ci(goal, "summar") || contains_ci(goal, "list workspace") ||
         contains_ci(goal, "what's in") || contains_ci(goal, "whats in"))
         return INTENT_SUMMARIZE;
@@ -228,9 +198,10 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
 
     if (intent == INTENT_HELP) {
         agent_tool_console_print(
-            "Peak Agent tools: fs.read, fs.write, fs.list, fs.exec, console.print");
+            "Peak Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm "
+            "fs.search sys.info mem.recall audit.tail console.print");
         agent_tool_console_print(
-            "Try: ask \"summarize workspace\" | \"run ls /home/dev/workspace\" | audit | memory");
+            "Try: ask \"summarize workspace\" | \"search README\" | \"run ls .\" | audit | memory");
         agent_tool_console_print("CLI builtins: man <cmd> or help");
         TOOL_NOTE("console.print");
         set_summary(summary, summary_cap, "help");
@@ -246,7 +217,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("fs.exec");
             set_summary(summary, summary_cap, "ran allowlisted /bin cmd");
         } else {
-            agent_tool_console_print("[agent] exec denied or failed (allowlist: ls cat wc stat …)");
+            agent_tool_console_print("[agent] exec denied or failed (allowlist: ls cat wc stat find …)");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "exec failed");
         }
@@ -255,40 +226,87 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     }
 
     if (intent == INTENT_RECALL) {
-        if (!recall[0])
+        char recall_buf[512];
+        if (agent_tool_mem_recall(goal, recall_buf, sizeof(recall_buf)) == 0) {
+            TOOL_NOTE("mem.recall");
+            agent_tool_console_print(recall_buf);
+            TOOL_NOTE("console.print");
+        } else {
             agent_tool_console_print("[agent] no prior memory yet");
-        TOOL_NOTE("console.print");
+            TOOL_NOTE("console.print");
+        }
         set_summary(summary, summary_cap, "recalled session memory");
         memory_append_turn(goal, tools_used, NULL);
         return;
     }
 
     if (intent == INTENT_AUDIT) {
-        /* True tail: read last ~400 bytes even when the log exceeds the buffer. */
         char audit[AGENT_READ_CONTENT_MAX];
-        size_t n = 0;
-        struct vfs_stat st;
-        size_t file_sz = 0;
-        if (vfs_stat(AGENT_AUDIT_PATH, &st) == 0 && st.type == VFS_FILE)
-            file_sz = st.size;
-        size_t want = 400;
-        if (want + 1 > sizeof(audit))
-            want = sizeof(audit) - 1;
-        if (file_sz == 0) {
-            agent_tool_console_print("[agent] audit empty");
+        if (agent_tool_audit_tail(audit, sizeof(audit)) == 0) {
+            TOOL_NOTE("audit.tail");
+            agent_tool_console_print("[agent] audit tail:");
+            TOOL_NOTE("console.print");
+            agent_tool_console_print(audit);
         } else {
-            size_t off = file_sz > want ? file_sz - want : 0;
-            if (vfs_read_at(AGENT_AUDIT_PATH, off, audit, want, &n) == 0 && n) {
-                audit[n] = '\0';
-                agent_tool_console_print("[agent] audit tail:");
-                agent_tool_console_print(audit);
-            } else {
-                agent_tool_console_print("[agent] audit empty");
-            }
+            agent_tool_console_print("[agent] audit empty");
+            TOOL_NOTE("console.print");
         }
-        TOOL_NOTE("console.print");
         set_summary(summary, summary_cap, "showed audit");
         memory_append_turn(goal, tools_used, AGENT_AUDIT_PATH);
+        return;
+    }
+
+    if (intent == INTENT_SYSINFO) {
+        char info[256];
+        if (agent_tool_sys_info(info, sizeof(info)) == 0) {
+            TOOL_NOTE("sys.info");
+            agent_tool_console_print("[agent] system:");
+            TOOL_NOTE("console.print");
+            agent_tool_console_print(info);
+            set_summary(summary, summary_cap, "system info");
+        } else {
+            agent_tool_console_print("[agent] sys.info unavailable");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "sysinfo failed");
+        }
+        memory_append_turn(goal, tools_used, NULL);
+        return;
+    }
+
+    if (intent == INTENT_SEARCH) {
+        char needle[64];
+        needle[0] = '\0';
+        const char *p = goal;
+        if (contains_ci(goal, "search "))
+            p = goal + 7;
+        else if (contains_ci(goal, "find "))
+            p = goal + 5;
+        while (*p == ' ')
+            p++;
+        size_t i = 0;
+        for (; *p && *p != ' ' && i + 1 < sizeof(needle); p++)
+            needle[i++] = *p;
+        needle[i] = '\0';
+        if (!needle[0]) {
+            agent_tool_console_print("[agent] search needs a term");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "search failed");
+            memory_append_turn(goal, tools_used, NULL);
+            return;
+        }
+        char hits[512];
+        if (agent_tool_fs_search(needle, hits, sizeof(hits)) == 0) {
+            TOOL_NOTE("fs.search");
+            agent_tool_console_print("[agent] search matches:");
+            TOOL_NOTE("console.print");
+            agent_tool_console_print(hits);
+            set_summary(summary, summary_cap, "search results");
+        } else {
+            agent_tool_console_print("[agent] no matches");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "search empty");
+        }
+        memory_append_turn(goal, tools_used, needle);
         return;
     }
 

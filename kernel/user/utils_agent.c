@@ -8,8 +8,9 @@ int upeak_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
     console_write("Peak OS 0.2.0-ai — research workstation\n");
-    console_write("Agent tools: fs.read fs.write fs.list fs.exec console.print\n");
-    console_write("Try: ask \"summarize workspace\"   audit   memory   man ls\n");
+    console_write("Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm\n");
+    console_write("             fs.search sys.info mem.recall audit.tail console.print\n");
+    console_write("Try: ask \"summarize workspace\"   ask \"search README\"   audit   memory\n");
     console_write("Desktop: gui → Agent app (approve writes with Y/N)\n");
     return 0;
 }
@@ -71,7 +72,7 @@ int upolicy_main(int argc, char **argv) {
     size_t len = 0;
     console_write("policy: /etc/peak/agent.policy\n");
     if (vfs_read_file("/etc/peak/agent.policy", buf, sizeof(buf) - 1, &len) != 0) {
-        console_write("(empty — defaults: workspace paths + fs.read/write/list/exec)\n");
+        console_write("(empty — defaults: workspace paths + fs.read/write/list/exec/search)\n");
         return 0;
     }
     buf[len] = '\0';

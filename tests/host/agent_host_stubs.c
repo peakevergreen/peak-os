@@ -8,6 +8,7 @@
 #include "peakvec.h"
 #include "ubin.h"
 #include "util.h"
+#include "sysmon.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -23,12 +24,15 @@ struct host_file {
 };
 
 static struct host_file g_files[HOST_VFS_FILES];
+static char g_dirs[16][VFS_PATH_MAX];
+static int g_dir_count;
 
 void agent_host_vfs_reset(void) {
     for (int i = 0; i < HOST_VFS_FILES; i++) {
         free(g_files[i].data);
         memset(&g_files[i], 0, sizeof(g_files[i]));
     }
+    g_dir_count = 0;
 }
 
 static struct host_file *host_find(const char *path) {
@@ -182,8 +186,55 @@ int vfs_list(const char *path, char *out, size_t out_len) {
 }
 
 struct vfs_node *vfs_mkdir(const char *path) {
-    (void)path;
-    return NULL;
+    if (!path || g_dir_count >= 16)
+        return NULL;
+    size_t pl = strlen(path);
+    if (pl + 1 > VFS_PATH_MAX)
+        return NULL;
+    memcpy(g_dirs[g_dir_count], path, pl + 1);
+    g_dir_count++;
+    return (struct vfs_node *)(uintptr_t)g_dir_count;
+}
+
+int vfs_is_dir(const char *path) {
+    if (!path)
+        return 0;
+    for (int i = 0; i < g_dir_count; i++) {
+        if (!strcmp(g_dirs[i], path))
+            return 1;
+    }
+    return 0;
+}
+
+int vfs_unlink(const char *path) {
+    struct host_file *f = host_find(path);
+    if (!f)
+        return PEAK_ENOENT;
+    free(f->data);
+    f->used = 0;
+    f->data = NULL;
+    f->len = 0;
+    return 0;
+}
+
+int vfs_walk(const char *path, vfs_walk_cb cb, void *ctx) {
+    if (!path || !cb)
+        return PEAK_ENOENT;
+    size_t pl = strlen(path);
+    for (int i = 0; i < HOST_VFS_FILES; i++) {
+        if (!g_files[i].used)
+            continue;
+        if (strncmp(g_files[i].path, path, pl) != 0)
+            continue;
+        if (g_files[i].path[pl] != '\0' && g_files[i].path[pl] != '/')
+            continue;
+        struct vfs_node node;
+        memset(&node, 0, sizeof(node));
+        node.type = VFS_FILE;
+        node.size = g_files[i].len;
+        cb(g_files[i].path, &node, ctx);
+    }
+    return 0;
 }
 
 struct vfs_node *vfs_lookup(const char *path) {
@@ -192,8 +243,17 @@ struct vfs_node *vfs_lookup(const char *path) {
 }
 
 int vfs_remove_tree(const char *path) {
-    (void)path;
-    return 0;
+    if (!path)
+        return PEAK_ENOENT;
+    for (int i = 0; i < g_dir_count; i++) {
+        if (!strcmp(g_dirs[i], path)) {
+            memmove(g_dirs[i], g_dirs[i + 1],
+                    (size_t)(g_dir_count - i - 1) * sizeof(g_dirs[0]));
+            g_dir_count--;
+            return 0;
+        }
+    }
+    return PEAK_ENOENT;
 }
 
 /* Write-approval stub: treat as auto-approved path for host tool tests. */
@@ -248,6 +308,29 @@ int peakvec_query(const char *ns, const int16_t *query, int top_k, struct peakve
 
 uint32_t sysmon_now_us(void) {
     return 0;
+}
+
+static struct sysmon_sample g_sysmon_sample;
+
+void sysmon_poll(void) {
+    g_sysmon_sample.uptime_secs = 42;
+    g_sysmon_sample.mem_pct = 50;
+    g_sysmon_sample.heap_pct = 25;
+    g_sysmon_sample.load_pct = 10;
+    g_sysmon_sample.tasks = 3;
+    g_sysmon_sample.rx_bps = 1024;
+    g_sysmon_sample.tx_bps = 512;
+    g_sysmon_sample.vfs_nodes = 12;
+}
+
+const struct sysmon_sample *sysmon_latest(void) {
+    return &g_sysmon_sample;
+}
+
+void sysmon_format_rate(uint32_t bps, char *buf, size_t cap) {
+    if (!buf || cap == 0)
+        return;
+    snprintf(buf, cap, "%ubps", (unsigned)bps);
 }
 
 void sysmon_note_agent_audit_us(uint32_t us) {
