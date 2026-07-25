@@ -5,6 +5,8 @@
 #include "console.h"
 #include "util.h"
 #include "pmm.h"
+#include "peakdisk.h"
+#include "blobstore.h"
 
 int umkdir_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
@@ -164,6 +166,15 @@ int ustat_main(int argc, char **argv) {
     console_printf("size: %lu\n", (uint64_t)st.size);
     console_printf("children: %u\n", st.nchildren);
     console_printf("refs: %u\n", st.refs);
+    if (st.type == VFS_FILE) {
+        struct vfs_node *node = vfs_lookup(abs);
+        if (node) {
+            if (node->blob_id)
+                console_printf("backing: blob (id %u)\n", node->blob_id);
+            else
+                console_printf("backing: heap\n");
+        }
+    }
     return 0;
 }
 
@@ -190,10 +201,21 @@ int udf_main(int argc, char **argv) {
     (void)argv;
     int nodes = vfs_node_count();
     int pct = (nodes * 100) / VFS_MAX_NODES;
-    console_printf("VFS inodes: %d / %d (%d%% used)\n", nodes, VFS_MAX_NODES, pct);
+    console_printf("VFS inodes:  %d used / %d max (%d%%)\n", nodes, VFS_MAX_NODES, pct);
     uint64_t free_p = pmm_free_pages();
     uint64_t total_p = pmm_total_pages();
-    console_printf("RAM pages:  %lu free / %lu total\n", free_p, total_p);
+    console_printf("RAM pages:   %lu free / %lu total\n", free_p, total_p);
+    if (peakdisk_available()) {
+        if (peakdisk_busy())
+            console_write("PeakDisk:    block device present (saving)\n");
+        else
+            console_write("PeakDisk:    block device present\n");
+    } else {
+        console_write("PeakDisk:    no block device\n");
+    }
+    if (blobstore_available())
+        console_printf("Blobstore:   %u objects, %u cache pages\n",
+                       blobstore_object_count(), blobstore_cache_pages_used());
     if (nodes >= VFS_MAX_NODES - 2)
         console_write("df: warning — VFS inode table nearly full\n");
     return 0;

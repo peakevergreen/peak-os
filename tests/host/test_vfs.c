@@ -306,6 +306,45 @@ int main(void) {
                "write dir error message");
     }
 
+    /* --- errno: unlink / rmdir / stat / normalize / mkdir --- */
+    {
+        reset_vfs();
+        vfs_mkdir("/home");
+        expect(vfs_write_file("/home/f", "x", 1) == 0, "seed file");
+        expect(vfs_unlink("/nope") == PEAK_ENOENT, "unlink missing → ENOENT");
+        expect(vfs_unlink("/home") == PEAK_EISDIR, "unlink dir → EISDIR");
+        expect(vfs_rmdir("/home/f") == PEAK_ENOTDIR, "rmdir file → ENOTDIR");
+        expect(vfs_rmdir("/nope") == PEAK_ENOENT, "rmdir missing → ENOENT");
+
+        struct vfs_stat st;
+        expect(vfs_stat("/nope", &st) == PEAK_ENOENT, "stat missing → ENOENT");
+        expect(vfs_stat("/home", NULL) == PEAK_EINVAL, "stat null st → EINVAL");
+
+        char longpath[VFS_PATH_MAX];
+        longpath[0] = '/';
+        memset(longpath + 1, 'a', VFS_NAME_MAX);
+        longpath[1 + VFS_NAME_MAX] = '\0';
+        expect(vfs_normalize(longpath, norm, sizeof(norm)) == PEAK_EINVAL,
+               "normalize overlong component → EINVAL");
+
+        expect(vfs_mkdir("/home/f") == NULL, "mkdir on file → NULL");
+        expect(vfs_is_file("/home/f"), "file still exists after mkdir fail");
+    }
+
+    /* --- blob backing stat hint (via lookup) --- */
+    {
+        reset_vfs();
+        vfs_host_blob_reset();
+        if (blobstore_available()) {
+            vfs_mkdir("/home");
+            uint32_t id = 0;
+            expect(blobstore_create(&id, 64) == 0, "blob for stat test");
+            expect(vfs_bind_blob("/home/blobby", id, 4) == 0, "bind blob file");
+            struct vfs_node *n = vfs_lookup("/home/blobby");
+            expect(n && n->blob_id != 0, "blob_id set on node");
+        }
+    }
+
     if (fails) {
         fprintf(stderr, "%d test(s) failed\n", fails);
         return 1;

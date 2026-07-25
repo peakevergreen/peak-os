@@ -143,8 +143,11 @@ struct vfs_node *vfs_lookup(const char *path) {
 
 struct vfs_node *vfs_mkdir(const char *path) {
     struct vfs_node *existing = vfs_lookup(path);
-    if (existing)
-        return existing;
+    if (existing) {
+        if (existing->type == VFS_DIR)
+            return existing;
+        return NULL;
+    }
     /* recursively create */
     char build[VFS_PATH_MAX];
     build[0] = '\0';
@@ -168,7 +171,10 @@ struct vfs_node *vfs_mkdir(const char *path) {
             build[bi++] = part[k];
         build[bi] = '\0';
         struct vfs_node *n = find_child(cur, part);
-        if (!n) {
+        if (n) {
+            if (n->type != VFS_DIR)
+                return NULL;
+        } else {
             n = alloc_node(part, VFS_DIR);
             if (!n)
                 return NULL;
@@ -373,8 +379,11 @@ int vfs_normalize(const char *path, char *out, size_t out_len) {
             break;
         char part[VFS_NAME_MAX];
         size_t j = 0;
-        while (path[i] && path[i] != '/' && j + 1 < VFS_NAME_MAX)
+        while (path[i] && path[i] != '/') {
+            if (j + 1 >= VFS_NAME_MAX)
+                return PEAK_EINVAL;
             part[j++] = path[i++];
+        }
         part[j] = '\0';
         if (!strcmp(part, ".") || j == 0)
             continue;
@@ -431,8 +440,10 @@ static void node_path(struct vfs_node *n, char *out, size_t out_len) {
 }
 
 int vfs_stat(const char *path, struct vfs_stat *st) {
+    if (!st)
+        return PEAK_EINVAL;
     struct vfs_node *n = vfs_lookup(path);
-    if (!n || !st)
+    if (!n)
         return PEAK_ENOENT;
     st->type = n->type;
     st->size = n->size;
@@ -485,8 +496,12 @@ static void unlink_from_parent(struct vfs_node *n) {
 
 int vfs_unlink(const char *path) {
     struct vfs_node *n = vfs_lookup(path);
-    if (!n || n->type != VFS_FILE || n == root)
+    if (!n)
+        return PEAK_ENOENT;
+    if (n == root)
         return PEAK_EINVAL;
+    if (n->type != VFS_FILE)
+        return PEAK_EISDIR;
     unlink_from_parent(n);
     /* Count sharers of this data pointer */
     int sharers = 0;
@@ -519,8 +534,12 @@ int vfs_unlink(const char *path) {
 
 int vfs_rmdir(const char *path) {
     struct vfs_node *n = vfs_lookup(path);
-    if (!n || n->type != VFS_DIR || n == root)
+    if (!n)
+        return PEAK_ENOENT;
+    if (n == root)
         return PEAK_EINVAL;
+    if (n->type != VFS_DIR)
+        return PEAK_ENOTDIR;
     if (n->child)
         return PEAK_EBUSY;
     unlink_from_parent(n);
