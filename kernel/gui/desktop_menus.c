@@ -32,7 +32,6 @@ static int taskbar_overflow;
 
 static int app_kind_ready(enum app_kind k) {
     switch (k) {
-    case APP_IMAGES:
     case APP_DISKS:
     case APP_NETEXP:
     case APP_NETCTL:
@@ -328,6 +327,8 @@ int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int ma
         return desktop_files_ctx_menu(items, max_items);
     case APP_NOTEPAD:
         return desktop_notepad_ctx_menu(items, max_items);
+    case APP_IMAGES:
+        return desktop_images_ctx_menu(items, max_items);
     default:
         break;
     }
@@ -350,6 +351,8 @@ int desktop_app_ctx_action(enum app_kind kind, int action_id) {
         return desktop_files_ctx_action(action_id);
     case APP_NOTEPAD:
         return desktop_notepad_ctx_action(action_id);
+    case APP_IMAGES:
+        return desktop_images_ctx_action(action_id);
     default:
         return 0;
     }

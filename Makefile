@@ -163,6 +163,8 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/desktop_terminal.c \
 	kernel/gui/desktop_files.c \
 	kernel/gui/desktop_notepad.c \
+	kernel/gui/img_decode.c \
+	kernel/gui/desktop_images.c \
 	kernel/gui/desktop_settings.c \
 	kernel/gui/desktop_agent.c \
 	kernel/gui/game.c \
@@ -303,6 +305,7 @@ BIOS_C_SRCS := \
 	boot/common/load_ctx.c \
 	boot/common/peak_conf.c \
 	boot/common/sha256.c \
+	boot/common/hmac_sha256.c \
 	boot/common/verify_kernel.c
 
 BIOS_S_SRCS := boot/bios/entry.S boot/bios/lm_enter.S
@@ -345,7 +348,7 @@ HOST_TEST_NAMES := \
 	phase7 gfx boot lan http_tcp js webapi random tls libpeak ubin_registry \
 	shell_split console_scroll display_present wallpaper_cache \
 	peakdisk peakvec guiproto vmm_usercopy blobstore heap_pmm agent_policy \
-	ctr_path dom vfs cli_crypto
+	agent_tools desktop_titles ctr_path dom vfs cli_crypto img_decode
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
 
 test: test-host
@@ -361,7 +364,7 @@ $(eval $(call HOST_TEST_RULE,phase7,tests/host/test_phase7.c kernel/vfs_path_uti
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
 $(eval $(call HOST_TEST_RULE,gfx,tests/host/test_gfx.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,boot,tests/host/test_boot.c boot/common/elf_load.c boot/common/util.c \
-	boot/common/sha256.c boot/common/verify_kernel.c boot/common/peak_conf.c,\
+	boot/common/sha256.c boot/common/hmac_sha256.c boot/common/verify_kernel.c boot/common/peak_conf.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_BOOT)))
 $(eval $(call HOST_TEST_RULE,lan,tests/host/test_lan.c kernel/net/dhcp_util.c kernel/net/http_util.c \
 	kernel/net/arp_util.c boot/common/peak_conf.c boot/common/util.c,\
@@ -429,6 +432,10 @@ $(eval $(call HOST_TEST_RULE,heap_pmm,tests/host/test_heap_pmm.c tests/host/heap
 $(eval $(call HOST_TEST_RULE,agent_policy,tests/host/test_agent_policy.c tests/host/agent_host_stubs.c \
 	kernel/agent_policy.c kernel/agent_tools.c kernel/agent_planner.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel))
+$(eval $(call HOST_TEST_RULE,agent_tools,tests/host/test_agent_tools.c tests/host/agent_host_stubs.c \
+	kernel/agent_tools.c kernel/agent_policy.c,\
+	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel))
+$(eval $(call HOST_TEST_RULE,desktop_titles,tests/host/test_desktop_titles.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,ctr_path,tests/host/test_ctr_path.c kernel/ctr_path.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel))
 $(eval $(call HOST_TEST_RULE,dom,tests/host/test_dom.c tests/host/dom_host_stubs.c \
@@ -436,8 +443,11 @@ $(eval $(call HOST_TEST_RULE,dom,tests/host/test_dom.c tests/host/dom_host_stubs
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui))
 $(eval $(call HOST_TEST_RULE,cli_crypto,tests/host/test_cli_crypto.c kernel/net/crypto_hash.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
+$(eval $(call HOST_TEST_RULE,img_decode,tests/host/test_img_decode.c kernel/gui/img_decode.c \
+	tests/host/img_decode_host_stubs.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui))
 $(eval $(call HOST_TEST_RULE,vfs,tests/host/test_vfs.c tests/host/vfs_host_stubs.c \
-	kernel/vfs.c kernel/vfs_peakfs.c kernel/vfs_path_util.c kernel/blobstore.c kernel/blockdev.c,\
+	kernel/vfs.c kernel/vfs_peakfs.c kernel/vfs_path_util.c kernel/peak_errno.c kernel/blobstore.c kernel/blockdev.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DBLOBSTORE_CACHE_PAGES=4 $(HOST_TEST_INC_KERNEL)))
 
 smoke:
@@ -604,14 +614,18 @@ $(BUILD)/uefi/verify_kernel.o: boot/common/verify_kernel.c
 	@mkdir -p $(dir $@)
 	$(CC) $(UEFI_CFLAGS) -c $< -o $@
 
+$(BUILD)/uefi/hmac_sha256.o: boot/common/hmac_sha256.c
+	@mkdir -p $(dir $@)
+	$(CC) $(UEFI_CFLAGS) -c $< -o $@
+
 $(UEFI_EFI): $(BUILD)/uefi/efi_main.o $(BUILD)/uefi/util.o $(BUILD)/uefi/elf_load.o \
              $(BUILD)/uefi/paging.o $(BUILD)/uefi/load_ctx.o $(BUILD)/uefi/peak_conf.o \
-             $(BUILD)/uefi/sha256.o $(BUILD)/uefi/verify_kernel.o
+             $(BUILD)/uefi/sha256.o $(BUILD)/uefi/hmac_sha256.o $(BUILD)/uefi/verify_kernel.o
 	@mkdir -p $(dir $@)
 	$(LLDLINK) /subsystem:efi_application /entry:efi_main /out:$@ \
 		$(BUILD)/uefi/efi_main.o $(BUILD)/uefi/util.o \
 		$(BUILD)/uefi/elf_load.o $(BUILD)/uefi/paging.o $(BUILD)/uefi/load_ctx.o \
-		$(BUILD)/uefi/peak_conf.o $(BUILD)/uefi/sha256.o $(BUILD)/uefi/verify_kernel.o
+		$(BUILD)/uefi/peak_conf.o $(BUILD)/uefi/sha256.o $(BUILD)/uefi/hmac_sha256.o $(BUILD)/uefi/verify_kernel.o
 
 $(ESP_IMG): $(UEFI_EFI) $(KERNEL_ELF) boot/peak.conf scripts/mkesp.py
 	python3 scripts/mkesp.py $(UEFI_EFI) $@ --size-kib 8192 --kernel $(KERNEL_ELF) \
@@ -628,6 +642,7 @@ $(ISO): $(KERNEL_ELF) $(BIOS_BIN) $(ESP_IMG) $(UEFI_EFI) boot/peak.conf
 	cp $(ESP_IMG) $(ISO_ROOT)/boot/efi.img
 	cp $(UEFI_EFI) $(ISO_ROOT)/EFI/BOOT/BOOTX64.EFI
 	if [ -f $(BUILD)/SHA256SUMS ]; then cp $(BUILD)/SHA256SUMS $(ISO_ROOT)/boot/SHA256SUMS; fi
+	if [ -f $(BUILD)/SHA256SUMS.sig ]; then cp $(BUILD)/SHA256SUMS.sig $(ISO_ROOT)/boot/SHA256SUMS.sig; fi
 	cp boot/peak.conf $(ISO_ROOT)/boot/peak.conf
 	@BLS=$$(( ($$(stat -f%z $(BIOS_BIN) 2>/dev/null || stat -c%s $(BIOS_BIN)) + 511) / 512 )); \
 	xorriso -as mkisofs -R -r -J \

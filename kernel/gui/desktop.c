@@ -158,6 +158,8 @@ void desktop_run(void) {
                           wins[focus].kind == APP_FILES;
         int npad_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
                          wins[focus].kind == APP_NOTEPAD;
+        int img_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
+                        wins[focus].kind == APP_IMAGES;
         int agent_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
                           wins[focus].kind == APP_AGENT;
 
@@ -173,6 +175,11 @@ void desktop_run(void) {
 
         if (key && npad_focus) {
             desktop_notepad_key(key);
+            key = 0;
+        }
+
+        if (key && img_focus) {
+            desktop_images_key(key);
             key = 0;
         }
 
@@ -227,6 +234,8 @@ void desktop_run(void) {
                 desktop_terminal_wheel(m.wheel);
             else if (files_focus)
                 desktop_files_wheel(m.wheel);
+            else if (img_focus)
+                desktop_images_wheel(m.wheel);
             else if (br_focus) {
                 browser_input(m.wheel > 0 ? 'k' : 'j');
                 dirty_bits |= DIRTY_BROWSER;
