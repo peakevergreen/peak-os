@@ -89,6 +89,19 @@ void heap_get_stats(uint64_t *used_bytes, uint64_t *free_bytes, uint64_t *blocks
         *blocks_out = 0;
 }
 
+uint32_t heap_fragmentation_pct(void) {
+    return 0;
+}
+
+void heap_get_freelist_stats(struct heap_freelist_stats *out) {
+    if (out)
+        memset(out, 0, sizeof(*out));
+}
+
+uint32_t heap_oom_count(void) {
+    return 0;
+}
+
 uint64_t heap_total_allocated(void) {
     return 0;
 }

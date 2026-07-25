@@ -5,6 +5,7 @@
 #include "keyboard.h"
 #include "sched.h"
 #include "sysmon.h"
+#include "heap.h"
 #include "util.h"
 
 static void top_render_once(int oneshot) {
@@ -68,18 +69,39 @@ int ups_main(int argc, char **argv) {
     int n = sched_list_tasks(list, MAX_TASKS);
     sched_sort_tasks(list, n);
     int cur = sched_current_pid();
-    console_printf("PID  STATE   CPU     NAME\n");
+    uint64_t total_ticks = 0;
+    for (int i = 0; i < n; i++)
+        total_ticks += list[i].cpu_ticks;
+    if (!total_ticks)
+        total_ticks = 1;
+    uint64_t now = timer_ticks();
+    console_printf("PID  STATE   TICKS   AGE     WAKE    SHARE  NAME\n");
     for (int i = 0; i < n; i++) {
         const char *st =
             list[i].state == TASK_RUNNING ? "run" :
             list[i].state == TASK_READY ? "ready" :
             list[i].state == TASK_BLOCKED ? "block" :
             list[i].state == TASK_ZOMBIE ? "zombie" : "?";
-        console_printf("%-4d %-7s %-7lu %s%s\n",
-                       list[i].pid, st,
-                       (unsigned long)list[i].cpu_ticks,
-                       list[i].name,
-                       list[i].pid == cur ? " *" : "");
+        uint64_t age = now > list[i].spawned_at ? now - list[i].spawned_at : 0;
+        uint32_t share = (uint32_t)((list[i].cpu_ticks * 100ull) / total_ticks);
+        if (list[i].state == TASK_BLOCKED && list[i].wake_tick)
+            console_printf("%-4d %-7s %-7lu %-7lu %-7lu %-5u %s%s\n",
+                           list[i].pid, st,
+                           (unsigned long)list[i].cpu_ticks,
+                           (unsigned long)age,
+                           (unsigned long)list[i].wake_tick,
+                           (unsigned)share,
+                           list[i].name,
+                           list[i].pid == cur ? " *" : "");
+        else
+            console_printf("%-4d %-7s %-7lu %-7lu %-7s %-5u %s%s\n",
+                           list[i].pid, st,
+                           (unsigned long)list[i].cpu_ticks,
+                           (unsigned long)age,
+                           "-",
+                           (unsigned)share,
+                           list[i].name,
+                           list[i].pid == cur ? " *" : "");
     }
     console_printf("tasks %d  ctx %lu  (sorted by CPU ticks)\n",
                    n, (unsigned long)sched_ctx_switches());
