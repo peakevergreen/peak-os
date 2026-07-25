@@ -311,6 +311,54 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     }
 
     if (intent == INTENT_SUMMARIZE) {
+        char term[64];
+        term[0] = '\0';
+        const char *p = goal;
+        if (contains_ci(goal, "summarize "))
+            p = goal + 10;
+        else if (contains_ci(goal, "what's in "))
+            p = goal + 10;
+        else if (contains_ci(goal, "whats in "))
+            p = goal + 9;
+        while (*p == ' ')
+            p++;
+        size_t ti = 0;
+        for (; *p && *p != ' ' && ti + 1 < sizeof(term); p++)
+            term[ti++] = *p;
+        term[ti] = '\0';
+
+        if (term[0]) {
+            char hits[512];
+            if (agent_tool_fs_search(term, hits, sizeof(hits)) == 0) {
+                TOOL_NOTE("fs.search");
+                agent_tool_console_print("[agent] summarize search:");
+                TOOL_NOTE("console.print");
+                agent_tool_console_print(hits);
+                const char *first = hits;
+                char path[VFS_PATH_MAX];
+                size_t pi = 0;
+                for (; *first && *first != '\n' && pi + 1 < sizeof(path); first++)
+                    path[pi++] = *first;
+                path[pi] = '\0';
+                if (path[0]) {
+                    char body[384];
+                    size_t n = 0;
+                    if (agent_tool_fs_read(path, body, sizeof(body), &n) == 0 && n) {
+                        TOOL_NOTE("fs.read");
+                        body[n < sizeof(body) ? n : sizeof(body) - 1] = '\0';
+                        if (n > 240)
+                            body[240] = '\0';
+                        agent_tool_console_print("[agent] snippet:");
+                        agent_tool_console_print(body);
+                        TOOL_NOTE("console.print");
+                    }
+                }
+                set_summary(summary, summary_cap, "search summarize");
+                memory_append_turn(goal, tools_used, term);
+                return;
+            }
+        }
+
         char listing[512];
         if (agent_tool_fs_list("/home/dev/workspace", listing, sizeof(listing)) == 0) {
             TOOL_NOTE("fs.list");
