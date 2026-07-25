@@ -113,6 +113,7 @@ int main(void) {
     expect(!access_ok_write(user_win, 8), "RO mapping not writable");
     memcpy(user_win, "readonly", 9);
     expect(copy_from_user(kbuf, user_win, 9) == 0, "copy_from_user on RO map");
+    expect(copy_to_user(user_win, kbuf, 9) != 0, "copy_to_user on RO map rejected");
 
     teardown_as(cr3);
 

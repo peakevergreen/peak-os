@@ -18,7 +18,7 @@ int ujs_main(int argc, char **argv) {
 
     struct js_runtime *rt = js_rt_create();
     if (!rt) {
-        peak_perror("js", "runtime create failed");
+        peak_perror("js", "out of memory");
         return 1;
     }
 
@@ -45,7 +45,7 @@ int ujs_main(int argc, char **argv) {
         }
         char *src = kmalloc(65536);
         if (!src) {
-            peak_perror("js", "oom");
+            peak_perror("js", "out of memory");
             js_rt_destroy(rt);
             return 1;
         }

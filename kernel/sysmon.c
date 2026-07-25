@@ -239,6 +239,13 @@ void sysmon_poll(void) {
     s.heap_free = hf;
     s.heap_blocks = hb;
     s.heap_peak = heap_peak;
+    s.heap_frag_pct = heap_fragmentation_pct();
+    {
+        struct heap_freelist_stats fl;
+        heap_get_freelist_stats(&fl);
+        s.heap_free_blocks = fl.free_blocks;
+    }
+    s.heap_oom = heap_oom_count();
     s.vfs_nodes = (uint64_t)vfs_node_count();
     s.rx_bytes = rx_bytes;
     s.tx_bytes = tx_bytes;
@@ -397,7 +404,8 @@ int sysmon_snapshot(char *buf, size_t cap) {
     sysmon_format_bytes(s->heap_used, a, sizeof(a)); sysmon_format_bytes(s->heap_free, f, sizeof(f));
     sysmon_format_bytes(s->heap_used + s->heap_free, b, sizeof(b)); sysmon_format_bytes(s->heap_peak, p, sizeof(p));
     SNAP("Heap %s %3u%%  %s / %s  peak %s  (%lu blk)\n", bar, (unsigned)s->heap_pct, a, b, p, (unsigned long)s->heap_blocks);
-    SNAP("     used %s  free %s\n", a, f);
+    SNAP("     used %s  free %s  frag %u%%  free blk %u  oom %u\n", a, f,
+         (unsigned)s->heap_frag_pct, (unsigned)s->heap_free_blocks, (unsigned)s->heap_oom);
     char rxr[16], txr[16], rxt[16], txt[16];
     sysmon_format_rate(s->rx_bps, rxr, sizeof(rxr)); sysmon_format_rate(s->tx_bps, txr, sizeof(txr));
     sysmon_format_bytes(s->rx_bytes, rxt, sizeof(rxt)); sysmon_format_bytes(s->tx_bytes, txt, sizeof(txt));
@@ -410,8 +418,21 @@ int sysmon_snapshot(char *buf, size_t cap) {
     SNAP("GFX  compose %s  present %s  surf %u%%\n", cu, pu, (unsigned)s->surf_pressure);
     SNAP("Agent peakvec %s  audit %s\n\n", pv, au);
     struct task list[MAX_TASKS]; int tn = sched_list_tasks(list, MAX_TASKS); sched_sort_tasks(list, tn); int cur = sched_current_pid();
-    SNAP("PID  STATE   TICKS   NAME\n");
-    for (int i = 0; i < tn && i < 16; i++) SNAP("%-4d %-7s %-7lu %s%s\n", list[i].pid, task_state_name(list[i].state), (unsigned long)list[i].cpu_ticks, list[i].name, list[i].pid == cur ? " *" : "");
+    SNAP("PID  STATE   TICKS   AGE     SHARE  NAME\n");
+    uint64_t total_ticks = 0;
+    for (int i = 0; i < tn; i++)
+        total_ticks += list[i].cpu_ticks;
+    if (!total_ticks)
+        total_ticks = 1;
+    uint64_t now = timer_ticks();
+    for (int i = 0; i < tn && i < 16; i++) {
+        uint64_t age = now > list[i].spawned_at ? now - list[i].spawned_at : 0;
+        uint32_t share = (uint32_t)((list[i].cpu_ticks * 100ull) / total_ticks);
+        SNAP("%-4d %-7s %-7lu %-7lu %-5u %s%s\n", list[i].pid,
+             task_state_name(list[i].state), (unsigned long)list[i].cpu_ticks,
+             (unsigned long)age, (unsigned)share, list[i].name,
+             list[i].pid == cur ? " *" : "");
+    }
     SNAP("\n");
     struct sysmon_sample hist[SYSMON_HISTORY]; int hn = sysmon_history(hist, SYSMON_HISTORY);
     uint32_t load_s[SYSMON_HISTORY], mem_s[SYSMON_HISTORY], fps_s[SYSMON_HISTORY], net_s[SYSMON_HISTORY];

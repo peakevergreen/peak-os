@@ -129,6 +129,17 @@ int main(void) {
         kfree(c);
     }
 
+    {
+        void *x = kmalloc(32);
+        expect(x != NULL, "freelist probe alloc");
+        kfree(x);
+        struct heap_freelist_stats fl;
+        heap_get_freelist_stats(&fl);
+        expect(fl.free_blocks > 0, "freelist stats free blocks");
+        expect(fl.class_counts[0] > 0, "32-byte class freelist");
+    }
+    expect(heap_fragmentation_pct() <= 100, "frag pct bounded");
+
     heap_pmm_host_teardown();
 
     if (fails) {
