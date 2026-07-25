@@ -34,6 +34,9 @@ grep -q 'SHELL_PIPE_MAX' kernel/include/shell_split.h
 grep -q 'nslookup' kernel/user/ubin_cmds.def
 grep -q 'printf' kernel/user/ubin_cmds.def
 grep -q 'test' kernel/user/ubin_cmds.def
+grep -q 'xargs' kernel/user/ubin_cmds.def
+grep -q 'fold' kernel/user/ubin_cmds.def
+grep -q 'utils_text5' Makefile
 grep -q 'boot_verify_manifest_sig' boot/common/verify_kernel.c
 grep -q 'SHELL_PIPE_MAX' kernel/include/shell_split.h
 

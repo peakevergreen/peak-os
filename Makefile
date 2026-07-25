@@ -140,6 +140,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/user/utils_text2.c \
 	kernel/user/utils_text3.c \
 	kernel/user/utils_text4.c \
+	kernel/user/utils_text5.c \
 	kernel/user/utils_crypto.c \
 	kernel/user/utils_pager.c \
 	kernel/user/utils_sys.c \
@@ -352,7 +353,7 @@ HOST_TEST_NAMES := \
 	phase7 gfx boot lan http_tcp js webapi random tls libpeak ubin_registry \
 	shell_split console_scroll display_present wallpaper_cache \
 	peakdisk peakvec guiproto vmm_usercopy blobstore heap_pmm agent_policy \
-	agent_tools desktop_titles ctr_path dom vfs cli_crypto img_decode
+	agent_tools desktop_titles ctr_path dom vfs cli_crypto cli_text5 img_decode
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
 
 test: test-host
@@ -447,6 +448,7 @@ $(eval $(call HOST_TEST_RULE,dom,tests/host/test_dom.c tests/host/dom_host_stubs
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui))
 $(eval $(call HOST_TEST_RULE,cli_crypto,tests/host/test_cli_crypto.c kernel/net/crypto_hash.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
+$(eval $(call HOST_TEST_RULE,cli_text5,tests/host/test_cli_text5.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,img_decode,tests/host/test_img_decode.c kernel/gui/img_decode.c \
 	tests/host/img_decode_host_stubs.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui))

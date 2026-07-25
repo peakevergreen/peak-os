@@ -33,7 +33,7 @@ int main(void) {
     expect(n == expected, "ubin count matches ubin_cmds.def");
     expect(expected >= 25, "minimum built-in count");
 
-    int found_nslookup = 0, found_printf = 0, found_test = 0;
+    int found_nslookup = 0, found_printf = 0, found_test = 0, found_xargs = 0, found_fold = 0;
     for (int i = 0; i < n; i++) {
         expect(ubin_names[i][0], "non-empty name");
         if (!strcmp(ubin_names[i], "nslookup"))
@@ -42,12 +42,18 @@ int main(void) {
             found_printf = 1;
         if (!strcmp(ubin_names[i], "test"))
             found_test = 1;
+        if (!strcmp(ubin_names[i], "xargs"))
+            found_xargs = 1;
+        if (!strcmp(ubin_names[i], "fold"))
+            found_fold = 1;
         for (int j = i + 1; j < n; j++)
             expect(strcmp(ubin_names[i], ubin_names[j]) != 0, "duplicate built-in name");
     }
     expect(found_nslookup, "nslookup in registry");
     expect(found_printf, "printf in registry");
     expect(found_test, "test in registry");
+    expect(found_xargs, "xargs in registry");
+    expect(found_fold, "fold in registry");
 
     int found_disksave = 0;
     for (int i = 0; i < n; i++)
