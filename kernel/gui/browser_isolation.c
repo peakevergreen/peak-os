@@ -41,3 +41,9 @@ void browser_isolation_status_line(char *out, size_t cap) {
     else
         snprintf(out, cap, "Isolation: off (in-process)");
 }
+
+const char *browser_isolation_fetch_denied_reason(void) {
+    if (browser_isolation_enforced() && !browser_ring3_available())
+        return "fetch blocked: ring-3 isolation enforce (net gated)";
+    return "fetch blocked: ring-3 isolation unavailable";
+}

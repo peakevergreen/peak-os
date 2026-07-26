@@ -4,6 +4,7 @@
 #include "js.h"
 #include "webapi.h"
 #include "webapi_internal.h"
+#include "browser_isolation.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -77,10 +78,15 @@ int main(void) {
     eval_fails(rt, "fetch({})", "URL string required");
     eval_fails(rt, "fetch('javascript:alert(1)')", "only http(s)");
     eval_fails(rt, "fetch('data:text/plain,hi')", "only http(s)");
-    eval_fails(rt, "fetch('https://example.com/x',{method:'HEAD'})", "only GET/POST");
+    eval_fails(rt, "fetch('https://example.com/x',{method:'HEAD'})", "method HEAD not supported");
+    eval_fails(rt, "fetch('https://example.com/x',{method:'PUT'})", "method PUT not supported");
     eval_fails(rt, "fetch('https://example.com/x',{method:''})", "only GET/POST");
     eval_fails(rt, "fetch('https://example.com/x',{body:'x'})", "only with POST");
-    eval_fails(rt, "fetch('https://example.com/x',{headers:{}})", "unsupported init");
+    webapi_host_set_http(0, 200, "hello", "");
+    eval_ok(rt, "var r=fetch('https://example.com/x'); r.ok", "true");
+    eval_ok(rt, "var r=fetch('https://example.com/x',{headers:{}}); r.ok", "true");
+    eval_ok(rt, "var h={Accept:'text/plain'}; var r=fetch('https://example.com/x',{headers:h}); r.ok", "true");
+    eval_fails(rt, "fetch('https://example.com/x',{headers:[]})", "headers array");
     eval_fails(rt, "fetch('https://example.com/x',{credentials:'include'})", "unsupported init");
     eval_fails(rt, "fetch('https://example.com/x',{mode:'cors'})", "unsupported init");
     eval_fails(rt, "fetch('https://example.com/x','bad')", "init must be object");
@@ -205,6 +211,11 @@ int main(void) {
     webapi_clear_tab(0);
     expect(webapi_install(rt, "https://example.com/page") == 0, "session reload");
     eval_ok(rt, "sessionStorage.getItem('ephem')", "null");
+
+    /* Fail-closed isolation: enforce mode blocks fetch with explicit reason. */
+    browser_isolation_set_enforce(1);
+    eval_fails(rt, "fetch('https://example.com/x')", "ring-3 isolation enforce");
+    browser_isolation_set_enforce(0);
 
     js_rt_destroy(rt);
     if (fails) {

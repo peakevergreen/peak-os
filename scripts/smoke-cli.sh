@@ -723,6 +723,13 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 140 WebAPI fetch headers isolation"
+grep -q 'stub_fetch_parse_headers' kernel/gui/webapi_stubs.c
+grep -q 'browser_isolation_fetch_denied_reason' kernel/gui/browser_isolation.c
+grep -q 'method HEAD not supported' kernel/gui/webapi_stubs.c
+grep -q 'headers must be plain object' kernel/gui/webapi_stubs.c
+grep -q 'ring-3 isolation enforce' tests/host/test_webapi.c
+
 echo "==> Wave 7 Pass 139 JS Promise allSettled race"
 grep -q 'nat_promise_all_settled' kernel/js/js_vm.c
 grep -q 'nat_promise_race' kernel/js/js_vm.c

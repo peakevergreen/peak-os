@@ -12,5 +12,7 @@ int browser_isolation_enforced(void);
 int browser_isolation_dom_allowed(void);
 int browser_isolation_net_allowed(void);
 void browser_isolation_status_line(char *out, size_t cap);
+/* Fail-closed reason when fetch is blocked under enforce mode. */
+const char *browser_isolation_fetch_denied_reason(void);
 
 #endif
