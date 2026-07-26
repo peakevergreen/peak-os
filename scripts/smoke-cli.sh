@@ -723,6 +723,12 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 143 HTTP redirect cookie jar"
+grep -q 'HTTP_REDIRECT_MAX' kernel/include/http_util.h
+grep -q 'http_cookie_jar_store' kernel/net/http_util.c
+grep -q 'http_cookie_jar_honesty' kernel/net/http_util.c
+grep -q 'HTTP_REDIRECT_MAX' kernel/net/http.c
+
 echo "==> Wave 7 Pass 142 DOM querySelector CSS"
 grep -q 'query_tag_class_in_subtree' kernel/gui/dom_core.c
 grep -q 'p.note' tests/host/test_dom.c

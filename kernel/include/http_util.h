@@ -74,4 +74,13 @@ int http_join_redirect(int https, const char *host, uint16_t port,
 /* 1 if req_url is active mixed content relative to https page_url. */
 int http_blocks_active_mixed(const char *page_url, const char *req_url);
 
+/* Redirect follow cap (honest limit surfaced in error pages). */
+#define HTTP_REDIRECT_MAX 5
+
+/* Cookie jar lite: in-memory per-host (max 8 entries; no persistence). */
+void http_cookie_jar_clear(void);
+void http_cookie_jar_store(const char *host, const char *set_cookie_line);
+const char *http_cookie_jar_for_host(const char *host, char *out, size_t out_cap);
+const char *http_cookie_jar_honesty(void);
+
 #endif
