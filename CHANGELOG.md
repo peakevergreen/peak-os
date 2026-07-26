@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 120:** awk `BEGIN`/`END`/vars; sed `q`/`=`; jq nested `.key.keys` depth
+
 - **Pass 119:** `join` `-1`/`-2`/`-t` field/delimiter; `comm` `-1`/`-2`/`-3` column suppress
 
 - **Pass 118:** Wave 5 lock-in — smoke-cli gates Passes 99–117, ROADMAP/CHANGELOG Wave 5 shipped, security-checklist CI note

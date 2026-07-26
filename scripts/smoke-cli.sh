@@ -474,6 +474,12 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 120 awk/sed/jq depth"
+grep -q 'awk_var_get' kernel/user/utils_text6.c
+grep -q 'do_quit' kernel/user/utils_text3.c
+grep -q 'do_lineno' kernel/user/utils_text3.c
+grep -q '\.key.keys' docs/CLI.md || grep -q 'nested' docs/CLI.md
+
 echo "==> Wave 6 Pass 119 join/comm depth"
 grep -q 'line_field_delim' kernel/user/utils_text2.c
 grep -q 'suppress1' kernel/user/utils_text2.c

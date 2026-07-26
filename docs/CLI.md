@@ -95,12 +95,12 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `grep [-i] [-n] [-v] [-r] [-c] [-l] [-o] [-A N] [-B N] <pat> [path...]` | substring match; `-c` count, `-l` filenames, `-o` only match, `-A`/`-B` context lite (≤32) |
 | `diff [-u] <a> <b>` `patch <target> [patch\|-]` | line diff; unified `-u`; patch lite applies `+`/`-` hunks |
 | `sort` `uniq` `join` `comm` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok; `sort` `-r`/`-n`/`-u`, `uniq` `-c`; `join` `-1`/`-2`/`-t`; `comm` `-1`/`-2`/`-3` suppress) |
-| `sed` | sed-lite: `[N\|[N,M]] s/old/new/[g]`, `y/from/to/`, `d`, `p`, `-n` (32 KiB) |
+| `sed` | sed-lite: `[N\|[N,M]] s/old/new/[g]`, `y/from/to/`, `d`, `p`, `q`, `=`, `-n` (32 KiB) |
 | `fold` `rev` `nl` `tac` | wrap lines (`-w`), reverse chars/lines, number lines |
 | `od` `split` `paste` | byte dump (`-tx1`/`-to1`), split by bytes (`-b`), merge two files |
 | `xargs` | build `/bin` argv from stdin (`-0` null-delimited, `-n N` batch, `-I repl` replace; max 12 tokens) |
-| `awk` | awk-lite: `-F fs`, `$0`/`$n`, `NR`/`NF`, `/pat/ { print … }` (32 KiB) |
-| `jq` | jq-lite: `.key`, `.[]`, `keys`, `length`, compact print (32 KiB) |
+| `awk` | awk-lite: `-F fs`, `$0`/`$n`, `NR`/`NF`, `BEGIN`/`END`, vars `a-z`, `/pat/ { print … }` (32 KiB) |
+| `jq` | jq-lite: `.key`, `.[]`, `.key.keys` nested, `keys`, `length`, compact print (32 KiB) |
 | `basename` `dirname` `realpath` | path helpers |
 | `hexdump` `strings` `xxd` | binary helpers (`xxd` 8 KiB cap) |
 | `shuf` `cksum` | shuffle lines (8 KiB); CRC32 + byte count |

@@ -309,6 +309,18 @@ static int parse_filter(const char *filter, jq_prog *prog) {
         }
         if (*p == '.')
             p++;
+        if (!strncmp(p, "keys", 4) && (!p[4] || p[4] == ' ' || p[4] == '|')) {
+            prog->steps[prog->nsteps++].kind = JQ_KEYS;
+            p += 4;
+            p = skip_ws(p);
+            continue;
+        }
+        if (!strncmp(p, "length", 6) && (!p[6] || p[6] == ' ' || p[6] == '|')) {
+            prog->steps[prog->nsteps++].kind = JQ_LENGTH;
+            p += 6;
+            p = skip_ws(p);
+            continue;
+        }
         if (!is_ident(*p))
             return -1;
         size_t i = 0;
@@ -425,9 +437,9 @@ static int apply_filter(const jdoc *d, int root, const jq_prog *prog, jset *out)
     jset_add(&cur, root);
     for (int i = 0; i < prog->nsteps; i++) {
         if (prog->steps[i].kind == JQ_KEYS || prog->steps[i].kind == JQ_LENGTH) {
-            jset_clear(out);
-            for (int j = 0; j < cur.n; j++)
-                jset_add(out, cur.ids[j]);
+            if (i + 1 < prog->nsteps)
+                return -1;
+            *out = cur;
             return 0;
         }
         if (apply_step(d, &cur, &nxt, &prog->steps[i]) != 0)
@@ -592,11 +604,12 @@ static size_t print_compact(const jdoc *d, int id, char *out, size_t cap) {
 
 static int emit_values(const jdoc *d, const jq_prog *prog, const jset *vals) {
     char line[OUT_MAX];
+    jq_kind tail = prog->nsteps > 0 ? prog->steps[prog->nsteps - 1].kind : JQ_KEY;
     for (int i = 0; i < vals->n; i++) {
         size_t n = 0;
-        if (prog->nsteps == 1 && prog->steps[0].kind == JQ_KEYS)
+        if (tail == JQ_KEYS)
             n = print_keys_array(d, vals->ids[i], line, sizeof(line));
-        else if (prog->nsteps == 1 && prog->steps[0].kind == JQ_LENGTH)
+        else if (tail == JQ_LENGTH)
             n = print_length(d, vals->ids[i], line, sizeof(line));
         else
             n = print_compact(d, vals->ids[i], line, sizeof(line));
