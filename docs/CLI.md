@@ -79,9 +79,9 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 ## Text
 | Command | Notes |
 |---------|-------|
-| `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N`) |
+| `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N`; `wc` `-l`/`-w`/`-c` select fields) |
 | `grep [-i] [-n] [-v] [-r] <pat> [path...]` | substring match; `-i` case-fold, `-n` line numbers, `-v` invert, `-r` recurse dirs; multi-file prints `path:` |
-| `diff` `sort` `uniq` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok) |
+| `diff` `sort` `uniq` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok; `sort` `-r`/`-n`/`-u`, `uniq` `-c`) |
 | `sed` | sed-lite: `[N\|[N,M]] s/old/new/[g]`, `y/from/to/`, `d`, `p`, `-n` (8 KiB) |
 | `fold` `rev` `nl` `tac` | wrap lines (`-w`), reverse chars/lines, number lines |
 | `od` `split` `paste` | byte dump (`-tx1`/`-to1`), split by bytes (`-b`), merge two files |
