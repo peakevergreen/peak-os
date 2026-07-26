@@ -88,6 +88,7 @@ extern int useq_main(int argc, char **argv);
 extern int usleep_main(int argc, char **argv);
 extern int uhostname_main(int argc, char **argv);
 extern int uuptime_main(int argc, char **argv);
+extern int unproc_main(int argc, char **argv);
 extern int uwhoami_main(int argc, char **argv);
 extern int uid_main(int argc, char **argv);
 extern int ucal_main(int argc, char **argv);
