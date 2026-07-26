@@ -137,7 +137,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `ask` `audit` `memory` `peakvec` `policy` `peak` `gui` | agent + desktop (`peakvec query …` for top-k search) |
 | `privacy` | `persist` / `net-allow` / `kill-switch on --confirm` — [privacy.md](privacy.md) |
 | `reboot` | request platform reboot (QEMU/ACPI path when available) |
-| `disksave` | PeakDisk save/export helper (VFS → PeakDisk image) |
+| `disksave` | PeakDisk save/export helper (VFS → PeakDisk image); Disks app shows dirty/clean + autosave interval (default 120s) |
 
 `gui` enters the desktop; press **Ctrl+Alt+Esc** anytime to return to CLI.
 

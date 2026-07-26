@@ -3,6 +3,7 @@
 #include "heap.h"
 #include "util.h"
 #include "blobstore.h"
+#include "peakdisk.h"
 
 static struct vfs_node nodes[VFS_MAX_NODES];
 static int node_count;
@@ -20,6 +21,10 @@ static void vfs_set_error(const char *msg) {
     for (; msg[i] && i + 1 < sizeof(vfs_errbuf); i++)
         vfs_errbuf[i] = msg[i];
     vfs_errbuf[i] = '\0';
+}
+
+static void vfs_note_workspace_dirty(void) {
+    peakdisk_mark_dirty();
 }
 /* First-character child buckets: 0 = empty, else 1-based index into nodes[].
  * 16 buckets (was 32) halves BSS (~128 KiB) with the same first-char probe. */
@@ -309,6 +314,7 @@ int vfs_write_file(const char *path, const void *data, size_t len) {
     f->capacity = len;
     f->blob_id = 0; /* heap wins over any prior blob binding */
     vfs_set_error("");
+    vfs_note_workspace_dirty();
     return 0;
 }
 
@@ -325,6 +331,7 @@ int vfs_bind_blob(const char *path, uint32_t blob_id, size_t size) {
     f->capacity = 0;
     f->blob_id = blob_id;
     f->size = size;
+    vfs_note_workspace_dirty();
     return 0;
 }
 
@@ -386,6 +393,7 @@ int vfs_write_at(const char *path, size_t off, const void *buf, size_t len) {
             return PEAK_EIO;
         if (off + (size_t)n > f->size)
             f->size = off + (size_t)n;
+        vfs_note_workspace_dirty();
         return 0;
     }
     /* Heap-backed ranged write: grow via full replace for small files only. */
@@ -406,6 +414,7 @@ int vfs_write_at(const char *path, size_t off, const void *buf, size_t len) {
     memcpy(f->data + off, buf, len);
     if (need > f->size)
         f->size = need;
+    vfs_note_workspace_dirty();
     return 0;
 }
 
@@ -558,6 +567,7 @@ int vfs_chmod(const char *path, uint16_t mode) {
     if (n == root)
         return PEAK_EINVAL;
     n->mode = mode & 0777u;
+    vfs_note_workspace_dirty();
     return 0;
 }
 
@@ -594,7 +604,7 @@ int vfs_symlink(const char *target, const char *linkpath) {
     struct vfs_node *link = alloc_node(leaf, VFS_SYMLINK); if (!link) return PEAK_ENOMEM;
     uint8_t *buf = (uint8_t *)kmalloc(tlen + 1); if (!buf) return PEAK_ENOMEM;
     memcpy(buf, target, tlen); buf[tlen] = '\0'; link->data = buf; link->size = tlen; link->capacity = tlen + 1;
-    add_child(dir, link); vfs_set_error(""); return 0;
+    add_child(dir, link); vfs_set_error(""); vfs_note_workspace_dirty(); return 0;
 }
 
 static void unlink_from_parent(struct vfs_node *n) {
@@ -660,6 +670,7 @@ int vfs_unlink(const char *path) {
     n->name[0] = '\0';
     n->parent = NULL;
     n->sibling = NULL;
+    vfs_note_workspace_dirty();
     return 0;
 }
 
@@ -679,6 +690,7 @@ int vfs_rmdir(const char *path) {
     n->parent = NULL;
     n->sibling = NULL;
     n->child = NULL;
+    vfs_note_workspace_dirty();
     return 0;
 }
 
@@ -727,6 +739,7 @@ int vfs_rename(const char *oldp, const char *newp) {
         n->name[j] = leaf[j];
     n->name[j] = '\0';
     add_child(dir, n);
+    vfs_note_workspace_dirty();
     return 0;
 }
 

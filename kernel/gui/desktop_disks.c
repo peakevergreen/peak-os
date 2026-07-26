@@ -118,6 +118,15 @@ void desktop_disks_draw(struct win *w) {
     } else
         fb_draw_string(tx, ty, "Status: idle", desktop_color_dim(), desktop_color_bg());
     ty += row;
+    if (peakdisk_is_dirty())
+        fb_draw_string(tx, ty, "Workspace: dirty (unsaved changes)", theme_get()->danger, desktop_color_bg());
+    else
+        fb_draw_string(tx, ty, "Workspace: clean", desktop_color_dim(), desktop_color_bg());
+    ty += row;
+    snprintf(line, sizeof(line), "Autosave: every %us when dirty",
+             (unsigned)peakdisk_autosave_interval_sec());
+    fb_draw_string(tx, ty, line, desktop_color_dim(), desktop_color_bg());
+    ty += row;
     if (!peakdisk_busy()) {
         const char *err = peakdisk_last_error();
         if (err && err[0]) {

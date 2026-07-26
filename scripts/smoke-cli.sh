@@ -723,6 +723,13 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 145 PeakDisk autosave dirty"
+grep -q 'peakdisk_mark_dirty' kernel/peakdisk.c
+grep -q 'peakdisk_autosave_tick' kernel/peakdisk.c
+grep -q 'peakdisk_is_dirty' kernel/gui/desktop_disks.c
+grep -q 'vfs_note_workspace_dirty' kernel/vfs.c
+grep -q 'autosave interval' docs/CLI.md || grep -q 'autosave' docs/CLI.md
+
 echo "==> Wave 7 Pass 144 TLS alert hostname UX"
 grep -q 'tls_hostname_mismatch_ux' kernel/net/tls_util.c
 grep -q 'tls_alert_desc_name' kernel/net/tls_util.c

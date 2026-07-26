@@ -18,6 +18,7 @@
 #include "surface.h"
 #include "platform.h"
 #include "guiproto.h"
+#include "peakdisk.h"
 
 #include "desktop_internal.h"
 
@@ -688,6 +689,7 @@ void desktop_run(void) {
         }
 
         sysmon_poll();
+        peakdisk_autosave_tick();
         if (desktop_find_win(APP_DISKS) >= 0)
             desktop_disks_tick();
         if (desktop_find_win(APP_MONITOR) >= 0 && timer_ticks() - last_mon_tick >= 50) {

@@ -10,9 +10,11 @@
 #include "privacy.h"
 #include "crypto.h"
 #include "random.h"
+#include "timer.h"
 
 #define PEAKDISK_LBA0 1
 #define PEAKDISK_KDF_ITERS 4096u
+#define PEAKDISK_AUTOSAVE_DEFAULT_SEC 120u
 
 static volatile int save_busy;
 static volatile int save_queued;
@@ -21,6 +23,10 @@ static uint32_t peakdisk_saved_bytes;
 static uint32_t peakdisk_progress_pct;
 static char g_pass[128];
 static size_t g_pass_len;
+static volatile int workspace_dirty;
+static uint32_t autosave_interval_sec = PEAKDISK_AUTOSAVE_DEFAULT_SEC;
+static uint64_t last_save_uptime_sec;
+static uint64_t dirty_since_uptime_sec;
 
 void peakdisk_set_passphrase(const char *pass) {
     memzero_explicit(g_pass, sizeof(g_pass));
@@ -69,6 +75,42 @@ static int read_payload_streamed(uint8_t *data, uint32_t len) {
 }
 
 void peakdisk_init(void) {
+    last_save_uptime_sec = timer_uptime_secs();
+}
+
+void peakdisk_mark_dirty(void) {
+    if (!workspace_dirty) {
+        workspace_dirty = 1;
+        dirty_since_uptime_sec = timer_uptime_secs();
+    }
+}
+
+int peakdisk_is_dirty(void) {
+    return workspace_dirty;
+}
+
+void peakdisk_set_autosave_interval_sec(uint32_t sec) {
+    autosave_interval_sec = sec;
+}
+
+uint32_t peakdisk_autosave_interval_sec(void) {
+    return autosave_interval_sec;
+}
+
+void peakdisk_autosave_tick(void) {
+    if (!workspace_dirty || !autosave_interval_sec || !blockdev_present())
+        return;
+    if (save_busy || save_queued)
+        return;
+    if (privacy_persist_profile() <= 0)
+        return;
+    if (!cap_check(CAP_DISK_PERSIST))
+        return;
+    uint64_t now = timer_uptime_secs();
+    if (now - dirty_since_uptime_sec < autosave_interval_sec)
+        return;
+    if (peakdisk_save_async() == 0)
+        serial_log(SERIAL_LOG_INFO, "peakdisk: autosave queued\n");
 }
 
 int peakdisk_available(void) {
@@ -233,6 +275,8 @@ int peakdisk_save(void) {
 
     peakdisk_saved_bytes = sz;
     peakdisk_progress_pct = 100;
+    workspace_dirty = 0;
+    last_save_uptime_sec = timer_uptime_secs();
     serial_log(SERIAL_LOG_INFO,
                encrypted ? "peakdisk: saved (encrypted)\n" : "peakdisk: saved\n");
     save_busy = 0;
