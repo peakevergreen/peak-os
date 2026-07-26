@@ -94,7 +94,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N` or `-c N` bytes; `wc` `-l`/`-w`/`-c`) |
 | `grep [-i] [-n] [-v] [-r] [-c] [-l] [-o] [-A N] [-B N] <pat> [path...]` | substring match; `-c` count, `-l` filenames, `-o` only match, `-A`/`-B` context lite (≤32) |
 | `diff [-u] <a> <b>` `patch <target> [patch\|-]` | line diff; unified `-u`; patch lite applies `+`/`-` hunks |
-| `sort` `uniq` `join` `comm` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok; `sort` `-r`/`-n`/`-u`, `uniq` `-c`; `join` field-1; `comm` three-column lite) |
+| `sort` `uniq` `join` `comm` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok; `sort` `-r`/`-n`/`-u`, `uniq` `-c`; `join` `-1`/`-2`/`-t`; `comm` `-1`/`-2`/`-3` suppress) |
 | `sed` | sed-lite: `[N\|[N,M]] s/old/new/[g]`, `y/from/to/`, `d`, `p`, `-n` (32 KiB) |
 | `fold` `rev` `nl` `tac` | wrap lines (`-w`), reverse chars/lines, number lines |
 | `od` `split` `paste` | byte dump (`-tx1`/`-to1`), split by bytes (`-b`), merge two files |
