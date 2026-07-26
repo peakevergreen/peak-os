@@ -51,7 +51,95 @@ static int split_lines(char *data, size_t len, char **lines, int max) {
     return n;
 }
 
-/* sed subset: s/old/new/, d, p, -n */
+static int parse_addr(const char *script, int *lo, int *hi, const char **cmd) {
+    *lo = 0;
+    *hi = 0;
+    if (!script[0] || script[0] < '0' || script[0] > '9') {
+        *cmd = script;
+        return 0;
+    }
+    int a = 0;
+    const char *p = script;
+    while (*p >= '0' && *p <= '9')
+        a = a * 10 + (*p++ - '0');
+    if (*p == ',') {
+        p++;
+        if (*p < '0' || *p > '9')
+            return -1;
+        int b = 0;
+        while (*p >= '0' && *p <= '9')
+            b = b * 10 + (*p++ - '0');
+        if (a < 1 || b < a)
+            return -1;
+        *lo = a;
+        *hi = b;
+    } else if (a > 0) {
+        *lo = a;
+        *hi = a;
+    } else {
+        *cmd = script;
+        return 0;
+    }
+    *cmd = p;
+    return 0;
+}
+
+static int line_in_range(int line_no, int lo, int hi) {
+    if (lo == 0)
+        return 1;
+    return line_no >= lo && line_no <= hi;
+}
+
+static void subst_line(char *out, size_t cap, const char *src, const char *old,
+                       size_t old_len, const char *newv, size_t new_len, int global) {
+    size_t o = 0;
+    const char *p = src;
+    while (*p) {
+        const char *hit = 0;
+        if (old_len == 0)
+            hit = p;
+        else {
+            for (const char *q = p; *q; q++) {
+                if (!memcmp(q, old, old_len)) {
+                    hit = q;
+                    break;
+                }
+            }
+        }
+        if (hit) {
+            for (const char *q = p; q < hit && o + 1 < cap; q++)
+                out[o++] = *q;
+            for (size_t k = 0; k < new_len && o + 1 < cap; k++)
+                out[o++] = newv[k];
+            p = hit + old_len;
+            if (!global)
+                break;
+        } else {
+            if (o + 1 < cap)
+                out[o++] = *p++;
+            else
+                p++;
+        }
+    }
+    while (*p && o + 1 < cap)
+        out[o++] = *p++;
+    out[o] = '\0';
+}
+
+static void translit_line(char *out, size_t cap, const char *src, const char *from,
+                          size_t from_len, const char *to) {
+    unsigned char map[256];
+    for (int i = 0; i < 256; i++)
+        map[i] = (unsigned char)i;
+    for (size_t i = 0; i < from_len; i++)
+        map[(unsigned char)from[i]] = (unsigned char)to[i];
+    size_t o = 0;
+    for (const char *q = src; *q && o + 1 < cap; q++)
+        out[o++] = (char)map[(unsigned char)*q];
+    out[o] = '\0';
+}
+
+/* sed subset: [N|[N,M]] s/old/new/[g], y/from/to/, d, p, -n */
 int used_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("sed", "[-n] <script> [path|-]");
@@ -84,14 +172,20 @@ int used_main(int argc, char **argv) {
     char *lines[MAX_LINES];
     int n = split_lines(data, len, lines, MAX_LINES);
 
-    /* Parse script: s/old/new/ or single-letter d/p */
-    int do_delete = 0, do_print = 0;
-    const char *old = 0, *newv = 0;
-    size_t old_len = 0, new_len = 0;
-    char old_buf[128], new_buf[128];
+    int addr_lo = 0, addr_hi = 0;
+    const char *cmd = script;
+    if (parse_addr(script, &addr_lo, &addr_hi, &cmd) != 0) {
+        peak_perror("sed", "bad address");
+        return 1;
+    }
 
-    if (script[0] == 's' && script[1] == '/') {
-        const char *p = script + 2;
+    int do_delete = 0, do_print = 0, do_subst = 0, do_tr = 0, subst_global = 0;
+    const char *old = 0, *newv = 0, *from = 0, *to = 0;
+    size_t old_len = 0, new_len = 0, from_len = 0;
+    char old_buf[128], new_buf[128], from_buf[128], to_buf[128];
+
+    if (cmd[0] == 's' && cmd[1] == '/') {
+        const char *p = cmd + 2;
         size_t oi = 0;
         while (*p && *p != '/' && oi + 1 < sizeof(old_buf))
             old_buf[oi++] = *p++;
@@ -105,50 +199,71 @@ int used_main(int argc, char **argv) {
         while (*p && *p != '/' && ni + 1 < sizeof(new_buf))
             new_buf[ni++] = *p++;
         new_buf[ni] = '\0';
+        if (*p != '/') {
+            peak_perror("sed", "bad s///");
+            return 1;
+        }
+        p++;
+        if (*p == 'g') {
+            subst_global = 1;
+            p++;
+        }
+        if (*p) {
+            peak_perror("sed", "bad s///");
+            return 1;
+        }
         old = old_buf;
         newv = new_buf;
         old_len = oi;
         new_len = ni;
-    } else if (!strcmp(script, "d")) {
+        do_subst = 1;
+    } else if (cmd[0] == 'y' && cmd[1] == '/') {
+        const char *p = cmd + 2;
+        size_t fi = 0;
+        while (*p && *p != '/' && fi + 1 < sizeof(from_buf))
+            from_buf[fi++] = *p++;
+        from_buf[fi] = '\0';
+        if (*p != '/') {
+            peak_perror("sed", "bad y///");
+            return 1;
+        }
+        p++;
+        size_t ti = 0;
+        while (*p && *p != '/' && ti + 1 < sizeof(to_buf))
+            to_buf[ti++] = *p++;
+        to_buf[ti] = '\0';
+        if (*p != '/' || fi != ti || fi == 0) {
+            peak_perror("sed", "bad y///");
+            return 1;
+        }
+        from = from_buf;
+        to = to_buf;
+        from_len = fi;
+        do_tr = 1;
+    } else if (!strcmp(cmd, "d")) {
         do_delete = 1;
-    } else if (!strcmp(script, "p")) {
+    } else if (!strcmp(cmd, "p")) {
         do_print = 1;
-        quiet = 1; /* -n style: only print on p */
+        quiet = 1;
     } else {
         peak_perror("sed", "unsupported script");
         return 1;
     }
 
     for (int i = 0; i < n; i++) {
+        int line_no = i + 1;
+        if (!line_in_range(line_no, addr_lo, addr_hi))
+            continue;
         if (do_delete)
             continue;
         char out[LINE_MAX];
         const char *src = lines[i];
-        if (old) {
-            /* First occurrence replace only */
-            const char *hit = 0;
-            if (old_len == 0)
-                hit = src;
-            else {
-                for (const char *q = src; *q; q++) {
-                    if (!memcmp(q, old, old_len)) {
-                        hit = q;
-                        break;
-                    }
-                }
-            }
-            if (hit) {
-                size_t pre = (size_t)(hit - src);
-                size_t o = 0;
-                for (size_t k = 0; k < pre && o + 1 < sizeof(out); k++)
-                    out[o++] = src[k];
-                for (size_t k = 0; k < new_len && o + 1 < sizeof(out); k++)
-                    out[o++] = newv[k];
-                for (const char *q = hit + old_len; *q && o + 1 < sizeof(out); q++)
-                    out[o++] = *q;
-                out[o] = '\0';
-                src = out;
-            }
+        if (do_subst) {
+            subst_line(out, sizeof(out), src, old, old_len, newv, new_len, subst_global);
+            src = out;
+        } else if (do_tr) {
+            translit_line(out, sizeof(out), src, from, from_len, to);
+            src = out;
         }
         if (!quiet || do_print) {
             console_write(src);
