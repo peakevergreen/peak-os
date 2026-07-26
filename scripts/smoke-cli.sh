@@ -326,6 +326,12 @@ grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
 
+echo "==> Wave 3 Pass 77 containers depth"
+grep -q 'ENV %s' kernel/ctr_build.c
+grep -q 'X-Peak-Env' kernel/ctr_http.c
+grep -q 'ctr_image_expose' kernel/ctr.c
+grep -q 'Pass 77' docs/containers.md
+
 echo "==> Wave 3 Pass 76 agent tools"
 grep -q 'agent_tool_fs_tree' kernel/agent_tools.c
 grep -q 'agent_tool_sys_ps' kernel/agent_tools.c

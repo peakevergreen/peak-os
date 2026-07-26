@@ -153,7 +153,9 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
     int copies = 0;
     int from_quarantined = 0;
     size_t staged_bytes = 0;
-    char expose_port[16] = "";
+    char env_buf[512];
+    size_t env_len = 0;
+    char expose_port[16] = "8080";
     int line_no = 0;
     const char *p = df;
     while (*p) {
@@ -222,8 +224,22 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
             continue;
         }
 
+        if (!strncmp(lp, "ENV", 3) && (lp[3] == ' ' || lp[3] == '\t')) {
+            lp += 3;
+            char kv[128];
+            if (parse_word(&lp, kv, sizeof(kv)) == 0 && kv[0]) {
+                size_t kl = strlen(kv);
+                if (env_len + kl + 1 < sizeof(env_buf)) {
+                    memcpy(env_buf + env_len, kv, kl);
+                    env_len += kl;
+                    env_buf[env_len++] = '\n';
+                    snprintf(msg, sizeof(msg), "ENV %s", kv);
+                    ctr_log_line(log, log_cap, line_no, msg);
+                }
+            }
+            continue;
+        }
         if (!strncmp(lp, "WORKDIR", 7) || !strncmp(lp, "CMD", 3) ||
-            !strncmp(lp, "ENV", 3) ||
             !strncmp(lp, "RUN", 3) || !strncmp(lp, "ENTRYPOINT", 10)) {
             snprintf(msg, sizeof(msg), "skip: %s", line);
             ctr_log_line(log, log_cap, line_no, msg);
@@ -242,8 +258,9 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
 
     char meta[CTR_PATH_MAX];
     ctr_image_meta_path(tag, meta, sizeof(meta));
-    char metabuf[128];
+    char metabuf[640];
     snprintf(metabuf, sizeof(metabuf), "%s\nexpose=%s\n", tag, expose_port);
+    if (env_len) { size_t ml = strlen(metabuf); if (ml + env_len < sizeof(metabuf)) { memcpy(metabuf + ml, env_buf, env_len); metabuf[ml + env_len] = 0; } }
     vfs_write_file(meta, metabuf, strlen(metabuf));
 
     snprintf(last_image, sizeof(last_image), "%s", tag);

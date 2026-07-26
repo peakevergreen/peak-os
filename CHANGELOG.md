@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 77:** ctr build ENV meta + EXPOSE default port on `ctr run`; `X-Peak-Env` on static HTTP
+
 - **Pass 76:** Agent tools `fs.tree` + `sys.ps` with planner intent hooks
 
 - **Pass 75:** Browser Save to Downloads (VFS `/home/dev/Downloads`) + bookmark remove in context menu
