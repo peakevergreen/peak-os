@@ -191,7 +191,7 @@ static const struct help_entry help_table[] = {
     { "head", "text", "first N lines" },
     { "tail", "text", "last N lines" },
     { "wc", "text", "line/word/byte count" },
-    { "grep", "text", "substring search" },
+    { "grep", "text", "substring search (-i -n -v -r)" },
     { "diff", "text", "line diff (-/+)" },
     { "sort", "text", "sort lines" },
     { "uniq", "text", "drop adjacent dup lines" },
