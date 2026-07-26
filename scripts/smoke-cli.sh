@@ -723,6 +723,12 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 147 Agent GUI approval export"
+grep -q 'agent_export_transcript' kernel/agent.c
+grep -q 'agent_approval_queue_draw' kernel/agent.c
+grep -q 'agent-export.txt' kernel/gui/desktop_agent.c
+grep -q 'last tool' kernel/agent.c
+
 echo "==> Wave 7 Pass 146 PeakVec multi-bucket ANN"
 grep -q 'peakvec_bucket_in_probe' kernel/peakvec.c
 grep -q 'multi_bucket_probe' kernel/include/peakvec.h

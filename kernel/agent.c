@@ -23,6 +23,7 @@ static char tlines[AGENT_TLINES][AGENT_TLINE];
 static int tcount;
 static int tscroll;
 static char agent_transcript_filter[24];
+static char last_tool_result[AGENT_TLINE];
 
 static void transcript_push_one(const char *line) {
     if (!line)
@@ -110,7 +111,56 @@ void agent_transcript_note_recall(const char *msg) {
 
 void agent_transcript_note_tool(const char *msg) {
     if (!msg||!msg[0]) return;
-    char line[AGENT_TLINE]; snprintf(line, sizeof(line), "[tool] %s", msg); agent_transcript_push(line);
+    char line[AGENT_TLINE]; snprintf(line, sizeof(line), "[tool] %s", msg);
+    size_t i = 0;
+    for (; msg[i] && i + 1 < sizeof(last_tool_result); i++)
+        last_tool_result[i] = msg[i];
+    last_tool_result[i] = '\0';
+    agent_transcript_push(line);
+}
+
+const char *agent_last_tool_result(void) {
+    return last_tool_result;
+}
+
+int agent_export_transcript(const char *path) {
+    if (!path || !path[0])
+        return -1;
+    char out[AGENT_TLINES * AGENT_TLINE / 2];
+    size_t o = 0;
+    for (int i = 0; i < tcount && o + AGENT_TLINE + 2 < sizeof(out); i++) {
+        size_t l = strlen(tlines[i]);
+        if (o + l + 2 >= sizeof(out))
+            break;
+        memcpy(out + o, tlines[i], l);
+        o += l;
+        out[o++] = '\n';
+    }
+    if (last_tool_result[0] && o + 32 < sizeof(out)) {
+        o += (size_t)snprintf(out + o, sizeof(out) - o,
+                              "\n--- last tool ---\n%s\n", last_tool_result);
+    }
+    if (o == 0)
+        return -1;
+    if (vfs_write_file(path, out, o) != 0)
+        return -1;
+    return (int)o;
+}
+
+void agent_approval_queue_draw(uint32_t x, uint32_t y, uint32_t w) {
+    const struct peak_theme *th = theme_get();
+    uint32_t lh = fb_char_h() + 4;
+    char line[96];
+    if (pending <= 0) {
+        fb_draw_string(x, y, "Approval queue: empty", th->dim, th->surface);
+        return;
+    }
+    snprintf(line, sizeof(line), "Approval queue: %d pending", pending);
+    fb_draw_string(x, y, line, th->danger, th->surface);
+    if (write_wait && write_path[0]) {
+        snprintf(line, sizeof(line), "  #1 fs.write %s (Y/N)", write_path);
+        fb_draw_string_fit(x, y + lh, w, line, th->fg, th->surface);
+    }
 }
 int agent_queue_write_approval(const char *path, const char *content) {
     if (write_wait)
@@ -135,6 +185,7 @@ int agent_queue_write_approval(const char *path, const char *content) {
 
 void agent_init(void) {
     last_summary[0] = '\0';
+    last_tool_result[0] = '\0';
     pending = 0;
     write_wait = 0;
     write_approved = 0;
@@ -279,9 +330,7 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     }
 
     uint32_t fy = ty + (uint32_t)(vis + (tcount > vis ? 1 : 0)) * line_h + 4 * s;
-    char pend[48];
-    snprintf(pend, sizeof(pend), "pending approvals: %d", pending);
-    fb_draw_string(x + 8 * s, fy, pend, fg, bg);
+    agent_approval_queue_draw(x + 8 * s, fy, w - 16 * s);
 
 }
 
