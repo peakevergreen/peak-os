@@ -106,7 +106,7 @@ void monitor_input(char c) {
     } else if (c == 'e' || c == 'E') {
         if (monitor_do_export() == 0) {
             char msg[96];
-            snprintf(msg, sizeof(msg), "Saved %s", mon_last_export);
+            snprintf(msg, sizeof(msg), "Saved export");
             notify_push(msg);
         } else
             notify_push("Export failed");

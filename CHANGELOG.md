@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Audit v2 harness:** mouse/PPM helpers + dense scenario runner; deep fixlist GA-101…125 closed Fixed/Deferred
+
 - **GA-105–108/112/113/115:** Scale-3 clipping — Settings hint+chips, Monitor Export/footer, brand scrim pad, Browser tab close gap, short export toast
 
 - **GA-104:** Files toolbar hints wrap to two lines so Shift+range is not clipped at scale 3
