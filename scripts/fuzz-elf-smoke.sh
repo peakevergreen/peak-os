@@ -18,3 +18,5 @@ SEED="${PEAK_FUZZ_SEED:-42}"
 ITERS="${PEAK_FUZZ_ITERS:-200}"
 "$BIN" --fuzz "$ITERS" --seed "$SEED"
 echo "ok: fuzz-elf-smoke ($ITERS mutations)"
+chmod +x scripts/fuzz-tls-smoke.sh
+./scripts/fuzz-tls-smoke.sh

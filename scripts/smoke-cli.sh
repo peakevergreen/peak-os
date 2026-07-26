@@ -28,6 +28,10 @@ echo "    registered commands: $count"
 test "$count" -ge 90
 grep -q 'test_ubin_registry' Makefile
 grep -q 'test_agent_tools' Makefile
+grep -q 'test_cli_awk' Makefile
+grep -q 'test_cli_sed' Makefile
+grep -q 'test_cli_jq' Makefile
+grep -q 'test_cli_zip' Makefile
 grep -q 'test_desktop_titles' Makefile
 grep -q 'shell_parse_pipeline' kernel/shell_split.c
 grep -q 'SHELL_PIPE_MAX' kernel/include/shell_split.h
@@ -140,6 +144,11 @@ echo "==> Pass 37 input/console"
 grep -q 'keyboard_set_repeat' kernel/keyboard.c
 grep -q 'console_scroll_find_next' kernel/console_scroll.c
 
+echo "==> Pass 39 awk-lite"
+grep -q 'awk' kernel/user/ubin_cmds.def
+grep -q 'uawk_main' kernel/user/utils_text6.c
+grep -q 'test_cli_awk' Makefile
+
 echo "==> Pass 47 zip/unzip"
 grep -q 'zip' kernel/user/ubin_cmds.def
 grep -q 'unzip' kernel/user/ubin_cmds.def
@@ -151,9 +160,11 @@ echo "==> Pass 40 sed depth"
 grep -q 'parse_addr' kernel/user/utils_text3.c
 grep -q 'subst_global' kernel/user/utils_text3.c
 grep -q 'translit_line' kernel/user/utils_text3.c
+grep -q 'test_cli_sed' Makefile
 
 echo "==> Pass 43 human sizes"
 grep -q 'peak_hsize_fmt' kernel/user/utils_file.c
+grep -q 'peak_has_flag(argc, argv, "-h")' kernel/user/utils_file.c
 grep -q 'KiB/MiB' docs/CLI.md
 
 echo "==> Pass 42 symlinks"
@@ -174,6 +185,24 @@ grep -q 'HTTP/2' docs/network.md
 echo "==> Pass 45 pager depth"
 grep -q 'pager_find_next' kernel/user/utils_pager.c
 grep -q 'less_main' kernel/user/utils_pager.c
+
+echo "==> Wave 2 subsystem markers"
+grep -q 'files_copy_sel_path' kernel/gui/desktop_files.c
+grep -q 'browser_new_tab' kernel/gui/browser_nav.c
+grep -q 'browser_close_tab' kernel/gui/browser_nav.c
+grep -q 'browser_select_tab' kernel/gui/browser_nav.c
+grep -q 'http2_get' kernel/net/http2.c
+grep -q 'test_http_tcp' Makefile
+grep -q 'webapi_install' kernel/gui/webapi.c
+grep -q 'test_webapi' Makefile
+grep -q 'tls_session_get' kernel/net/tls_session.c
+grep -q 'tls_session_put' kernel/net/tls_session.c
+grep -q 'test_tls' Makefile
+grep -q 'peakvec_query' kernel/peakvec.c
+grep -q 'test_peakvec' Makefile
+grep -q 'fs.stat' kernel/agent_tools.c
+grep -q 'mem.recall' kernel/agent_tools.c
+grep -q 'audit.tail' kernel/agent_tools.c
 
 echo "==> Pass 49 agent GUI UX"
 grep -q 'AGENT_INPUT_MAX 256' kernel/gui/desktop_agent.c

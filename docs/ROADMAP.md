@@ -10,6 +10,12 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 **Pass 38 (S9-lite):** `smoke-cli.sh` gates for Pass 19–37 markers, host-test coverage, ROADMAP/CHANGELOG sync, security-checklist automation notes — release acceptance without a separate signing ceremony.
 
+## Enhancement wave 2 (Passes 39–58)
+
+**Shipped on `main` (Passes 39–58):** `awk`/`sed`/`jq`/`zip` CLI depth; VFS `chmod`, symlinks, human-readable sizes; `uname` flags; `less` pager search; Images and Agent GUI UX; files clipboard path ops; browser tab chrome; HTTP/2 client, WebAPI stubs, TLS session resume, PeakVec query, and expanded agent tools catalog — plus S9 remainder smoke-cli lock-in.
+
+**Pass 58 (S9 remainder):** `smoke-cli.sh` gates for Pass 39–49 + Wave 2 subsystem markers, host-test coverage, ROADMAP/CHANGELOG sync, security-checklist automation notes, fuzz corpus growth — Wave 2 release acceptance without a separate signing ceremony.
+
 ## Near term
 
 ### Raspberry Pi
@@ -26,7 +32,8 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 - [x] **S8:** verified boot, signed releases, A/B rollback — [verified-boot.md](verified-boot.md)
   - Signing ceremony (`sign-release.py` / `verify-release.py`) + A/B ESP sketch landed; loader-embedded verify still remaining
 - [x] **S9-lite (Pass 38):** smoke-cli Pass 19–37 markers, host tests, checklist sync — CI `host-tests` job
-- **S9 remainder:** signed release ceremony on tagged builds, continuous fuzz corpus growth beyond `fuzz-elf-smoke.sh`
+- [x] **S9 remainder (Pass 58):** smoke-cli Wave 2 gates (Passes 39–49 + subsystem markers), fuzz corpus growth — CI `host-tests` job
+- **S9 ceremony:** signed release ceremony on tagged builds (loader-embedded verify still remaining)
 
 ### Browser / JS
 

@@ -184,7 +184,7 @@ int vfs_stat(const char *path, struct vfs_stat *st) {
 }
 void vfs_mode_string(enum vfs_type type, uint16_t mode, char *buf, size_t len) {
     if (!buf || len < 11) return;
-    buf[0] = (type == VFS_DIR) ? "d" : "-";
+    buf[0] = (type == VFS_DIR) ? 'd' : '-';
     static const char *triples[] = { "---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx" };
     buf[1]=triples[(mode>>6)&7][0]; buf[2]=triples[(mode>>6)&7][1]; buf[3]=triples[(mode>>6)&7][2];
     buf[4]=triples[(mode>>3)&7][0]; buf[5]=triples[(mode>>3)&7][1]; buf[6]=triples[(mode>>3)&7][2];
@@ -407,3 +407,9 @@ int ubin_run(const char *path, int argc, char **argv) {
     (void)argv;
     return 0;
 }
+
+void agent_transcript_note_audit(const char *op, const char *target, const char *decision) {
+    (void)op; (void)target; (void)decision;
+}
+
+void agent_transcript_note_tool(const char *msg) { (void)msg; }
