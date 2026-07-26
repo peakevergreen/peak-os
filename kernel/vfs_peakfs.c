@@ -347,8 +347,8 @@ void vfs_seed_defaults(void) {
 
     const char *policy =
         "allow_paths=/home/dev/workspace,/var/peak/sessions\n"
-        "allow_tools=fs.read,fs.write,fs.list,fs.exec,fs.stat,fs.mkdir,fs.rm,fs.search,fs.grep,fs.diff,"
-        "sys.info,net.ping,net.fetch,console.print,mem.recall,audit.tail\n"
+        "allow_tools=fs.read,fs.write,fs.list,fs.exec,fs.stat,fs.mkdir,fs.rm,fs.search,fs.grep,fs.diff,fs.tree,"
+        "sys.info,sys.ps,net.ping,net.fetch,console.print,mem.recall,audit.tail\n"
         "require_approval=fs.write\n";
     vfs_write_file("/etc/peak/agent.policy", policy, strlen(policy));
 

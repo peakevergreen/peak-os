@@ -326,6 +326,12 @@ grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
 
+echo "==> Wave 3 Pass 76 agent tools"
+grep -q 'agent_tool_fs_tree' kernel/agent_tools.c
+grep -q 'agent_tool_sys_ps' kernel/agent_tools.c
+grep -q 'INTENT_TREE' kernel/agent_planner.c
+grep -q 'fs.tree' kernel/vfs_peakfs.c
+
 echo "==> Wave 3 Pass 75 browser downloads/bookmarks"
 grep -q 'browser_download_save' kernel/gui/browser_bookmarks.c
 grep -q 'browser_bookmark_remove' kernel/gui/browser_bookmarks.c
