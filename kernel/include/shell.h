@@ -36,6 +36,7 @@ void shell_env_list(void);
 
 /* help */
 void shell_help_topics(void);
+void shell_help_category(const char *cat);
 void shell_help_cmd(const char *cmd);
 
 /* Default env + cwd; called from shell_init(). */
