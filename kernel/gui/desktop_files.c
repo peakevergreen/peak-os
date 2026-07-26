@@ -257,6 +257,7 @@ static int files_paste_into_cwd(void) {
 }
 
 static void files_draw_status(struct win *w, uint32_t tx, uint32_t sy, uint32_t inner) {
+    (void)w;
     char status[128];
     struct vfs_dirent ents[FILES_ROWS];
     int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
