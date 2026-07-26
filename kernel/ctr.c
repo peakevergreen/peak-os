@@ -68,8 +68,14 @@ int ctr_run(const char *image, const char *name, const char *port,
     ctr_init();
     if (log && log_cap)
         log[0] = '\0';
-    if (!image || !name || !port)
+    if (!image || !name)
         return -1;
+    char use_port[16] = "8080";
+    if (!port || !port[0]) {
+        if (ctr_image_expose(image, use_port, sizeof(use_port)) != 0)
+            snprintf(use_port, sizeof(use_port), "8080");
+        port = use_port;
+    }
     /* Explicit ctr run = localhost listen consent (not LAN). */
     privacy_set_listeners_localhost_only(1);
     privacy_grant_net_listen(0, 0);
@@ -117,6 +123,27 @@ int ctr_run(const char *image, const char *name, const char *port,
         return -1;
     }
 
+    c->env_note[0] = '\0';
+    {
+        char meta[CTR_PATH_MAX];
+        ctr_image_meta_path(image, meta, sizeof(meta));
+        char mbuf[384];
+        size_t mn = 0;
+        if (vfs_read_file(meta, mbuf, sizeof(mbuf) - 1, &mn) == 0 && mn) {
+            mbuf[mn] = '\0';
+            char *line = mbuf;
+            while (line && *line) {
+                char *nl = strchr(line, '\n');
+                if (nl)
+                    *nl = '\0';
+                if (strchr(line, '=') && strncmp(line, "expose=", 7) != 0)
+                    snprintf(c->env_note, sizeof(c->env_note), "%s", line);
+                if (!nl)
+                    break;
+                line = nl + 1;
+            }
+        }
+    }
     snprintf(c->image, sizeof(c->image), "%s", image);
     snprintf(c->port, sizeof(c->port), "%s", port);
     snprintf(c->rootfs, sizeof(c->rootfs), "%s", rootfs);

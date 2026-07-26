@@ -24,6 +24,7 @@ struct ctr_container {
     char image[CTR_TAG_MAX];
     char port[16];
     char rootfs[CTR_PATH_MAX];
+    char env_note[128];
     char log[CTR_LOG_MAX];
 };
 

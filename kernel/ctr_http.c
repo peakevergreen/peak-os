@@ -110,12 +110,21 @@ static void serve_http_conn(struct ctr_container *c, int fd) {
             mime = "text/html; charset=utf-8";
         else
             mime = http_mime_for_path(path);
-        snprintf(hdr, sizeof(hdr),
-                 "HTTP/1.0 200 OK\r\n"
-                 "Content-Type: %s\r\n"
-                 "Content-Length: %u\r\n"
-                 "Connection: close\r\n\r\n",
-                 mime, (unsigned)blen);
+        if (c->env_note[0])
+            snprintf(hdr, sizeof(hdr),
+                     "HTTP/1.0 200 OK\r\n"
+                     "Content-Type: %s\r\n"
+                     "Content-Length: %u\r\n"
+                     "X-Peak-Env: %s\r\n"
+                     "Connection: close\r\n\r\n",
+                     mime, (unsigned)blen, c->env_note);
+        else
+            snprintf(hdr, sizeof(hdr),
+                     "HTTP/1.0 200 OK\r\n"
+                     "Content-Type: %s\r\n"
+                     "Content-Length: %u\r\n"
+                     "Connection: close\r\n\r\n",
+                     mime, (unsigned)blen);
         net_tcp_fd_send(fd, hdr, strlen(hdr));
         if (strcmp(method, "HEAD") != 0 && blen)
             net_tcp_fd_send(fd, body, blen);
