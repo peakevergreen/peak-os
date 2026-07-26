@@ -482,6 +482,13 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 117 ctr heap sched"
+grep -q 'workdir=' kernel/ctr_build.c
+grep -q vfs_copy_tree kernel/ctr_build.c
+grep -q parse_content_range kernel/ctr_http.c
+grep -q heap_freelist_steal kernel/heap.c
+grep -q sched_starvation_count kernel/sched.c
+
 echo "==> Wave 5 Pass 116 agent tools"
 grep -q agent_tool_mem_store kernel/agent_tools.c
 grep -q agent_tool_peakvec_query kernel/agent_tools.c

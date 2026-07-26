@@ -71,6 +71,25 @@ static int copy_into_rootfs(const char *context, const char *src_rel,
         return -1;
     }
 
+    if (vfs_is_dir(src)) {
+        if (ensure_dir_for_file(dst) != 0 && !vfs_mkdir(dst)) {
+            char msg[240];
+            snprintf(msg, sizeof(msg), "COPY cannot create dir %s", dst);
+            ctr_log_line(log, log_cap, line_no, msg);
+            return -1;
+        }
+        if (vfs_copy_tree(src, dst) != 0) {
+            char msg[240];
+            snprintf(msg, sizeof(msg), "COPY dir failed: %s -> %s", src, dst);
+            ctr_log_line(log, log_cap, line_no, msg);
+            return -1;
+        }
+        char msg[200];
+        snprintf(msg, sizeof(msg), "COPY dir %s -> %s", src_rel, dest_abs);
+        ctr_log_line(log, log_cap, line_no, msg);
+        return 0;
+    }
+
     if (!vfs_is_file(src)) {
         char msg[240];
         snprintf(msg, sizeof(msg), "COPY miss: %s", src);
@@ -156,6 +175,7 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
     char env_buf[512];
     size_t env_len = 0;
     char expose_port[16] = "8080";
+    char workdir[CTR_PATH_MAX] = "/";
     int line_no = 0;
     const char *p = df;
     while (*p) {
@@ -239,8 +259,21 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
             }
             continue;
         }
-        if (!strncmp(lp, "WORKDIR", 7) || !strncmp(lp, "CMD", 3) ||
-            !strncmp(lp, "RUN", 3) || !strncmp(lp, "ENTRYPOINT", 10)) {
+        if (!strncmp(lp, "WORKDIR", 7) && (lp[7] == ' ' || lp[7] == '\t')) {
+            lp += 7;
+            char wd[128];
+            if (parse_word(&lp, wd, sizeof(wd)) == 0 && wd[0]) {
+                if (wd[0] == '/')
+                    snprintf(workdir, sizeof(workdir), "%s", wd);
+                else
+                    snprintf(workdir, sizeof(workdir), "/%s", wd);
+                snprintf(msg, sizeof(msg), "WORKDIR %s", workdir);
+                ctr_log_line(log, log_cap, line_no, msg);
+            }
+            continue;
+        }
+        if (!strncmp(lp, "CMD", 3) || !strncmp(lp, "RUN", 3) ||
+            !strncmp(lp, "ENTRYPOINT", 10)) {
             snprintf(msg, sizeof(msg), "skip: %s", line);
             ctr_log_line(log, log_cap, line_no, msg);
             continue;
@@ -259,7 +292,7 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
     char meta[CTR_PATH_MAX];
     ctr_image_meta_path(tag, meta, sizeof(meta));
     char metabuf[640];
-    snprintf(metabuf, sizeof(metabuf), "%s\nexpose=%s\n", tag, expose_port);
+    snprintf(metabuf, sizeof(metabuf), "%s\nexpose=%s\nworkdir=%s\n", tag, expose_port, workdir);
     if (env_len) { size_t ml = strlen(metabuf); if (ml + env_len < sizeof(metabuf)) { memcpy(metabuf + ml, env_buf, env_len); metabuf[ml + env_len] = 0; } }
     vfs_write_file(meta, metabuf, strlen(metabuf));
 

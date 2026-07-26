@@ -947,7 +947,7 @@ int agent_tool_sys_ps(char *out, size_t out_len) {
     int n = sched_list_tasks(list, MAX_TASKS);
     sched_sort_tasks(list, n);
     size_t o = 0;
-    const char *hdr = "PID STATE TICKS NAME\n";
+    const char *hdr = "PID STATE TICKS STARV NAME\n";
     for (const char *p = hdr; *p && o + 1 < out_len; p++)
         out[o++] = *p;
     for (int i = 0; i < n && o + 40 < out_len; i++) {
@@ -955,8 +955,10 @@ int agent_tool_sys_ps(char *out, size_t out_len) {
                          list[i].state == TASK_READY ? "ready" :
                          list[i].state == TASK_BLOCKED ? "block" : "zombie";
         char line[96];
-        snprintf(line, sizeof(line), "%d %s %lu %s\n", list[i].pid, st,
-                 (unsigned long)list[i].cpu_ticks, list[i].name);
+        snprintf(line, sizeof(line), "%d %s %lu %u %s\n", list[i].pid, st,
+                 (unsigned long)list[i].cpu_ticks,
+                 (unsigned)sched_task_starvation(sched_slot_for_pid(list[i].pid)),
+                 list[i].name);
         for (const char *p = line; *p && o + 1 < out_len; p++)
             out[o++] = *p;
     }

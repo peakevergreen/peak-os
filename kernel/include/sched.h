@@ -67,5 +67,9 @@ uint64_t sched_ctx_switches(void);
  * Returns 0 ok, -1 not found, -2 refused. */
 int  sched_kill(int pid);
 
-#endif
 void sched_note_gui_load(unsigned weight);
+uint32_t sched_starvation_count(void);
+uint32_t sched_task_starvation(int slot);
+int sched_slot_for_pid(int pid);
+
+#endif
