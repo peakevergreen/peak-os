@@ -226,14 +226,23 @@ int umv_main(int argc, char **argv) {
 }
 
 int uln_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv) || argc < 3) {
-        peak_usage("ln", "<target> <linkname>");
-        return argc < 3 ? 1 : 0;
-    }
-    char as[VFS_PATH_MAX], ad[VFS_PATH_MAX];
-    if (shell_resolve_path(argv[1], as, sizeof(as)) || shell_resolve_path(argv[2], ad, sizeof(ad)))
-        return 1;
+    if (peak_wants_help(argc, argv)) { peak_usage("ln", "[-s] <target> <linkname>"); return 0; }
+    int sym = peak_has_flag(argc, argv, "-s");
+    const char *target = NULL, *linkname = NULL;
+    for (int i = 1; i < argc; i++) { if (argv[i][0] == '-') continue; if (!target) target = argv[i]; else if (!linkname) linkname = argv[i]; }
+    if (!target || !linkname) { peak_usage("ln", "[-s] <target> <linkname>"); return 1; }
+    char ad[VFS_PATH_MAX]; if (shell_resolve_path(linkname, ad, sizeof(ad))) return 1;
+    if (sym) return vfs_symlink(target, ad) == 0 ? 0 : 1;
+    char as[VFS_PATH_MAX]; if (shell_resolve_path(target, as, sizeof(as))) return 1;
     return vfs_link(as, ad) == 0 ? 0 : 1;
+}
+
+int ureadlink_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) { peak_usage("readlink", "<path>"); return argc < 2 ? 1 : 0; }
+    char abs[VFS_PATH_MAX]; if (shell_resolve_path(argv[1], abs, sizeof(abs))) return 1;
+    char target[VFS_PATH_MAX]; size_t n = 0;
+    if (vfs_readlink(abs, target, sizeof(target), &n) != 0) { peak_perror("readlink", "failed"); return 1; }
+    console_write(target); console_write("\n"); return 0;
 }
 
 int ustat_main(int argc, char **argv) {
@@ -258,6 +267,7 @@ int ustat_main(int argc, char **argv) {
     console_printf("size: %lu\n", (uint64_t)st.size);
     console_printf("children: %u\n", st.nchildren);
     console_printf("refs: %u\n", st.refs);
+    if (st.type == VFS_SYMLINK && st.link_target[0]) console_printf("target: %s\n", st.link_target);
     if (st.type == VFS_FILE) {
         struct vfs_node *node = vfs_lookup(abs);
         if (node) {

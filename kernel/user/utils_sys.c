@@ -45,7 +45,6 @@ int ucd_main(int argc, char **argv) {
     }
     return 0;
 }
-
 static void tree_walk(const char *path, int depth, int max_depth) {
     if (depth > max_depth)
         return;

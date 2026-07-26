@@ -59,6 +59,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 44:** `uname -a/-s/-n/-m/-r` from BootInfo platform/ABI + `$HOSTNAME`
 - **Pass 46:** `jq` lite — `.key`, `.[]`, `keys`, `length`, compact JSON print (8 KiB)
 - **Pass 40:** `sed` depth — line addresses (`N`, `N,M`), `s///g` global replace, `y///` transliterate
+- **Pass 42:** VFS symlinks, `ln -s`/`readlink`, resolve-on-open (`PEAK_ELOOP`), ls/stat link hints
 - **Pass 43:** `ls -lh`, `du -h`, `df -h` — human-readable KiB/MiB sizes in file utils
 - **Pass 20:** `hostname`, `uptime`, `whoami`, `id`, `cal`, `gzip`/`gunzip` (PEAKGZ1), `timeout`, `watch`
 - **Pass 21:** `!n` history, aliases (`/var/peak/aliases`), `cd -`, Tab path/`/bin` completion, clearer redirect/pipe errors

@@ -8,10 +8,12 @@
 #define VFS_MAX_NODES 4096
 #define VFS_MODE_FILE 0644u
 #define VFS_MODE_DIR  0755u
+#define VFS_SYMLINK_LOOP_MAX 8
 
 enum vfs_type {
     VFS_DIR = 1,
     VFS_FILE = 2,
+    VFS_SYMLINK = 3,
 };
 
 struct vfs_node {
@@ -36,6 +38,7 @@ struct vfs_stat {
     uint32_t nchildren;
     uint32_t refs;
     char name[VFS_NAME_MAX];
+    char link_target[VFS_PATH_MAX];
 };
 
 struct vfs_dirent {
@@ -68,12 +71,16 @@ int vfs_export_ramdisk_size(void);
 void vfs_seed_defaults(void);
 
 int vfs_normalize(const char *path, char *out, size_t out_len);
+int vfs_resolve(const char *path, char *out, size_t out_len);
 int vfs_stat(const char *path, struct vfs_stat *st);
 int vfs_chmod(const char *path, uint16_t mode);
 void vfs_mode_string(enum vfs_type type, uint16_t mode, char *buf, size_t len);
+int vfs_readlink(const char *path, char *buf, size_t buf_len, size_t *out_len);
+int vfs_symlink(const char *target, const char *linkpath);
 int vfs_exists(const char *path);
 int vfs_is_dir(const char *path);
 int vfs_is_file(const char *path);
+int vfs_is_symlink(const char *path);
 int vfs_unlink(const char *path);
 int vfs_rmdir(const char *path);
 int vfs_remove_tree(const char *path);

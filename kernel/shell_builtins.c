@@ -102,14 +102,17 @@ int shell_chdir(const char *path) {
     char abs[VFS_PATH_MAX];
     if (shell_resolve_path(path, abs, sizeof(abs)) != 0)
         return last_path_err;
-    if (!vfs_is_dir(abs)) {
-        last_path_err = vfs_exists(abs) ? PEAK_ENOTDIR : PEAK_ENOENT;
+    char resolved[VFS_PATH_MAX];
+    int rc = vfs_resolve(abs, resolved, sizeof(resolved));
+    if (rc != 0) { last_path_err = rc; return rc; }
+    if (!vfs_is_dir(resolved)) {
+        last_path_err = vfs_exists(resolved) ? PEAK_ENOTDIR : PEAK_ENOENT;
         return last_path_err;
     }
     shell_env_set("OLDPWD", cwd);
     size_t i = 0;
-    for (; abs[i] && i + 1 < sizeof(cwd); i++)
-        cwd[i] = abs[i];
+    for (; resolved[i] && i + 1 < sizeof(cwd); i++)
+        cwd[i] = resolved[i];
     cwd[i] = '\0';
     shell_env_set("PWD", cwd);
     return 0;
@@ -177,7 +180,8 @@ static const struct help_entry help_table[] = {
     { "rm", "file", "remove file/dir (-rf)" },
     { "cp", "file", "copy (-r recursive)" },
     { "mv", "file", "rename/move" },
-    { "ln", "file", "hard link" },
+    { "ln", "file", "hard/symbolic link (-s)" },
+    { "readlink", "file", "print symlink target" },
     { "chmod", "file", "change mode (octal or u+x/g-w)" },
     { "stat", "file", "file metadata" },
     { "du", "file", "disk usage" },
@@ -285,7 +289,7 @@ static const struct help_entry help_table[] = {
 void shell_help_topics(void) {
     console_write("Peak CLI — categories:\n");
     console_write("  nav   pwd cd ls tree find\n");
-    console_write("  file  mkdir touch rm cp mv ln chmod stat du df truncate basename dirname realpath\n");
+    console_write("  file  mkdir touch rm cp mv ln readlink chmod stat du df truncate basename dirname realpath\n");
     console_write("  text  cat head tail wc grep diff sort uniq cut tr sed cmp hexdump strings echo printf tee yes\n");
     console_write("        fold rev od split paste nl tac xargs awk sha256sum md5sum base64 less more edit\n");
     console_write("  sys   date free top sysmon ps kill env which seq sleep theme wallpaper scale\n");

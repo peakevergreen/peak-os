@@ -117,6 +117,64 @@ static struct vfs_node *find_child(struct vfs_node *dir, const char *name) {
     return NULL;
 }
 
+static int path_join1(const char *base, const char *part, char *out, size_t out_len) {
+    char tmp[VFS_PATH_MAX]; size_t bl = strlen(base); size_t o = 0;
+    for (size_t k = 0; k < bl && o + 1 < sizeof(tmp); k++) tmp[o++] = base[k];
+    if (o + 1 + strlen(part) >= sizeof(tmp)) return PEAK_ENOSPC;
+    if (!(o == 1 && tmp[0] == '/')) tmp[o++] = '/';
+    for (size_t k = 0; part[k]; k++) tmp[o++] = part[k];
+    tmp[o] = '\0'; return vfs_normalize(tmp, out, out_len);
+}
+static int path_dirname(const char *path, char *out, size_t out_len) {
+    char norm[VFS_PATH_MAX]; if (vfs_normalize(path, norm, sizeof(norm)) != 0) return PEAK_EINVAL;
+    size_t len = strlen(norm); if (len <= 1) { out[0] = '/'; out[1] = '\0'; return 0; }
+    int last = -1; for (size_t i = 0; norm[i]; i++) if (norm[i] == '/') last = (int)i;
+    if (last <= 0) { out[0] = '/'; out[1] = '\0'; return 0; }
+    if ((size_t)last + 1 > out_len) return PEAK_ENOSPC;
+    memcpy(out, norm, (size_t)last); out[last] = '\0'; return 0;
+}
+static int expand_symlink_at(const char *link_path, struct vfs_node *link, const char *remainder, char *out, size_t out_len) {
+    if (!link || link->type != VFS_SYMLINK || !link->data) return PEAK_EINVAL;
+    const char *target = (const char *)link->data; char combined[VFS_PATH_MAX]; size_t o = 0;
+    if (target[0] == '/') { for (; target[o] && o + 1 < sizeof(combined); o++) combined[o] = target[o]; }
+    else {
+        char dir[VFS_PATH_MAX]; if (path_dirname(link_path, dir, sizeof(dir)) != 0) return PEAK_ENOSPC;
+        for (size_t k = 0; dir[k] && o + 1 < sizeof(combined); k++) combined[o++] = dir[k];
+        if (o + 1 >= sizeof(combined)) return PEAK_ENOSPC; combined[o++] = '/';
+        for (size_t k = 0; target[k] && o + 1 < sizeof(combined); k++) combined[o++] = target[k];
+    }
+    if (remainder && remainder[0]) {
+        if (remainder[0] != '/') { if (o + 1 >= sizeof(combined)) return PEAK_ENOSPC; combined[o++] = '/'; }
+        for (size_t k = 0; remainder[k] && o + 1 < sizeof(combined); k++) combined[o++] = remainder[k];
+    }
+    combined[o] = '\0'; return vfs_normalize(combined, out, out_len);
+}
+int vfs_resolve(const char *path, char *out, size_t out_len) {
+    if (!path || !out || out_len < 2) return PEAK_EINVAL;
+    char work[VFS_PATH_MAX]; int rc = vfs_normalize(path, work, sizeof(work)); if (rc != 0) return rc;
+    int depth = 0;
+resolve_restart: {
+    struct vfs_node *cur = root; size_t i = 1; char link_path[VFS_PATH_MAX]; link_path[0] = '/'; link_path[1] = '\0';
+    while (work[i]) {
+        char part[VFS_NAME_MAX]; size_t j = 0;
+        while (work[i] && work[i] != '/' && j + 1 < VFS_NAME_MAX) part[j++] = work[i++];
+        part[j] = '\0'; if (work[i] == '/') i++; if (j == 0) continue;
+        rc = path_join1(link_path, part, link_path, sizeof(link_path)); if (rc != 0) return rc;
+        cur = find_child(cur, part); if (!cur) { vfs_set_error("not found"); return PEAK_ENOENT; }
+        if (cur->type == VFS_SYMLINK) {
+            if (++depth > VFS_SYMLINK_LOOP_MAX) { vfs_set_error("too many symlink levels"); return PEAK_ELOOP; }
+            const char *rest = work[i] ? work + i : "";
+            rc = expand_symlink_at(link_path, cur, rest, work, sizeof(work)); if (rc != 0) return rc;
+            goto resolve_restart;
+        }
+        if (cur->type != VFS_DIR && work[i]) { vfs_set_error("not a directory"); return PEAK_ENOTDIR; }
+    }}
+    size_t wl = strlen(work); if (wl + 1 > out_len) return PEAK_ENOSPC;
+    memcpy(out, work, wl + 1); vfs_set_error(""); return 0;
+}
+static int path_for_io(const char *path, char *out, size_t out_len) {
+    int rc = vfs_resolve(path, out, out_len); if (rc == PEAK_ENOENT) rc = vfs_normalize(path, out, out_len); return rc;
+}
 struct vfs_node *vfs_lookup(const char *path) {
     if (!path || path[0] != '/')
         return NULL;
@@ -224,6 +282,10 @@ struct vfs_node *vfs_create_file(const char *path) {
 }
 
 int vfs_write_file(const char *path, const void *data, size_t len) {
+    char resolved[VFS_PATH_MAX];
+    int pr = path_for_io(path, resolved, sizeof(resolved));
+    if (pr != 0) return pr;
+    path = resolved;
     struct vfs_node *existing = vfs_lookup(path);
     if (existing && existing->type == VFS_DIR) {
         vfs_set_error("is a directory");
@@ -276,6 +338,10 @@ int vfs_create_blob_file(const char *path, size_t size) {
 }
 
 int vfs_read_at(const char *path, size_t off, void *buf, size_t len, size_t *out_len) {
+    char resolved[VFS_PATH_MAX];
+    int pr = path_for_io(path, resolved, sizeof(resolved));
+    if (pr != 0) return pr;
+    path = resolved;
     struct vfs_node *f = vfs_lookup(path);
     if (!f || f->type != VFS_FILE)
         return PEAK_ENOENT;
@@ -305,6 +371,10 @@ int vfs_read_at(const char *path, size_t off, void *buf, size_t len, size_t *out
 }
 
 int vfs_write_at(const char *path, size_t off, const void *buf, size_t len) {
+    char resolved[VFS_PATH_MAX];
+    int pr = path_for_io(path, resolved, sizeof(resolved));
+    if (pr != 0) return pr;
+    path = resolved;
     struct vfs_node *f = vfs_lookup(path);
     if (!f || f->type != VFS_FILE)
         return PEAK_ENOENT;
@@ -356,6 +426,8 @@ int vfs_list(const char *path, char *out, size_t out_len) {
         o += l;
         if (c->type == VFS_DIR)
             out[o++] = '/';
+        else if (c->type == VFS_SYMLINK)
+            out[o++] = '@';
         out[o++] = '\n';
     }
     out[o] = '\0';
@@ -451,9 +523,14 @@ int vfs_stat(const char *path, struct vfs_stat *st) {
     st->size = n->size;
     st->refs = n->refs;
     st->nchildren = 0;
+    st->link_target[0] = '\0';
     for (struct vfs_node *c = n->child; c; c = c->sibling)
         st->nchildren++;
     memcpy(st->name, n->name, VFS_NAME_MAX);
+    if (n->type == VFS_SYMLINK && n->data) {
+        size_t tl = n->size; if (tl >= VFS_PATH_MAX) tl = VFS_PATH_MAX - 1;
+        memcpy(st->link_target, n->data, tl); st->link_target[tl] = '\0';
+    }
     return 0;
 }
 
@@ -494,6 +571,32 @@ int vfs_is_file(const char *path) {
     return n && n->type == VFS_FILE;
 }
 
+int vfs_is_symlink(const char *path) { struct vfs_node *n = vfs_lookup(path); return n && n->type == VFS_SYMLINK; }
+int vfs_readlink(const char *path, char *buf, size_t buf_len, size_t *out_len) {
+    struct vfs_node *n = vfs_lookup(path); if (!n) return PEAK_ENOENT;
+    if (n->type != VFS_SYMLINK) { vfs_set_error("not a symlink"); return PEAK_EINVAL; }
+    size_t tlen = n->size; if (out_len) *out_len = tlen; if (!buf || buf_len == 0) return 0;
+    size_t copy = tlen < buf_len - 1 ? tlen : buf_len - 1; memcpy(buf, n->data, copy); buf[copy] = '\0';
+    vfs_set_error(""); return 0;
+}
+int vfs_symlink(const char *target, const char *linkpath) {
+    if (!target || !target[0] || !linkpath) return PEAK_EINVAL;
+    if (vfs_lookup(linkpath)) return PEAK_EEXIST;
+    size_t tlen = strlen(target); if (tlen >= VFS_PATH_MAX) return PEAK_EINVAL;
+    char parent[VFS_PATH_MAX]; size_t n = 0;
+    while (linkpath[n] && n + 1 < VFS_PATH_MAX) { parent[n] = linkpath[n]; n++; }
+    parent[n] = '\0'; int last = -1;
+    for (size_t i = 0; parent[i]; i++) if (parent[i] == '/') last = (int)i;
+    if (last < 0) return PEAK_EINVAL; parent[last] = '\0'; const char *leaf = linkpath + last + 1;
+    if (last > 0 && !vfs_mkdir(parent)) return PEAK_ENOTDIR;
+    struct vfs_node *dir = (last == 0) ? root : vfs_lookup(parent);
+    if (!dir || dir->type != VFS_DIR) return PEAK_ENOTDIR;
+    struct vfs_node *link = alloc_node(leaf, VFS_SYMLINK); if (!link) return PEAK_ENOMEM;
+    uint8_t *buf = (uint8_t *)kmalloc(tlen + 1); if (!buf) return PEAK_ENOMEM;
+    memcpy(buf, target, tlen); buf[tlen] = '\0'; link->data = buf; link->size = tlen; link->capacity = tlen + 1;
+    add_child(dir, link); vfs_set_error(""); return 0;
+}
+
 static void unlink_from_parent(struct vfs_node *n) {
     if (!n->parent)
         return;
@@ -529,12 +632,11 @@ int vfs_unlink(const char *path) {
         return PEAK_ENOENT;
     if (n == root)
         return PEAK_EINVAL;
-    if (n->type != VFS_FILE)
+    if (n->type != VFS_FILE && n->type != VFS_SYMLINK)
         return PEAK_EISDIR;
     unlink_from_parent(n);
-    /* Count sharers of this data pointer */
     int sharers = 0;
-    if (n->data) {
+    if (n->type == VFS_FILE && n->data) {
         for (int i = 0; i < node_count; i++) {
             if (nodes[i].type == VFS_FILE && nodes[i].data == n->data)
                 sharers++;
@@ -585,6 +687,8 @@ int vfs_remove_tree(const char *path) {
     if (!n || n == root)
         return PEAK_EINVAL;
     if (n->type == VFS_FILE)
+        return vfs_unlink(path);
+    if (n->type == VFS_SYMLINK)
         return vfs_unlink(path);
     while (n->child) {
         char cp[VFS_PATH_MAX];
