@@ -107,5 +107,6 @@ uint64_t vfs_tree_bytes(const char *path);
 
 /* Last VFS error detail string (empty if none). Not thread-safe. */
 const char *vfs_last_error(void);
+const char *vfs_last_error_path(void);
 
 #endif

@@ -9,6 +9,20 @@
 
 static int fails;
 
+/* Minimal VFS stubs for ctr_path host tests (ctr_dir_index_listing). */
+int vfs_is_dir(const char *path) {
+    (void)path;
+    return 1;
+}
+
+int vfs_list(const char *path, char *out, size_t out_len) {
+    (void)path;
+    if (!out || out_len < 2)
+        return -1;
+    snprintf(out, out_len, "index.html\n");
+    return 0;
+}
+
 static void expect(int cond, const char *msg) {
     if (!cond) {
         fprintf(stderr, "FAIL: %s\n", msg);

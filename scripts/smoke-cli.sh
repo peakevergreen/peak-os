@@ -723,6 +723,11 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 150 VFS errno path naming"
+grep -q 'vfs_last_error_path' kernel/vfs.c
+grep -q 'peak_perror_path' kernel/user/libpeak.c
+grep -q 'symlink loop at' kernel/vfs.c
+
 echo "==> Wave 7 Pass 149 ctr CMD health index"
 grep -q 'HEALTHCHECK-lite' kernel/ctr_build.c
 grep -q 'ctr_dir_index_listing' kernel/ctr_path.c
