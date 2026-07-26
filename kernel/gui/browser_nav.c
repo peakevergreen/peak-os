@@ -10,6 +10,7 @@
 #include "notify.h"
 #include "keyboard.h"
 #include "desktop_internal.h"
+#include "tls.h"
 
 static struct {
     int valid;
@@ -309,6 +310,28 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
         browser_reload();
         return;
     }
+    if (t->show_tls_accept && hit_accept_w > 0 &&
+        (uint32_t)lx >= hit_accept_x && (uint32_t)lx < hit_accept_x + hit_accept_w &&
+        (uint32_t)ly >= hit_accept_y && (uint32_t)ly < hit_accept_y + hit_accept_h) {
+        if (tls_trust_accept_last() == 0) {
+            snprintf(t->status, sizeof(t->status), "Accepted certificate — reloading");
+            notify_push("Accepted certificate");
+            browser_reload();
+        } else {
+            snprintf(t->status, sizeof(t->status), "Accept failed (no cert to remember)");
+            needs_redraw = 1;
+        }
+        return;
+    }
+    if (t->show_tls_accept && hit_forget_w > 0 &&
+        (uint32_t)lx >= hit_forget_x && (uint32_t)lx < hit_forget_x + hit_forget_w &&
+        (uint32_t)ly >= hit_forget_y && (uint32_t)ly < hit_forget_y + hit_forget_h) {
+        tls_trust_forget_host(NULL);
+        snprintf(t->status, sizeof(t->status), "Forgot saved trust for this host");
+        notify_push("Forgot certificate");
+        needs_redraw = 1;
+        return;
+    }
     if (t->use_layout && t->js_ok) {
         uint32_t ch = fb_cell_h();
         uint32_t pad = 6;
@@ -364,6 +387,7 @@ void browser_forward(void) {
 void browser_reload(void) {
     struct br_tab *t = browser_cur();
     t->show_retry = 0;
+    t->show_tls_accept = 0;
     browser_go(t->url);
 }
 

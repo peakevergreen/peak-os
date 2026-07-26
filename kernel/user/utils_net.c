@@ -62,7 +62,9 @@ static void wget_print_failure(int st, const char *body) {
     const char *tls_err = tls_last_error();
     const char *reject = net_http_tls_reject_name();
     const char *detail = net_last_error();
-    if (tls_err && tls_err[0]) {
+    int tls_code = tls_last_error_code();
+    /* tls_last_error() returns "no error" when idle — do not prefer it over net/DNS. */
+    if (tls_code != TLS_E_OK && tls_err && tls_err[0] && strcmp(tls_err, "no error") != 0) {
         console_printf("failed: TLS %s", tls_err);
         if (reject && reject[0])
             console_printf(" [%s]", reject);
@@ -797,11 +799,14 @@ int unc_main(int argc, char **argv) {
 }
 int utlsinfo_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage("tlsinfo", "[-r] [-s] [-m pattern host]");
+        peak_usage("tlsinfo", "[-r] [-s] [-A] [-F [host]] [-m pattern host]");
         return 0;
     }
     int show_roots = 0;
     int show_sessions = 0;
+    int do_accept = 0;
+    int do_forget = 0;
+    const char *forget_host = NULL;
     const char *match_pat = NULL;
     const char *match_host = NULL;
     for (int i = 1; i < argc; i++) {
@@ -809,13 +814,36 @@ int utlsinfo_main(int argc, char **argv) {
             show_roots = 1;
         else if (!strcmp(argv[i], "-s"))
             show_sessions = 1;
-        else if (!strcmp(argv[i], "-m") && i + 2 < argc) {
+        else if (!strcmp(argv[i], "-A"))
+            do_accept = 1;
+        else if (!strcmp(argv[i], "-F")) {
+            do_forget = 1;
+            if (i + 1 < argc && argv[i + 1][0] != '-')
+                forget_host = argv[++i];
+        } else if (!strcmp(argv[i], "-m") && i + 2 < argc) {
             match_pat = argv[++i];
             match_host = argv[++i];
         } else {
-            peak_usage("tlsinfo", "[-r] [-s] [-m pattern host]");
+            peak_usage("tlsinfo", "[-r] [-s] [-A] [-F [host]] [-m pattern host]");
             return 1;
         }
+    }
+    if (do_accept) {
+        if (tls_trust_accept_last() != 0) {
+            console_write("tlsinfo: nothing to Accept (no recent cert failure)\n");
+            return 1;
+        }
+        console_write("tlsinfo: Accept — remembered last failed cert in /etc/peak/tls-tofu\n");
+        return 0;
+    }
+    if (do_forget) {
+        if (tls_trust_forget_host(forget_host) != 0) {
+            console_write("tlsinfo: Forget failed (no host)\n");
+            return 1;
+        }
+        console_printf("tlsinfo: Forgot TOFU entry%s%s\n",
+                       forget_host ? " for " : "", forget_host ? forget_host : "");
+        return 0;
     }
     if (match_pat && match_host) {
         int m = tls_hostname_matches_sni(match_pat, match_host);

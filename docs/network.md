@@ -128,10 +128,21 @@ extensions. Optional live probe: `make smoke-tls-live` (soft-fail offline).
 ## Browser HTTPS UX
 
 Dedicated TLS error pages (RNG / alert / expired / hostname mismatch / untrusted)
-replace the generic handshake blob. Address-bar lock: `L` when verified HTTPS,
-`!` when HTTPS without full verify. `fetch()` rejects with stable names:
-`fetch: tls-rng`, `tls-alert`, `tls-expired`, `tls-mismatch`, `tls-untrusted`,
-`tls-handshake`.
+replace the generic handshake blob. On **Untrusted certificate**, the page offers
+**Retry**, **Accept** (writes `/etc/peak/tls-tofu` for this host’s last cert digest),
+and **Forget** (drops that TOFU entry). Accept’d hosts verify from the store even when
+Settings → Network TOFU is off; opt-in TOFU still auto-remembers new hosts when enabled.
+CLI mirrors: `tlsinfo -A` (Accept last failure), `tlsinfo -F [host]` (Forget).
+
+Address-bar lock: `L` when verified HTTPS, `!` when HTTPS without full verify.
+`fetch()` rejects with stable names: `fetch: tls-rng`, `tls-alert`, `tls-expired`,
+`tls-mismatch`, `tls-untrusted`, `tls-handshake`. Specific `cert_fail` reasons
+(expiry, hostname, chain signature) are preserved — not overwritten by a generic
+WebPKI string.
+
+WebPKI path building matches trust anchors by **SPKI** (cross-signed intermediates/
+roots in the server chain) as well as full DER. QEMU prove notes and URL matrix:
+`scripts/browser-https-fixlist.md`, `scripts/browser-https-diag.py`.
 
 Active mixed content: `http://` subresources (`fetch`, `<script src>`) on `https://`
 pages are blocked (`fetch: mixed-content`). HSTS-lite stores `max-age` hosts in
@@ -155,8 +166,8 @@ until HPKE lands (interop note).
 - DNS negative cache (10s) may report "cached failure" immediately after a
   timeout or empty response; wait or retry with a different name.
 - Weak RNG (timer-based) — not for real security
-- **Certificate trust**: pins → WebPKI (embedded roots + path build) → opt-in
-  TOFU (`/etc/peak/tls-tofu`). DER X.509 parse covers SAN/validity/SPKI/
+- **Certificate trust**: pins → WebPKI (embedded roots + SPKI path build) → TOFU
+  store (Accept / opt-in). DER X.509 parse covers SAN/validity/SPKI/
   BasicConstraints/KeyUsage/AKI/SKI. Validity enforced when RTC time is available.
   No OCSP/CRL yet.
 - Bridged mode is platform-specific (macOS vmnet); Linux tap/bridge is not wired yet
@@ -168,7 +179,7 @@ until HPKE lands (interop note).
 - ClientHello GREASE (cipher, group, empty extension) per RFC 8701
 - Handshake DoS budgets: max message `TLS_HS_MSG_MAX`, max records `TLS_HS_RECORD_MAX`
 - Structured `tls_last_error_code()` alongside string `tls_last_error()`; `tls_err_name()` maps codes to short tags (`cert`, `alert`, …) and non-alert errors are prefixed `[tag]` in `tls_last_error()`
-- `tlsinfo` CLI: trust summary (embedded WebPKI root count, pin count, TOFU toggle), session verify flags, bounded session ticket cache (`session_cache: used=N/4`), `-s` lists cached SNI/cipher/TLS version, `cert_fail` reason, last error; `-r` dumps root SHA-256 digests; `-m pattern host` exercises hostname matching
+- `tlsinfo` CLI: trust summary (embedded WebPKI root count, pin count, TOFU toggle), session verify flags, bounded session ticket cache (`session_cache: used=N/4`), `-s` lists cached SNI/cipher/TLS version, `cert_fail` reason, last error; `-r` dumps root SHA-256 digests; `-m pattern host` exercises hostname matching; `-A` Accept last failed cert into TOFU; `-F [host]` Forget TOFU entry
 - Session resume: TLS 1.2 offers cached tickets via `session_ticket`; TLS 1.3 PSK-lite offers `pre_shared_key` with HKDF/HMAC binder (RFC 8446); cached resumption master + ticket nonce when captured from NewSessionTicket. Post-handshake NewSessionTicket captured for both paths. ECH full HPKE remains NYI.
 
 ## Timeouts (100 Hz ticks)

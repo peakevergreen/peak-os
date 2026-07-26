@@ -123,10 +123,18 @@ static int cmp_time(const struct x509_time *a, const struct x509_time *b) {
 }
 
 static void add_san(struct x509_cert *c, const char *name, size_t nlen) {
-    if (c->san_count >= X509_SAN_MAX || nlen == 0 || nlen >= X509_NAME_MAX)
+    if (nlen == 0 || nlen >= X509_NAME_MAX)
         return;
-    memcpy(c->sans[c->san_count], name, nlen);
-    c->sans[c->san_count][nlen] = '\0';
+    char tmp[X509_NAME_MAX];
+    memcpy(tmp, name, nlen);
+    tmp[nlen] = '\0';
+    c->san_total++;
+    /* Match against every SAN even when the stored list is full (Google apex certs). */
+    if (c->match_sni && c->match_sni[0] && tls_hostname_matches_sni(tmp, c->match_sni))
+        c->match_sni_hit = 1;
+    if (c->san_count >= X509_SAN_MAX)
+        return;
+    memcpy(c->sans[c->san_count], tmp, nlen + 1);
     c->san_count++;
 }
 
@@ -230,7 +238,10 @@ static int parse_extensions(const uint8_t *exts, size_t elen, struct x509_cert *
 int x509_parse_der(const uint8_t *der, size_t der_len, struct x509_cert *out) {
     if (!der || !out || der_len < 64)
         return -1;
+    const char *sni = out->match_sni;
     memset(out, 0, sizeof(*out));
+    out->match_sni = sni;
+    out->match_sni_hit = 0;
     const uint8_t *p = der;
     size_t rem = der_len;
     const uint8_t *cert;
@@ -316,12 +327,18 @@ int x509_time_compare(const struct x509_time *a, const struct x509_time *b) {
 int x509_cert_hostname_match(const struct x509_cert *c, const char *sni) {
     if (!c || !sni || !sni[0])
         return -1;
+    /* Full SAN walk during parse (match_sni) — required when san_total > X509_SAN_MAX. */
+    if (c->match_sni && c->match_sni[0] && !strcmp(c->match_sni, sni) && c->match_sni_hit)
+        return 1;
     if (c->san_count == 0)
-        return -1;
+        return c->san_total > 0 ? 0 : -1;
     for (int i = 0; i < c->san_count; i++) {
         if (tls_hostname_matches_sni(c->sans[i], sni))
             return 1;
     }
+    /* Stored list incomplete and no streaming hit for this sni. */
+    if (c->san_total > c->san_count && !(c->match_sni && c->match_sni[0]))
+        return -1;
     return 0;
 }
 

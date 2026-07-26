@@ -74,7 +74,8 @@ static double json_atof(const char *s, const char **end) {
 static int stub_fail(struct js_runtime *rt, void *ret, const char *msg) {
     if (ret)
         js_val_set_undefined(ret);
-    if (rt && msg)
+    /* msg may already be rt->err; overlapping snprintf is UB (glibc clears). */
+    if (rt && msg && msg != rt->err)
         snprintf(rt->err, sizeof(rt->err), "%s", msg);
     return -1;
 }

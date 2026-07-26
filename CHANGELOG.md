@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Browser HTTPS WebPKI:** SPKI trust-anchor match for cross-signed roots; ECDSA BIT STRING parse; TLS 1.2 fail-closed on cert; error-page Accept/Forget + `tlsinfo -A`/`-F`; snprintf `%.Ns`; QEMU URL matrix in `scripts/browser-https-fixlist.md`
+
 - **Audit v2 harness:** mouse/PPM helpers + dense scenario runner; deep fixlist GA-101…125 closed Fixed/Deferred
 
 - **GA-105–108/112/113/115:** Scale-3 clipping — Settings hint+chips, Monitor Export/footer, brand scrim pad, Browser tab close gap, short export toast

@@ -200,7 +200,8 @@ int main(void) {
         expect(shell_parse_pipeline(buf, &pl) != 0, "duplicate out redir");
     }
     {
-        char buf[] = "a | b | c | d | e";
+        /* SHELL_PIPE_MAX is 6; seven stages must fail closed. */
+        char buf[] = "a | b | c | d | e | f | g";
         struct shell_pipeline pl;
         expect(shell_parse_pipeline(buf, &pl) != 0, "pipe max exceeded");
     }
