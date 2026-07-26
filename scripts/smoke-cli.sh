@@ -385,6 +385,11 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 87 js for-await"
+grep -q parse_for_await_of kernel/js/js_parse.c
+grep -q for-await.js tests/fixtures/js/for-await.js
+grep -q 'eval module m2' tests/host/test_js.c
+
 echo "==> Wave 4 Pass 86 browser ring3"
 grep -q browser_isolation_dom_allowed kernel/gui/browser_isolation.c
 grep -q 'ring-3 isolation unavailable' kernel/gui/browser_js.c
