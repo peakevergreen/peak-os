@@ -488,7 +488,7 @@ int utruncate_main(int argc, char **argv) {
     return vfs_write_file(abs, zbuf, (size_t)sz) == 0 ? 0 : 1;
 }
 
-#define DD_IO_MAX   8192
+#define DD_IO_MAX   (32 * 1024)
 #define DD_BS_DEF   512
 
 static int dd_parse_eq(const char *arg, const char *key, const char **val) {
@@ -502,7 +502,7 @@ static int dd_parse_eq(const char *arg, const char *key, const char **val) {
 int udd_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
         peak_usage("dd", "if=<path> of=<path> [bs=N] [count=N]");
-        console_write("  lite copy (default bs=512, max 8192 bytes total)\n");
+        console_write("  lite copy (default bs=512, max 32 KiB total)\n");
         return 0;
     }
     const char *if_path = NULL;
@@ -525,7 +525,7 @@ int udd_main(int argc, char **argv) {
         return 1;
     }
     if (bs <= 0 || bs > DD_IO_MAX) {
-        peak_perror("dd", "bs out of range (1..8192)");
+        peak_perror("dd", "bs out of range (1..32768)");
         return 1;
     }
     char if_abs[VFS_PATH_MAX];

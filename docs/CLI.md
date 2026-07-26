@@ -84,7 +84,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `truncate <path> <n>` | resize (max 4096) |
 | `mktemp [TEMPLATE]` | create unique temp path under `/tmp` (lite) |
 | `install [-D] [-m mode] <src> <dst>` | copy with optional parent create (`-D`) and mode |
-| `dd if=<in> of=<out> [bs=N] [count=N]` | lite block copy (default bs=512; 8 KiB total cap) |
+| `dd if=<in> of=<out> [bs=N] [count=N]` | lite block copy (default bs=512; 32 KiB total cap) |
 | `sync` | flush block device when ATA/SD present |
 | `file <path>…` | magic sniff (ELF, PPM P6, BMP, PEAKZIP1, PEAKGZ1, text vs data) |
 
@@ -118,7 +118,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `date [+format]` (`+%s`, `+%Y-%m-%d` via RTC) `free` `env` `export` `which` `seq` `sleep` `time` | (`free`: PMM pages + heap used/free/frag/freelist/oom) |
 | `hostname` `uptime` `whoami` `id` `cal` | identity + calendar |
 | `uname [-asnmr]` | kernel identity (`-s` sysname, `-n` `$HOSTNAME`, `-r` release, `-m` machine, `-a` all + BootInfo platform) |
-| `gzip` `gunzip` | Peak RLE compress/decompress (PEAKGZ1 `.gz`, 8 KiB cap) |
+| `gzip` `gunzip` | Peak RLE compress/decompress (PEAKGZ1 `.gz`, 32 KiB cap) |
 | `timeout` | `<sec> <cmd>` wall limit (exit 124 if exceeded; no preemption) |
 | `watch` | run once with deadline note; repeat (`-n`, max 32 iters) |
 | `top` `sysmon` | live system monitor (sparklines, legend; `q` quit, `r` reset, `e` export, `-n` once) |
@@ -146,7 +146,7 @@ CLI scrollback search: **Ctrl+F**, type a needle, **Enter** for next match (128 
 | `nslookup` `host` | DNS A (`-6` AAAA diagnostic, `-x` PTR reverse); IPv4 routing only |
 | `traceroute` | Staged reachability: local → gateway → DNS → dest (TCP :80) |
 | `nc` | TCP connect (`host port` or `host:port`; optional send + recv) |
-| `tar -c` / `tar -x` | ustar archive create/extract (64 KiB cap) |
+| `tar -c` / `-x` / `-t [-v]` | ustar create/extract/list (64 KiB archive cap; `-v` verbose) |
 | `zip` `unzip` | PEAKZIP1 multi-file archive — store or RLE per entry (64 KiB / 32 files / 8 KiB each) |
 | `ctr` `ctrd` | Dockerfile staging / static HTTP (not OCI) — [containers.md](containers.md) |
 

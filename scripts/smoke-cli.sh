@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 106 tar dd gzip"
+grep -q 'mode = 3' kernel/user/utils_tar.c
+grep -q 'DD_IO_MAX   (32 \* 1024)' kernel/user/utils_file.c
+grep -q 'COMP_MAX (32 \* 1024)' kernel/user/utils_sys2.c
+grep -q '32 KiB' docs/CLI.md
+
 echo "==> Wave 5 Pass 105 diff patch sha"
 grep -q upatch_main kernel/user/utils_text2.c
 grep -q 'peak_has_flag(argc, argv, "-u")' kernel/user/utils_text2.c
