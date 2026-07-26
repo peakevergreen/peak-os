@@ -330,10 +330,13 @@ void desktop_run(void) {
                 continue;
             }
 
-            if (desktop_menus_toggle_start(m.x, m.y, ty, th)) {
-                /* Peak start button toggled */
-            } else if (menu_open) {
-                desktop_menu_click(m.x, m.y);
+            /* When the Start menu is open, handle it first so item hits are not
+             * swallowed by the Peak button toggle (and outside clicks dismiss). */
+            if (menu_open) {
+                if (!desktop_menus_toggle_start(m.x, m.y, ty, th))
+                    desktop_menu_click(m.x, m.y);
+            } else if (desktop_menus_toggle_start(m.x, m.y, ty, th)) {
+                /* Peak start button opened the menu */
             } else {
                 int tb_win = -1;
                 int tb_overflow = 0;
