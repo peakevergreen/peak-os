@@ -27,6 +27,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Notepad app (Pass 09):** multi-line editor, VFS load/save, dirty flag, clipboard, context menu
 - **Images app (Pass 10):** PPM/BMP decode, fit/1:1/zoom-pan viewer, host test_img_decode
 - **Pass 48:** Images directory next/prev ([/] wheel), keyboard zoom/pan (0/1 fit/actual, Shift+arrows), status strip, drag-pan, Files open-with goto
+- **Pass 50:** Files copy/cut/paste path ops (Ctrl+C/X/V), status strip, empty-folder paste hints
 - **Disks app (Pass 11):** PeakDisk status, VFS/PMM stats, confirmed disksave, context menu
 - **Net Explorer (Pass 12):** link/IP/DNS pane, ping & nslookup, context menu
 - **Net Control (Pass 13):** net-allow, kill switch, persist, DHCP renew, RNG; Settings deep-link
@@ -43,6 +44,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 35:** Heap freelist stats + fragmentation/oom counters in `free`/sysmon; honest OOM toasts in GUI/CLI; `ps` age/wake/share columns; `copy_to_user` write-probe hardening
 - **Pass 37:** Keyboard repeat tuning (PS/2 typematic + software repeat for USB), mouse acceleration lite, CLI scrollback search (Ctrl+F, 128 lines), clearer Ctrl+Alt+Esc CLI↔desktop hints
 - **Pass 29:** Files confirm-delete arm, Home/End + Shift range select, hardened open-with; Notepad line numbers, Ctrl+F find, Ctrl+H replace lite
+- **Pass 50:** Files Ctrl+C/X/V copy/cut/paste (VFS copy/rename), cut-cancel on Esc, context-menu Paste, status strip + empty-folder messaging
 - Display: x86 VBlank probe, Pi mailbox pageflip; Monitor compose/present timing
 - `SYS_peakgui` / guiproto buffer attach + damage
 - CLI boot scroll stays on the front framebuffer (does not wipe via empty backbuffer)

@@ -8,10 +8,14 @@
 #include "util.h"
 
 static char files_cwd[VFS_PATH_MAX] = "/home/dev/workspace";
+static char files_clip_path[VFS_PATH_MAX];
 static int files_sel, files_sel_anchor, files_scroll, files_del_arm, files_ctx_empty;
+static int files_clip_cut;
 
 void desktop_files_init(void) {
     files_sel = files_sel_anchor = files_scroll = files_del_arm = files_ctx_empty = 0;
+    files_clip_cut = 0;
+    files_clip_path[0] = '\0';
 }
 
 static void files_disarm_del(void) { files_del_arm = 0; }
@@ -125,6 +129,175 @@ static void files_format_size(size_t sz, char *buf, size_t cap) {
     else snprintf(buf, cap, "%lu", (unsigned long)sz);
 }
 
+static uint32_t files_status_h(void) {
+    return fb_cell_h() + desktop_u(4);
+}
+
+static const char *files_basename(const char *path) {
+    const char *base = path;
+    if (!path) return "";
+    for (const char *p = path; *p; p++) if (*p == '/') base = p + 1;
+    return base;
+}
+
+static void files_build_dest(const char *name, char *dest, size_t cap) {
+    if (!name || !name[0] || !dest || cap == 0) {
+        if (dest && cap) dest[0] = '\0';
+        return;
+    }
+    if (!strcmp(files_cwd, "/")) snprintf(dest, cap, "/%s", name);
+    else snprintf(dest, cap, "%s/%s", files_cwd, name);
+}
+
+static void files_clip_clear(void) {
+    files_clip_cut = 0;
+    files_clip_path[0] = '\0';
+}
+
+static void files_clip_store(const char *path, int cut) {
+    if (!path || !path[0]) return;
+    size_t i = 0;
+    for (; path[i] && i + 1 < sizeof(files_clip_path); i++)
+        files_clip_path[i] = path[i];
+    files_clip_path[i] = '\0';
+    files_clip_cut = cut ? 1 : 0;
+    clipboard_set(files_clip_path, i);
+}
+
+static int files_sel_path(char *path, size_t cap) {
+    struct vfs_dirent ents[FILES_ROWS];
+    int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
+    if (n <= 0 || files_sel < 0 || files_sel >= n || !path || cap == 0) {
+        if (path && cap) path[0] = '\0';
+        return 0;
+    }
+    files_build_path(files_sel, path, cap);
+    return path[0] != '\0';
+}
+
+static void files_copy_sel(void) {
+    char path[VFS_PATH_MAX];
+    if (!files_sel_path(path, sizeof(path))) return;
+    files_clip_store(path, 0);
+    notify_push("Copied"); dirty_bits |= DIRTY_TOAST;
+}
+
+static void files_cut_sel(void) {
+    char path[VFS_PATH_MAX];
+    if (!files_sel_path(path, sizeof(path))) return;
+    files_clip_store(path, 1);
+    notify_push("Cut — paste to move"); dirty_bits |= DIRTY_TOAST;
+}
+
+static int files_paste_into_cwd(void) {
+    char src[VFS_PATH_MAX];
+    size_t n = clipboard_get(src, sizeof(src));
+    if (!n) {
+        notify_push("Nothing to paste"); dirty_bits |= DIRTY_TOAST;
+        return -1;
+    }
+    if (files_clip_cut && files_clip_path[0] && !strcmp(src, files_clip_path))
+        ; /* cut marker matches clipboard text */
+    else if (files_clip_path[0])
+        files_clip_cut = 0;
+
+    struct vfs_stat st;
+    if (vfs_stat(src, &st) != 0) {
+        notify_push("Paste source missing"); dirty_bits |= DIRTY_TOAST;
+        files_clip_clear();
+        return -1;
+    }
+
+    const char *base = files_basename(src);
+    char dest[VFS_PATH_MAX];
+    files_build_dest(base, dest, sizeof(dest));
+
+    if (!strcmp(src, dest)) {
+        notify_push("Already here"); dirty_bits |= DIRTY_TOAST;
+        return 0;
+    }
+
+    if (vfs_exists(dest)) {
+        char alt[VFS_NAME_MAX + 8];
+        for (int i = 1; i < 100; i++) {
+            snprintf(alt, sizeof(alt), "%s~%d", base, i);
+            files_build_dest(alt, dest, sizeof(dest));
+            if (!vfs_exists(dest)) break;
+        }
+        if (vfs_exists(dest)) {
+            notify_push("Paste failed — name exists"); dirty_bits |= DIRTY_TOAST;
+            return -1;
+        }
+    }
+
+    int rc;
+    if (files_clip_cut) {
+        rc = vfs_rename(src, dest);
+        if (rc == 0) {
+            files_clip_clear();
+            clipboard_clear();
+            notify_push("Moved");
+        } else {
+            notify_push("Move failed"); dirty_bits |= DIRTY_TOAST;
+            return -1;
+        }
+    } else if (st.type == VFS_DIR) {
+        rc = vfs_copy_tree(src, dest);
+        notify_push(rc == 0 ? "Folder pasted" : "Paste failed");
+        if (rc != 0) { dirty_bits |= DIRTY_TOAST; return -1; }
+    } else {
+        rc = vfs_copy_file(src, dest);
+        notify_push(rc == 0 ? "Pasted" : "Paste failed");
+        if (rc != 0) { dirty_bits |= DIRTY_TOAST; return -1; }
+    }
+
+    dirty_bits |= DIRTY_TOAST | DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
+    return 0;
+}
+
+static void files_draw_status(struct win *w, uint32_t tx, uint32_t sy, uint32_t inner) {
+    char status[128];
+    struct vfs_dirent ents[FILES_ROWS];
+    int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
+    if (n < 0) n = 0;
+
+    if (files_clip_cut && files_clip_path[0]) {
+        snprintf(status, sizeof(status), "Cut: %s  ·  Ctrl+V paste here  Esc cancel",
+                 files_basename(files_clip_path));
+    } else if (n <= 0) {
+        snprintf(status, sizeof(status), "Empty folder  ·  n new  Ctrl+V paste  u up  right-click");
+    } else if (files_sel >= 0 && files_sel < n) {
+        char path[VFS_PATH_MAX], szbuf[16];
+        files_build_path(files_sel, path, sizeof(path));
+        if (ents[files_sel].type == VFS_DIR) {
+            struct vfs_stat st;
+            if (vfs_stat(path, &st) == 0)
+                snprintf(szbuf, sizeof(szbuf), "%u items", (unsigned)st.nchildren);
+            else
+                szbuf[0] = '-', szbuf[1] = '\0';
+        } else {
+            struct vfs_stat st;
+            if (vfs_stat(path, &st) == 0) files_format_size(st.size, szbuf, sizeof(szbuf));
+            else szbuf[0] = '-', szbuf[1] = '\0';
+        }
+        int lo = files_sel_anchor < files_sel ? files_sel_anchor : files_sel;
+        int hi = files_sel_anchor > files_sel ? files_sel_anchor : files_sel;
+        if (lo != hi)
+            snprintf(status, sizeof(status), "%d selected  ·  Ctrl+C/X/V  n d r u",
+                     hi - lo + 1);
+        else
+            snprintf(status, sizeof(status), "%s%s  %s  ·  Ctrl+C/X/V  Enter open",
+                     ents[files_sel].name, ents[files_sel].type == VFS_DIR ? "/" : "", szbuf);
+    } else {
+        snprintf(status, sizeof(status), "%d items  ·  Ctrl+V paste  n new  u up", n);
+    }
+
+    fb_fill_rect(tx, sy, inner, files_status_h(), desktop_color_surface());
+    fb_draw_string_fit(tx + desktop_u(4), sy + desktop_u(2), inner - desktop_u(8), status,
+                       desktop_color_dim(), desktop_color_surface());
+}
+
 void desktop_files_draw(struct win *w) {
     files_clamp_sel();
     uint32_t ch = fb_cell_h(), th = desktop_title_h();
@@ -160,10 +333,13 @@ void desktop_files_draw(struct win *w) {
                            theme_get()->danger, desktop_color_bg());
     else
         fb_draw_string_fit(tx, ty + ch, inner,
-                           "[n]ew [d]el [r]ename [u]p Home/End · Shift+arrows select",
+                           "[n]ew [d]el [r]ename [u]p · Ctrl+C/X/V · Shift+arrows select",
                            desktop_color_dim(), desktop_color_bg());
     fb_draw_string_fit(size_x, ty + ch * 2 + desktop_u(2), desktop_u(64), "size", desktop_color_dim(), desktop_color_bg());
-    uint32_t area_h = w->h > th + ch * 3 + desktop_u(24) ? w->h - th - ch * 3 - desktop_u(24) : ch;
+    uint32_t status_h = files_status_h();
+    uint32_t area_h = w->h > th + ch * 3 + desktop_u(24) + status_h
+                          ? w->h - th - ch * 3 - desktop_u(24) - status_h
+                          : ch;
     int max_rows = (int)(area_h / ch);
     if (max_rows > FILES_ROWS) max_rows = FILES_ROWS;
     if (max_rows < 1) max_rows = 1;
@@ -172,7 +348,9 @@ void desktop_files_draw(struct win *w) {
     if (n < 0) n = 0;
     if (n == 0) {
         fb_draw_string(tx, ty + ch * 3 + desktop_u(4), "This folder is empty", desktop_color_dim(), desktop_color_bg());
-        fb_draw_string(tx, ty + ch * 4 + desktop_u(4), "n new file · u go up · right-click", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(tx, ty + ch * 4 + desktop_u(4), "n new file · Ctrl+V paste · u go up", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(tx, ty + ch * 5 + desktop_u(4), "Copy or cut elsewhere, then paste here", desktop_color_dim(), desktop_color_bg());
+        files_draw_status(w, tx, w->y + w->h - status_h - desktop_u(4), inner);
         return;
     }
     if (files_scroll > n) files_scroll = n > 0 ? n - 1 : 0;
@@ -208,6 +386,7 @@ void desktop_files_draw(struct win *w) {
         else obuf[0] = '\0';
         if (obuf[0]) fb_draw_string_fit(tx, ty + ch * 3 + desktop_u(4) + (uint32_t)max_rows * ch, inner, obuf, desktop_color_dim(), desktop_color_bg());
     }
+    files_draw_status(w, tx, w->y + w->h - status_h - desktop_u(4), inner);
 }
 
 static void files_go_up(void) {
@@ -261,7 +440,8 @@ static void files_rename_sel(void) {
 static void files_copy_sel_path(void) {
     char path[VFS_PATH_MAX]; files_build_path(files_sel, path, sizeof(path));
     if (!path[0]) return;
-    clipboard_set(path, strlen(path)); notify_push("Path copied"); dirty_bits |= DIRTY_TOAST;
+    files_clip_store(path, 0);
+    notify_push("Path copied"); dirty_bits |= DIRTY_TOAST;
 }
 
 static int files_open_text(const char *path, const char *name) {
@@ -319,6 +499,7 @@ int desktop_files_ctx_menu(struct ctx_menu_item *items, int max_items) {
     items[n].label=(lbl); items[n].enabled=(en); items[n].separator=(sep); items[n].action_id=(act); n++; } while (0)
     if (files_ctx_empty || files_entry_count() <= 0) {
         FADD("New file", 1, 0, CTX_ACT_FILES_NEW);
+        FADD("Paste", clipboard_has(), 0, CTX_ACT_FILES_PASTE);
         FADD("Go up", strcmp(files_cwd, "/") != 0, 0, CTX_ACT_FILES_GO_UP);
         FADD("Copy folder path", 1, 0, CTX_ACT_FILES_COPY_PATH);
     } else {
@@ -329,7 +510,9 @@ int desktop_files_ctx_menu(struct ctx_menu_item *items, int max_items) {
         if (ents[files_sel].type == VFS_FILE && files_is_image(ents[files_sel].name)) FADD("Open with Images", 1, 0, CTX_ACT_FILES_OPEN_IMG);
         if (files_is_volumes_dir(ents[files_sel].name, ents[files_sel].type)) FADD("Open Disks", 1, 0, CTX_ACT_FILES_OPEN_DISK);
         FADD(NULL, 0, 1, CTX_ACT_NONE);
-        FADD("Copy path", 1, 0, CTX_ACT_FILES_COPY_PATH);
+        FADD("Copy", 1, 0, CTX_ACT_FILES_COPY_PATH);
+        FADD("Cut", 1, 0, CTX_ACT_FILES_CUT);
+        FADD("Paste", clipboard_has(), 0, CTX_ACT_FILES_PASTE);
         FADD("Rename", 1, 0, CTX_ACT_FILES_RENAME);
         FADD("Delete", 1, 0, CTX_ACT_FILES_DELETE);
         FADD(NULL, 0, 1, CTX_ACT_NONE);
@@ -345,8 +528,13 @@ int desktop_files_ctx_action(int action_id) {
     case CTX_ACT_FILES_NEW: files_disarm_del(); files_new_file(); return 1;
     case CTX_ACT_FILES_GO_UP: files_disarm_del(); files_go_up(); dirty_bits |= DIRTY_WIN; desktop_mark_focus_surf_dirty(); return 1;
     case CTX_ACT_FILES_COPY_PATH:
-        if (files_ctx_empty || files_entry_count() <= 0) clipboard_set(files_cwd, strlen(files_cwd));
-        else files_copy_sel_path(); return 1;
+        if (files_ctx_empty || files_entry_count() <= 0) {
+            files_clip_store(files_cwd, 0);
+            notify_push("Path copied"); dirty_bits |= DIRTY_TOAST;
+        } else files_copy_sel_path();
+        return 1;
+    case CTX_ACT_FILES_CUT: files_disarm_del(); files_cut_sel(); return 1;
+    case CTX_ACT_FILES_PASTE: files_disarm_del(); files_paste_into_cwd(); return 1;
     case CTX_ACT_FILES_OPEN: files_disarm_del(); files_activate(); return 1;
     case CTX_ACT_FILES_DELETE: files_delete_sel(); return 1;
     case CTX_ACT_FILES_RENAME: files_disarm_del(); files_rename_sel(); return 1;
@@ -367,6 +555,11 @@ int desktop_files_ctx_action(int action_id) {
 
 int desktop_files_key(int key) {
     int extend = keyboard_shift_down();
+    if (keyboard_ctrl_down()) {
+        if (key == 'c' || key == 'C') { files_disarm_del(); files_copy_sel(); return 1; }
+        if (key == 'x' || key == 'X') { files_disarm_del(); files_cut_sel(); return 1; }
+        if (key == 'v' || key == 'V') { files_disarm_del(); files_paste_into_cwd(); return 1; }
+    }
     if (key == 'n' || key == 'N') { files_disarm_del(); files_new_file(); }
     else if (key == 'd' || key == 'D') files_delete_sel();
     else if (key == 'r' || key == 'R') { files_disarm_del(); files_rename_sel(); }
@@ -376,7 +569,18 @@ int desktop_files_key(int key) {
     else if (key == KEY_END) { int n = files_entry_count(); files_sel = n > 0 ? n - 1 : 0; if (!extend) files_sel_anchor = files_sel; files_disarm_del(); dirty_bits |= DIRTY_WIN; desktop_mark_focus_surf_dirty(); }
     else if (key == 'j' || key == 'J' || key == KEY_DOWN) files_move_sel(1, extend);
     else if (key == 'k' || key == 'K' || key == KEY_UP) files_move_sel(-1, extend);
-    else if (key == 27) { files_disarm_del(); dirty_bits |= DIRTY_WIN; desktop_mark_focus_surf_dirty(); }
+    else if (key == 27) {
+        files_disarm_del();
+        if (files_clip_cut) {
+            files_clip_clear();
+            notify_push("Cut cancelled");
+            dirty_bits |= DIRTY_TOAST | DIRTY_WIN;
+            desktop_mark_focus_surf_dirty();
+        } else {
+            dirty_bits |= DIRTY_WIN;
+            desktop_mark_focus_surf_dirty();
+        }
+    }
     else return 0;
     return 1;
 }
