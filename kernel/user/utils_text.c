@@ -136,10 +136,27 @@ int utail_main(int argc, char **argv) {
 
 int uwc_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage("wc", "[path|-]");
+        peak_usage("wc", "[-l] [-w] [-c] [path|-]");
         return 0;
     }
-    const char *path = argc >= 2 ? argv[1] : "-";
+    int show_l = 0, show_w = 0, show_c = 0;
+    const char *path = "-";
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-' && argv[i][1]) {
+            for (const char *p = argv[i] + 1; *p; p++) {
+                if (*p == 'l')
+                    show_l = 1;
+                else if (*p == 'w')
+                    show_w = 1;
+                else if (*p == 'c')
+                    show_c = 1;
+            }
+            continue;
+        }
+        path = argv[i];
+    }
+    if (!show_l && !show_w && !show_c)
+        show_l = show_w = show_c = 1;
     char abs[VFS_PATH_MAX];
     if (resolve_in_path(path, abs, sizeof(abs)))
         return 1;
@@ -160,7 +177,28 @@ int uwc_main(int argc, char **argv) {
             words++;
         }
     }
-    console_printf("%lu %lu %lu %s\n", (uint64_t)lines, (uint64_t)words, (uint64_t)len, abs);
+    int first = 1;
+    if (show_l) {
+        if (!first)
+            console_putc(' ');
+        console_printf("%lu", (uint64_t)lines);
+        first = 0;
+    }
+    if (show_w) {
+        if (!first)
+            console_putc(' ');
+        console_printf("%lu", (uint64_t)words);
+        first = 0;
+    }
+    if (show_c) {
+        if (!first)
+            console_putc(' ');
+        console_printf("%lu", (uint64_t)len);
+        first = 0;
+    }
+    console_putc(' ');
+    console_write(abs);
+    console_putc('\n');
     return 0;
 }
 

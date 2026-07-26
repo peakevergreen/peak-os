@@ -89,11 +89,26 @@ int udiff_main(int argc, char **argv) {
     return diffs ? 1 : 0;
 }
 
-static void sort_ptrs(char **arr, int n) {
+static int sort_key_cmp(const char *a, const char *b, int numeric) {
+    if (numeric) {
+        int ia = peak_atoi(a);
+        int ib = peak_atoi(b);
+        if (ia != ib)
+            return ia - ib;
+    }
+    return strcmp(a, b);
+}
+
+static void sort_ptrs(char **arr, int n, int numeric, int reverse) {
     for (int i = 1; i < n; i++) {
         char *key = arr[i];
         int j = i - 1;
-        while (j >= 0 && strcmp(arr[j], key) > 0) {
+        while (j >= 0) {
+            int c = sort_key_cmp(arr[j], key, numeric);
+            if (reverse)
+                c = -c;
+            if (c <= 0)
+                break;
             arr[j + 1] = arr[j];
             j--;
         }
@@ -101,12 +116,34 @@ static void sort_ptrs(char **arr, int n) {
     }
 }
 
+static void sort_parse_flags(int argc, char **argv, int *reverse, int *numeric, int *unique,
+                             const char **path) {
+    *reverse = *numeric = *unique = 0;
+    *path = "-";
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-' && argv[i][1]) {
+            for (const char *p = argv[i] + 1; *p; p++) {
+                if (*p == 'r')
+                    *reverse = 1;
+                else if (*p == 'n')
+                    *numeric = 1;
+                else if (*p == 'u')
+                    *unique = 1;
+            }
+            continue;
+        }
+        *path = argv[i];
+    }
+}
+
 int usort_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage("sort", "[path|-]");
+        peak_usage("sort", "[-r] [-n] [-u] [path|-]");
         return 0;
     }
-    const char *path = argc >= 2 ? argv[1] : "-";
+    int reverse = 0, numeric = 0, unique = 0;
+    const char *path = "-";
+    sort_parse_flags(argc, argv, &reverse, &numeric, &unique, &path);
     char data[READ_MAX];
     size_t len = 0;
     if (read_file(path, data, sizeof(data), &len) != 0) {
@@ -115,8 +152,10 @@ int usort_main(int argc, char **argv) {
     }
     char *lines[MAX_LINES];
     int n = split_lines(data, len, lines, MAX_LINES);
-    sort_ptrs(lines, n);
+    sort_ptrs(lines, n, numeric, reverse);
     for (int i = 0; i < n; i++) {
+        if (unique && i > 0 && !strcmp(lines[i], lines[i - 1]))
+            continue;
         console_write(lines[i]);
         console_write("\n");
     }
@@ -125,10 +164,17 @@ int usort_main(int argc, char **argv) {
 
 int uuniq_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage("uniq", "[path|-]");
+        peak_usage("uniq", "[-c] [path|-]");
         return 0;
     }
-    const char *path = argc >= 2 ? argv[1] : "-";
+    int count_prefix = peak_has_flag(argc, argv, "-c");
+    const char *path = "-";
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-c"))
+            continue;
+        if (argv[i][0] != '-')
+            path = argv[i];
+    }
     char data[READ_MAX];
     size_t len = 0;
     if (read_file(path, data, sizeof(data), &len) != 0) {
@@ -137,13 +183,15 @@ int uuniq_main(int argc, char **argv) {
     }
     char *lines[MAX_LINES];
     int n = split_lines(data, len, lines, MAX_LINES);
-    const char *prev = 0;
-    for (int i = 0; i < n; i++) {
-        if (prev && !strcmp(prev, lines[i]))
-            continue;
+    for (int i = 0; i < n;) {
+        int run = 1;
+        while (i + run < n && !strcmp(lines[i], lines[i + run]))
+            run++;
+        if (count_prefix)
+            console_printf("%d ", run);
         console_write(lines[i]);
         console_write("\n");
-        prev = lines[i];
+        i += run;
     }
     return 0;
 }
