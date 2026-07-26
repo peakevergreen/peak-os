@@ -15,7 +15,10 @@ Unclosed quotes treat the remainder of the line as one argument. Max 16 argv slo
 
 ## Pipes and redirection
 
-Operators `|`, `>`, `>>`, and `<` work outside quotes (spaces optional around them):
+Operators `|`, `>`, `>>`, `<`, `2>`, and `2>>` work outside quotes (spaces optional around them).
+`2>`/`2>>` are lite: they capture the same console stream as `>` (no separate stderr).
+
+Lists: `cmd1 && cmd2` runs `cmd2` only if `cmd1` succeeds; `cmd1 || cmd2` runs `cmd2` only if `cmd1` fails.
 
 ```
 echo hello > out.txt
@@ -23,6 +26,10 @@ echo more >> out.txt
 cat < out.txt
 echo hello world | grep hello
 seq 1 5 | wc
+false && echo no
+true || echo skipped
+true && echo yes
+expr 2 + 2
 ```
 
 Limits: up to 4 pipeline stages; captured pipe/redirect buffers are capped at 32 KiB.
@@ -98,7 +105,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `sha256sum` `md5sum` `sha1sum` `base64` `basenc` | digests and base64/base32 encode/decode (`basenc --base32`; `-d`; 64 KiB cap) |
 | `less` | pager with page-up (`b`), go top/bottom (`g`/`G`), forward search (`/pat`) |
 | `more` | simple pager (space next page, q quit) |
-| `echo` `printf` `tee` `yes` `clear` `edit` | misc (`printf` `%s %d %u %x` + `\\n` `\\t` `\\\\`; `tee` stdin→stdout+files `-a`; `test`/`[` predicates; `yes` bounded) |
+| `echo` `printf` `expr` `tee` `yes` `clear` `edit` | misc (`printf` `%s %d %u %x` + `\\n` `\\t` `\\\\`; `expr` INT OP INT; `tee` stdin→stdout+files `-a`; `test`/`[` predicates; `yes` bounded) |
 
 ## System / meta
 | Command | Notes |

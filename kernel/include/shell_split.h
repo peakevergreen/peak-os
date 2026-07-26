@@ -26,6 +26,8 @@ enum shell_redir_kind {
     SHELL_REDIR_OUT,   /* >  */
     SHELL_REDIR_APPEND,/* >> */
     SHELL_REDIR_IN,    /* <  */
+    SHELL_REDIR_ERR,   /* 2>  — lite: same console capture as stdout */
+    SHELL_REDIR_ERR_APPEND, /* 2>> */
 };
 
 struct shell_redir {
@@ -38,6 +40,7 @@ struct shell_stage {
     int argc;
     struct shell_redir redir_out; /* > or >> (at most one) */
     struct shell_redir redir_in;  /* < (at most one) */
+    struct shell_redir redir_err; /* 2> or 2>> (at most one; capture honesty) */
 };
 
 struct shell_pipeline {
@@ -47,7 +50,7 @@ struct shell_pipeline {
 
 /*
  * Parse a full command line into up to SHELL_PIPE_MAX stages separated by `|`.
- * Operators `|`, `>`, `>>`, `<` are recognized only outside quotes.
+ * Operators `|`, `>`, `>>`, `<`, `2>`, `2>>` are recognized only outside quotes.
  * Mutates `line` in place (NULs). Returns 0 on success, -1 on parse error
  * (too many stages/args, bare operator, conflicting redirects).
  */

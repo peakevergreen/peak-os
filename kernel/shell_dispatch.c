@@ -201,7 +201,8 @@ static int run_stage(struct shell_stage *st, int capture_out, char *cap_buf, siz
         }
     }
 
-    int want_cap = capture_out || st->redir_out.kind != SHELL_REDIR_NONE;
+    int want_cap = capture_out || st->redir_out.kind != SHELL_REDIR_NONE ||
+                   st->redir_err.kind != SHELL_REDIR_NONE;
     if (want_cap)
         console_capture_begin(cap_buf, cap_sz);
 
@@ -225,6 +226,15 @@ static int run_stage(struct shell_stage *st, int capture_out, char *cap_buf, siz
         if (write_redir(st->redir_out.path, cap_buf, n, ap) != 0) {
             if (shell_last_path_errno() == PEAK_OK)
                 console_write("shell: redirect write failed\n");
+            return 1;
+        }
+    }
+    /* 2>/2>> lite: same console capture as stdout (no separate stderr stream). */
+    if (st->redir_err.kind != SHELL_REDIR_NONE && st->redir_err.path) {
+        int ap = (st->redir_err.kind == SHELL_REDIR_ERR_APPEND);
+        if (write_redir(st->redir_err.path, cap_buf, n, ap) != 0) {
+            if (shell_last_path_errno() == PEAK_OK)
+                console_write("shell: stderr redirect write failed\n");
             return 1;
         }
     }
@@ -343,60 +353,116 @@ void shell_execute(char *cmd) {
         return;
     }
 
-    struct shell_pipeline pl;
-    if (shell_parse_pipeline(cmd, &pl) != 0) {
-        console_write("shell: parse error (pipes/redirects)\n");
-        shell_set_last_status(1);
-        return;
-    }
-
     (void)vfs_mkdir("/tmp");
 
-    char cap[SHELL_CAPTURE_MAX];
-    char pipe_data[SHELL_CAPTURE_MAX];
-    size_t pipe_len = 0;
+    /* && / || list above pipelines (outside quotes). */
+    char *seg = cmd;
     int final_rc = 0;
+    int have_rc = 0;
+    for (;;) {
+        char *p = seg;
+        int in_sq = 0, in_dq = 0;
+        char *op_at = 0;
+        int op_or = 0; /* 0=&&, 1=|| */
+        while (*p) {
+            if (!in_dq && *p == '\'') {
+                in_sq = !in_sq;
+                p++;
+                continue;
+            }
+            if (!in_sq && *p == '"') {
+                in_dq = !in_dq;
+                p++;
+                continue;
+            }
+            if (!in_sq && !in_dq) {
+                if (p[0] == '&' && p[1] == '&') {
+                    op_at = p;
+                    op_or = 0;
+                    break;
+                }
+                if (p[0] == '|' && p[1] == '|') {
+                    op_at = p;
+                    op_or = 1;
+                    break;
+                }
+            }
+            p++;
+        }
+        char *next = 0;
+        if (op_at) {
+            *op_at = '\0';
+            next = op_at + 2;
+            while (*next == ' ')
+                next++;
+        }
 
-    for (int s = 0; s < pl.nstages; s++) {
-        int is_last = (s + 1 == pl.nstages);
-        int capture_for_pipe = !is_last;
-
-        if (s > 0) {
-            int prc = vfs_write_file(PIPE_PATH, pipe_data, pipe_len);
-            if (prc != 0) {
-                console_write("shell: pipe buffer write failed: ");
-                console_write(peak_strerror(prc));
-                console_write("\n");
-                shell_set_stdin_path(0);
+        while (*seg == ' ')
+            seg++;
+        if (*seg) {
+            struct shell_pipeline pl;
+            if (shell_parse_pipeline(seg, &pl) != 0) {
+                console_write("shell: parse error (pipes/redirects)\n");
                 shell_set_last_status(1);
                 return;
             }
-            shell_set_stdin_path(PIPE_PATH);
-            if (pl.stages[s].argc == 1 && pl.stages[s].argc < SHELL_ARGV_MAX - 1) {
-                pl.stages[s].argv[pl.stages[s].argc++] = (char *)"-";
-                pl.stages[s].argv[pl.stages[s].argc] = 0;
+
+            char cap[SHELL_CAPTURE_MAX];
+            char pipe_data[SHELL_CAPTURE_MAX];
+            size_t pipe_len = 0;
+            int seg_rc = 0;
+
+            for (int s = 0; s < pl.nstages; s++) {
+                int is_last = (s + 1 == pl.nstages);
+                int capture_for_pipe = !is_last;
+
+                if (s > 0) {
+                    int prc = vfs_write_file(PIPE_PATH, pipe_data, pipe_len);
+                    if (prc != 0) {
+                        console_write("shell: pipe buffer write failed: ");
+                        console_write(peak_strerror(prc));
+                        console_write("\n");
+                        shell_set_stdin_path(0);
+                        shell_set_last_status(1);
+                        return;
+                    }
+                    shell_set_stdin_path(PIPE_PATH);
+                    if (pl.stages[s].argc == 1 && pl.stages[s].argc < SHELL_ARGV_MAX - 1) {
+                        pl.stages[s].argv[pl.stages[s].argc++] = (char *)"-";
+                        pl.stages[s].argv[pl.stages[s].argc] = 0;
+                    }
+                }
+
+                size_t n = 0;
+                int rc = run_stage(&pl.stages[s], capture_for_pipe, cap, sizeof(cap), &n);
+                shell_set_stdin_path(0);
+                if (rc == -999) {
+                    shell_set_last_status(127);
+                    return;
+                }
+                seg_rc = rc;
+
+                if (capture_for_pipe) {
+                    if (n >= sizeof(pipe_data) - 2)
+                        console_printf("shell: pipe output truncated at %u bytes\n",
+                                       (unsigned)sizeof(pipe_data));
+                    if (n >= sizeof(pipe_data))
+                        n = sizeof(pipe_data) - 1;
+                    memcpy(pipe_data, cap, n);
+                    pipe_data[n] = '\0';
+                    pipe_len = n;
+                }
             }
+            final_rc = seg_rc;
+            have_rc = 1;
         }
 
-        size_t n = 0;
-        int rc = run_stage(&pl.stages[s], capture_for_pipe, cap, sizeof(cap), &n);
-        shell_set_stdin_path(0);
-        if (rc == -999) {
-            shell_set_last_status(127);
-            return;
-        }
-        final_rc = rc;
-
-        if (capture_for_pipe) {
-            if (n >= sizeof(pipe_data) - 2)
-                console_printf("shell: pipe output truncated at %u bytes\n",
-                               (unsigned)sizeof(pipe_data));
-            if (n >= sizeof(pipe_data))
-                n = sizeof(pipe_data) - 1;
-            memcpy(pipe_data, cap, n);
-            pipe_data[n] = '\0';
-            pipe_len = n;
-        }
+        if (!op_at)
+            break;
+        /* Short-circuit: && skips rest on failure; || skips rest on success. */
+        if ((!op_or && final_rc != 0) || (op_or && have_rc && final_rc == 0))
+            break;
+        seg = next;
     }
     shell_set_last_status(final_rc);
 }

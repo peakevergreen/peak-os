@@ -210,6 +210,7 @@ static const struct help_entry help_table[] = {
     { "echo", "text", "print arguments" },
     { "printf", "text", "format print (%s %d %u %x)" },
     { "tee", "text", "copy stdin to files (-a append)" },
+    { "expr", "sys", "integer arithmetic (+ - * / % comparisons)" },
     { "test", "sys", "file/string/int predicates (exit 0/1)" },
     { "[", "sys", "test alias (requires closing ])" },
     { "yes", "text", "print line repeatedly (bounded)" },
@@ -301,7 +302,7 @@ void shell_help_topics(void) {
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
     console_write("  net   ctr ctrd ifconfig ping wget curl nslookup host traceroute nc tlsinfo\n");
     console_write("  file  … tar zip unzip basename dirname realpath\n");
-    console_write("Shell: quotes, globs (* ?), pipes |, redirects > >> <\n");
+    console_write("Shell: quotes, globs (* ?), pipes |, redirects > >> < 2> 2>>, lists && ||\n");
     console_write("Try: man <cmd>   ls *.c   echo hi | wc   tar -c a.tar f   gui\n");
 }
 

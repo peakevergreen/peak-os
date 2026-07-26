@@ -155,6 +155,13 @@ int main(void) {
         expect(strcmp(pl.stages[0].redir_out.path, "f") == 0, "abut path");
     }
     {
+        char buf[] = "cmd 2>err.txt";
+        struct shell_pipeline pl;
+        expect(shell_parse_pipeline(buf, &pl) == 0, "2> parse");
+        expect(pl.stages[0].redir_err.kind == SHELL_REDIR_ERR, "2> kind");
+        expect(strcmp(pl.stages[0].redir_err.path, "err.txt") == 0, "2> path");
+    }
+    {
         char buf[] = "echo a |";
         struct shell_pipeline pl;
         expect(shell_parse_pipeline(buf, &pl) != 0, "bare pipe fail");

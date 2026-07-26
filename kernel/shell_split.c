@@ -50,6 +50,8 @@ static void stage_init(struct shell_stage *st) {
     st->redir_out.path = 0;
     st->redir_in.kind = SHELL_REDIR_NONE;
     st->redir_in.path = 0;
+    st->redir_err.kind = SHELL_REDIR_NONE;
+    st->redir_err.path = 0;
 }
 
 static int stage_push_arg(struct shell_stage *st, char *arg) {
@@ -65,7 +67,7 @@ static int is_op_start(char c) {
 }
 
 /*
- * Token kinds: 0=word, 1=|, 2=>, 3=>>, 4=<, -1=end
+ * Token kinds: 0=word, 1=|, 2=>, 3=>>, 4=<, 5=2>, 6=2>>, -1=end
  * When a word abuts an operator (echo>f), the operator char is saved in
  * *pending_op and replaced with NUL so the word is terminated; the next
  * call returns that pending operator first.
@@ -96,6 +98,18 @@ static int next_token(char **pp, char **tok, int *pending_op) {
         *pp = p + 1;
         return 4;
     }
+    /* 2> / 2>> before bare digits become words */
+    if (*p == '2' && p[1] == '>') {
+        *p = '\0';
+        p += 2;
+        if (*p == '>') {
+            *p = '\0';
+            *pp = p + 1;
+            return 6;
+        }
+        *pp = p;
+        return 5;
+    }
     if (*p == '>') {
         char *op = p;
         *op = '\0';
@@ -121,8 +135,22 @@ static int next_token(char **pp, char **tok, int *pending_op) {
     }
 
     *tok = p;
-    while (*p && *p != ' ' && !is_op_start(*p))
+    while (*p && *p != ' ' && !is_op_start(*p) &&
+           !(*p == '2' && p[1] == '>'))
         p++;
+    if (*p && *p == '2' && p[1] == '>') {
+        *p = '\0';
+        p += 2;
+        if (*p == '>') {
+            *pending_op = 6;
+            *p = '\0';
+            *pp = p + 1;
+        } else {
+            *pending_op = 5;
+            *pp = p;
+        }
+        return 0;
+    }
     if (*p && is_op_start(*p)) {
         /* Abutting operator: terminate word, remember op for next call. */
         if (*p == '|') {
@@ -163,7 +191,7 @@ int shell_parse_pipeline(char *line, struct shell_pipeline *out) {
 
     char *p = line;
     struct shell_stage *st = &out->stages[0];
-    int pending_redir = 0; /* 2=>, 3=>>, 4=< */
+    int pending_redir = 0; /* 2=>, 3=>>, 4=<, 5=2>, 6=2>> */
     int pending_op = 0;
     int saw_any = 0;
 
@@ -187,7 +215,7 @@ int shell_parse_pipeline(char *line, struct shell_pipeline *out) {
             continue;
         }
 
-        if (kind == 2 || kind == 3 || kind == 4) {
+        if (kind == 2 || kind == 3 || kind == 4 || kind == 5 || kind == 6) {
             if (pending_redir)
                 return -1;
             pending_redir = kind;
@@ -204,6 +232,12 @@ int shell_parse_pipeline(char *line, struct shell_pipeline *out) {
                     return -1;
                 st->redir_in.kind = SHELL_REDIR_IN;
                 st->redir_in.path = tok;
+            } else if (pending_redir == 5 || pending_redir == 6) {
+                if (st->redir_err.kind != SHELL_REDIR_NONE)
+                    return -1;
+                st->redir_err.kind = (pending_redir == 6) ? SHELL_REDIR_ERR_APPEND
+                                                          : SHELL_REDIR_ERR;
+                st->redir_err.path = tok;
             } else {
                 if (st->redir_out.kind != SHELL_REDIR_NONE)
                     return -1;

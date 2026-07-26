@@ -277,3 +277,87 @@ int uyes_main(int argc, char **argv) {
     }
     return 0;
 }
+
+static int expr_parse_long(const char *s, long *out) {
+    if (!s || !s[0] || !out)
+        return -1;
+    int neg = 0;
+    if (*s == '-') {
+        neg = 1;
+        s++;
+    } else if (*s == '+')
+        s++;
+    if (!*s)
+        return -1;
+    long v = 0;
+    while (*s >= '0' && *s <= '9') {
+        v = v * 10 + (*s - '0');
+        s++;
+    }
+    if (*s)
+        return -1;
+    *out = neg ? -v : v;
+    return 0;
+}
+
+int uexpr_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("expr", "INT OP INT   (OP: + - * / % = != < <= > >=)");
+        return argc < 2 ? 2 : 0;
+    }
+    if (argc == 2) {
+        long v;
+        if (expr_parse_long(argv[1], &v) != 0) {
+            peak_perror("expr", "non-integer");
+            return 2;
+        }
+        console_printf("%d\n", (int)v);
+        return v == 0 ? 1 : 0;
+    }
+    if (argc != 4) {
+        peak_perror("expr", "usage: expr INT OP INT");
+        return 2;
+    }
+    long a, b, r = 0;
+    if (expr_parse_long(argv[1], &a) != 0 || expr_parse_long(argv[3], &b) != 0) {
+        peak_perror("expr", "non-integer");
+        return 2;
+    }
+    const char *op = argv[2];
+    if (!strcmp(op, "+"))
+        r = a + b;
+    else if (!strcmp(op, "-"))
+        r = a - b;
+    else if (!strcmp(op, "*"))
+        r = a * b;
+    else if (!strcmp(op, "/")) {
+        if (b == 0) {
+            peak_perror("expr", "division by zero");
+            return 2;
+        }
+        r = a / b;
+    } else if (!strcmp(op, "%")) {
+        if (b == 0) {
+            peak_perror("expr", "division by zero");
+            return 2;
+        }
+        r = a % b;
+    } else if (!strcmp(op, "=") || !strcmp(op, "=="))
+        r = (a == b);
+    else if (!strcmp(op, "!="))
+        r = (a != b);
+    else if (!strcmp(op, "<"))
+        r = (a < b);
+    else if (!strcmp(op, "<="))
+        r = (a <= b);
+    else if (!strcmp(op, ">"))
+        r = (a > b);
+    else if (!strcmp(op, ">="))
+        r = (a >= b);
+    else {
+        peak_perror("expr", "unknown operator");
+        return 2;
+    }
+    console_printf("%d\n", (int)r);
+    return r == 0 ? 1 : 0;
+}

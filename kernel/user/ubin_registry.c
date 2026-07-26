@@ -46,6 +46,7 @@ extern int uhexdump_main(int argc, char **argv);
 extern int ustrings_main(int argc, char **argv);
 extern int uecho_main(int argc, char **argv);
 extern int uprintf_main(int argc, char **argv);
+extern int uexpr_main(int argc, char **argv);
 extern int utee_main(int argc, char **argv);
 extern int utest_main(int argc, char **argv);
 extern int uyes_main(int argc, char **argv);
