@@ -174,7 +174,7 @@ static const struct help_entry help_table[] = {
     { "cd", "nav", "change directory (cd - = OLDPWD)" },
     { "ls", "nav", "list directory (-l long)" },
     { "tree", "nav", "print directory tree" },
-    { "find", "nav", "find -name <name>" },
+    { "find", "nav", "find -name|-iname|-type|-maxdepth" },
     { "mkdir", "file", "create directory" },
     { "touch", "file", "create empty file" },
     { "rm", "file", "remove file/dir (-rf)" },

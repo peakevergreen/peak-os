@@ -276,6 +276,13 @@ grep -q 'grep_walk_cb' kernel/user/utils_text.c
 grep -q 'test_cli_grep' Makefile
 grep -q '\[-i\] \[-n\] \[-v\] \[-r\]' docs/CLI.md
 
+
+echo "==> Wave 3 Pass 60 find depth"
+grep -q 'find_icase_eq' kernel/user/utils_sys.c
+grep -q 'find_walk_rec' kernel/user/utils_sys.c
+grep -q 'test_cli_find' Makefile
+grep -q '\[-maxdepth\]' docs/CLI.md
+
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c kernel/net/tls_handshake.c

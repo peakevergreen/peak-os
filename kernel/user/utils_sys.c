@@ -85,46 +85,165 @@ int utree_main(int argc, char **argv) {
     return 0;
 }
 
+#define FIND_USAGE "<dir> [-name <name>] [-iname <pat>] [-type f|d] [-maxdepth N]"
+
 struct find_ctx {
     const char *name;
+    const char *iname;
+    int has_type;
+    enum vfs_type type_want;
+    int maxdepth;
     int found;
 };
 
-static int find_cb(const char *path, struct vfs_node *node, void *ud) {
-    (void)node;
-    struct find_ctx *ctx = ud;
+static const char *find_basename(const char *path) {
     const char *base = path;
     for (const char *p = path; *p; p++)
         if (*p == '/')
             base = p + 1;
-    if (!strcmp(base, ctx->name)) {
+    return base;
+}
+
+static char find_fold(char c) {
+    if (c >= 'A' && c <= 'Z')
+        return (char)(c + 32);
+    return c;
+}
+
+static int find_icase_eq(const char *a, const char *b) {
+    for (; *a && *b; a++, b++) {
+        if (find_fold(*a) != find_fold(*b))
+            return 0;
+    }
+    return *a == 0 && *b == 0;
+}
+
+static int find_matches(struct find_ctx *ctx, const char *path, struct vfs_node *node) {
+    if (ctx->has_type && node->type != ctx->type_want)
+        return 0;
+    const char *base = find_basename(path);
+    if (ctx->name && strcmp(base, ctx->name) != 0)
+        return 0;
+    if (ctx->iname && !find_icase_eq(base, ctx->iname))
+        return 0;
+    return 1;
+}
+
+static int find_walk_rec(struct vfs_node *n, char *path, size_t path_len, int depth,
+                         struct find_ctx *ctx) {
+    if (ctx->maxdepth >= 0 && depth > ctx->maxdepth)
+        return 0;
+    if (find_matches(ctx, path, n)) {
         console_write(path);
         console_write("\n");
         ctx->found++;
     }
+    if (n->type != VFS_DIR)
+        return 0;
+    if (ctx->maxdepth >= 0 && depth >= ctx->maxdepth)
+        return 0;
+    for (struct vfs_node *c = n->child; c; c = c->sibling) {
+        char child[VFS_PATH_MAX];
+        size_t cl = 0;
+        if (path_len == 1 && path[0] == '/')
+            child[cl++] = '/';
+        else {
+            memcpy(child, path, path_len);
+            cl = path_len;
+            child[cl++] = '/';
+        }
+        for (size_t k = 0; c->name[k] && cl + 1 < sizeof(child); k++)
+            child[cl++] = c->name[k];
+        child[cl] = '\0';
+        if (find_walk_rec(c, child, cl, depth + 1, ctx) != 0)
+            return PEAK_EIO;
+    }
     return 0;
 }
 
+static int find_walk(const char *path, struct find_ctx *ctx) {
+    struct vfs_node *n = vfs_lookup(path);
+    if (!n)
+        return PEAK_ENOENT;
+    char pbuf[VFS_PATH_MAX];
+    size_t pl = 0;
+    while (path[pl] && pl + 1 < sizeof(pbuf)) {
+        pbuf[pl] = path[pl];
+        pl++;
+    }
+    pbuf[pl] = '\0';
+    return find_walk_rec(n, pbuf, pl, 0, ctx);
+}
+
 int ufind_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv) || argc < 3) {
-        peak_usage("find", "<dir> -name <name>");
-        return argc < 3 ? 1 : 0;
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("find", FIND_USAGE);
+        return argc < 2 ? 1 : 0;
     }
     const char *dir = argv[1];
     const char *name = NULL;
-    for (int i = 2; i < argc - 1; i++) {
-        if (!strcmp(argv[i], "-name"))
-            name = argv[i + 1];
-    }
-    if (!name) {
-        peak_usage("find", "<dir> -name <name>");
-        return 1;
+    const char *iname = NULL;
+    int has_type = 0;
+    enum vfs_type type_want = 0;
+    int maxdepth = -1;
+    for (int i = 2; i < argc; i++) {
+        if (!strcmp(argv[i], "-name")) {
+            if (i + 1 >= argc) {
+                peak_usage("find", FIND_USAGE);
+                return 1;
+            }
+            name = argv[++i];
+        } else if (!strcmp(argv[i], "-iname")) {
+            if (i + 1 >= argc) {
+                peak_usage("find", FIND_USAGE);
+                return 1;
+            }
+            iname = argv[++i];
+        } else if (!strcmp(argv[i], "-type")) {
+            if (i + 1 >= argc) {
+                peak_usage("find", FIND_USAGE);
+                return 1;
+            }
+            const char *t = argv[++i];
+            if (!strcmp(t, "f")) {
+                type_want = VFS_FILE;
+                has_type = 1;
+            } else if (!strcmp(t, "d")) {
+                type_want = VFS_DIR;
+                has_type = 1;
+            }
+            else {
+                peak_usage("find", FIND_USAGE);
+                return 1;
+            }
+        } else if (!strcmp(argv[i], "-maxdepth")) {
+            if (i + 1 >= argc) {
+                peak_usage("find", FIND_USAGE);
+                return 1;
+            }
+            maxdepth = peak_atoi(argv[++i]);
+            if (maxdepth < 0) {
+                peak_usage("find", FIND_USAGE);
+                return 1;
+            }
+        } else {
+            peak_usage("find", FIND_USAGE);
+            return 1;
+        }
     }
     char abs[VFS_PATH_MAX];
     if (shell_resolve_path(dir, abs, sizeof(abs)))
         return 1;
-    struct find_ctx ctx = { .name = name, .found = 0 };
-    vfs_walk(abs, find_cb, &ctx);
+    struct find_ctx ctx = {
+        .name = name,
+        .iname = iname,
+        .has_type = has_type,
+        .type_want = type_want,
+        .maxdepth = maxdepth,
+        .found = 0,
+    };
+    if (find_walk(abs, &ctx) != 0)
+        return 1;
     return 0;
 }
 

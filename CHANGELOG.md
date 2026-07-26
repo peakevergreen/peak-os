@@ -16,6 +16,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 38 (S9-lite):** smoke-cli enhancement-wave gates (incl. Passes 35–37), ROADMAP/CHANGELOG sync, security-checklist automation notes
 - **Pass 58 (S9 remainder):** smoke-cli Wave 2 gates (Passes 39–49 + subsystem markers), ROADMAP Wave 2 shipped, security-checklist sync, TLS fuzz in `fuzz-elf-smoke.sh`
 - **Pass 59:** `grep -i`/`-n`/`-v`/`-r`, multi-file `path:` prefixes, host `test_cli_grep`
+- **Pass 60:** `find -type f|d`, `-iname`, `-maxdepth`, host `test_cli_find`
 - PeakDisk atomic publish (payload→header) + SDHCI CMD13 flush; DWC2 hub enum/split/hotplug; `/bin/disksave`
 - Quieter boot: status lines only (net IP folded into `e1000 (dhcp …)`; no chatter for JS/PeakVec/disk absence)
 - **S8 loader verify:** kernel SHA-256 vs `peak.conf` / embedded `SHA256SUMS`; optional `verify_sig=1` HMAC-SHA256 of manifest (dev key stub); host `sign-release.py` / `verify-release.py` remain the ceremony gate
@@ -59,6 +60,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - `-h` / `--help` gap-fill on text/sys utils; docs/CLI.md inventory refresh
 - New builtins: `printf`, `tee`, `test`/`[`, `yes` (bounded)
 - **Pass 59:** `grep` depth — `-i`/`-n`/`-v`/`-r`, multi-file `path:` prefixes, recursive VFS walk
+- **Pass 60:** `find` depth — `-type f|d`, case-insensitive `-iname`, `-maxdepth` walk limit
 - **Pass 19:** `fold`, `rev`, `od`, `split`, `paste`, `nl`, `tac`, `xargs`
 - **Pass 41:** VFS mode bits (default `0644`/`0755`); `chmod` (octal + `u+x`/`g-w`); `ls -l` and `stat` show mode
 - **Pass 39:** `awk` lite — field split (`-F`), `$n`/`NR`/`NF`, `/pat/ { print }`
