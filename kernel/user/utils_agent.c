@@ -128,6 +128,8 @@ static void print_peakvec_explain(const struct peakvec_query_explain *ex) {
                    (unsigned)ex->remainder,
                    (unsigned)ex->scored,
                    (unsigned)ex->skipped_early);
+    if (ex->multi_bucket_probe)
+        console_printf(" multi_bucket=%u", (unsigned)ex->probe_buckets);
     if (ex->ann_shortcut)
         console_write(" shortcut=1");
     console_putc('\n');

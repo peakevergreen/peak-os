@@ -25,6 +25,8 @@ struct peakvec_query_explain {
     uint8_t  use_ann;
     uint8_t  query_bucket;
     uint8_t  ann_shortcut;
+    uint8_t  multi_bucket_probe;
+    uint8_t  probe_buckets;
     uint32_t ns_live;
     uint32_t bucket_probed;
     uint32_t remainder;

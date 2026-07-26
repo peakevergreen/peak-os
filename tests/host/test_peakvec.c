@@ -229,6 +229,8 @@ static void test_query_explain_ann(void) {
     int n = peakvec_query_ex("agent", q, 3, hits, &ex);
     expect(n >= 1, "explain ann returns hits");
     expect(ex.use_ann == 1, "explain ann mode");
+    expect(ex.multi_bucket_probe == 1, "explain multi bucket");
+    expect(ex.probe_buckets == 3, "explain probe bucket count");
     expect(ex.ns_live >= PEAKVEC_ANN_THRESHOLD, "explain ann ns live");
     expect(ex.bucket_probed + ex.remainder == ex.scored, "explain scored sum");
     expect(!strcmp(hits[0].key, "needle"), "explain ann finds needle");
