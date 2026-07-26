@@ -14,6 +14,9 @@
 #define AGENT_TOOL_NAME_MAX 32
 #define AGENT_TOOLS_MAX 16
 #define AGENT_READ_CONTENT_MAX 1024
+#define AGENT_DIFF_BODY_MAX 1024
+#define AGENT_DIFF_LINES_MAX 48
+#define AGENT_FETCH_BODY_MAX 2048
 #define AGENT_MEMORY_TAIL_MAX 768
 
 void agent_policy_load_defaults(void);
@@ -45,8 +48,10 @@ int agent_tool_fs_mkdir(const char *path);
 int agent_tool_fs_rm(const char *path);
 int agent_tool_fs_search(const char *needle, char *out, size_t out_len);
 int agent_tool_fs_grep(const char *needle, char *out, size_t out_len);
+int agent_tool_fs_diff(const char *path_a, const char *path_b, char *out, size_t out_len);
 int agent_tool_sys_info(char *out, size_t out_len);
 int agent_tool_net_ping(const char *host, char *out, size_t out_len);
+int agent_tool_net_fetch(const char *url, char *out, size_t out_len);
 int agent_tool_mem_recall(const char *goal, char *out, size_t out_len);
 int agent_tool_audit_tail(char *out, size_t out_len);
 

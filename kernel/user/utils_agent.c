@@ -12,7 +12,7 @@ int upeak_main(int argc, char **argv) {
     (void)argv;
     console_write("Peak OS 0.2.0-ai — research workstation\n");
     console_write("Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm\n");
-    console_write("             fs.search fs.grep sys.info net.ping mem.recall audit.tail console.print\n");
+    console_write("             fs.search fs.grep fs.diff sys.info net.ping net.fetch mem.recall audit.tail console.print\n");
     console_write("Try: ask \"summarize workspace\"   ask \"search README\"   audit   memory   peakvec   policy\n");
     console_write("Desktop: gui → Agent app (approve writes with Y/N)\n");
     return 0;
@@ -253,8 +253,8 @@ int upolicy_main(int argc, char **argv) {
         console_write("  /var/peak/sessions\n\n");
         console_write("allow_tools:\n");
         console_write("  fs.read fs.write fs.list console.print fs.exec\n");
-        console_write("  mem.recall audit.tail fs.stat fs.mkdir fs.rm fs.search fs.grep\n");
-        console_write("  sys.info net.ping\n\n");
+        console_write("  mem.recall audit.tail fs.stat fs.mkdir fs.rm fs.search fs.grep fs.diff\n");
+        console_write("  sys.info net.ping net.fetch\n\n");
         console_write("deny_tools:\n  (none)\n\n");
         console_write("require_approval: fs.write\n");
         return 0;

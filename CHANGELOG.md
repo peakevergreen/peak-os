@@ -86,6 +86,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 
 - In-guest planner (`ask`), capabilities, audit, GUI write approval
 - Agent tools expanded: fs.stat, fs.mkdir, fs.rm, fs.search, fs.grep, sys.info, net.ping, mem.recall, audit.tail; AGENT_TOOLS_MAX 16; fs.exec allowlist widened
+- **Pass 57:** Agent tools wave-2 — `fs.diff` (bounded line hunks), privacy-gated `net.fetch` (2 KiB body cap), planner intent hooks for diff/fetch
 - Policy seed uses `fs.exec` (no phantom `proc.exec` deny)
 - Agent GUI uses theme colors, scrollable transcript, write-approval toasts, search-aware summarize
 - **Pass 49:** Agent GUI — 256-char input, scrollable transcript with tool/audit lines, clearer write-approval prompt (Y/N + path)

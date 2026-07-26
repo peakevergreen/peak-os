@@ -324,6 +324,54 @@ static void test_planner_audit_true_tail(void) {
     free(full);
 }
 
+
+static void test_fs_diff_and_net_fetch(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.diff,net.fetch\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+    expect(vfs_write_file("/home/dev/workspace/a.txt", "line1\nline2\n", 12) == 0, "seed diff a");
+    expect(vfs_write_file("/home/dev/workspace/b.txt", "line1\nline2 changed\n", 19) == 0, "seed diff b");
+    char out[512];
+    expect(agent_tool_fs_diff("/home/dev/workspace/a.txt", "/home/dev/workspace/b.txt",
+                              out, sizeof(out)) == 0, "fs.diff ok");
+    expect(strstr(out, "--- /home/dev/workspace/a.txt") != NULL, "fs.diff header a");
+    expect(strstr(out, "-line2") != NULL || strstr(out, "+line2 changed") != NULL, "fs.diff hunk");
+
+    expect(agent_tool_net_fetch("http://example.com/", out, sizeof(out)) != 0, "net.fetch denied without grant");
+    char buf[512]; size_t n = 0;
+    read_audit(buf, sizeof(buf), &n);
+    expect(strstr(buf, "deny-privacy") != NULL, "net.fetch privacy gate logged");
+    privacy_grant_net_client(0);
+    expect(agent_tool_net_fetch("http://example.com/", out, sizeof(out)) == 0, "net.fetch ok with grant");
+    expect(strstr(out, "HTTP 200") != NULL, "net.fetch status line");
+    expect(strstr(out, "hello from fetch stub") != NULL, "net.fetch body");
+    expect(agent_tool_net_fetch("ftp://example.com/", out, sizeof(out)) != 0, "net.fetch rejects ftp");
+}
+
+static void test_planner_diff_and_fetch(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.diff,net.fetch,console.print\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+    expect(vfs_write_file("/home/dev/workspace/x.txt", "alpha\n", 6) == 0, "seed planner x");
+    expect(vfs_write_file("/home/dev/workspace/y.txt", "beta\n", 5) == 0, "seed planner y");
+
+    char summary[128];
+    agent_plan_goal("diff x.txt y.txt", summary, sizeof(summary));
+    expect(!strcmp(summary, "diff ok"), "diff intent summary");
+
+    privacy_grant_net_client(0);
+    agent_plan_goal("fetch http://example.com/", summary, sizeof(summary));
+    expect(!strcmp(summary, "fetch ok"), "fetch intent summary");
+}
+
 int main(void) {
     test_path_policy();
     test_tool_policy_reload();
@@ -338,6 +386,8 @@ int main(void) {
     test_richer_sys_info();
     test_audit_tail_formatted();
     test_fs_exec_allowlist();
+    test_fs_diff_and_net_fetch();
+    test_planner_diff_and_fetch();
 
     if (fails) {
         fprintf(stderr, "%d agent policy test(s) failed\n", fails);
