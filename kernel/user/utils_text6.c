@@ -10,6 +10,45 @@
 #define MAX_LINES 256
 #define MAX_FIELDS 32
 #define FS_DEFAULT ' '
+#define AWK_VAR_SLOTS 26
+
+static int awk_vars[AWK_VAR_SLOTS];
+
+static void awk_var_clear(void) {
+    for (int i = 0; i < AWK_VAR_SLOTS; i++)
+        awk_vars[i] = 0;
+}
+
+static int awk_var_get(char name) {
+    if (name >= 'a' && name <= 'z')
+        return awk_vars[name - 'a'];
+    return 0;
+}
+
+static void awk_var_set(char name, int val) {
+    if (name >= 'a' && name <= 'z')
+        awk_vars[name - 'a'] = val;
+}
+
+/* Parse "x=123" assignment in BEGIN block */
+static void awk_run_assignments(const char *block) {
+    if (!block || !block[0])
+        return;
+    const char *p = block;
+    while (*p) {
+        while (*p == ' ')
+            p++;
+        if (*p >= 'a' && *p <= 'z' && p[1] == '=') {
+            char vn = *p;
+            p += 2;
+            int v = 0;
+            while (*p >= '0' && *p <= '9')
+                v = v * 10 + (*p++ - '0');
+            awk_var_set(vn, v);
+        } else
+            p++;
+    }
+}
 
 static int resolve_in_path(const char *path, char *abs, size_t abs_len) {
     if (!path || !strcmp(path, "-")) {
@@ -138,6 +177,11 @@ static void awk_print(const char *expr, const char *line, char **f, int nf, int 
         } else if (!strncmp(p, "NF", 2) && (p[2] == '\0' || p[2] == ' ' || p[2] == ',')) {
             console_printf("%d", nf);
             p += 2;
+        } else if (*p >= 'a' && *p <= 'z') {
+            /* simple var: x (single-letter vars a-z) */
+            char vn = *p++;
+            int val = awk_var_get(vn);
+            console_printf("%d", val);
         } else if (*p == '"') {
             p++;
             while (*p && *p != '"') {
@@ -160,17 +204,64 @@ static void awk_print(const char *expr, const char *line, char **f, int nf, int 
 /*
  * Program forms:
  *   '{ print }'
- *   '{ print $1 }'
+ *   'BEGIN { print "start" }'
+ *   'END { print NR }'
  *   '/pat/ { print $0 }'
- *   '{ print NR, NF }'
  */
 static int parse_prog(const char *prog, char *pat_out, size_t pat_cap,
-                      char *body_out, size_t body_cap) {
+                      char *body_out, size_t body_cap,
+                      char *begin_out, size_t begin_cap,
+                      char *end_out, size_t end_cap) {
     pat_out[0] = '\0';
     body_out[0] = '\0';
+    begin_out[0] = '\0';
+    end_out[0] = '\0';
     const char *p = prog;
     while (*p == ' ')
         p++;
+    /* BEGIN { ... } */
+    if (!strncmp(p, "BEGIN", 5)) {
+        p += 5;
+        while (*p == ' ')
+            p++;
+        if (*p == '{') {
+            p++;
+            size_t i = 0;
+            while (*p && *p != '}' && i + 1 < begin_cap)
+                begin_out[i++] = *p++;
+            begin_out[i] = '\0';
+            if (*p == '}')
+                p++;
+        }
+        while (*p == ' ')
+            p++;
+    }
+    /* END { ... } — parsed after main body below */
+    const char *end_marker = strstr(p, "END");
+    if (end_marker && (end_marker == p || end_marker[-1] == ' ')) {
+        const char *ep = end_marker + 3;
+        while (*ep == ' ')
+            ep++;
+        if (*ep == '{') {
+            ep++;
+            size_t i = 0;
+            while (*ep && *ep != '}' && i + 1 < end_cap)
+                end_out[i++] = *ep++;
+            end_out[i] = '\0';
+        }
+        /* truncate prog at END for main parse */
+        if (end_marker > p) {
+            char tmp[256];
+            size_t len = (size_t)(end_marker - p);
+            if (len >= sizeof(tmp))
+                len = sizeof(tmp) - 1;
+            memcpy(tmp, p, len);
+            tmp[len] = '\0';
+            p = tmp;
+        } else {
+            return 0;
+        }
+    }
     if (*p == '/') {
         p++;
         size_t i = 0;
@@ -225,8 +316,9 @@ int uawk_main(int argc, char **argv) {
         return 1;
     }
 
-    char pat[128], body[128];
-    parse_prog(prog, pat, sizeof(pat), body, sizeof(body));
+    char pat[128], body[128], begin[128], end[128];
+    parse_prog(prog, pat, sizeof(pat), body, sizeof(body),
+               begin, sizeof(begin), end, sizeof(end));
     if (!body[0]) {
         /* default action */
         size_t j = 0;
@@ -235,6 +327,11 @@ int uawk_main(int argc, char **argv) {
             body[j] = def[j];
         body[j] = '\0';
     }
+
+    awk_var_clear();
+    awk_run_assignments(begin);
+    if (begin[0] && !strchr(begin, '='))
+        awk_print(begin, "", NULL, 0, 0);
 
     char data[READ_MAX];
     size_t len = 0;
@@ -261,6 +358,12 @@ int uawk_main(int argc, char **argv) {
         char *fields[MAX_FIELDS];
         int nf = split_fields(field_buf, fs, fields, MAX_FIELDS);
         awk_print(body, line_copy, fields, nf, li + 1);
+    }
+    if (end[0]) {
+        if (strchr(end, '='))
+            awk_run_assignments(end);
+        else
+            awk_print(end, "", NULL, 0, nlines);
     }
     return 0;
 }

@@ -245,16 +245,24 @@ int used_main(int argc, char **argv) {
     } else if (!strcmp(cmd, "p")) {
         do_print = 1;
         quiet = 1;
+    } else if (!strcmp(cmd, "q")) {
+        do_delete = 1; /* handled below: quit after this line */
+    } else if (!strcmp(cmd, "=")) {
+        do_print = 1;
+        quiet = 0;
     } else {
         peak_perror("sed", "unsupported script");
         return 1;
     }
 
+    int do_quit = !strcmp(cmd, "q");
+    int do_lineno = !strcmp(cmd, "=");
+
     for (int i = 0; i < n; i++) {
         int line_no = i + 1;
         if (!line_in_range(line_no, addr_lo, addr_hi))
             continue;
-        if (do_delete)
+        if (do_delete && !do_lineno)
             continue;
         char out[LINE_MAX];
         const char *src = lines[i];
@@ -265,10 +273,17 @@ int used_main(int argc, char **argv) {
             translit_line(out, sizeof(out), src, from, from_len, to);
             src = out;
         }
-        if (!quiet || do_print) {
-            console_write(src);
-            console_write("\n");
+        if (do_lineno) {
+            console_printf("%d\n", line_no);
         }
+        if (!quiet || do_print) {
+            if (!do_lineno) {
+                console_write(src);
+                console_write("\n");
+            }
+        }
+        if (do_quit)
+            break;
     }
     return 0;
 }
