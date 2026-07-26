@@ -311,6 +311,12 @@ grep -q test_cli_date Makefile
 grep -q '+%s' docs/CLI.md
 grep -q 'escapes:' kernel/user/utils_text4.c
 
+
+echo "==> Wave 3 Pass 65 pipe buffer"
+grep -q 'SHELL_CAPTURE_MAX  32768' kernel/include/shell_split.h
+grep -q '32 KiB' docs/CLI.md
+grep -q 'pipe output truncated' kernel/shell_dispatch.c
+
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c kernel/net/tls_handshake.c
