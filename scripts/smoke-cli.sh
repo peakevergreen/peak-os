@@ -474,6 +474,12 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 136 idle lock minutes"
+grep -q 'settings_idle_lock_minutes' kernel/settings.c
+grep -q 'idle_lock_honesty_copy' kernel/gui/desktop_overlays.c
+grep -q 'Enter unlocks (not a password)' docs/privacy.md
+grep -q 'SHIT_IDLE_LOCK' kernel/gui/desktop_settings.c
+
 echo "==> Wave 6 Pass 135 settings a11y scale preview"
 grep -q 'settings_draw_focus_ring_depth' kernel/gui/desktop_settings.c
 grep -q 'settings_scale_live_preview' kernel/gui/desktop_settings.c

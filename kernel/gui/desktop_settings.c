@@ -27,6 +27,7 @@ enum settings_hit_act {
     SHIT_TLS_TOFU,
     SHIT_TLS_FORGET,
     SHIT_NETCTL,
+    SHIT_IDLE_LOCK,
 };
 
 struct settings_hit {
@@ -303,17 +304,6 @@ static void settings_draw_toggle(uint32_t tx, uint32_t cy, const char *label, in
                        on ? desktop_color_accent() : desktop_color_surface());
 }
 
-static void settings_draw_scale_preview(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
-    const struct peak_theme *t = theme_get();
-    fb_fill_rect(x, y, w, h, t->surface);
-    fb_fill_rect(x, y, w, desktop_u(8), t->title);
-    fb_fill_rect(x, y + desktop_u(8), w, desktop_u(1), t->border);
-    fb_draw_string_fit(x + desktop_u(4), y + desktop_u(10), w - desktop_u(8),
-                       "Preview", t->fg, t->surface);
-    fb_fill_rect(x + desktop_u(4), y + h - desktop_u(10),
-                 w - desktop_u(8), desktop_u(6), t->accent);
-}
-
 static void settings_scale_live_preview(uint32_t x, uint32_t y, uint32_t scale) {
     if (scale < 1)
         scale = 1;
@@ -542,6 +532,19 @@ void desktop_settings_draw(struct win *w) {
                        desktop_color_bg());
         cy += row;
         cy = settings_divider(tx, cy, content_w);
+        cy = settings_section(tx, cy, "Session lock");
+        {
+            char iline[48];
+            snprintf(iline, sizeof(iline), "Idle lock: %d min (click to cycle)",
+                     settings_idle_lock_minutes());
+            fb_draw_string(tx, cy, iline, desktop_color_fg(), desktop_color_bg());
+            settings_hit_add(tx, cy, content_w, row * 2, SHIT_IDLE_LOCK, 0);
+        }
+        cy += row;
+        fb_draw_string(tx, cy, "Enter unlocks (not a password)", desktop_color_dim(),
+                       desktop_color_bg());
+        cy += row;
+        cy = settings_divider(tx, cy, content_w);
         cy = settings_section(tx, cy, "Network safety");
         fb_draw_string(tx, cy, "Kill switch (click):", desktop_color_fg(), desktop_color_bg());
         settings_hit_add(tx, cy, content_w, row * 2, SHIT_KILLSW, 0);
@@ -673,6 +676,11 @@ static void settings_hit_dispatch(enum settings_hit_act act, int param) {
             privacy_kill_arm = 0;
             notify_push("Kill switch on — network blocked");
         }
+        break;
+    case SHIT_IDLE_LOCK:
+        settings_cycle_idle_lock_minutes();
+        settings_persist();
+        settings_notify_persist("/etc/peak/display", "Display");
         break;
     case SHIT_CLEAR_SESSION:
         privacy_kill_arm = 0;
