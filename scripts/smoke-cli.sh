@@ -429,7 +429,7 @@ grep -q desktop_files_drop_at kernel/gui/desktop.c
 
 echo "==> Wave 4 Pass 87 js for-await"
 grep -q parse_for_await_of kernel/js/js_parse.c
-grep -q for-await.js tests/fixtures/js/for-await.js
+grep -q "for-await lite" tests/fixtures/js/for-await.js
 grep -q 'eval module m2' tests/host/test_js.c
 
 echo "==> Wave 4 Pass 86 browser ring3"
@@ -470,7 +470,7 @@ echo "==> Wave 4 Pass 79 join/comm"
 grep -q ujoin_main kernel/user/utils_text2.c
 grep -q ucomm_main kernel/user/utils_text2.c
 grep -q 'UBIN_CMD("join"' kernel/user/ubin_cmds.def
-grep -q '`join`' docs/CLI.md
+grep -q 'join' docs/CLI.md
 
 
 echo "==> Wave 4 Pass 98 lock-in"

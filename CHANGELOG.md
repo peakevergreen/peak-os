@@ -4,7 +4,7 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
-- **Pass 98:** Wave 4 lock-in — smoke-cli gates Passes 79–97, ROADMAP/CHANGELOG Wave 4 shipped, security-checklist CI note
+- **Pass 98:** Wave 4 lock-in — smoke-cli gates Passes 79–97, ROADMAP/CHANGELOG Wave 4 shipped, security-checklist CI note; restore host `test_tls` link of `tls_trust`/`tls_psk`; fix Pass 79/87 smoke markers
 
 - **Pass 97:** heap/sched fairness under GUI load; ps share column label
 
@@ -21,8 +21,6 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 - **Pass 91:** Monitor graph polish + one-click export snapshot to VFS
 
 - **Pass 90:** Help overlay searchable shortcuts + per-app focus hint
-
-- **Pass 98:** Wave 4 lock-in — smoke-cli gates Passes 79–97, ROADMAP/CHANGELOG Wave 4 shipped, security-checklist CI note
 
 - **Pass 89:** Settings theme chrome mock preview (titlebar/taskbar/toast) before apply
 

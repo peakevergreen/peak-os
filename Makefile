@@ -392,6 +392,7 @@ $(eval $(call HOST_TEST_RULE,js,tests/host/test_js.c tests/host/js_host_stubs.c 
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/js))
 $(eval $(call HOST_TEST_RULE,webapi,tests/host/test_webapi.c tests/host/js_host_stubs.c \
 	tests/host/webapi_host_stubs.c kernel/gui/webapi.c kernel/gui/webapi_stubs.c \
+	kernel/gui/browser_isolation.c \
 	kernel/net/http_util.c kernel/js/js_core.c kernel/js/js_compile.c \
 	kernel/js/js_lex.c kernel/js/js_codegen.c kernel/js/js_parse.c kernel/js/js_vm.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/js -Ikernel/gui))
@@ -404,7 +405,8 @@ $(eval $(call HOST_TEST_RULE,random,tests/host/test_random.c kernel/random.c \
 	-Ikernel/net/hacl_p384/karamel/krmllib/dist/minimal -DHACL_CAN_COMPILE_UINT128 \
 	-Wno-unused-function -Wno-unused-parameter))
 $(eval $(call HOST_TEST_RULE,tls,tests/host/test_tls.c tests/host/tls_host_stubs.c \
-	kernel/net/tls_session.c \
+	kernel/net/tls_util.c kernel/net/tls_trust.c kernel/net/tls_clienthello.c \
+	kernel/net/tls_session.c kernel/net/tls_psk.c \
 	kernel/net/tls_hsts.c kernel/net/tls_ech.c \
 	kernel/net/x509.c \
 	kernel/net/webpki.c kernel/net/webpki_roots_data.c kernel/random.c \
