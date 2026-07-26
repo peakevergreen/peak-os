@@ -1,12 +1,13 @@
 /*
  * Minimal HTTP/2 GET client (RFC 7540 subset) for ALPN h2 sessions.
- * Preface + SETTINGS + stream-1 HEADERS; synthesizes an HTTP/1.0 response.
  */
 #include "http2.h"
 #include "tls.h"
 #include "net_internal.h"
 #include "timer.h"
 #include "util.h"
+
+static struct http2_meta last_meta;
 
 static void wr24(uint8_t *p, uint32_t v) {
     p[0] = (uint8_t)(v >> 16);
@@ -69,7 +70,7 @@ static int hpack_add_lit(uint8_t *buf, size_t cap, size_t *o, uint8_t name_idx,
     size_t vlen = strlen(val);
     if (vlen > 127 || *o + 2 + vlen > cap)
         return -1;
-    buf[(*o)++] = (uint8_t)(name_idx & 0x0f); /* Literal without indexing */
+    buf[(*o)++] = (uint8_t)(name_idx & 0x0f);
     buf[(*o)++] = (uint8_t)vlen;
     memcpy(buf + *o, val, vlen);
     *o += vlen;
@@ -86,69 +87,113 @@ static int parse_dec(const uint8_t *p, size_t n) {
     return v;
 }
 
-/* Scan HPACK block for :status (static index 8 or literal). */
-static int hpack_find_status(const uint8_t *p, size_t len) {
+static const char *status_phrase(int st) {
+    switch (st) {
+    case 200: return "OK";
+    case 204: return "No Content";
+    case 404: return "Not Found";
+    case 500: return "Internal Server Error";
+    default:  return "OK";
+    }
+}
+
+static int hpack_static_entry(uint8_t idx, const char **name_out, const char **val_out) {
+    static const struct { uint8_t idx; const char *name; const char *val; } tbl[] = {
+        {8, ":status", "200"}, {9, ":status", "204"}, {10, ":status", "206"},
+        {11, ":status", "304"}, {12, ":status", "400"}, {13, ":status", "404"},
+        {14, ":status", "500"}, {17, "cache-control", "no-cache"},
+        {22, "content-type", "text/html"}, {24, "content-type", "application/octet-stream"},
+        {25, "content-type", "application/json"},
+        {31, "content-type", "text/html; charset=utf-8"},
+        {44, "location", ""}, {46, "location", ""}, {54, "server", ""},
+    };
+    for (size_t i = 0; i < sizeof(tbl) / sizeof(tbl[0]); i++) {
+        if (tbl[i].idx == idx) {
+            if (name_out) *name_out = tbl[i].name;
+            if (val_out) *val_out = tbl[i].val;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static const char *hpack_static_name(uint8_t idx) {
+    const char *n = NULL, *v = NULL;
+    return hpack_static_entry(idx, &n, &v) == 0 ? n : NULL;
+}
+
+static int hdr_append(char *buf, size_t cap, size_t *off, const char *name, const char *val) {
+    if (!name || !val || !name[0] || name[0] == ':')
+        return 0;
+    int n = snprintf(buf + *off, cap - *off, "%s: %s\r\n", name, val);
+    if (n < 0 || (size_t)n >= cap - *off)
+        return -1;
+    *off += (size_t)n;
+    return 0;
+}
+
+static int hpack_emit_field(char *hdr_buf, size_t hdr_cap, size_t *hdr_off, const char *name,
+                            const char *val, int *status_out) {
+    if (!name)
+        return 0;
+    if (!strncmp(name, ":status", 7)) {
+        if (status_out && val && val[0])
+            *status_out = parse_dec((const uint8_t *)val, strlen(val));
+        return 0;
+    }
+    return hdr_append(hdr_buf, hdr_cap, hdr_off, name, val ? val : "");
+}
+
+static int hpack_read_str(const uint8_t *p, size_t len, size_t *i, char *out, size_t out_cap) {
+    if (*i >= len)
+        return -1;
+    size_t slen = p[(*i)++] & 0x7f;
+    if (*i + slen > len)
+        return -1;
+    if (slen >= out_cap)
+        slen = out_cap - 1;
+    memcpy(out, p + *i, slen);
+    out[slen] = '\0';
+    *i += slen;
+    return 0;
+}
+
+static int hpack_decode_block(const uint8_t *p, size_t len, int *status_out, char *hdr_buf,
+                              size_t hdr_cap, size_t *hdr_off) {
     size_t i = 0;
     while (i < len) {
         uint8_t b = p[i++];
         if (b & 0x80) {
-            uint8_t idx = b & 0x7f;
-            if (idx == 8)
-                return 200;
-            if (idx == 9)
-                return 204;
-            if (idx == 10)
-                return 206;
-            if (idx == 11)
-                return 304;
-            if (idx == 12)
-                return 400;
-            if (idx == 13)
-                return 404;
-            if (idx == 14)
-                return 500;
+            const char *name = NULL, *val = NULL;
+            if (hpack_static_entry(b & 0x7f, &name, &val) == 0 &&
+                hpack_emit_field(hdr_buf, hdr_cap, hdr_off, name, val, status_out) != 0)
+                return -1;
             continue;
         }
         if ((b & 0xf0) == 0x00) {
+            char name[96], val[256];
+            name[0] = val[0] = '\0';
             uint8_t nidx = b & 0x0f;
             if (nidx == 0) {
-                if (i >= len)
+                if (hpack_read_str(p, len, &i, name, sizeof(name)) != 0)
                     break;
-                size_t nlen = p[i++] & 0x7f;
-                if (i + nlen > len)
-                    break;
-                int is_status = (nlen == 7 && !memcmp(p + i, ":status", 7));
-                i += nlen;
-                if (i >= len)
-                    break;
-                size_t vlen = p[i++] & 0x7f;
-                if (i + vlen > len)
-                    break;
-                if (is_status)
-                    return parse_dec(p + i, vlen);
-                i += vlen;
             } else {
-                if (i >= len)
+                const char *sn = hpack_static_name(nidx);
+                if (!sn)
                     break;
-                size_t vlen = p[i++] & 0x7f;
-                if (i + vlen > len)
-                    break;
-                if (nidx == 8)
-                    return parse_dec(p + i, vlen);
-                i += vlen;
+                snprintf(name, sizeof(name), "%s", sn);
             }
+            if (hpack_read_str(p, len, &i, val, sizeof(val)) != 0)
+                break;
+            if (hpack_emit_field(hdr_buf, hdr_cap, hdr_off, name, val, status_out) != 0)
+                return -1;
             continue;
         }
-        /* Incremental indexing / other — skip name/value coarsely */
         if ((b & 0xc0) == 0x40) {
-            uint8_t nidx = b & 0x3f;
-            if (nidx == 0) {
-                if (i >= len)
+            if ((b & 0x3f) == 0) {
+                char skip[96];
+                if (hpack_read_str(p, len, &i, skip, sizeof(skip)) != 0)
                     break;
-                size_t nlen = p[i++] & 0x7f;
-                if (i + nlen > len)
-                    break;
-                i += nlen;
             }
             if (i >= len)
                 break;
@@ -163,9 +208,15 @@ static int hpack_find_status(const uint8_t *p, size_t len) {
     return 0;
 }
 
+void http2_last_meta(struct http2_meta *out) {
+    if (out)
+        *out = last_meta;
+}
+
 int http2_get(const char *host, const char *path, const char *extra_headers, char *out,
               size_t out_cap, int *status_out) {
     (void)extra_headers;
+    memset(&last_meta, 0, sizeof(last_meta));
     if (!host || !path || !out || out_cap < 128)
         return -1;
 
@@ -177,8 +228,8 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
 
     uint8_t hpack[256];
     size_t ho = 0;
-    hpack[ho++] = 0x82; /* :method GET */
-    hpack[ho++] = 0x87; /* :scheme https */
+    hpack[ho++] = 0x82;
+    hpack[ho++] = 0x87;
     if (!strcmp(path, "/"))
         hpack[ho++] = 0x84;
     else if (hpack_add_lit(hpack, sizeof(hpack), &ho, 4, path) != 0)
@@ -189,8 +240,10 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
         return -1;
 
     int status = 0;
-    uint8_t body_acc[12288];
-    size_t body_len = 0;
+    char resp_hdrs[2048];
+    size_t resp_hdr_off = 0;
+    uint8_t body_acc[HTTP2_BODY_MAX];
+    size_t body_len = 0, body_total = 0;
     int stream_done = 0;
     uint64_t start = timer_ticks();
 
@@ -199,12 +252,11 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
         if (recv_exact(fh, 9) != 0)
             break;
         uint32_t plen = rd24(fh);
-        uint8_t type = fh[3];
-        uint8_t flags = fh[4];
+        uint8_t type = fh[3], flags = fh[4];
         uint32_t sid = rd32(fh + 5) & 0x7fffffffu;
-        if (plen > sizeof(body_acc))
+        if (plen > HTTP2_BODY_MAX)
             return -1;
-        uint8_t payload[12288];
+        uint8_t payload[HTTP2_BODY_MAX];
         if (plen && recv_exact(payload, plen) != 0)
             return -1;
 
@@ -229,11 +281,10 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
             }
             if (flags & 0x20)
                 off += 5;
-            if (off < plen) {
-                int st = hpack_find_status(payload + off, plen - off);
-                if (st)
-                    status = st;
-            }
+            if (off < plen &&
+                hpack_decode_block(payload + off, plen - off, &status, resp_hdrs,
+                                   sizeof(resp_hdrs), &resp_hdr_off) != 0)
+                return -1;
             if (!status)
                 status = 200;
             if (flags & 0x01)
@@ -241,8 +292,7 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
             continue;
         }
         if (type == 0x00) {
-            size_t data_off = 0;
-            size_t data_len = plen;
+            size_t data_off = 0, data_len = plen;
             if (flags & 0x08) {
                 if (!plen)
                     continue;
@@ -252,6 +302,7 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
                     continue;
                 data_len = plen - 1 - pad;
             }
+            body_total += data_len;
             if (body_len + data_len > sizeof(body_acc))
                 data_len = sizeof(body_acc) - body_len;
             if (data_len) {
@@ -268,14 +319,38 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
     if (status_out)
         *status_out = status;
 
-    size_t so = (size_t)snprintf(out, out_cap,
-                                 "HTTP/1.0 %d OK\r\nContent-Type: text/html\r\n"
-                                 "Connection: close\r\n\r\n",
-                                 status);
+    last_meta.status = status;
+    last_meta.body_stored = body_len;
+    last_meta.body_total = body_total;
+    last_meta.truncated = (body_total > body_len) ? 1 : 0;
+
+    size_t so = (size_t)snprintf(out, out_cap, "HTTP/1.0 %d %s\r\n", status,
+                                 status_phrase(status));
     if (so >= out_cap)
         return -1;
-    if (so + body_len >= out_cap)
+    if (resp_hdr_off) {
+        if (so + resp_hdr_off >= out_cap)
+            return -1;
+        memcpy(out + so, resp_hdrs, resp_hdr_off);
+        so += resp_hdr_off;
+    } else {
+        int n = snprintf(out + so, out_cap - so, "Content-Type: text/html\r\n");
+        if (n < 0 || (size_t)n >= out_cap - so)
+            return -1;
+        so += (size_t)n;
+    }
+    {
+        int n = snprintf(out + so, out_cap - so, "Connection: close\r\n"
+                                                   "X-Peak-HTTP2: 1\r\n\r\n");
+        if (n < 0 || (size_t)n >= out_cap - so)
+            return -1;
+        so += (size_t)n;
+    }
+    if (so + body_len >= out_cap) {
         body_len = out_cap - so - 1;
+        last_meta.truncated = 1;
+        last_meta.body_stored = body_len;
+    }
     if (body_len)
         memcpy(out + so, body_acc, body_len);
     out[so + body_len] = '\0';

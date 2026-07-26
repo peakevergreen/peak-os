@@ -70,6 +70,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 22:** VFS errno hygiene (`unlink`/`rmdir`/`stat`/`normalize`/`mkdir`), `peak_strerror(EBUSY)`, `stat`/`df` backing hints
 - **Pass 25:** ctr build log line numbers, 0-COPY / 256 KiB cap failures, path sandbox messages name escaped paths; clearer `ctr build` log output
 - **Pass 23:** dig-style `nslookup`/`host`, clearer `ifconfig` route/DNS, `wget`/`curl` TLS detail + progress note, `traceroute` lite
+- **Pass 53:** HTTP/2 client depth — HPACK response headers, body limit metadata (`HTTP2_BODY_MAX`), `wget`/`curl` `-i` + truncation warnings
 - Hash/pager tools: `sha256sum`, `md5sum`, `base64`, `less`/`more`, `time`
 - Net diag: `nslookup`, `host`, `nc` (TCP connect); Pass 23 adds dig-style DNS output, `traceroute` staged probe, richer `wget`/`curl` TLS errors
 - Shell history: persistent `/var/peak/history`, Up/Down/Ctrl-P/N recall, `history`, `!!`, exit-status prompt, errno-style path errors
@@ -91,6 +92,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Peak JS bytecode VM, DOM/CSS subset, `peak://demo`
 - In-guest IPv4 DHCP/DNS/TCP/TLS/HTTP; e1000 on PC; LAN web-demo containers
 - **Pass 24 (TLS/WebPKI polish):** `tls_err_name()` + RFC alert names; `[tag]` prefixes on structured TLS errors; `tlsinfo` CLI; `webpki_root_sha256()` root listing; ECH full HPKE remains NYI (scaffold fail-closed only)
+- **Pass 53 (HTTP/2 client depth):** HPACK response headers synthesized into HTTP/1.x; `http2_last_meta()` body totals/truncation; `wget`/`curl` show HTTP/2 status, Content-Type, `-i` headers, 8192-byte limit warnings
 - **Pass 30 (Browser + Peak JS UX):** back/forward toolbar + **b**/**f** keys; VFS bookmarks bar + context menu; JS console panel (`console.log` capture); TLS/net error pages use `tls_last_error()` + `net_last_error()`
 
 ### Raspberry Pi

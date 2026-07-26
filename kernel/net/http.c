@@ -11,6 +11,19 @@
 
 static int last_tls_secure;
 static int last_tls_verified;
+static int last_http_h2;
+static size_t last_http_body_total;
+static int last_http_body_truncated;
+
+int net_http_last_h2(void) { return last_http_h2; }
+size_t net_http_last_body_total(void) { return last_http_body_total; }
+int net_http_last_body_truncated(void) { return last_http_body_truncated; }
+
+static void http_clear_transfer_meta(void) {
+    last_http_h2 = 0;
+    last_http_body_total = 0;
+    last_http_body_truncated = 0;
+}
 
 int net_http_needs_tls(void) {
     return http_needs_tls_flag;
@@ -162,6 +175,7 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
                               int *status_out) {
     last_tls_secure = 0;
     last_tls_verified = 0;
+    http_clear_transfer_meta();
     if (tls_connect(ip, 443, host, NET_TLS_HANDSHAKE_TICKS) != 0)
         return -2;
 
@@ -174,6 +188,13 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
         tls_close();
         if (rc != 0)
             return -4;
+        last_http_h2 = 1;
+        {
+            struct http2_meta hm;
+            http2_last_meta(&hm);
+            last_http_body_total = hm.body_total;
+            last_http_body_truncated = hm.truncated;
+        }
         if (status_out)
             *status_out = st;
         return 0;
@@ -232,6 +253,7 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
     if (!privacy_net_client_allowed())
         return -1;
 
+    http_clear_transfer_meta();
     const char *method = req->method[0] ? req->method : "GET";
     if (strcmp(method, "GET") && strcmp(method, "POST"))
         return -1;
