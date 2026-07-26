@@ -38,6 +38,7 @@ int blobstore_cached_at(uint32_t id, size_t off);
 struct blobstore_stats {
     uint32_t objects;
     uint32_t pages_used;
+    uint32_t pages_free;   /* pages on internal reclaim free-list */
     uint32_t pages_total;
     uint32_t cache_pages;
     uint64_t bytes_used;

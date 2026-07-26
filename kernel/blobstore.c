@@ -37,8 +37,17 @@ struct cache_page {
     uint32_t lru;
 };
 
+#define BLOB_FREE_MAX 32u
+struct blob_free_span {
+    uint32_t start_page;
+    uint32_t npages;
+    uint8_t  in_use;
+};
+
 static struct blob_obj objects[BLOBSTORE_MAX_OBJECTS];
 static struct blob_super super;
+static struct blob_free_span free_spans[BLOB_FREE_MAX];
+static uint32_t free_pages_total;
 static struct cache_page cache[BLOBSTORE_CACHE_PAGES];
 static uint32_t lru_tick;
 static int ready;
@@ -267,9 +276,88 @@ static struct blob_obj *find_obj(uint32_t id) {
     return NULL;
 }
 
+static void cache_evict_object_pages(uint32_t start, uint32_t npages) {
+    for (uint32_t i = 0; i < BLOBSTORE_CACHE_PAGES; i++) {
+        if (!cache[i].valid)
+            continue;
+        if (cache[i].global_page < start || cache[i].global_page >= start + npages)
+            continue;
+        if (cache[i].dirty)
+            (void)flush_page(&cache[i]);
+        cache_hash_remove(cache[i].global_page, i);
+        cache[i].valid = 0;
+        cache[i].dirty = 0;
+        if (cache_live)
+            cache_live--;
+        if (cache_hot == (int)i)
+            cache_hot = -1;
+    }
+}
+
+static int free_span_add(uint32_t start, uint32_t npages) {
+    if (npages == 0)
+        return 0;
+    for (uint32_t i = 0; i < BLOB_FREE_MAX; i++) {
+        if (free_spans[i].in_use)
+            continue;
+        free_spans[i].start_page = start;
+        free_spans[i].npages = npages;
+        free_spans[i].in_use = 1;
+        free_pages_total += npages;
+        return 0;
+    }
+    return -1;
+}
+
+static void blob_rewind_tip(void) {
+    for (;;) {
+        int merged = 0;
+        for (uint32_t i = 0; i < BLOB_FREE_MAX; i++) {
+            if (!free_spans[i].in_use)
+                continue;
+            if (free_spans[i].start_page + free_spans[i].npages != super.next_page)
+                continue;
+            super.next_page = free_spans[i].start_page;
+            free_pages_total -= free_spans[i].npages;
+            free_spans[i].in_use = 0;
+            merged = 1;
+            break;
+        }
+        if (!merged)
+            break;
+    }
+}
+
+static int free_span_take(uint32_t need, uint32_t *out_start) {
+    int best = -1;
+    uint32_t best_extra = 0xFFFFFFFFu;
+    for (uint32_t i = 0; i < BLOB_FREE_MAX; i++) {
+        if (!free_spans[i].in_use || free_spans[i].npages < need)
+            continue;
+        uint32_t extra = free_spans[i].npages - need;
+        if (extra < best_extra) {
+            best_extra = extra;
+            best = (int)i;
+        }
+    }
+    if (best < 0)
+        return -1;
+    *out_start = free_spans[best].start_page;
+    if (free_spans[best].npages > need) {
+        free_spans[best].start_page += need;
+        free_spans[best].npages -= need;
+    } else {
+        free_spans[best].in_use = 0;
+    }
+    free_pages_total -= need;
+    return 0;
+}
+
 void blobstore_init(void) {
     cache_hash_clear();
     memset(objects, 0, sizeof(objects));
+    memset(free_spans, 0, sizeof(free_spans));
+    free_pages_total = 0;
     memset(cache, 0, sizeof(cache));
     memset(&super, 0, sizeof(super));
     lru_tick = 0;
@@ -295,8 +383,13 @@ int blobstore_create(uint32_t *out_id, size_t size) {
     uint32_t npages = (uint32_t)((size + BLOBSTORE_PAGE_SIZE - 1) / BLOBSTORE_PAGE_SIZE);
     if (npages == 0)
         npages = 1;
-    if (super.next_page + npages > super.total_pages)
-        return -1;
+    uint32_t start_page;
+    if (free_span_take(npages, &start_page) != 0) {
+        if (super.next_page + npages > super.total_pages)
+            return -1;
+        start_page = super.next_page;
+        super.next_page += npages;
+    }
     struct blob_obj *slot = NULL;
     for (uint32_t i = 0; i < BLOBSTORE_MAX_OBJECTS; i++) {
         if (!objects[i].in_use) {
@@ -307,11 +400,10 @@ int blobstore_create(uint32_t *out_id, size_t size) {
     if (!slot)
         return -1;
     slot->id = super.next_id++;
-    slot->start_page = super.next_page;
+    slot->start_page = start_page;
     slot->npages = npages;
     slot->size = (uint32_t)size;
     slot->in_use = 1;
-    super.next_page += npages;
     super.nobjects++;
     *out_id = slot->id;
     (void)write_meta();
@@ -322,10 +414,18 @@ int blobstore_delete(uint32_t id) {
     struct blob_obj *o = find_obj(id);
     if (!o)
         return -1;
-    /* Simple bump allocator: mark free but do not reclaim pages yet. */
+    uint32_t start = o->start_page;
+    uint32_t npages = o->npages;
+    cache_evict_object_pages(start, npages);
     o->in_use = 0;
     if (super.nobjects)
         super.nobjects--;
+    if (start + npages == super.next_page) {
+        super.next_page = start;
+        blob_rewind_tip();
+    } else {
+        (void)free_span_add(start, npages);
+    }
     (void)write_meta();
     return 0;
 }
@@ -470,6 +570,7 @@ void blobstore_stats(struct blobstore_stats *out) {
     if (!out) return;
     out->objects = super.nobjects;
     out->pages_used = super.next_page;
+    out->pages_free = free_pages_total;
     out->pages_total = super.total_pages;
     out->cache_pages = cache_live;
     out->bytes_used = (uint64_t)super.next_page * BLOBSTORE_PAGE_SIZE;
@@ -497,6 +598,31 @@ int blobstore_check(void) {
             uint32_t a0 = o->start_page, a1 = o->start_page + o->npages;
             uint32_t b0 = q->start_page, b1 = q->start_page + q->npages;
             if (a0 < b1 && b0 < a1) return -1;
+        }
+    }
+    for (uint32_t i = 0; i < BLOB_FREE_MAX; i++) {
+        if (!free_spans[i].in_use)
+            continue;
+        struct blob_free_span *f = &free_spans[i];
+        if (f->npages == 0 || f->start_page + f->npages > super.total_pages)
+            return -1;
+        for (uint32_t j = i + 1; j < BLOB_FREE_MAX; j++) {
+            if (!free_spans[j].in_use)
+                continue;
+            struct blob_free_span *g = &free_spans[j];
+            uint32_t a0 = f->start_page, a1 = f->start_page + f->npages;
+            uint32_t b0 = g->start_page, b1 = g->start_page + g->npages;
+            if (a0 < b1 && b0 < a1)
+                return -1;
+        }
+        for (uint32_t k = 0; k < BLOBSTORE_MAX_OBJECTS; k++) {
+            if (!objects[k].in_use)
+                continue;
+            struct blob_obj *o = &objects[k];
+            uint32_t a0 = f->start_page, a1 = f->start_page + f->npages;
+            uint32_t b0 = o->start_page, b1 = o->start_page + o->npages;
+            if (a0 < b1 && b0 < a1)
+                return -1;
         }
     }
     return live == super.nobjects ? 0 : -1;

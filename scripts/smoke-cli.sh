@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 111 blobstore reclaim"
+grep -q blob_rewind_tip kernel/blobstore.c
+grep -q free_span_take kernel/blobstore.c
+grep -q pages_free kernel/include/blobstore.h
+grep -q 'tip rewind' tests/host/test_blobstore.c
+
 echo "==> Wave 5 Pass 110 blob copy"
 grep -q vfs_copy_stream kernel/vfs.c
 grep -q vfs_copy_file_ex kernel/vfs.c

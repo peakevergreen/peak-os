@@ -15,6 +15,7 @@ PeakVec is a Peak-authored, in-guest vector index for session/workspace context.
 `kernel/blobstore.c` — block-backed object store starting at LBA 8192 (4 MiB), with:
 
 - bump-allocated extents (grow-in-place only for the tip object)
+- delete reclaims pages: tip rewind when the last object is removed; otherwise a bounded free-list reuses extents on create
 - 48×4 KiB LRU page cache (override `BLOBSTORE_CACHE_PAGES` in host tests)
 - sync on PeakDisk save
 
