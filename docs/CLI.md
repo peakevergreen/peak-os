@@ -56,7 +56,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 |---------|-------|
 | `pwd` | print working directory |
 | `cd [path]` | change directory (default workspace) |
-| `ls [-l] [path]` | list directory |
+| `ls [-l] [-h] [path]` | list directory (`-lh` human KiB/MiB sizes) |
 | `tree [path]` | directory tree |
 | `find <dir> -name <name>` | basename search |
 
@@ -68,10 +68,11 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `rm [-rf] <path>` | remove file or tree |
 | `cp [-r] <src> <dst>` | copy |
 | `mv <src> <dst>` | rename/move |
-| `ln <target> <link>` | hard link |
-| `stat <path>` | metadata (heap vs blob backing for files) |
-| `du [path]` | tree byte size |
-| `df` | VFS inodes, RAM pages, PeakDisk/Blobstore status (+ integrity) |
+| `ln [-s] <target> <link>` | hard link or symlink (`-s`) |
+| `readlink <path>` | print symlink target (no follow) |
+| `stat <path>` | metadata; symlinks show `target:` (heap vs blob for files) |
+| `du [-h] [path]` | tree byte size (`-h` KiB/MiB) |
+| `df [-h]` | VFS inodes, RAM, PeakDisk/Blobstore status (`-h` KiB/MiB) |
 | `truncate <path> <n>` | resize (max 4096) |
 
 ## Text

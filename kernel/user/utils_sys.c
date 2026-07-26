@@ -45,58 +45,6 @@ int ucd_main(int argc, char **argv) {
     return 0;
 }
 
-int uls_main(int argc, char **argv) {
-    int longf = peak_has_flag(argc, argv, "-l");
-    const char *path = ".";
-    for (int i = 1; i < argc; i++) {
-        if (argv[i][0] != '-') {
-            path = argv[i];
-            break;
-        }
-    }
-    char abs[VFS_PATH_MAX];
-    if (shell_resolve_path(path, abs, sizeof(abs)))
-        return 1;
-    if (!vfs_is_dir(abs)) {
-        struct vfs_stat st;
-        if (vfs_stat(abs, &st) != 0) {
-            peak_perror("ls", "not found");
-            return 1;
-        }
-        if (longf)
-            console_printf("%c %6lu %s\n", 'f', (uint64_t)st.size, abs);
-        else {
-            console_write(abs);
-            console_write("\n");
-        }
-        return 0;
-    }
-    struct vfs_dirent ents[64];
-    int n = vfs_readdir(abs, ents, 64);
-    if (n < 0)
-        return 1;
-    for (int i = 0; i < n; i++) {
-        if (longf) {
-            char child[VFS_PATH_MAX];
-            if (!strcmp(abs, "/"))
-                snprintf(child, sizeof(child), "/%s", ents[i].name);
-            else
-                snprintf(child, sizeof(child), "%s/%s", abs, ents[i].name);
-            struct vfs_stat st;
-            vfs_stat(child, &st);
-            console_printf("%c %6lu %s\n",
-                           ents[i].type == VFS_DIR ? 'd' : 'f',
-                           (uint64_t)st.size, ents[i].name);
-        } else {
-            console_write(ents[i].name);
-            if (ents[i].type == VFS_DIR)
-                console_write("/");
-            console_write("\n");
-        }
-    }
-    return 0;
-}
-
 static void tree_walk(const char *path, int depth, int max_depth) {
     if (depth > max_depth)
         return;

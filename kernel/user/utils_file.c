@@ -1,4 +1,4 @@
-/* /bin file utilities: mkdir, touch, rm, cp, mv, ln, stat, du, df, truncate. */
+/* /bin file utilities: ls, mkdir, touch, rm, cp, mv, ln, stat, du, df, truncate. */
 #include "libpeak.h"
 #include "vfs.h"
 #include "shell.h"
@@ -7,6 +7,84 @@
 #include "pmm.h"
 #include "peakdisk.h"
 #include "blobstore.h"
+
+#define PEAK_PAGE_BYTES 4096ull
+
+/* Human-readable binary size (B / KiB / MiB). */
+static void peak_hsize_fmt(uint64_t n, char *buf, size_t cap) {
+    if (!buf || !cap)
+        return;
+    if (n < 1024)
+        snprintf(buf, cap, "%luB", (unsigned long)n);
+    else if (n < 1024ull * 1024)
+        snprintf(buf, cap, "%luKiB", (unsigned long)(n / 1024));
+    else
+        snprintf(buf, cap, "%luMiB", (unsigned long)(n / (1024ull * 1024)));
+}
+
+int uls_main(int argc, char **argv) {
+    int longf = peak_has_flag(argc, argv, "-l");
+    int human = peak_has_flag(argc, argv, "-h");
+    const char *path = ".";
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] != '-') {
+            path = argv[i];
+            break;
+        }
+    }
+    char abs[VFS_PATH_MAX];
+    if (shell_resolve_path(path, abs, sizeof(abs)))
+        return 1;
+    if (!vfs_is_dir(abs)) {
+        struct vfs_stat st;
+        if (vfs_stat(abs, &st) != 0) {
+            peak_perror("ls", "not found");
+            return 1;
+        }
+        if (longf) {
+            if (human) {
+                char sz[16];
+                peak_hsize_fmt((uint64_t)st.size, sz, sizeof(sz));
+                console_printf("%c %7s %s\n", 'f', sz, abs);
+            } else
+                console_printf("%c %6lu %s\n", 'f', (uint64_t)st.size, abs);
+        } else {
+            console_write(abs);
+            console_write("\n");
+        }
+        return 0;
+    }
+    struct vfs_dirent ents[64];
+    int n = vfs_readdir(abs, ents, 64);
+    if (n < 0)
+        return 1;
+    for (int i = 0; i < n; i++) {
+        if (longf) {
+            char child[VFS_PATH_MAX];
+            if (!strcmp(abs, "/"))
+                snprintf(child, sizeof(child), "/%s", ents[i].name);
+            else
+                snprintf(child, sizeof(child), "%s/%s", abs, ents[i].name);
+            struct vfs_stat st;
+            vfs_stat(child, &st);
+            if (human) {
+                char sz[16];
+                peak_hsize_fmt((uint64_t)st.size, sz, sizeof(sz));
+                console_printf("%c %7s %s\n",
+                               ents[i].type == VFS_DIR ? 'd' : 'f', sz, ents[i].name);
+            } else
+                console_printf("%c %6lu %s\n",
+                               ents[i].type == VFS_DIR ? 'd' : 'f',
+                               (uint64_t)st.size, ents[i].name);
+        } else {
+            console_write(ents[i].name);
+            if (ents[i].type == VFS_DIR)
+                console_write("/");
+            console_write("\n");
+        }
+    }
+    return 0;
+}
 
 int umkdir_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
@@ -162,10 +240,14 @@ int ustat_main(int argc, char **argv) {
         return 1;
     }
     console_printf("path: %s\n", abs);
-    console_printf("type: %s\n", st.type == VFS_DIR ? "directory" : "file");
+    const char *type_str = st.type == VFS_DIR ? "directory" :
+                           st.type == VFS_SYMLINK ? "symlink" : "file";
+    console_printf("type: %s\n", type_str);
     console_printf("size: %lu\n", (uint64_t)st.size);
     console_printf("children: %u\n", st.nchildren);
     console_printf("refs: %u\n", st.refs);
+    if (st.type == VFS_SYMLINK && st.link_target[0])
+        console_printf("target: %s\n", st.link_target);
     if (st.type == VFS_FILE) {
         struct vfs_node *node = vfs_lookup(abs);
         if (node) {
@@ -179,6 +261,7 @@ int ustat_main(int argc, char **argv) {
 }
 
 int udu_main(int argc, char **argv) {
+    int human = peak_has_flag(argc, argv, "-h");
     const char *path = ".";
     for (int i = 1; i < argc; i++)
         if (argv[i][0] != '-') {
@@ -192,19 +275,30 @@ int udu_main(int argc, char **argv) {
         console_printf("du: cannot access '%s': no such file or directory\n", abs);
         return 1;
     }
-    console_printf("%lu\t%s\n", vfs_tree_bytes(abs), abs);
+    uint64_t bytes = vfs_tree_bytes(abs);
+    if (human) {
+        char sz[16];
+        peak_hsize_fmt(bytes, sz, sizeof(sz));
+        console_printf("%s\t%s\n", sz, abs);
+    } else
+        console_printf("%lu\t%s\n", bytes, abs);
     return 0;
 }
 
 int udf_main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    int human = peak_has_flag(argc, argv, "-h");
     int nodes = vfs_node_count();
     int pct = (nodes * 100) / VFS_MAX_NODES;
     console_printf("VFS inodes:  %d used / %d max (%d%%)\n", nodes, VFS_MAX_NODES, pct);
     uint64_t free_p = pmm_free_pages();
     uint64_t total_p = pmm_total_pages();
-    console_printf("RAM pages:   %lu free / %lu total\n", free_p, total_p);
+    if (human) {
+        char free_s[16], total_s[16];
+        peak_hsize_fmt(free_p * PEAK_PAGE_BYTES, free_s, sizeof(free_s));
+        peak_hsize_fmt(total_p * PEAK_PAGE_BYTES, total_s, sizeof(total_s));
+        console_printf("RAM:         %s free / %s total\n", free_s, total_s);
+    } else
+        console_printf("RAM pages:   %lu free / %lu total\n", free_p, total_p);
     if (peakdisk_available()) {
         if (peakdisk_busy())
             console_write("PeakDisk:    block device present (saving)\n");
@@ -216,11 +310,19 @@ int udf_main(int argc, char **argv) {
     if (blobstore_available()) {
         struct blobstore_stats bs;
         blobstore_stats(&bs);
-        console_printf("Blobstore:   %u objects, %u / %u pages (%lu KiB), cache %u / %u",
-                       (unsigned)bs.objects, (unsigned)bs.pages_used,
-                       (unsigned)bs.pages_total,
-                       (unsigned long)(bs.bytes_used / 1024u),
-                       (unsigned)bs.cache_pages, (unsigned)BLOBSTORE_CACHE_PAGES);
+        if (human) {
+            char used_s[16], total_s[16];
+            peak_hsize_fmt(bs.bytes_used, used_s, sizeof(used_s));
+            peak_hsize_fmt((uint64_t)bs.pages_total * PEAK_PAGE_BYTES, total_s, sizeof(total_s));
+            console_printf("Blobstore:   %u objects, %s / %s, cache %u / %u",
+                           (unsigned)bs.objects, used_s, total_s,
+                           (unsigned)bs.cache_pages, (unsigned)BLOBSTORE_CACHE_PAGES);
+        } else
+            console_printf("Blobstore:   %u objects, %u / %u pages (%lu KiB), cache %u / %u",
+                           (unsigned)bs.objects, (unsigned)bs.pages_used,
+                           (unsigned)bs.pages_total,
+                           (unsigned long)(bs.bytes_used / 1024u),
+                           (unsigned)bs.cache_pages, (unsigned)BLOBSTORE_CACHE_PAGES);
         console_write(blobstore_check() == 0 ? " ok\n" : " (integrity check failed)\n");
     }
     if (nodes >= VFS_MAX_NODES - 2)

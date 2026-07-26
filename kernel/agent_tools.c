@@ -196,8 +196,9 @@ int agent_tool_fs_stat(const char *path, char *out, size_t out_len) {
         return -1;
     }
     if (out && out_len) {
-        char modebuf[12]; vfs_mode_string(st.type, st.mode, modebuf, sizeof(modebuf));
-        snprintf(out, out_len, "%s %04o %s %llu refs=%u children=%u", norm, (unsigned)st.mode, modebuf, (unsigned long long)st.size, (unsigned)st.refs, (unsigned)st.nchildren);
+        snprintf(out, out_len, "%s %c %llu refs=%u children=%u",
+                 norm, st.type == VFS_DIR ? 'd' : 'f', (unsigned long long)st.size,
+                 (unsigned)st.refs, (unsigned)st.nchildren);
     }
     agent_audit_event("fs.stat", norm, "ok");
     return 0;
