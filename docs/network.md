@@ -72,8 +72,10 @@ wget https://example.com/
 ctr build … && ctr run -p 8080 …
 ```
 
-`wget` / `curl` print `fetching...` before the transfer and surface
-`tls_last_error()` plus stable reject names (`fetch: tls-*`) on HTTPS failure.
+`wget` / `curl` print `fetching...` before the transfer, label **HTTP/2** when ALPN
+`h2` is negotiated, show **Content-Type** (or full response headers with `-i`), and
+warn when the body hits the **8192-byte** client limit (`truncated, received …`).
+TLS failures surface `tls_last_error()` plus stable reject names (`fetch: tls-*`).
 
 HTTPS trust is **WebPKI** (embedded roots + path build + hostname/time) by default.
 **Pins** override; **TOFU** is opt-in via Settings (`tls_tofu=1` in `/etc/peak/display`).
@@ -111,13 +113,13 @@ and ECDSA P-256/P-384 (SHA-256/SHA-384).
 | AES-256-GCM | `0xC02C`/`0xC030` | `0x1302` |
 | ChaCha20-Poly1305 | `0xCCA8`/`0xCCA9` | `0x1303` |
 | ALPN `http/1.1` | yes | yes |
-| ALPN `h2` + HTTP/2 GET | yes | yes |
+| ALPN `h2` + HTTP/2 GET | yes (HPACK headers, body limits) | yes |
 | SKE / CertVerify | ECDSA-P256, RSA-PSS/PKCS1 | ECDSA-P256, RSA-PSS-SHA256 |
 | Finished check | PRF verify_data | HMAC-finished |
 | GREASE ClientHello | yes | yes |
 | Session tickets / PSK | cache+offer (1.2 NST) | — (PSK later) |
 | ECH | scaffold (fail-closed) | scaffold (fail-closed) |
-| HTTP/2 ALPN `h2` | yes (minimal GET) | yes |
+| HTTP/2 ALPN `h2` | yes (HPACK headers, body limits) | yes |
 
 Host goldens: `tests/host/test_tls.c` (`test_clienthello_goldens`) asserts suite order and
 extensions. Optional live probe: `make smoke-tls-live` (soft-fail offline).

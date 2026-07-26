@@ -5,6 +5,7 @@
 #include "shell.h"
 #include "console.h"
 #include "net.h"
+#include "http_util.h"
 #include "tls.h"
 #include "tls_util.h"
 #include "webpki.h"
@@ -177,7 +178,7 @@ int uping_main(int argc, char **argv) {
 int uwget_main(int argc, char **argv) {
     privacy_grant_net_client(0);
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("wget", "[-O path] <url>");
+        peak_usage("wget", "[-i] [-O path] <url>");
         return argc < 2 ? 1 : 0;
     }
     if (!net_ready()) {
@@ -186,27 +187,54 @@ int uwget_main(int argc, char **argv) {
     }
     const char *url = 0;
     const char *out_path = 0;
+    int show_headers = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-O") && i + 1 < argc) {
             out_path = argv[++i];
+            continue;
+        }
+        if (!strcmp(argv[i], "-i")) {
+            show_headers = 1;
             continue;
         }
         if (argv[i][0] != '-')
             url = argv[i];
     }
     if (!url) {
-        peak_usage("wget", "[-O path] <url>");
+        peak_usage("wget", "[-i] [-O path] <url>");
         return 1;
     }
     char body[8192];
+    char hdrs[2048];
     int st = 0;
+    struct net_http_request req;
+    memset(&req, 0, sizeof(req));
+    snprintf(req.method, sizeof(req.method), "GET");
+    req.url = url;
     console_printf("GET %s\n", url);
     console_write("fetching...\n");
-    if (net_http_get(url, body, sizeof(body), &st) != 0) {
+    if (net_http_request(&req, body, sizeof(body), &st, hdrs, sizeof(hdrs)) != 0) {
         wget_print_failure(st, body);
         return 1;
     }
-    console_printf("HTTP %d  %lu bytes\n", st, (unsigned long)strlen(body));
+    if (net_http_last_h2())
+        console_printf("HTTP/2 %d\n", st);
+    else
+        console_printf("HTTP %d\n", st);
+    if (show_headers && hdrs[0]) {
+        console_write(hdrs);
+    } else {
+        char ct[128];
+        if (http_header_value(hdrs, "content-type", ct, sizeof(ct)) == 0)
+            console_printf("  Content-Type: %s\n", ct);
+    }
+    console_printf("  %lu bytes", (unsigned long)strlen(body));
+    if (net_http_last_body_truncated()) {
+        console_printf(" (truncated, received %lu, limit %lu)",
+                       (unsigned long)net_http_last_body_total(),
+                       (unsigned long)sizeof(body));
+    }
+    console_write("\n");
     if (out_path) {
         char abs[256];
         if (shell_resolve_path(out_path, abs, sizeof(abs))) {
@@ -234,7 +262,7 @@ int uwget_main(int argc, char **argv) {
 
 int ucurl_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("curl", "[-o path] <url>");
+        peak_usage("curl", "[-i] [-o path] <url>");
         return argc < 2 ? 1 : 0;
     }
     char *av[16];
@@ -244,6 +272,10 @@ int ucurl_main(int argc, char **argv) {
         if (!strcmp(argv[i], "-o") && i + 1 < argc) {
             av[ac++] = (char *)"-O";
             av[ac++] = argv[++i];
+            continue;
+        }
+        if (!strcmp(argv[i], "-i")) {
+            av[ac++] = (char *)"-i";
             continue;
         }
         av[ac++] = argv[i];

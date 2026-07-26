@@ -90,6 +90,10 @@ int net_http_needs_tls(void);
 /* Snapshot from last successful HTTPS handshake (cleared on failure). */
 int net_http_last_tls_secure(void);
 int net_http_last_tls_verified(void);
+/* Last transfer used HTTP/2 (ALPN h2) and body limit metadata. */
+int net_http_last_h2(void);
+size_t net_http_last_body_total(void);
+int net_http_last_body_truncated(void);
 /* Stable reject name for last TLS failure (e.g. "fetch: tls-mismatch"). */
 const char *net_http_tls_reject_name(void);
 
