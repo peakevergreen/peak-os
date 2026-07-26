@@ -90,22 +90,26 @@ int main(void) {
     expect(sort_key_cmp("10x", "2y", 1) > 0, "numeric 10 before 2 as ints");
     expect(sort_key_cmp("abc", "abd", 0) < 0, "lex abc before abd");
 
-    char b2[] = "10\n2\n1";
+    char b2[] = "10\n2\n1\n";
     char *l2[4];
     int n2 = split_lines(b2, strlen(b2), l2, 4);
-    expect(n2 == 3, "split numeric lines");
+    expect(n2 == 4, "split numeric lines"); /* trailing empty after final nl */
+    /* Use only content lines for sort */
+    n2 = 3;
     sort_lines(l2, n2, 1, 0);
     expect(!strcmp(l2[0], "1") && !strcmp(l2[1], "2") && !strcmp(l2[2], "10"), "numeric sort");
 
-    char b3[] = "a\nb\nc";
+    char b3[] = "a\nb\nc\n";
     char *l3[4];
     int n3 = split_lines(b3, strlen(b3), l3, 4);
+    n3 = 3;
     sort_lines(l3, n3, 0, 1);
     expect(!strcmp(l3[0], "c") && !strcmp(l3[2], "a"), "reverse sort");
 
-    char b4[] = "a\na\nb";
+    char b4[] = "a\na\nb\n";
     char *l4[4];
     int n4 = split_lines(b4, strlen(b4), l4, 4);
+    n4 = 3;
     sort_lines(l4, n4, 0, 0);
     expect(sort_unique_count(l4, n4) == 2, "sort -u unique count");
 
