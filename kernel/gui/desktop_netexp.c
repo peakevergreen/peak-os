@@ -7,6 +7,8 @@
 #include "clipboard.h"
 #include "notify.h"
 #include "util.h"
+#include "tls_session.h"
+#include "tls.h"
 
 #define NETEXP_LINES 12
 #define NETEXP_COLS  56
@@ -117,6 +119,35 @@ static void nx_run_nslookup(void) {
     nx_mark_dirty();
 }
 
+
+static void netexp_draw_conn_table(uint32_t tx, uint32_t *pty, uint32_t cw) {
+    char line[NETEXP_COLS + 1];
+    fb_draw_string_fit(tx, *pty, cw, "Connections (recent TCP)", desktop_color_accent(), desktop_color_bg());
+    *pty += fb_cell_h() + desktop_u(2);
+    int rows = net_tcp_conn_row_count();
+    if (rows <= 0) {
+        nx_append("  (no active TCP sessions)");
+        fb_draw_string_fit(tx, *pty, cw, "  (no active TCP sessions)", desktop_color_dim(), desktop_color_bg());
+        *pty += fb_cell_h();
+    } else {
+        for (int r = 0; r < rows && r < 3; r++) {
+            char host[48], state[16];
+            uint16_t port = 0;
+            if (net_tcp_conn_row(r, host, sizeof(host), &port, state, sizeof(state)) != 0)
+                break;
+            snprintf(line, sizeof(line), "  %s:%u  %s", host, (unsigned)port, state);
+            fb_draw_string_fit(tx, *pty, cw, line, desktop_color_fg(), desktop_color_bg());
+            *pty += fb_cell_h();
+        }
+    }
+    int ts = tls_session_used_count();
+    int tmax = tls_session_max_slots();
+    snprintf(line, sizeof(line), "TLS tickets %d/%d  resume %s", ts, tmax,
+             tls_last_handshake_resumed() ? "yes" : "no");
+    fb_draw_string_fit(tx, *pty, cw, line, desktop_color_dim(), desktop_color_bg());
+    *pty += fb_cell_h() + desktop_u(4);
+}
+
 void desktop_netexp_draw(struct win *w) {
     uint32_t ch = fb_cell_h();
     uint32_t th = desktop_title_h();
@@ -129,6 +160,8 @@ void desktop_netexp_draw(struct win *w) {
     ty += ch + desktop_u(4);
     int vis = NETEXP_LINES;
     int start = nx_count > vis ? nx_count - vis : 0;
+    uint32_t table_y = ty + (uint32_t)vis * ch + desktop_u(4);
+    netexp_draw_conn_table(tx, &table_y, cw);
     for (int i = 0; i < vis && start + i < nx_count; i++) {
         fb_draw_string_fit(tx, ty + (uint32_t)i * ch, cw, nx_lines[start + i],
                            desktop_color_fg(), desktop_color_bg());

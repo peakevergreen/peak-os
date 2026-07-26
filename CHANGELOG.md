@@ -4,6 +4,10 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 90:** Help overlay searchable shortcuts + per-app focus hint
+
+- **Pass 98:** Wave 4 lock-in — smoke-cli gates Passes 79–97, ROADMAP/CHANGELOG Wave 4 shipped, security-checklist CI note
+
 - **Pass 89:** Settings theme chrome mock preview (titlebar/taskbar/toast) before apply
 
 - **Pass 88:** Drag Files row onto Notepad/Images to open

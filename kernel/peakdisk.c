@@ -18,6 +18,7 @@ static volatile int save_busy;
 static volatile int save_queued;
 static char peakdisk_err[96];
 static uint32_t peakdisk_saved_bytes;
+static uint32_t peakdisk_progress_pct;
 static char g_pass[128];
 static size_t g_pass_len;
 
@@ -231,6 +232,7 @@ int peakdisk_save(void) {
     (void)blobstore_sync();
 
     peakdisk_saved_bytes = sz;
+    peakdisk_progress_pct = 100;
     serial_log(SERIAL_LOG_INFO,
                encrypted ? "peakdisk: saved (encrypted)\n" : "peakdisk: saved\n");
     save_busy = 0;
@@ -243,12 +245,18 @@ static void peakdisk_save_worker(void) {
     sched_exit();
 }
 
+uint32_t peakdisk_save_progress_pct(void) {
+    if (!peakdisk_busy()) return peakdisk_progress_pct;
+    return peakdisk_progress_pct < 95 ? peakdisk_progress_pct + 5 : 95;
+}
+
 int peakdisk_save_async(void) {
     if (!blockdev_present()) {
         peakdisk_set_err("no block device (ATA/SD not present)");
         return -1;
     }
     if (save_busy || save_queued) {
+        peakdisk_progress_pct = 5;
         peakdisk_set_err("save already in progress");
         return -1;
     }

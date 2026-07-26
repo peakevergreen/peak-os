@@ -218,3 +218,5 @@ void tls_close(void) {
     client_seq = server_seq = 0;
     tls_scrub_secrets();
 }
+
+int tls_last_handshake_resumed(void) { return tls_last_resume; }

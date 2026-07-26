@@ -81,12 +81,19 @@ void desktop_agent_draw(struct win *w) {
 }
 
 int desktop_agent_key(int key) {
+    if ((key == 6 || key == 'f' || key == 'F') && keyboard_ctrl_down()) {
+        if (agent_transcript_filter_key(0)) {} /* open filter via typing */
+        dirty_bits |= DIRTY_WIN;
+        return 1;
+    }
+    if (agent_transcript_filter_key(key)) { dirty_bits |= DIRTY_WIN; return 1; }
     if (agent_write_pending() && (key == 'y' || key == 'Y' || key == 'n' || key == 'N'))
         agent_approve_write(key == 'y' || key == 'Y');
     else if (key == KEY_UP) { if (agent_transcript_scroll(keyboard_ctrl_down() ? AGENT_SCROLL_PAGE : 1)) dirty_bits |= DIRTY_WIN; }
     else if (key == KEY_DOWN) { if (agent_transcript_scroll(keyboard_ctrl_down() ? -AGENT_SCROLL_PAGE : -1)) dirty_bits |= DIRTY_WIN; }
     else if (key == KEY_HOME) { agent_transcript_reset_scroll(); dirty_bits |= DIRTY_WIN; }
     else if (key == KEY_END) { if (agent_transcript_scroll_end()) dirty_bits |= DIRTY_WIN; }
+    else if ((key == 6 || key == 18) && keyboard_ctrl_down()) { if (agent_transcript_filter_key(key == 6 ? 27 : key)) dirty_bits |= DIRTY_WIN; }
     else if (key == '\n' && agent_input_len) {
         agent_ask(agent_input); clipboard_set(agent_input, agent_input_len);
         agent_input_len ='\0'; agent_input[0] ='\0'; agent_notify_done();

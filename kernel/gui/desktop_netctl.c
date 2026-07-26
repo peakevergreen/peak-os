@@ -8,6 +8,8 @@
 #include "notify.h"
 #include "clipboard.h"
 #include "util.h"
+#include "tls_session.h"
+#include "tls.h"
 
 static int nc_kill_arm;
 static int nc_row; /* context target row */
@@ -112,6 +114,11 @@ void desktop_netctl_draw(struct win *w) {
              (rf & RANDOM_READY_CRYPTO) ? " CRYPTO" : "",
              (rf & RANDOM_FLAG_WEAK) ? " WEAK" : "");
     fb_draw_string(tx, ty, line, desktop_color_dim(), desktop_color_bg());
+    ty += row;
+    snprintf(line, sizeof(line), "TLS cache %d/%d  last resume %s",
+             tls_session_used_count(), tls_session_max_slots(),
+             tls_last_handshake_resumed() ? "yes" : "no");
+    fb_draw_string(tx, ty, line, desktop_color_fg(), desktop_color_bg());
 }
 
 int desktop_netctl_click(struct win *w, int32_t mx, int32_t my) {

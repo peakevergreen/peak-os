@@ -22,6 +22,7 @@ static int write_approved;
 static char tlines[AGENT_TLINES][AGENT_TLINE];
 static int tcount;
 static int tscroll;
+static char agent_transcript_filter[24];
 
 static void transcript_push_one(const char *line) {
     if (!line)
@@ -100,6 +101,13 @@ void agent_transcript_note_audit(const char *op, const char *target, const char 
     snprintf(line, sizeof(line), "[audit] %s %s -> %s", op?op:"?", target?target:"-", decision?decision:"?");
     agent_transcript_push(line);
 }
+void agent_transcript_note_recall(const char *msg) {
+    if (!msg || !msg[0]) return;
+    char line[AGENT_TLINE];
+    snprintf(line, sizeof(line), "[recall] %s", msg);
+    agent_transcript_push(line);
+}
+
 void agent_transcript_note_tool(const char *msg) {
     if (!msg||!msg[0]) return;
     char line[AGENT_TLINE]; snprintf(line, sizeof(line), "[tool] %s", msg); agent_transcript_push(line);
@@ -231,7 +239,7 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
                    "tools: read write list exec search grep stat sys.info net.ping", dim, bg);
 
     uint32_t ty = y + 8 * s + 2 * line_h;
-    uint32_t body_h = h > 120 * s ? h - 100 * s : h / 2;
+    uint32_t body_h = h > 140 * s ? h - 80 * s : (h * 3) / 5;
     if (body_h < line_h * 2)
         body_h = line_h * 2;
     int vis = (int)(body_h / line_h);
@@ -246,8 +254,19 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     for (int row = 0; row < vis; row++) {
         int idx = start + row;
         const char *txt = "(no session — type a goal below)";
-        if (idx >= 0 && idx < tcount)
+        if (idx >= 0 && idx < tcount) {
+            if (agent_transcript_filter[0]) {
+                const char *f = agent_transcript_filter;
+                const char *s = tlines[idx];
+                int ok = 0;
+                for (; *s; s++) {
+                    if (*s == *f) { f++; if (!*f) { ok = 1; break; } }
+                    else f = agent_transcript_filter;
+                }
+                if (!ok) { txt = "(filtered)"; if (agent_transcript_filter[0]) txt = "…"; continue; }
+            }
             txt = tlines[idx];
+        }
         else if (tcount == 0 && row == vis - 1)
             txt = last_summary[0] ? last_summary : txt;
         uint32_t line_fg = fg; if (txt[0]=='[' && (!strncmp(txt,"[audit]",7)||!strncmp(txt,"[tool]",6)||!strncmp(txt,"[pending",8)||!strncmp(txt,"[write",6))) line_fg = dim; fb_draw_string_fit(x + 8 * s, ty + (uint32_t)row * line_h, w - 16 * s, txt, line_fg, bg);
@@ -265,3 +284,22 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     fb_draw_string(x + 8 * s, fy, pend, fg, bg);
 
 }
+
+int agent_transcript_filter_key(int key) {
+    if (key == 27) { agent_transcript_filter[0] = '\0'; return 1; }
+    if (key == '\b') {
+        size_t n = strlen(agent_transcript_filter);
+        if (n) agent_transcript_filter[n - 1] = '\0';
+        return 1;
+    }
+    if (key >= 32 && key < 127) {
+        size_t n = strlen(agent_transcript_filter);
+        if (n + 1 < sizeof(agent_transcript_filter)) {
+            agent_transcript_filter[n] = (char)key;
+            agent_transcript_filter[n + 1] = '\0';
+        }
+        return 1;
+    }
+    return 0;
+}
+const char *agent_transcript_filter_text(void) { return agent_transcript_filter; }

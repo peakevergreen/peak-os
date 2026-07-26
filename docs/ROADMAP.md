@@ -15,6 +15,10 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 **Shipped on `main` (Passes 59–78):** CLI grep/find/sort depth, pipe buffer, net POST/AAAA, desktop UX (start menu through Files/Notepad a11y), TLS 1.3 PSK binder, streaming PeakFS export, browser downloads/bookmarks, agent `fs.tree`/`sys.ps`, container ENV/EXPOSE depth, and Wave 3 smoke-cli lock-in (Pass 78).
 
+**Shipped on `main` (Passes 79–97):** join/comm, head/tail/timeout, crypto pack, mktemp/install, text buffers, HTTP body policy, DNS negcache, browser ring-3, JS for-await, Files DnD open-with, theme preview, help shortcuts, Monitor export, Net TLS table, Disks save UX, PeakVec namespace, Agent search, nc/traceroute depth, heap/sched GUI fairness.
+
+**Pass 98 (Wave 4 lock-in):** smoke-cli gates Passes 79–97, ROADMAP/CHANGELOG Wave 4 shipped, security-checklist CI note.
+
 **Pass 78 (Wave 3 lock-in):** `smoke-cli.sh` gates for Passes 59–77 markers, ROADMAP/CHANGELOG sync, security-checklist automation notes — Wave 3 release acceptance.
 
 ## Enhancement wave 2 (Passes 39–58)

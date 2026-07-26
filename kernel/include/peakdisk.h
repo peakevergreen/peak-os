@@ -19,3 +19,4 @@ uint32_t peakdisk_last_save_bytes(void);
 void peakdisk_set_passphrase(const char *pass);
 
 #endif
+uint32_t peakdisk_save_progress_pct(void);

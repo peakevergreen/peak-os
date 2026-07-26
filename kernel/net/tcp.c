@@ -30,6 +30,7 @@ int net_tcp_alloc_slot(void) {
         if (tcps[i].state == TCP_CLOSED)
             return i;
     }
+    tcp_conn_note("?", port, "fail");
     return -1;
 }
 
@@ -421,4 +422,27 @@ void net_tcp_close(void) {
     }
     tcp_state = TCP_CLOSED;
     tcp_rx_len = 0;
+}
+
+#define TCP_CONN_ROWS 4
+static char tcp_conn_host[TCP_CONN_ROWS][48];
+static uint16_t tcp_conn_port[TCP_CONN_ROWS];
+static char tcp_conn_state[TCP_CONN_ROWS][16];
+static int tcp_conn_n;
+
+static void tcp_conn_note(const char *host, uint16_t port, const char *state) {
+    if (!host || !state) return;
+    int slot = tcp_conn_n < TCP_CONN_ROWS ? tcp_conn_n++ : TCP_CONN_ROWS - 1;
+    snprintf(tcp_conn_host[slot], sizeof(tcp_conn_host[slot]), "%s", host);
+    tcp_conn_port[slot] = port;
+    snprintf(tcp_conn_state[slot], sizeof(tcp_conn_state[slot]), "%s", state);
+}
+
+int net_tcp_conn_row_count(void) { return tcp_conn_n; }
+int net_tcp_conn_row(int idx, char *host, size_t host_cap, uint16_t *port, char *state, size_t state_cap) {
+    if (idx < 0 || idx >= tcp_conn_n) return -1;
+    if (host && host_cap) snprintf(host, host_cap, "%s", tcp_conn_host[idx]);
+    if (port) *port = tcp_conn_port[idx];
+    if (state && state_cap) snprintf(state, state_cap, "%s", tcp_conn_state[idx]);
+    return 0;
 }

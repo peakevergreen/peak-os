@@ -199,12 +199,22 @@ int umemory_main(int argc, char **argv) {
     return 0;
 }
 
+static int peakvec_namespace_list(void) {
+    console_write("PeakVec namespaces: agent (default), session
+");
+    print_peakvec_index_line("agent");
+    print_peakvec_index_line("session");
+    return 0;
+}
+
 int upeakvec_main(int argc, char **argv) {
     const char *ns = "agent";
     if (peak_wants_help(argc, argv)) {
-        peak_usage("peakvec", "stats [namespace] | query <text...> [-k N] [--explain] [--timing]");
+        peak_usage("peakvec", "stats [namespace] | namespace | query <text...> [-k N] [--explain] [--timing]");
         return 0;
     }
+    if (argc >= 2 && !strcmp(argv[1], "namespace"))
+        return peakvec_namespace_list();
     if (argc >= 2 && !strcmp(argv[1], "query"))
         return peakvec_run_query(argc, argv);
     for (int i = 1; i < argc; i++) {
