@@ -124,7 +124,7 @@ CLI scrollback search: **Ctrl+F**, type a needle, **Enter** for next match (128 
 | Command | Notes |
 |---------|-------|
 | `ifconfig` `ping` `wget` `curl` | IPv4 + HTTP — [network.md](network.md) |
-| `tlsinfo` | TLS trust summary, last error, `-r` root digests, `-m` hostname test |
+| `tlsinfo` | TLS trust summary, session cache, `-s` cache list, `-r` root digests, `-m` hostname test |
 | `nslookup` `host` | DNS A lookup (dig-style QUESTION/ANSWER) |
 | `traceroute` | Staged reachability: local → gateway → DNS → dest (TCP :80) |
 | `nc` | TCP connect (`host port` or `host:port`; optional send + recv) |

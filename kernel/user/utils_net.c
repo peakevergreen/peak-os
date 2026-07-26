@@ -8,6 +8,7 @@
 #include "http_util.h"
 #include "tls.h"
 #include "tls_util.h"
+#include "tls_session.h"
 #include "webpki.h"
 #include "settings.h"
 #include "random.h"
@@ -506,20 +507,23 @@ int unc_main(int argc, char **argv) {
 }
 int utlsinfo_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage("tlsinfo", "[-r] [-m pattern host]");
+        peak_usage("tlsinfo", "[-r] [-s] [-m pattern host]");
         return 0;
     }
     int show_roots = 0;
+    int show_sessions = 0;
     const char *match_pat = NULL;
     const char *match_host = NULL;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-r"))
             show_roots = 1;
+        else if (!strcmp(argv[i], "-s"))
+            show_sessions = 1;
         else if (!strcmp(argv[i], "-m") && i + 2 < argc) {
             match_pat = argv[++i];
             match_host = argv[++i];
         } else {
-            peak_usage("tlsinfo", "[-r] [-m pattern host]");
+            peak_usage("tlsinfo", "[-r] [-s] [-m pattern host]");
             return 1;
         }
     }
@@ -534,6 +538,21 @@ int utlsinfo_main(int argc, char **argv) {
                    settings_tls_tofu() ? "on" : "off");
     console_printf("session: connected=%d cert_verified=%d hostname_matched=%d\n",
                    tls_ready(), tls_cert_verified(), tls_hostname_matched());
+    console_printf("session_cache: used=%d/%d\n",
+                   tls_session_used_count(), tls_session_max_slots());
+    if (show_sessions) {
+        int n = tls_session_used_count();
+        for (int i = 0; i < n; i++) {
+            char sni[TLS_SESSION_SNI_MAX];
+            struct tls_session_meta meta;
+            size_t tlen = 0;
+            if (tls_session_entry_info(i, sni, sizeof(sni), &meta, &tlen) != 0)
+                continue;
+            console_printf("  [%d] sni=%s tls=%s cipher=0x%04x ticket_len=%u\n",
+                           i, sni, meta.tls13 ? "1.3" : "1.2", meta.cipher,
+                           (unsigned)tlen);
+        }
+    }
     {
         const char *fail = tls_cert_fail_reason();
         if (fail && fail[0])

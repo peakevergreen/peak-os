@@ -239,6 +239,12 @@ grep -q uchmod_main kernel/user/utils_file.c
 grep -q chmod kernel/user/ubin_cmds.def
 grep -q vfs_mode_string kernel/vfs.c
 
+echo "==> Pass 55 TLS session resume"
+grep -q '0x0029' kernel/net/tls_clienthello.c
+grep -q 'tls_session_entry_info' kernel/net/tls_session.c
+grep -q 'session_cache:' kernel/user/utils_net.c
+grep -q 'PSK-lite' docs/network.md
+
 echo "==> theme names"
 grep -q evergreen kernel/theme.c
 grep -q midnight kernel/theme.c

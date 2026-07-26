@@ -18,7 +18,13 @@ static void wr24(uint8_t *p, uint32_t v) {
     p[2] = (uint8_t)v;
 }
 
-/* RFC 8701 GREASE values (one of 0x0A0A..0xFAFA). */
+static void wr32(uint8_t *p, uint32_t v) {
+    p[0] = (uint8_t)(v >> 24);
+    p[1] = (uint8_t)(v >> 16);
+    p[2] = (uint8_t)(v >> 8);
+    p[3] = (uint8_t)v;
+}
+
 static uint16_t grease_from(uint8_t b) {
     static const uint16_t g[] = {
         0x0A0A, 0x1A1A, 0x2A2A, 0x3A3A, 0x4A4A, 0x5A5A, 0x6A6A, 0x7A7A,
@@ -26,14 +32,13 @@ static uint16_t grease_from(uint8_t b) {
     return g[b & 0x0f];
 }
 
-/* 0 ok; -1 crypto RNG not ready; -2 message exceeds cap; -3 ECH required/missing. */
 int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *out_len) {
     {
         int ech = tls_ech_prepare_client_hello();
         if (ech == -1)
             return -3;
         if (ech == -2)
-            return -3; /* treat unimplemented encode as fail-closed when config set */
+            return -3;
     }
     if (crypto_random(client_random, 32) != 0)
         return -1;
@@ -54,6 +59,17 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     if (grease_ext == grease_cs || grease_ext == grease_grp)
         grease_ext = grease_from(client_random[6] ^ 0xcc);
 
+    uint8_t resume_ticket[TLS_SESSION_TICKET_MAX];
+    size_t resume_tlen = sizeof(resume_ticket);
+    struct tls_session_meta resume_meta;
+    int resume_have = 0;
+    int resume_tls13 = 0;
+    if (sni && sni[0]) {
+        resume_have = tls_session_get(sni, resume_ticket, &resume_tlen, &resume_meta);
+        if (resume_have)
+            resume_tls13 = resume_meta.tls13;
+    }
+
     out[0] = HS_CLIENT_HELLO;
     size_t o = 4;
     out[o++] = 0x03;
@@ -62,7 +78,6 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     o += 32;
     out[o++] = 0;
 
-    /* Cipher suites: GREASE + real + SCSV (22 bytes of suites → length 22). */
     wr16(out + o, 22);
     o += 2;
     wr16(out + o, grease_cs);
@@ -95,7 +110,6 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     o += 2;
     size_t ext_start = o;
 
-    /* GREASE extension (empty). */
     wr16(out + o, grease_ext);
     o += 2;
     wr16(out + o, 0);
@@ -116,9 +130,6 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
         o += sl;
     }
 
-    /* supported_groups / elliptic_curves: X25519 + P-256 for ECDHE, plus
-     * secp384r1 so TLS 1.2 servers with P-384 certs accept the ClientHello
-     * (RFC 8422). ECDHE still prefers X25519 via list order + key_share. */
     wr16(out + o, 0x000a);
     o += 2;
     wr16(out + o, 10);
@@ -131,7 +142,7 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     o += 2;
     wr16(out + o, 0x0017);
     o += 2;
-    wr16(out + o, 0x0018); /* secp384r1 — cert curve advertisement */
+    wr16(out + o, 0x0018);
     o += 2;
 
     wr16(out + o, 0x000b);
@@ -178,18 +189,14 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     wr16(out + o, 0);
     o += 2;
 
-    /* session_ticket (RFC 5077): empty = willing; body = cached ticket. */
-    {
-        uint8_t ticket[TLS_SESSION_TICKET_MAX];
-        size_t tlen = sizeof(ticket);
-        int have = tls_session_get(sni, ticket, &tlen, NULL);
+    if (!resume_tls13) {
         wr16(out + o, 0x0023);
         o += 2;
-        if (have && tlen > 0 && tlen <= TLS_SESSION_TICKET_MAX) {
-            wr16(out + o, (uint16_t)tlen);
+        if (resume_have && resume_tlen > 0 && resume_tlen <= TLS_SESSION_TICKET_MAX) {
+            wr16(out + o, (uint16_t)resume_tlen);
             o += 2;
-            memcpy(out + o, ticket, tlen);
-            o += tlen;
+            memcpy(out + o, resume_ticket, resume_tlen);
+            o += resume_tlen;
         } else {
             wr16(out + o, 0);
             o += 2;
@@ -224,6 +231,38 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
     o += 2;
     memcpy(out + o, tls13_client_pub, 32);
     o += 32;
+
+    if (resume_have && resume_tls13 && resume_tlen > 0 && resume_tlen <= TLS_SESSION_TICKET_MAX) {
+        wr16(out + o, 0x002d);
+        o += 2;
+        wr16(out + o, 2);
+        o += 2;
+        out[o++] = 1;
+        out[o++] = 1;
+
+        wr16(out + o, 0x0029);
+        o += 2;
+        size_t psk_ext_len_at = o;
+        o += 2;
+
+        uint16_t ident_len = (uint16_t)(2 + resume_tlen + 4);
+        wr16(out + o, ident_len);
+        o += 2;
+        wr16(out + o, (uint16_t)resume_tlen);
+        o += 2;
+        memcpy(out + o, resume_ticket, resume_tlen);
+        o += resume_tlen;
+        wr32(out + o, 0);
+        o += 4;
+
+        wr16(out + o, 33);
+        o += 2;
+        out[o++] = 32;
+        memset(out + o, 0, 32);
+        o += 32;
+
+        wr16(out + psk_ext_len_at, (uint16_t)(o - psk_ext_len_at - 2));
+    }
 
     wr16(out + ext_len_at, (uint16_t)(o - ext_start));
     wr24(out + 1, (uint32_t)(o - 4));
