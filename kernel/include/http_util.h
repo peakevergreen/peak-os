@@ -54,6 +54,9 @@ void http_copy_response_headers(const char *buf, char *hdr_out, size_t hdr_cap);
 /* Strip headers in-place, leaving the body. No-op if incomplete. */
 void http_strip_headers(char *msg);
 
+/* Decode chunked transfer-encoding body in-place when present. */
+void http_decode_chunked_body(char *msg, size_t cap);
+
 /* Parse "HTTP/x.y NNN ..." status. Returns 0 and sets *status_out on success. */
 int http_parse_status(const char *buf, int *status_out);
 

@@ -182,9 +182,16 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
     last_tls_secure = 1;
     last_tls_verified = tls_cert_verified() && tls_hostname_matched();
 
-    if (tls_alpn_is_h2() && (!method || !strcmp(method, "GET") || !strcmp(method, "HEAD")) && !body_len) {
+    if (tls_alpn_is_h2() && (!method || !strcmp(method, "GET") || !strcmp(method, "HEAD") ||
+                             (!strcmp(method, "POST") && body_len <= HTTP2_BODY_MAX)) &&
+        (!body_len || !strcmp(method, "POST"))) {
         int st = 0;
-        int rc = http2_get(host, path, extra_headers, buf, buf_cap, &st);
+        int rc;
+        if (method && !strcmp(method, "POST") && body_len)
+            rc = http2_request("POST", host, path, extra_headers, body, body_len, buf,
+                               buf_cap, &st);
+        else
+            rc = http2_get(host, path, extra_headers, buf, buf_cap, &st);
         tls_close();
         if (rc != 0)
             return -4;
@@ -367,6 +374,7 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
                 http_copy_response_headers(body, hdrtmp, sizeof(hdrtmp));
                 hsts_process_header(host, hdrtmp);
             }
+            http_decode_chunked_body(body, body_cap);
             http_strip_headers(body);
             http_needs_tls_flag = 0;
             return 0;

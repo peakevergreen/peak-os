@@ -215,10 +215,19 @@ void http2_last_meta(struct http2_meta *out) {
 
 int http2_get(const char *host, const char *path, const char *extra_headers, char *out,
               size_t out_cap, int *status_out) {
+    return http2_request("GET", host, path, extra_headers, NULL, 0, out, out_cap,
+                         status_out);
+}
+
+int http2_request(const char *method, const char *host, const char *path,
+                  const char *extra_headers, const char *body, size_t body_len,
+                  char *out, size_t out_cap, int *status_out) {
     (void)extra_headers;
     memset(&last_meta, 0, sizeof(last_meta));
     if (!host || !path || !out || out_cap < 128)
         return -1;
+    if (!method)
+        method = "GET";
 
     static const char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
     if (tls_send(preface, sizeof(preface) - 1) != 0)
@@ -228,7 +237,10 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
 
     uint8_t hpack[256];
     size_t ho = 0;
-    hpack[ho++] = 0x82;
+    if (!strcmp(method, "POST"))
+        hpack[ho++] = 0x83;
+    else
+        hpack[ho++] = 0x82;
     hpack[ho++] = 0x87;
     if (!strcmp(path, "/"))
         hpack[ho++] = 0x84;
@@ -236,14 +248,27 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
         return -1;
     if (hpack_add_lit(hpack, sizeof(hpack), &ho, 1, host) != 0)
         return -1;
-    if (send_frame(0x01, 0x05, 1, hpack, ho) != 0)
+    if (body_len > 0) {
+        char cl[16];
+        snprintf(cl, sizeof(cl), "%zu", body_len);
+        if (hpack_add_lit(hpack, sizeof(hpack), &ho, 28, cl) != 0)
+            return -1;
+    }
+    uint8_t hdr_flags = body_len ? 0x04 : 0x05;
+    if (send_frame(0x01, hdr_flags, 1, hpack, ho) != 0)
         return -1;
+    if (body_len > 0) {
+        if (body_len > HTTP2_BODY_MAX)
+            body_len = HTTP2_BODY_MAX;
+        if (send_frame(0x00, 0x01, 1, (const uint8_t *)body, body_len) != 0)
+            return -1;
+    }
 
     int status = 0;
     char resp_hdrs[2048];
     size_t resp_hdr_off = 0;
     uint8_t body_acc[HTTP2_BODY_MAX];
-    size_t body_len = 0, body_total = 0;
+    size_t body_stored = 0, body_total = 0;
     int stream_done = 0;
     uint64_t start = timer_ticks();
 
@@ -303,11 +328,11 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
                 data_len = plen - 1 - pad;
             }
             body_total += data_len;
-            if (body_len + data_len > sizeof(body_acc))
-                data_len = sizeof(body_acc) - body_len;
+            if (body_stored + data_len > sizeof(body_acc))
+                data_len = sizeof(body_acc) - body_stored;
             if (data_len) {
-                memcpy(body_acc + body_len, payload + data_off, data_len);
-                body_len += data_len;
+                memcpy(body_acc + body_stored, payload + data_off, data_len);
+                body_stored += data_len;
             }
             if (flags & 0x01)
                 stream_done = 1;
@@ -320,9 +345,9 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
         *status_out = status;
 
     last_meta.status = status;
-    last_meta.body_stored = body_len;
+    last_meta.body_stored = body_stored;
     last_meta.body_total = body_total;
-    last_meta.truncated = (body_total > body_len) ? 1 : 0;
+    last_meta.truncated = (body_total > body_stored) ? 1 : 0;
 
     size_t so = (size_t)snprintf(out, out_cap, "HTTP/1.0 %d %s\r\n", status,
                                  status_phrase(status));
@@ -346,13 +371,13 @@ int http2_get(const char *host, const char *path, const char *extra_headers, cha
             return -1;
         so += (size_t)n;
     }
-    if (so + body_len >= out_cap) {
-        body_len = out_cap - so - 1;
+    if (so + body_stored >= out_cap) {
+        body_stored = out_cap - so - 1;
         last_meta.truncated = 1;
-        last_meta.body_stored = body_len;
+        last_meta.body_stored = body_stored;
     }
-    if (body_len)
-        memcpy(out + so, body_acc, body_len);
-    out[so + body_len] = '\0';
+    if (body_stored)
+        memcpy(out + so, body_acc, body_stored);
+    out[so + body_stored] = '\0';
     return 0;
 }
