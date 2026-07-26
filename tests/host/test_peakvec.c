@@ -191,8 +191,54 @@ static void test_stats(void) {
     peakvec_stats("agent", &st);
     expect(st.count == 0, "stats count empty");
     expect(st.max_entries == 4096u, "stats max entries");
+    expect(st.ann_active == 0, "stats ann inactive when empty");
     upsert_text("s1", "stats probe"); peakvec_stats("agent", &st);
     expect(st.count == 1, "stats count after upsert");
+    expect(st.ann_threshold == PEAKVEC_ANN_THRESHOLD, "stats ann threshold");
+}
+
+static void test_query_explain_brute(void) {
+    peakvec_init();
+    upsert_text("a", "alpha beta gamma");
+    upsert_text("b", "delta epsilon zeta");
+    int16_t q[PEAKVEC_DIM];
+    peakvec_embed_text("alpha beta gamma", q);
+    struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
+    struct peakvec_query_explain ex;
+    int n = peakvec_query_ex("agent", q, 2, hits, &ex);
+    expect(n == 2, "explain brute returns hits");
+    expect(ex.use_ann == 0, "explain brute mode");
+    expect(ex.ns_live == 2, "explain ns live");
+    expect(ex.scored == 2, "explain scored all entries");
+    expect(ex.elapsed_us > 0, "explain elapsed set");
+}
+
+static void test_query_explain_ann(void) {
+    peakvec_init();
+    char key[32], text[80];
+    for (int i = 0; i < 80; i++) {
+        snprintf(key, sizeof(key), "ex%d", i);
+        snprintf(text, sizeof(text), "filler document about topic %d kernels", i);
+        upsert_text(key, text);
+    }
+    upsert_text("needle", "unique peakvec ivf bucket probe phrase");
+    int16_t q[PEAKVEC_DIM];
+    peakvec_embed_text("unique peakvec ivf bucket probe phrase", q);
+    struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
+    struct peakvec_query_explain ex;
+    int n = peakvec_query_ex("agent", q, 3, hits, &ex);
+    expect(n >= 1, "explain ann returns hits");
+    expect(ex.use_ann == 1, "explain ann mode");
+    expect(ex.ns_live >= PEAKVEC_ANN_THRESHOLD, "explain ann ns live");
+    expect(ex.bucket_probed + ex.remainder == ex.scored, "explain scored sum");
+    expect(!strcmp(hits[0].key, "needle"), "explain ann finds needle");
+    struct peakvec_stats st;
+    peakvec_stats("agent", &st);
+    expect(st.ann_active == 1, "stats ann active");
+    uint32_t hist_sum = 0;
+    for (int i = 0; i < PEAKVEC_ANN_BUCKETS; i++)
+        hist_sum += st.bucket_hist[i];
+    expect(hist_sum == st.count, "stats bucket hist sums to count");
 }
 static void test_ann_threshold_corpus(void) {
     /* Fill past ANN threshold; self-query must still find needle. */
@@ -222,6 +268,8 @@ int main(void) {
     test_dense_pack_after_deletes();
     test_namespace_isolation();
     test_stats();
+    test_query_explain_brute();
+    test_query_explain_ann();
     test_ann_threshold_corpus();
 
     if (fails) {

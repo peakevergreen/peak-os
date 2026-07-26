@@ -9,8 +9,6 @@
 #define PEAKVEC_MAGIC "PEAKVEC1"
 #define PEAKVEC_MAX_ENTRIES 4096u
 #define PEAKVEC_NS_DEFAULT "agent"
-#define PEAKVEC_ANN_BUCKETS 16u
-#define PEAKVEC_ANN_THRESHOLD 64u
 
 #if (PEAKVEC_DIM % 4) != 0
 #error PEAKVEC_DIM must be a multiple of 4 for batched dot/norm helpers
@@ -568,6 +566,12 @@ int peakvec_delete(const char *ns, const char *key) {
 
 int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
                   int topk, struct peakvec_hit *hits) {
+    return peakvec_query_ex(ns, query, topk, hits, NULL);
+}
+
+int peakvec_query_ex(const char *ns, const int16_t query[PEAKVEC_DIM],
+                     int topk, struct peakvec_hit *hits,
+                     struct peakvec_query_explain *explain) {
     if (!ready || !query || !hits || topk <= 0)
         return -1;
     if (topk > PEAKVEC_TOPK_MAX)
@@ -575,6 +579,8 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
     char nsb[PEAKVEC_NS_MAX];
     ns_copy(nsb, ns);
     uint32_t t0 = sysmon_now_us();
+    if (explain)
+        memset(explain, 0, sizeof(*explain));
     for (int i = 0; i < topk; i++) {
         hits[i].key[0] = '\0';
         hits[i].meta[0] = '\0';
@@ -583,12 +589,22 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
     int64_t qnorm = vec_norm_sq_i16(query);
     uint64_t qroot = isqrt_u64((uint64_t)qnorm);
     uint8_t qb = vec_bucket(query);
-    int use_ann = (count >= PEAKVEC_ANN_THRESHOLD && entry_bucket != NULL);
+    uint32_t ns_live = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        if (entry_ns && !ns_eq(nsb, &entry_ns[i * PEAKVEC_NS_MAX]))
+            continue;
+        ns_live++;
+    }
+    int use_ann = (ns_live >= PEAKVEC_ANN_THRESHOLD && entry_bucket != NULL);
     int found = 0;
     int32_t worst = -1000000;
+    uint32_t scored = 0;
+    uint32_t skipped_early = 0;
+    uint32_t bucket_probed = 0;
+    uint32_t remainder = 0;
+    int ann_shortcut = 0;
 
     for (int pass = 0; pass < (use_ann ? 2 : 1); pass++) {
-        /* pass 0: same IVF bucket; pass 1: remainder (or full if !ANN). */
         for (uint32_t i = 0; i < count; i++) {
             if (entry_ns && !ns_eq(nsb, &entry_ns[i * PEAKVEC_NS_MAX]))
                 continue;
@@ -597,14 +613,23 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
                 if (pass == 0 && b != qb)
                     continue;
                 if (pass == 1 && b == qb)
-                    continue; /* already scored */
+                    continue;
             }
             uint64_t vroot = entry_nroot ? entry_nroot[i] : 0;
             int early = (found >= topk);
             int skipped = 0;
             int32_t sc = cosine_milli_roots(query, qroot, entries[i].vec, vroot,
                                            early, worst, &skipped);
-            if (skipped || (found >= topk && sc <= worst))
+            scored++;
+            if (pass == 0)
+                bucket_probed++;
+            else if (use_ann)
+                remainder++;
+            if (skipped) {
+                skipped_early++;
+                continue;
+            }
+            if (found >= topk && sc <= worst)
                 continue;
             int place = topk;
             for (int k = 0; k < topk; k++) {
@@ -624,11 +649,24 @@ int peakvec_query(const char *ns, const int16_t query[PEAKVEC_DIM],
                 found++;
             worst = hits[topk - 1].score_milli;
         }
-        /* If ANN bucket pass already filled top-k with strong hits, skip rest. */
-        if (use_ann && pass == 0 && found >= topk && worst > 500)
+        if (use_ann && pass == 0 && found >= topk && worst > 500) {
+            ann_shortcut = 1;
             break;
+        }
     }
-    sysmon_note_peakvec_us(sysmon_now_us() - t0);
+    uint32_t elapsed = sysmon_now_us() - t0;
+    sysmon_note_peakvec_us(elapsed);
+    if (explain) {
+        explain->use_ann = (uint8_t)(use_ann ? 1 : 0);
+        explain->query_bucket = qb;
+        explain->ann_shortcut = (uint8_t)(ann_shortcut ? 1 : 0);
+        explain->ns_live = ns_live;
+        explain->bucket_probed = bucket_probed;
+        explain->remainder = remainder;
+        explain->scored = scored;
+        explain->skipped_early = skipped_early;
+        explain->elapsed_us = elapsed;
+    }
     return found;
 }
 
@@ -652,11 +690,25 @@ int peakvec_count(const char *ns) {
 
 void peakvec_stats(const char *ns, struct peakvec_stats *out) {
     if (!out) return;
+    memset(out, 0, sizeof(*out));
     out->count = (uint32_t)peakvec_count(ns);
     out->capacity = capacity;
     out->max_entries = PEAKVEC_MAX_ENTRIES;
     out->use_blob = (uint8_t)(use_blob && blob_id != 0);
     out->blob_id = blob_id;
+    out->ann_threshold = PEAKVEC_ANN_THRESHOLD;
+    char nsb[PEAKVEC_NS_MAX];
+    ns_copy(nsb, ns);
+    for (uint32_t i = 0; i < count; i++) {
+        if (entry_ns && !ns_eq(nsb, &entry_ns[i * PEAKVEC_NS_MAX]))
+            continue;
+        if (entry_bucket) {
+            uint8_t b = entry_bucket[i];
+            if (b < PEAKVEC_ANN_BUCKETS)
+                out->bucket_hist[b]++;
+        }
+    }
+    out->ann_active = (uint8_t)(out->count >= PEAKVEC_ANN_THRESHOLD ? 1 : 0);
 }
 
 /* op: 1=upsert_text 2=query_text 3=count 4=delete

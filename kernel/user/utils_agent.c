@@ -5,6 +5,7 @@
 #include "agent.h"
 #include "util.h"
 #include "peakvec.h"
+#include "sysmon.h"
 
 int upeak_main(int argc, char **argv) {
     (void)argc;
@@ -99,7 +100,95 @@ static void print_peakvec_index_line(const char *ns) {
                    (unsigned)st.capacity, (unsigned)st.max_entries);
     if (st.use_blob) console_printf(", blob id %u", (unsigned)st.blob_id);
     else console_write(", vfs fallback");
+    if (st.ann_active)
+        console_printf(", ivf-lite (>= %u)", (unsigned)st.ann_threshold);
+    else if (st.count)
+        console_printf(", brute (< %u)", (unsigned)st.ann_threshold);
     console_putc('\n');
+}
+
+static void print_peakvec_hits(const struct peakvec_hit *hits, int n) {
+    for (int i = 0; i < n; i++) {
+        if (!hits[i].key[0])
+            continue;
+        int score = hits[i].score_milli;
+        console_printf("  %d.%03d  %s", score / 1000, score % 1000, hits[i].key);
+        if (hits[i].meta[0])
+            console_printf("  %s", hits[i].meta);
+        console_putc('\n');
+    }
+}
+
+static void print_peakvec_explain(const struct peakvec_query_explain *ex) {
+    console_printf("explain: mode=%s bucket=%u live=%u probed=%u remainder=%u scored=%u skipped=%u",
+                   ex->use_ann ? "ivf-lite" : "brute",
+                   (unsigned)ex->query_bucket,
+                   (unsigned)ex->ns_live,
+                   (unsigned)ex->bucket_probed,
+                   (unsigned)ex->remainder,
+                   (unsigned)ex->scored,
+                   (unsigned)ex->skipped_early);
+    if (ex->ann_shortcut)
+        console_write(" shortcut=1");
+    console_putc('\n');
+}
+
+static int peakvec_run_query(int argc, char **argv) {
+    const char *ns = "agent";
+    int topk = 3;
+    int explain = 0;
+    int timing = 0;
+    char text[256];
+    text[0] = '\0';
+
+    for (int i = 2; i < argc; i++) {
+        if (!strcmp(argv[i], "--explain")) {
+            explain = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "--timing")) {
+            timing = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "-k") && i + 1 < argc) {
+            topk = peak_atoi(argv[++i]);
+            if (topk <= 0)
+                topk = 1;
+            if (topk > PEAKVEC_TOPK_MAX)
+                topk = PEAKVEC_TOPK_MAX;
+            continue;
+        }
+        if (argv[i][0] == '-' && argv[i][1])
+            continue;
+        if (!text[0])
+            peak_join_args(argc, argv, i, text, sizeof(text));
+        break;
+    }
+    if (!text[0]) {
+        peak_usage("peakvec query", "<text...> [-k N] [--explain] [--timing]");
+        return 1;
+    }
+
+    int16_t vec[PEAKVEC_DIM];
+    peakvec_embed_text(text, vec);
+    struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
+    struct peakvec_query_explain qx;
+    int n = peakvec_query_ex(ns, vec, topk, hits, explain || timing ? &qx : NULL);
+    if (n < 0) {
+        console_write("peakvec query: failed\n");
+        return 1;
+    }
+    console_printf("peakvec query [%s]: %d hit%s for \"%s\"\n",
+                   ns, n, n == 1 ? "" : "s", text);
+    print_peakvec_hits(hits, n);
+    if (explain)
+        print_peakvec_explain(&qx);
+    if (timing) {
+        char tbuf[16];
+        sysmon_format_us(qx.elapsed_us, tbuf, sizeof(tbuf));
+        console_printf("timing: %s (sysmon peakvec_us)\n", tbuf);
+    }
+    return 0;
 }
 
 int umemory_main(int argc, char **argv) {
@@ -113,16 +202,20 @@ int umemory_main(int argc, char **argv) {
 int upeakvec_main(int argc, char **argv) {
     const char *ns = "agent";
     if (peak_wants_help(argc, argv)) {
-        peak_usage("peakvec", "[stats] [namespace]  (default: agent index stats)");
+        peak_usage("peakvec", "stats [namespace] | query <text...> [-k N] [--explain] [--timing]");
         return 0;
     }
+    if (argc >= 2 && !strcmp(argv[1], "query"))
+        return peakvec_run_query(argc, argv);
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-') continue;
         if (!strcmp(argv[i], "stats")) {
-            if (i + 1 < argc && argv[i + 1][0] != '-') ns = argv[i + 1];
+            if (i + 1 < argc && argv[i + 1][0] != '-')
+                ns = argv[i + 1];
             break;
         }
-        ns = argv[i]; break;
+        ns = argv[i];
+        break;
     }
     print_peakvec_index_line(ns);
     return 0;
