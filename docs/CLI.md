@@ -73,7 +73,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `mkdir [-p] <path>` | create directory (parents always) |
 | `touch <path>` | create empty file |
 | `rm [-rf] <path>` | remove file or tree |
-| `cp [-r] <src> <dst>` | copy |
+| `cp [-r] [--promote-blob] <src> <dst>` | copy (blob-aware via ranged I/O; `--promote-blob` stores dest in blobstore when available) |
 | `mv <src> <dst>` | rename/move |
 | `ln [-s] <target> <link>` | hard link or symlink (`-s`) |
 | `readlink <path>` | print symlink target (no follow) |

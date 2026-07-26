@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 110 blob copy"
+grep -q vfs_copy_stream kernel/vfs.c
+grep -q vfs_copy_file_ex kernel/vfs.c
+grep -q 'promote_blob' kernel/user/utils_file.c
+grep -q 'promote-blob' docs/CLI.md
+
 echo "==> Wave 5 Pass 109 dns cname flush"
 grep -q dns_answer_cname kernel/net/dns.c
 grep -q net_dns_flush kernel/net/dns.c
