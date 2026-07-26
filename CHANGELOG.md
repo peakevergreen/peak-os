@@ -20,6 +20,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 61:** `sort` `-r`/`-n`/`-u`, `uniq` `-c`, `wc` `-l`/`-w`/`-c`, host `test_cli_sortflags`
 - **Pass 62:** `dd` lite (`if=`/`of=`/`bs`/`count`, 8 KiB cap); `sync` calls `blockdev_flush` when a block device is present
 - **Pass 63:** `file` command — magic sniff for ELF/PPM/BMP/PEAKZIP1/PEAKGZ1/text vs binary
+- **Pass 64:** `date +%s` / `+%Y-%m-%d` (RTC); `printf` documents `\n` `\t` `\\` escapes
 - PeakDisk atomic publish (payload→header) + SDHCI CMD13 flush; DWC2 hub enum/split/hotplug; `/bin/disksave`
 - Quieter boot: status lines only (net IP folded into `e1000 (dhcp …)`; no chatter for JS/PeakVec/disk absence)
 - **S8 loader verify:** kernel SHA-256 vs `peak.conf` / embedded `SHA256SUMS`; optional `verify_sig=1` HMAC-SHA256 of manifest (dev key stub); host `sign-release.py` / `verify-release.py` remain the ceremony gate

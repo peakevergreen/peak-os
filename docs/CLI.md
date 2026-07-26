@@ -96,7 +96,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `sha256sum` `md5sum` `base64` | digests and base64 encode/decode (`-d`; 64 KiB cap) |
 | `less` | pager with page-up (`b`), go top/bottom (`g`/`G`), forward search (`/pat`) |
 | `more` | simple pager (space next page, q quit) |
-| `echo` `printf` `tee` `yes` `clear` `edit` | misc (`printf` `%s %d %u %x`; `tee` stdin→stdout+files `-a`; `test`/`[` predicates; `yes` bounded) |
+| `echo` `printf` `tee` `yes` `clear` `edit` | misc (`printf` `%s %d %u %x` + `\\n` `\\t` `\\\\`; `tee` stdin→stdout+files `-a`; `test`/`[` predicates; `yes` bounded) |
 
 ## System / meta
 | Command | Notes |
@@ -104,7 +104,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `theme list\|set\|next` | CLI+GUI themes |
 | `wallpaper list\|set\|none\|next` | Desktop background (binary PPM P6) |
 | `scale [1-4]` | UI glyph scale |
-| `date` `free` `env` `export` `which` `seq` `sleep` `time` | (`free`: PMM pages + heap used/free/frag/freelist/oom) |
+| `date [+format]` (`+%s`, `+%Y-%m-%d` via RTC) `free` `env` `export` `which` `seq` `sleep` `time` | (`free`: PMM pages + heap used/free/frag/freelist/oom) |
 | `hostname` `uptime` `whoami` `id` `cal` | identity + calendar |
 | `uname [-asnmr]` | kernel identity (`-s` sysname, `-n` `$HOSTNAME`, `-r` release, `-m` machine, `-a` all + BootInfo platform) |
 | `gzip` `gunzip` | Peak RLE compress/decompress (PEAKGZ1 `.gz`, 8 KiB cap) |
