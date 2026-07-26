@@ -723,6 +723,12 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 149 ctr CMD health index"
+grep -q 'HEALTHCHECK-lite' kernel/ctr_build.c
+grep -q 'ctr_dir_index_listing' kernel/ctr_path.c
+grep -q 'cmd=' kernel/ctr_build.c
+grep -q 'ctr_dir_index_listing' kernel/ctr_http.c
+
 echo "==> Wave 7 Pass 148 policy catalog filter"
 grep -q 'agent_policy_deny_reason' kernel/agent_policy.c
 grep -q 'policy_print_catalog' kernel/user/utils_agent.c

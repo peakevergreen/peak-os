@@ -157,3 +157,46 @@ int ctr_resolve_rootfs_candidates(const char *rootfs, const char *path,
     }
     return nc;
 }
+
+int ctr_dir_index_listing(const char *rootfs, const char *url_path,
+                          char *body, size_t body_cap, size_t *n_out) {
+    if (!rootfs || !url_path || !body || body_cap < 64)
+        return -1;
+    char dir[CTR_PATH_MAX];
+    if (!strcmp(url_path, "/") || url_path[0] == '\0')
+        snprintf(dir, sizeof(dir), "%s", rootfs);
+    else
+        snprintf(dir, sizeof(dir), "%s%s", rootfs, url_path);
+    if (!ctr_path_under_rootfs(rootfs, dir))
+        return -1;
+    if (!vfs_is_dir(dir))
+        return -1;
+    char listing[2048];
+    if (vfs_list(dir, listing, sizeof(listing)) != 0)
+        return -1;
+    size_t o = 0;
+    o += (size_t)snprintf(body + o, body_cap - o,
+                          "<html><head><title>Index of %s</title></head>"
+                          "<body><h1>Index of %s</h1><pre>\n",
+                          url_path, url_path);
+    const char *p = listing;
+    while (*p && o + 64 < body_cap) {
+        char name[64];
+        size_t i = 0;
+        while (*p && *p != '\n' && i + 1 < sizeof(name))
+            name[i++] = *p++;
+        if (*p == '\n')
+            p++;
+        name[i] = '\0';
+        if (!name[0])
+            continue;
+        o += (size_t)snprintf(body + o, body_cap - o, "<a href=\"%s%s%s\">%s</a>\n",
+                               url_path[0] == '/' && url_path[1] == '\0' ? "" : url_path,
+                               url_path[strlen(url_path) - 1] == '/' ? "" : "/",
+                               name, name);
+    }
+    o += (size_t)snprintf(body + o, body_cap - o, "</pre></body></html>\n");
+    if (n_out)
+        *n_out = o;
+    return 0;
+}
