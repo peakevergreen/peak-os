@@ -444,6 +444,81 @@ void http_strip_headers(char *msg) {
     memmove(msg, hdr_end, blen + 1);
 }
 
+static int te_has_chunked(const char *te) {
+    if (!te)
+        return 0;
+    for (const char *p = te; *p; p++) {
+        if ((p[0] == 'c' || p[0] == 'C') && (p[1] == 'h' || p[1] == 'H') &&
+            (p[2] == 'u' || p[2] == 'U') && (p[3] == 'n' || p[3] == 'N') &&
+            (p[4] == 'k' || p[4] == 'K') && (p[5] == 'e' || p[5] == 'E') &&
+            (p[6] == 'd' || p[6] == 'D'))
+            return 1;
+    }
+    return 0;
+}
+
+static size_t parse_chunk_hex(const char *p, size_t *consumed) {
+    size_t v = 0;
+    size_t i = 0;
+    while (p[i] && p[i] != '\r' && p[i] != '\n' && p[i] != ';') {
+        char c = p[i];
+        if (c >= '0' && c <= '9')
+            v = (v << 4) + (size_t)(c - '0');
+        else if (c >= 'a' && c <= 'f')
+            v = (v << 4) + (size_t)(c - 'a' + 10);
+        else if (c >= 'A' && c <= 'F')
+            v = (v << 4) + (size_t)(c - 'A' + 10);
+        else
+            break;
+        i++;
+    }
+    while (p[i] == ';')
+        while (p[i] && p[i] != '\r' && p[i] != '\n')
+            i++;
+    if (p[i] == '\r' && p[i + 1] == '\n')
+        i += 2;
+    else if (p[i] == '\n')
+        i += 1;
+    *consumed = i;
+    return v;
+}
+
+void http_decode_chunked_body(char *msg, size_t cap) {
+    if (!msg || cap < 16)
+        return;
+    char te[64];
+    if (http_header_value(msg, "transfer-encoding", te, sizeof(te)) != 0)
+        return;
+    if (!te_has_chunked(te))
+        return;
+    size_t total = strlen(msg);
+    size_t hlen = http_headers_len(msg, total);
+    if (!hlen || hlen >= cap)
+        return;
+    const char *src = msg + hlen;
+    char *dst = msg + hlen;
+    size_t out = 0;
+    while (src < msg + cap) {
+        size_t used = 0;
+        size_t csz = parse_chunk_hex(src, &used);
+        src += used;
+        if (csz == 0)
+            break;
+        if (src + csz > msg + cap)
+            break;
+        if (out + csz >= cap - hlen)
+            csz = (cap - hlen) - out - 1;
+        memcpy(dst + out, src, csz);
+        out += csz;
+        src += csz;
+        if (src[0] == '\r' && src[1] == '\n')
+            src += 2;
+        else if (src[0] == '\n')
+            src += 1;
+    }
+    dst[out] = '\0';
+}
+
 int http_parse_status(const char *buf, int *status_out) {
     if (status_out)
         *status_out = 0;

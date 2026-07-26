@@ -482,6 +482,11 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 108 chunked h2 post"
+grep -q http_decode_chunked_body kernel/net/http_util.c
+grep -q http2_request kernel/net/http2.c
+grep -q 'http_decode_chunked_body(body' kernel/net/http.c
+
 echo "==> Wave 5 Pass 107 curl ping"
 grep -q head_only kernel/user/utils_net.c
 grep -q 'strcmp(method, "HEAD")' kernel/net/http.c
