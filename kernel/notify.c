@@ -158,6 +158,11 @@ int notify_history_get(int idx, char *out, size_t cap) {
     return 1;
 }
 
+void notify_history_clear(void) {
+    memset(hist, 0, sizeof(hist));
+    hist_head = hist_count = 0;
+}
+
 int notify_click(int32_t mx, int32_t my, uint32_t screen_w) {
     if (!notify_active())
         return 0;
