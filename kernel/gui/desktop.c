@@ -130,7 +130,10 @@ void desktop_run(void) {
             continue;
 
         if (key == 27) {
-            if (focus >= 0 && wins[focus].open && wins[focus].kind == APP_TERM &&
+            if (desktop_files_drag_active()) {
+                desktop_files_drag_cancel();
+                key = 0;
+            } else if (focus >= 0 && wins[focus].open && wins[focus].kind == APP_TERM &&
                 desktop_terminal_find_active()) {
                 desktop_terminal_find_close();
                 key = 0;
@@ -283,6 +286,15 @@ void desktop_run(void) {
 
         struct mouse_state m;
         mouse_poll(&m);
+
+        if (desktop_files_drag_active()) {
+            static int32_t drag_mx = -1, drag_my = -1;
+            if (m.x != drag_mx || m.y != drag_my) {
+                drag_mx = m.x;
+                drag_my = m.y;
+                dirty_bits |= DIRTY_MOVE;
+            }
+        }
 
         notify_tick();
         if (notify_consume_dirty())
@@ -645,7 +657,8 @@ void desktop_run(void) {
 
         if (dirty_bits) {
             uint64_t now = timer_ticks();
-            int urgent = dragging || resizing || (dirty_bits & DIRTY_MOVE);
+            int urgent = dragging || resizing || (dirty_bits & DIRTY_MOVE) ||
+                         desktop_files_drag_active();
             if (urgent || last_present_tick == 0 || now - last_present_tick >= 2) {
                 desktop_draw();
                 sysmon_note_frame();
@@ -653,6 +666,8 @@ void desktop_run(void) {
                 cursor_mx = cursor_my = -1;
             }
         }
+        if (desktop_files_drag_active())
+            desktop_files_drag_paint(m.x, m.y);
         desktop_draw_cursor(m.x, m.y);
 
         if (!dirty_bits) {
