@@ -177,6 +177,13 @@ grep -q 'bootinfo_init' kernel/boot.c
 grep -q 'bootinfo_format_version' kernel/bootinfo.c
 grep -q 'peak_has_flag(argc, argv, "-a")' kernel/user/utils_sys.c
 
+echo "==> Pass 41 VFS modes"
+grep -q VFS_MODE_FILE kernel/include/vfs.h
+grep -q vfs_chmod kernel/vfs.c
+grep -q uchmod_main kernel/user/utils_file.c
+grep -q chmod kernel/user/ubin_cmds.def
+grep -q vfs_mode_string kernel/vfs.c
+
 echo "==> theme names"
 grep -q evergreen kernel/theme.c
 grep -q midnight kernel/theme.c

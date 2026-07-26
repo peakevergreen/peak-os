@@ -1,4 +1,4 @@
-/* /bin file utilities: ls, mkdir, touch, rm, cp, mv, ln, stat, du, df, truncate. */
+/* /bin file utilities: ls, mkdir, touch, rm, cp, mv, ln, stat, chmod, du, df, truncate. */
 #include "libpeak.h"
 #include "vfs.h"
 #include "shell.h"
@@ -22,6 +22,8 @@ static void peak_hsize_fmt(uint64_t n, char *buf, size_t cap) {
         snprintf(buf, cap, "%luMiB", (unsigned long)(n / (1024ull * 1024)));
 }
 
+static char ls_type_char(enum vfs_type t) { return t==VFS_DIR?'d':t==VFS_SYMLINK?'l':'f'; }
+
 int uls_main(int argc, char **argv) {
     int longf = peak_has_flag(argc, argv, "-l");
     int human = peak_has_flag(argc, argv, "-h");
@@ -42,12 +44,14 @@ int uls_main(int argc, char **argv) {
             return 1;
         }
         if (longf) {
+            char modebuf[12];
+            vfs_mode_string(st.type, st.mode, modebuf, sizeof(modebuf));
             if (human) {
                 char sz[16];
                 peak_hsize_fmt((uint64_t)st.size, sz, sizeof(sz));
-                console_printf("%c %7s %s\n", 'f', sz, abs);
+                console_printf("%c %7s %s\n", ls_type_char(st.type), sz, abs);
             } else
-                console_printf("%c %6lu %s\n", 'f', (uint64_t)st.size, abs);
+                console_printf("%c %6lu %s\n", ls_type_char(st.type), (uint64_t)st.size, abs);
         } else {
             console_write(abs);
             console_write("\n");
@@ -67,19 +71,25 @@ int uls_main(int argc, char **argv) {
                 snprintf(child, sizeof(child), "%s/%s", abs, ents[i].name);
             struct vfs_stat st;
             vfs_stat(child, &st);
+            char modebuf[12];
+            vfs_mode_string(st.type, st.mode, modebuf, sizeof(modebuf));
             if (human) {
                 char sz[16];
                 peak_hsize_fmt((uint64_t)st.size, sz, sizeof(sz));
-                console_printf("%c %7s %s\n",
-                               ents[i].type == VFS_DIR ? 'd' : 'f', sz, ents[i].name);
-            } else
-                console_printf("%c %6lu %s\n",
-                               ents[i].type == VFS_DIR ? 'd' : 'f',
-                               (uint64_t)st.size, ents[i].name);
+                if (ents[i].type == VFS_SYMLINK && st.link_target[0])
+                    console_printf("%c %7s %s -> %s\n", ls_type_char(ents[i].type), sz, ents[i].name, st.link_target);
+                else
+                    console_printf("%c %7s %s\n", ls_type_char(ents[i].type), sz, ents[i].name);
+            } else if (ents[i].type == VFS_SYMLINK && st.link_target[0])
+                console_printf("%c %6lu %s -> %s\n", ls_type_char(ents[i].type), (uint64_t)st.size, ents[i].name, st.link_target);
+            else
+                console_printf("%c %6lu %s\n", ls_type_char(ents[i].type), (uint64_t)st.size, ents[i].name);
         } else {
             console_write(ents[i].name);
             if (ents[i].type == VFS_DIR)
                 console_write("/");
+            else if (ents[i].type == VFS_SYMLINK)
+                console_write("@");
             console_write("\n");
         }
     }
@@ -240,14 +250,14 @@ int ustat_main(int argc, char **argv) {
         return 1;
     }
     console_printf("path: %s\n", abs);
-    const char *type_str = st.type == VFS_DIR ? "directory" :
-                           st.type == VFS_SYMLINK ? "symlink" : "file";
+    const char *type_str = st.type == VFS_DIR ? "directory" : "file";
+    char modebuf[12];
+    vfs_mode_string(st.type, st.mode, modebuf, sizeof(modebuf));
     console_printf("type: %s\n", type_str);
+    console_printf("mode: %04o (%s)\n", (unsigned)st.mode, modebuf);
     console_printf("size: %lu\n", (uint64_t)st.size);
     console_printf("children: %u\n", st.nchildren);
     console_printf("refs: %u\n", st.refs);
-    if (st.type == VFS_SYMLINK && st.link_target[0])
-        console_printf("target: %s\n", st.link_target);
     if (st.type == VFS_FILE) {
         struct vfs_node *node = vfs_lookup(abs);
         if (node) {
@@ -259,6 +269,122 @@ int ustat_main(int argc, char **argv) {
     }
     return 0;
 }
+
+static int parse_octal_mode(const char *s, uint16_t *out) {
+    if (!s || !*s)
+        return -1;
+    uint16_t v = 0;
+    for (; *s; s++) {
+        if (*s < '0' || *s > '7')
+            return -1;
+        v = (uint16_t)((v << 3) | (uint16_t)(*s - '0'));
+    }
+    if (v > 0777u)
+        return -1;
+    *out = v;
+    return 0;
+}
+
+static int apply_symbolic(uint16_t *mode, const char *spec) {
+    const char *p = spec;
+    while (*p) {
+        int who = 0;
+        while (*p == 'u' || *p == 'g' || *p == 'o' || *p == 'a') {
+            if (*p == 'u')
+                who |= 4;
+            else if (*p == 'g')
+                who |= 2;
+            else if (*p == 'o')
+                who |= 1;
+            else
+                who |= 7;
+            p++;
+        }
+        if (!who)
+            who = 7;
+        char op = *p++;
+        if (op != '+' && op != '-' && op != '=')
+            return -1;
+        int perm = 0;
+        while (*p == 'r' || *p == 'w' || *p == 'x') {
+            if (*p == 'r')
+                perm |= 4;
+            else if (*p == 'w')
+                perm |= 2;
+            else
+                perm |= 1;
+            p++;
+        }
+        if (!perm && op != '=')
+            return -1;
+        for (int slot = 0; slot < 3; slot++) {
+            int bit = 4 >> slot;
+            if (!(who & bit))
+                continue;
+            int shift = (2 - slot) * 3;
+            uint16_t mask = (uint16_t)(7u << shift);
+            if (op == '+')
+                *mode = (uint16_t)(*mode | ((uint16_t)(perm & 7) << shift));
+            else if (op == '-')
+                *mode = (uint16_t)(*mode & ~((uint16_t)(perm & 7) << shift));
+            else
+                *mode = (uint16_t)((*mode & ~mask) | ((uint16_t)(perm & 7) << shift));
+        }
+        if (*p == ',') {
+            p++;
+            continue;
+        }
+        if (*p)
+            return -1;
+    }
+    return 0;
+}
+
+static int parse_mode_arg(const char *s, uint16_t *out) {
+    if (!s || !*s)
+        return -1;
+    int all_digits = 1;
+    for (const char *p = s; *p; p++) {
+        if (*p < '0' || *p > '7') {
+            all_digits = 0;
+            break;
+        }
+    }
+    if (all_digits)
+        return parse_octal_mode(s, out);
+    uint16_t mode = *out;
+    return apply_symbolic(&mode, s) == 0 ? (*out = mode, 0) : -1;
+}
+
+int uchmod_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("chmod", "<mode> <path>...");
+        return 0;
+    }
+    if (argc < 3) {
+        peak_usage("chmod", "<mode> <path>...");
+        return 1;
+    }
+    uint16_t mode = 0;
+    if (parse_mode_arg(argv[1], &mode) != 0) {
+        peak_perror("chmod", "invalid mode");
+        return 1;
+    }
+    int rc = 0;
+    for (int i = 2; i < argc; i++) {
+        char abs[VFS_PATH_MAX];
+        if (shell_resolve_path(argv[i], abs, sizeof(abs)) != 0) {
+            rc = 1;
+            continue;
+        }
+        if (vfs_chmod(abs, mode) != 0) {
+            console_printf("chmod: cannot access '%s': no such file or directory\n", abs);
+            rc = 1;
+        }
+    }
+    return rc;
+}
+
 
 int udu_main(int argc, char **argv) {
     int human = peak_has_flag(argc, argv, "-h");

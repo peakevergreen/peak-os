@@ -53,6 +53,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - `-h` / `--help` gap-fill on text/sys utils; docs/CLI.md inventory refresh
 - New builtins: `printf`, `tee`, `test`/`[`, `yes` (bounded)
 - **Pass 19:** `fold`, `rev`, `od`, `split`, `paste`, `nl`, `tac`, `xargs`
+- **Pass 41:** VFS mode bits (default `0644`/`0755`); `chmod` (octal + `u+x`/`g-w`); `ls -l` and `stat` show mode
 - **Pass 39:** `awk` lite — field split (`-F`), `$n`/`NR`/`NF`, `/pat/ { print }`
 - **Pass 47:** `zip`/`unzip` — PEAKZIP1 multi-file archive (store/RLE per entry; 64 KiB cap)
 - **Pass 44:** `uname -a/-s/-n/-m/-r` from BootInfo platform/ABI + `$HOSTNAME`
@@ -72,7 +73,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Net diag: `nslookup`, `host`, `nc` (TCP connect); Pass 23 adds dig-style DNS output, `traceroute` staged probe, richer `wget`/`curl` TLS errors
 - Shell history: persistent `/var/peak/history`, Up/Down/Ctrl-P/N recall, `history`, `!!`, exit-status prompt, errno-style path errors
 - Host tests: `test_libpeak`, `test_shell_split`, `test_console_scroll`, `test_cli_crypto`, `test_agent_tools`, `test_desktop_titles`, `test_img_decode`
-- VFS: `vfs_last_error`, `PEAK_EISDIR` on directory write; Pass 22 errno cases in `test_vfs`
+- VFS: `vfs_last_error`, `PEAK_EISDIR` on directory write; Pass 22 errno cases in `test_vfs`; Pass 41 mode bits + `vfs_chmod`
 
 ### Agent and PeakVec
 

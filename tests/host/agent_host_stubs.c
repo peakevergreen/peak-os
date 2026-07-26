@@ -175,12 +175,22 @@ int vfs_stat(const char *path, struct vfs_stat *st) {
     if (!f || !st)
         return PEAK_ENOENT;
     st->type = VFS_FILE;
+    st->mode = VFS_MODE_FILE;
     st->size = f->len;
     st->refs = 1;
     st->nchildren = 0;
     st->name[0] = '\0';
     return 0;
 }
+void vfs_mode_string(enum vfs_type type, uint16_t mode, char *buf, size_t len) {
+    if (!buf || len < 11) return;
+    buf[0] = (type == VFS_DIR) ? "d" : "-";
+    static const char *triples[] = { "---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx" };
+    buf[1]=triples[(mode>>6)&7][0]; buf[2]=triples[(mode>>6)&7][1]; buf[3]=triples[(mode>>6)&7][2];
+    buf[4]=triples[(mode>>3)&7][0]; buf[5]=triples[(mode>>3)&7][1]; buf[6]=triples[(mode>>3)&7][2];
+    buf[7]=triples[mode&7][0]; buf[8]=triples[mode&7][1]; buf[9]=triples[mode&7][2]; buf[10]=0;
+}
+int vfs_chmod(const char *path, uint16_t mode) { (void)path; (void)mode; return 0; }
 
 int vfs_list(const char *path, char *out, size_t out_len) {
     if (!out || out_len < 2)

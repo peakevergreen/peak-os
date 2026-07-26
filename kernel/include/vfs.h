@@ -6,6 +6,8 @@
 #define VFS_NAME_MAX 64
 #define VFS_PATH_MAX 256
 #define VFS_MAX_NODES 4096
+#define VFS_MODE_FILE 0644u
+#define VFS_MODE_DIR  0755u
 
 enum vfs_type {
     VFS_DIR = 1,
@@ -15,6 +17,7 @@ enum vfs_type {
 struct vfs_node {
     char name[VFS_NAME_MAX];
     enum vfs_type type;
+    uint16_t mode;
     uint8_t *data;
     size_t size;
     size_t capacity;
@@ -28,6 +31,7 @@ struct vfs_node {
 
 struct vfs_stat {
     enum vfs_type type;
+    uint16_t mode;
     size_t size;
     uint32_t nchildren;
     uint32_t refs;
@@ -65,6 +69,8 @@ void vfs_seed_defaults(void);
 
 int vfs_normalize(const char *path, char *out, size_t out_len);
 int vfs_stat(const char *path, struct vfs_stat *st);
+int vfs_chmod(const char *path, uint16_t mode);
+void vfs_mode_string(enum vfs_type type, uint16_t mode, char *buf, size_t len);
 int vfs_exists(const char *path);
 int vfs_is_dir(const char *path);
 int vfs_is_file(const char *path);

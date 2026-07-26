@@ -59,6 +59,7 @@ static struct vfs_node *alloc_node(const char *name, enum vfs_type type) {
         n->name[i] = name[i];
     n->name[i] = '\0';
     n->type = type;
+    n->mode = (type == VFS_DIR) ? VFS_MODE_DIR : VFS_MODE_FILE;
     n->refs = 1;
     return n;
 }
@@ -446,12 +447,40 @@ int vfs_stat(const char *path, struct vfs_stat *st) {
     if (!n)
         return PEAK_ENOENT;
     st->type = n->type;
+    st->mode = n->mode;
     st->size = n->size;
     st->refs = n->refs;
     st->nchildren = 0;
     for (struct vfs_node *c = n->child; c; c = c->sibling)
         st->nchildren++;
     memcpy(st->name, n->name, VFS_NAME_MAX);
+    return 0;
+}
+
+void vfs_mode_string(enum vfs_type type, uint16_t mode, char *buf, size_t len) {
+    if (!buf || len < 11)
+        return;
+    buf[0] = (type == VFS_DIR) ? 'd' : '-';
+    static const char *triples[] = { "---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx" };
+    buf[1] = triples[(mode >> 6) & 7][0];
+    buf[2] = triples[(mode >> 6) & 7][1];
+    buf[3] = triples[(mode >> 6) & 7][2];
+    buf[4] = triples[(mode >> 3) & 7][0];
+    buf[5] = triples[(mode >> 3) & 7][1];
+    buf[6] = triples[(mode >> 3) & 7][2];
+    buf[7] = triples[mode & 7][0];
+    buf[8] = triples[mode & 7][1];
+    buf[9] = triples[mode & 7][2];
+    buf[10] = '\0';
+}
+
+int vfs_chmod(const char *path, uint16_t mode) {
+    struct vfs_node *n = vfs_lookup(path);
+    if (!n)
+        return PEAK_ENOENT;
+    if (n == root)
+        return PEAK_EINVAL;
+    n->mode = mode & 0777u;
     return 0;
 }
 
@@ -601,14 +630,28 @@ int vfs_copy_file(const char *src, const char *dst) {
     struct vfs_node *s = vfs_lookup(src);
     if (!s || s->type != VFS_FILE)
         return PEAK_ENOENT;
-    return vfs_write_file(dst, s->data ? s->data : (const uint8_t *)"", s->size);
+    if (vfs_write_file(dst, s->data ? s->data : (const uint8_t *)"", s->size) != 0)
+        return PEAK_EIO;
+    struct vfs_node *d = vfs_lookup(dst);
+    if (d)
+        d->mode = s->mode;
+    return 0;
 }
 
 static int copy_tree_rec(struct vfs_node *src, const char *dst_path) {
-    if (src->type == VFS_FILE)
-        return vfs_write_file(dst_path, src->data ? src->data : (const uint8_t *)"", src->size);
+    if (src->type == VFS_FILE) {
+        if (vfs_write_file(dst_path, src->data ? src->data : (const uint8_t *)"", src->size) != 0)
+            return PEAK_EIO;
+        struct vfs_node *d = vfs_lookup(dst_path);
+        if (d)
+            d->mode = src->mode;
+        return 0;
+    }
     if (!vfs_mkdir(dst_path))
         return PEAK_EIO;
+    struct vfs_node *d = vfs_lookup(dst_path);
+    if (d)
+        d->mode = src->mode;
     for (struct vfs_node *c = src->child; c; c = c->sibling) {
         char child[VFS_PATH_MAX];
         size_t o = 0;
@@ -661,6 +704,7 @@ int vfs_link(const char *target, const char *linkname) {
     link->data = t->data;
     link->size = t->size;
     link->capacity = t->capacity;
+    link->mode = t->mode;
     t->refs++;
     link->refs = t->refs;
     add_child(dir, link);
