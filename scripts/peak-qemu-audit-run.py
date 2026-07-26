@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Launch Peak OS under QEMU and run a visual audit with screendumps.
+"""Dense QEMU GUI audit scenario runner (harvest phase).
 
-Keeps one long-lived serial connection from boot (avoids missing the prompt).
-Monitor socket used for screendump + sendkey.
+Writes dumps to $PEAK_AUDIT_DIR (default /tmp/peak-audit-v2) and FINDINGS.jsonl.
 """
 from __future__ import annotations
 
@@ -15,100 +14,53 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MON = "/tmp/peak-qemu.mon"
-SER = "/tmp/peak-serial.sock"
-AUDIT = Path("/tmp/peak-audit")
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from peak_qemu_audit_lib import (  # noqa: E402
+    AUDIT,
+    MON,
+    PROMPT,
+    SER,
+    dump,
+    dump_hash,
+    find_log,
+    mouse_click,
+    mouse_drag,
+    mouse_goto,
+    mouse_reset_estimate,
+    peak_btn_xy,
+    sendkeys,
+    ser_read_until,
+    type_text,
+    u,
+)
+
 ISO = ROOT / "build" / "peak-os.iso"
 DISK = ROOT / "build" / "peak-disk.img"
+STEP = 0
 
 
-def mon_cmd(cmd: str) -> str:
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(5.0)
-    s.connect(MON)
-    try:
-        s.recv(4096)
-    except socket.timeout:
-        pass
-    s.sendall((cmd.strip() + "\n").encode())
-    time.sleep(0.2)
-    out = b""
-    s.settimeout(0.4)
-    try:
-        while True:
-            b = s.recv(4096)
-            if not b:
-                break
-            out += b
-    except socket.timeout:
-        pass
-    s.close()
-    return out.decode("utf-8", "replace")
+def step(name: str, note: str = "") -> Path:
+    global STEP
+    STEP += 1
+    return dump(f"{STEP:03d}-{name}", note)
 
 
-def dump(name: str) -> Path:
-    AUDIT.mkdir(parents=True, exist_ok=True)
-    path = AUDIT / name
-    mon_cmd(f"screendump {path}")
-    time.sleep(0.3)
-    if not path.is_file() or path.stat().st_size < 100:
-        raise RuntimeError(f"bad screendump {path}")
-    print(f"DUMP {path} ({path.stat().st_size} bytes)")
-    return path
+def finding(sev: str, area: str, repro: str, expected: str, actual: str, dump_name: str) -> None:
+    find_log(
+        {
+            "sev": sev,
+            "area": area,
+            "repro": repro,
+            "expected": expected,
+            "actual": actual,
+            "dump": dump_name,
+            "status": "candidate",
+        }
+    )
 
 
-def sendkeys(*keys: str) -> None:
-    for k in keys:
-        mon_cmd(f"sendkey {k}")
-        time.sleep(0.06)
-
-
-def char_keys(ch: str) -> list[str]:
-    if ch == "\n":
-        return ["ret"]
-    if ch == " ":
-        return ["spc"]
-    if ch == "-":
-        return ["minus"]
-    if ch == "/":
-        return ["slash"]
-    if ch == ".":
-        return ["dot"]
-    if "A" <= ch <= "Z":
-        return [f"shift-{ch.lower()}"]
-    if ("a" <= ch <= "z") or ("0" <= ch <= "9"):
-        return [ch]
-    raise RuntimeError(f"unsupported {ch!r}")
-
-
-def type_text(text: str) -> None:
-    for ch in text:
-        for k in char_keys(ch):
-            sendkeys(k)
-
-
-def ser_read_until(ser: socket.socket, needle: bytes, timeout: float, buf: bytearray) -> bytes:
-    deadline = time.time() + timeout
-    ser.settimeout(1.0)
-    while time.time() < deadline:
-        if needle in buf:
-            return bytes(buf)
-        try:
-            chunk = ser.recv(4096)
-            if chunk:
-                buf.extend(chunk)
-                sys.stdout.write(chunk.decode("utf-8", "replace"))
-                sys.stdout.flush()
-        except socket.timeout:
-            pass
-    raise RuntimeError(f"timeout for {needle!r}; tail={bytes(buf[-300:])!r}")
-
-
-def ser_write(ser: socket.socket, text: str) -> None:
-    ser.sendall(text.encode())
-
-
-def main() -> int:
+def boot_qemu() -> tuple[subprocess.Popen, socket.socket, bytearray]:
     os.environ["PATH"] = "/opt/homebrew/opt/llvm/bin:/usr/local/opt/llvm/bin:" + os.environ.get(
         "PATH", ""
     )
@@ -125,6 +77,11 @@ def main() -> int:
         except FileNotFoundError:
             pass
 
+    AUDIT.mkdir(parents=True, exist_ok=True)
+    findings = AUDIT / "FINDINGS.jsonl"
+    if findings.exists():
+        findings.unlink()
+
     qemu = [
         "qemu-system-x86_64",
         "-machine",
@@ -139,7 +96,6 @@ def main() -> int:
         f"file={DISK},format=raw,if=ide",
         "-boot",
         "d",
-        # wait=on: hold reset until serial client connects so we never miss boot log
         "-serial",
         f"unix:{SER},server=on,wait=on",
         "-monitor",
@@ -154,7 +110,7 @@ def main() -> int:
         "e1000,netdev=net0",
         "-no-reboot",
     ]
-    print("Starting QEMU…")
+    print("Starting QEMU…", flush=True)
     proc = subprocess.Popen(qemu, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def cleanup(*_a):
@@ -167,11 +123,10 @@ def main() -> int:
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    # Connect serial ASAP (QEMU waited for us)
     time.sleep(0.3)
     ser = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     ser.settimeout(5.0)
-    for _ in range(50):
+    for _ in range(80):
         try:
             ser.connect(SER)
             break
@@ -182,79 +137,432 @@ def main() -> int:
         raise SystemExit("serial connect failed")
 
     buf = bytearray()
-    # Bare "peak:/" matches mid-banner; wait for the interactive prompt.
-    prompt = b"peak:/home/dev/workspace>"
-    print(f"Waiting for {prompt.decode()} …")
-    ser_read_until(ser, prompt, 120.0, buf)
-    print("\n==> at shell; dumping CLI")
-    # monitor may need a moment
-    time.sleep(0.5)
-    dump("00-cli-shell.ppm")
+    print("Waiting for prompt…", flush=True)
+    ser_read_until(ser, PROMPT, 120.0, buf)
+    return proc, ser, buf
 
-    print("==> gui (sendkey — more reliable than early serial)")
+
+def enter_gui(buf: bytearray) -> None:
+    # PeakDisk line
+    text = bytes(buf).decode("latin1", "replace")
+    if "Disk (none)" in text:
+        finding(
+            "P1",
+            "PeakDisk",
+            "boot with peak-disk.img on -machine pc",
+            "Disk (empty) or restore",
+            "Disk (none) in serial banner",
+            "serial",
+        )
+    elif "Disk (empty" not in text and "Disk (" not in text:
+        finding(
+            "P2",
+            "PeakDisk",
+            "boot",
+            "Disk status line present",
+            "no Disk line matched",
+            "serial",
+        )
+
+    step("00-cli", "shell")
     sendkeys("g", "u", "i", "ret")
-    time.sleep(4.0)
-    dump("01-login-or-desktop.ppm")
-
-    # Dismiss login if present: Enter
+    time.sleep(2.8)
+    step("01-login-or-desktop")
     sendkeys("ret")
-    time.sleep(1.5)
-    dump("02-desktop.ppm")
+    time.sleep(1.2)
+    mouse_reset_estimate(100, 100)
+    step("02-desktop-empty")
 
-    print("==> hotkey 1 Terminal")
-    sendkeys("1")
-    time.sleep(1.5)
-    dump("03-terminal.ppm")
 
-    print("==> hotkey 2 Files")
-    sendkeys("2")
-    time.sleep(1.5)
-    dump("04-files.ppm")
-
-    print("==> hotkey 3 Settings")
-    sendkeys("3")
-    time.sleep(1.5)
-    dump("05-settings.ppm")
-
-    print("==> hotkey 6 Browser")
-    sendkeys("6")
-    time.sleep(2.0)
-    dump("06-browser.ppm")
-
-    print("==> hotkey 7 Monitor")
-    sendkeys("7")
-    time.sleep(1.5)
-    dump("07-monitor.ppm")
-
-    print("==> Alt-Tab")
-    sendkeys("alt-tab")
-    time.sleep(1.0)
-    dump("08-alttab.ppm")
-
-    print("==> Esc dismiss")
-    sendkeys("esc")
+def session_chrome() -> None:
+    print("=== A session/chrome ===", flush=True)
+    # Brand / clock / wallpaper
+    d = step("a-desktop-brand-clock")
+    # Start via Peak click
+    px, py = peak_btn_xy()
+    mouse_click(px, py)
+    time.sleep(0.8)
+    h0 = dump_hash("a-desktop-brand-clock")
+    d1 = step("a-start-menu")
+    h1 = dump_hash("a-start-menu")
+    if h0 == h1:
+        finding(
+            "P1",
+            "Start menu",
+            f"click Peak button ~({px},{py})",
+            "Start menu opens",
+            "screendump unchanged after Peak click (mouse miss or no menu)",
+            str(d1),
+        )
+    # Type filter
+    type_text("note")
     time.sleep(0.5)
+    step("a-start-filter-note")
+    sendkeys("ret")
+    time.sleep(1.0)
+    step("a-start-launch-notepad")
+    sendkeys("esc")
+    time.sleep(0.3)
 
-    # Ctrl+Alt+Esc back to CLI
-    print("==> leave desktop")
+    # Help overlay — try '?' 
+    sendkeys("shift-slash")  # ?
+    time.sleep(0.8)
+    step("a-help-maybe")
+    # Ctrl+Shift+H notify history
+    sendkeys("ctrl-shift-h")
+    time.sleep(0.7)
+    step("a-notify-hist")
+    sendkeys("esc")
+    time.sleep(0.3)
+    sendkeys("ctrl-shift-c")
+    time.sleep(0.7)
+    step("a-clipboard-picker")
+    sendkeys("esc")
+
+    # Open terminal + snap
+    sendkeys("1")
+    time.sleep(1.0)
+    step("a-term-open")
+    sendkeys("ctrl-alt-left")
+    time.sleep(0.7)
+    step("a-term-snap-left")
+    sendkeys("ctrl-alt-right")
+    time.sleep(0.7)
+    step("a-term-snap-right")
+    sendkeys("ctrl-alt-up")
+    time.sleep(0.7)
+    step("a-term-snap-max")
+    # Nudge
+    sendkeys("ctrl-alt-shift-left")
+    time.sleep(0.4)
+    step("a-term-nudge")
+
+    # Min/max/close via keys where possible — Ctrl+W close
+    sendkeys("2")
+    time.sleep(0.9)
+    step("a-files-open")
+    sendkeys("alt-tab")
+    time.sleep(0.6)
+    step("a-alttab")
+    sendkeys("esc")
+    time.sleep(0.3)
+    sendkeys("ctrl-w")
+    time.sleep(0.6)
+    step("a-ctrl-w")
+
+    # Lock / power via Start if menu works
+    mouse_click(*peak_btn_xy())
+    time.sleep(0.6)
+    type_text("lock")
+    time.sleep(0.4)
+    step("a-start-filter-lock")
+    sendkeys("ret")
+    time.sleep(0.9)
+    step("a-lock-screen")
+    sendkeys("ret")
+    time.sleep(0.8)
+    step("a-unlock")
+
+    mouse_click(*peak_btn_xy())
+    time.sleep(0.5)
+    type_text("power")
+    time.sleep(0.4)
+    step("a-start-filter-power")
+    sendkeys("ret")
+    time.sleep(0.7)
+    step("a-power-confirm")
+    sendkeys("n")
+    time.sleep(0.5)
+    step("a-power-cancel")
+
+    # Toasts: open several apps quickly
+    for k in ("1", "2", "3", "4"):
+        sendkeys(k)
+        time.sleep(0.35)
+    time.sleep(0.8)
+    step("a-toast-stack")
+    # Wait for expiry
+    time.sleep(4.0)
+    step("a-toast-after-wait")
+
+
+def apps_core() -> None:
+    print("=== B apps ===", flush=True)
+    # Close excess: Esc then Ctrl+Alt+Esc is too harsh; use Ctrl+W repeatedly
+    for _ in range(8):
+        sendkeys("ctrl-w")
+        time.sleep(0.25)
+    time.sleep(0.4)
+    step("b-desktop-cleared")
+
+    # Terminal multi
+    sendkeys("1")
+    time.sleep(0.8)
+    type_text("echo termA\n")
+    time.sleep(0.4)
+    step("b-term1")
+    # Second terminal via hotkey again (may raise same)
+    sendkeys("1")
+    time.sleep(0.5)
+    step("b-term-again")
+    # Find
+    sendkeys("ctrl-f")
+    time.sleep(0.4)
+    type_text("term")
+    time.sleep(0.3)
+    step("b-term-find")
+    sendkeys("esc")
+    # New tab Ctrl+Shift+T
+    sendkeys("ctrl-shift-t")
+    time.sleep(0.5)
+    step("b-term-newtab")
+
+    # Files
+    sendkeys("2")
+    time.sleep(1.0)
+    step("b-files")
+    sendkeys("n")
+    time.sleep(0.3)
+    type_text("audit-tmp\n")
+    time.sleep(0.5)
+    step("b-files-new")
+    sendkeys("r")
+    time.sleep(0.3)
+    type_text("audit-renamed\n")
+    time.sleep(0.5)
+    step("b-files-rename")
+    sendkeys("d")
+    time.sleep(0.4)
+    sendkeys("y")
+    time.sleep(0.5)
+    step("b-files-del")
+    sendkeys("down")
+    time.sleep(0.2)
+    sendkeys("down")
+    time.sleep(0.2)
+    sendkeys("ret")  # open?
+    time.sleep(0.6)
+    step("b-files-enter")
+
+    # Notepad via Start
+    mouse_click(*peak_btn_xy())
+    time.sleep(0.5)
+    type_text("notepad")
+    time.sleep(0.3)
+    sendkeys("ret")
+    time.sleep(1.0)
+    step("b-notepad")
+    type_text("hello audit world")
+    time.sleep(0.3)
+    step("b-notepad-typed")
+    sendkeys("ctrl-s")
+    time.sleep(0.6)
+    step("b-notepad-save")
+    sendkeys("ctrl-f")
+    time.sleep(0.3)
+    type_text("audit")
+    time.sleep(0.3)
+    step("b-notepad-find")
+    sendkeys("esc")
+
+    # Images via Start
+    mouse_click(*peak_btn_xy())
+    time.sleep(0.5)
+    type_text("images")
+    time.sleep(0.3)
+    sendkeys("ret")
+    time.sleep(1.0)
+    step("b-images")
+    sendkeys("f")  # fit?
+    time.sleep(0.4)
+    step("b-images-fit")
+    sendkeys("n")
+    time.sleep(0.4)
+    step("b-images-next")
+
+    # Browser
+    sendkeys("6")
+    time.sleep(1.5)
+    step("b-browser-demo")
+    # Try click Count — approximate center of demo page
+    mouse_click(960, 520)
+    time.sleep(0.8)
+    step("b-browser-count-click")
+    # Console?
+    sendkeys("ctrl-shift-j")
+    time.sleep(0.5)
+    step("b-browser-console-maybe")
+    sendkeys("esc")
+
+    # Settings
+    sendkeys("3")
+    time.sleep(1.0)
+    step("b-settings")
+    sendkeys("down")
+    time.sleep(0.2)
+    sendkeys("down")
+    time.sleep(0.2)
+    step("b-settings-nav")
+    # Scale key when settings focused may be swallowed — try click Look
+    mouse_click(400, 300)
+    time.sleep(0.5)
+    step("b-settings-click")
+
+    # Monitor
+    sendkeys("7")
+    time.sleep(1.2)
+    step("b-monitor")
+    sendkeys("right")
+    time.sleep(0.4)
+    step("b-monitor-page")
+    sendkeys("e")  # export?
+    time.sleep(0.6)
+    step("b-monitor-export-maybe")
+
+    # Agent
+    sendkeys("4")
+    time.sleep(1.0)
+    step("b-agent")
+    sendkeys("/")
+    time.sleep(0.3)
+    type_text("ask")
+    time.sleep(0.3)
+    step("b-agent-filter")
+    sendkeys("esc")
+
+    # Game
+    sendkeys("5")
+    time.sleep(1.0)
+    step("b-game")
+    sendkeys("spc")
+    time.sleep(0.4)
+    step("b-game-input")
+
+    # Disks / Net via Start
+    for app in ("disks", "net explorer", "net control"):
+        mouse_click(*peak_btn_xy())
+        time.sleep(0.45)
+        type_text(app)
+        time.sleep(0.25)
+        sendkeys("ret")
+        time.sleep(1.0)
+        step(f"b-app-{app.replace(' ', '-')}")
+
+
+def stress_and_scales() -> None:
+    print("=== C stress/scales ===", flush=True)
+    # Drag terminal title
+    sendkeys("1")
+    time.sleep(0.9)
+    step("c-before-drag")
+    # title bar approx center of a typical window
+    mouse_drag(500, 60, 800, 200, step=6)
+    time.sleep(0.5)
+    step("c-after-drag")
+    h0 = dump_hash("c-before-drag")
+    h1 = dump_hash("c-after-drag")
+    if h0 == h1:
+        finding(
+            "P2",
+            "window drag",
+            "mouse_drag title bar",
+            "window moves / dump changes",
+            "no visible change (mouse drag ineffective)",
+            "c-after-drag",
+        )
+
+    # Multi-window load
+    for k in ("1", "2", "6", "7", "3"):
+        sendkeys(k)
+        time.sleep(0.4)
+    time.sleep(0.8)
+    step("c-multi-window")
+
+    # Cursor trail check: move across
+    for x in range(100, 1800, 80):
+        mouse_goto(x, 400, step=4)
+    step("c-cursor-path")
+
+    # Scale cycle when possible — minimize focus issues: Esc overlays then S
+    sendkeys("esc")
+    sendkeys("esc")
+    # Close focused with ctrl-w until desktop-ish, then S
+    for _ in range(6):
+        sendkeys("ctrl-w")
+        time.sleep(0.2)
+    time.sleep(0.4)
+    step("c-scale3-baseline")
+    sendkeys("s")
+    time.sleep(0.8)
+    step("c-scale-after-s-1")
+    sendkeys("s")
+    time.sleep(0.8)
+    step("c-scale-after-s-2")
+    sendkeys("s")
+    time.sleep(0.8)
+    step("c-scale-after-s-3")  # back toward 3/4
+
+    # Theme T
+    sendkeys("t")
+    time.sleep(0.7)
+    step("c-theme-next")
+
+    # Opaque snap stress
+    sendkeys("1")
+    time.sleep(0.7)
+    sendkeys("ctrl-alt-left")
+    time.sleep(0.4)
+    sendkeys("ctrl-alt-right")
+    time.sleep(0.4)
+    sendkeys("ctrl-alt-up")
+    time.sleep(0.4)
+    step("c-snap-stress")
+
+
+def cross_cutting() -> None:
+    print("=== D cross-cutting ===", flush=True)
+    # Hotkey regression with focused terminal
+    for _ in range(5):
+        sendkeys("ctrl-w")
+        time.sleep(0.15)
+    sendkeys("1")
+    time.sleep(0.8)
+    step("d-term-focus")
+    sendkeys("2")
+    time.sleep(0.9)
+    step("d-hotkey2-files")
+    # Title padding
+    step("d-title-pad-check")
+    # Leave GUI
     sendkeys("ctrl-alt-esc")
     time.sleep(2.0)
-    dump("09-back-cli.ppm")
-    try:
-        ser_read_until(ser, prompt, 30.0, buf)
-        print("\n==> back at CLI OK")
-    except RuntimeError as e:
-        print(f"WARN: {e}")
+    step("d-back-cli")
 
-    notes = AUDIT / "NOTES.txt"
-    notes.write_text(
-        f"QEMU audit run at {time.ctime()}\n"
-        f"dumps in {AUDIT} (PPM from QEMU screendump)\n"
-        f"serial tail:\n{bytes(buf[-1500:]).decode('utf-8', 'replace')}\n"
-    )
-    print(f"Wrote {notes}")
-    cleanup()
-    print("DONE")
+
+def main() -> int:
+    os.environ.setdefault("PEAK_AUDIT_DIR", "/tmp/peak-audit-v2")
+    proc, ser, buf = boot_qemu()
+
+    def cleanup():
+        proc.send_signal(signal.SIGTERM)
+        try:
+            proc.wait(timeout=3)
+        except Exception:
+            proc.kill()
+
+    try:
+        enter_gui(buf)
+        session_chrome()
+        apps_core()
+        stress_and_scales()
+        cross_cutting()
+        (AUDIT / "NOTES.txt").write_text(
+            f"Dense audit finished {time.ctime()}\nsteps≈{STEP}\ndir={AUDIT}\n",
+            encoding="utf-8",
+        )
+        print(f"DONE steps={STEP} dir={AUDIT}", flush=True)
+    finally:
+        cleanup()
     return 0
 
 

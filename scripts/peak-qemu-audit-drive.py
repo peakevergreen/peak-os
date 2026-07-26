@@ -169,6 +169,16 @@ def main() -> int:
     p_ser.add_argument("text", help="Send on serial (supports \\n)")
     p_read = sub.add_parser("serial-read")
     p_read.add_argument("--seconds", type=float, default=1.0)
+    p_mouse = sub.add_parser("mouse")
+    p_mouse.add_argument("x", type=int)
+    p_mouse.add_argument("y", type=int)
+    p_mouse.add_argument("--click", action="store_true")
+    p_mouse.add_argument("--button", type=int, default=1)
+    p_png = sub.add_parser("ppm2png")
+    p_png.add_argument("ppm")
+    p_png.add_argument("png", nargs="?")
+    p_hash = sub.add_parser("hash")
+    p_hash.add_argument("path")
 
     args = ap.parse_args()
 
@@ -186,6 +196,19 @@ def main() -> int:
             print(f"ERROR: screendump missing: {path}", file=sys.stderr)
             return 1
         print(f"ok {path} ({os.path.getsize(path)} bytes)")
+        # Auto-convert if .ppm or sibling png requested
+        if path.endswith(".ppm") or path.endswith(".png"):
+            try:
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from peak_qemu_audit_lib import ppm_to_png
+
+                ppm = path if path.endswith(".ppm") else path[:-4] + ".ppm"
+                png = path if path.endswith(".png") else path[:-4] + ".png"
+                if os.path.isfile(ppm):
+                    ppm_to_png(__import__("pathlib").Path(ppm), __import__("pathlib").Path(png))
+                    print(f"png {png}")
+            except Exception as e:
+                print(f"ppm2png warn: {e}", file=sys.stderr)
         return 0
 
     if args.cmd == "sendkey":
@@ -206,14 +229,12 @@ def main() -> int:
         s = ser_connect(timeout=args.timeout)
         buf = ser_read_until(s, args.needle.encode(), timeout=args.timeout)
         print(buf.decode("utf-8", "replace")[-500:])
-        # keep connection? close — next serial-type reconnects
         s.close()
         return 0
 
     if args.cmd == "serial-type":
         text = args.text.encode().decode("unicode_escape")
         s = ser_connect()
-        # drain
         s.settimeout(0.2)
         try:
             while s.recv(4096):
@@ -234,6 +255,36 @@ def main() -> int:
             data = b""
         sys.stdout.buffer.write(data)
         s.close()
+        return 0
+
+    if args.cmd == "mouse":
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from peak_qemu_audit_lib import mouse_click, mouse_goto
+
+        if args.click:
+            mouse_click(args.x, args.y, button=args.button)
+        else:
+            mouse_goto(args.x, args.y)
+        print(f"mouse {'click' if args.click else 'move'} {args.x},{args.y}")
+        return 0
+
+    if args.cmd == "ppm2png":
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from pathlib import Path
+
+        from peak_qemu_audit_lib import ppm_to_png
+
+        ppm = Path(args.ppm)
+        png = Path(args.png) if args.png else ppm.with_suffix(".png")
+        ppm_to_png(ppm, png)
+        print(png)
+        return 0
+
+    if args.cmd == "hash":
+        import hashlib
+
+        data = open(args.path, "rb").read()
+        print(hashlib.md5(data).hexdigest())
         return 0
 
     return 1
