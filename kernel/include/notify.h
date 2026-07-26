@@ -17,5 +17,6 @@ void notify_dismiss_all(void);
 int notify_click(int32_t mx, int32_t my, uint32_t screen_w);
 int notify_history_count(void);
 int notify_history_get(int idx, char *out, size_t cap);
+void notify_history_clear(void);
 
 #endif

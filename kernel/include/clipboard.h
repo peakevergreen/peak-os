@@ -13,5 +13,7 @@ size_t clipboard_get_previous(char *buf, size_t cap);
 int clipboard_has(void);
 void clipboard_set_ttl_ticks(uint64_t ticks);
 int clipboard_history_count(void);
+size_t clipboard_get_slot(int slot_idx, char *buf, size_t cap);
+void clipboard_select_slot(int slot_idx);
 
 #endif

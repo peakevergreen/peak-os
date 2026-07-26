@@ -96,3 +96,29 @@ int clipboard_history_count(void) {
     clipboard_expire();
     return filled;
 }
+
+size_t clipboard_get_slot(int slot_idx, char *out, size_t cap) {
+    if (!cap_check(CAP_CLIPBOARD))
+        return 0;
+    clipboard_expire();
+    if (slot_idx < 0 || slot_idx >= filled || !out || cap == 0)
+        return 0;
+    int idx = (cur + CLIPBOARD_SLOTS - slot_idx) % CLIPBOARD_SLOTS;
+    size_t n = lens[idx];
+    if (n + 1 > cap)
+        n = cap - 1;
+    if (n)
+        memcpy(out, slots[idx], n);
+    out[n] = '\0';
+    return n;
+}
+
+void clipboard_select_slot(int slot_idx) {
+    if (!cap_check(CAP_CLIPBOARD))
+        return;
+    clipboard_expire();
+    if (slot_idx < 0 || slot_idx >= filled)
+        return;
+    cur = (cur + CLIPBOARD_SLOTS - slot_idx) % CLIPBOARD_SLOTS;
+    set_ticks[cur] = timer_ticks();
+}

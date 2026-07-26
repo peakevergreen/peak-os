@@ -14,6 +14,7 @@ int alttab_sel;
 int help_open;
 static char help_filter[24];
 int notify_hist_open;
+int clipboard_picker_open;
 int session_lock;
 int power_confirm;
 
@@ -133,7 +134,7 @@ void desktop_draw_notify_history(void) {
     if (rows > 8)
         rows = 8;
     uint32_t mw = desktop_u(480);
-    uint32_t mh = desktop_u(56) + rows * ch + desktop_u(36);
+    uint32_t mh = desktop_u(56) + rows * ch + desktop_u(36) + ch + desktop_u(8);
     uint32_t mx = ((uint32_t)fb->width - mw) / 2;
     uint32_t my = desktop_u(48);
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
@@ -159,9 +160,98 @@ void desktop_draw_notify_history(void) {
     snprintf(line, sizeof(line), "Clipboard ring: %d entries · Ctrl+Shift+V paste previous",
              clip_n);
     fb_draw_string_fit(mx + pad, cy, mw - 2 * pad, line, desktop_color_dim(), desktop_color_surface());
+    cy += ch + desktop_u(8);
+    fb_draw_string(mx + pad, cy, "[Clear all]", desktop_color_accent(), desktop_color_surface());
     cy = my + mh - pad - fb_cell_h();
     fb_draw_string(mx + pad, cy, "Esc / click to close · Start menu → Alerts",
                    desktop_color_dim(), desktop_color_surface());
+}
+
+void desktop_draw_clipboard_picker(void) {
+    if (!clipboard_picker_open)
+        return;
+    struct framebuffer *fb = fb_get();
+    int n = clipboard_history_count();
+    uint32_t ch = fb_cell_h() + desktop_u(4);
+    uint32_t rows = 4;
+    uint32_t mw = desktop_u(420);
+    uint32_t mh = desktop_u(56) + rows * ch + desktop_u(36);
+    uint32_t mx = ((uint32_t)fb->width - mw) / 2;
+    uint32_t my = desktop_u(96);
+    fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
+    fb_fill_rect(mx, my, mw, desktop_u(3), desktop_color_accent());
+    uint32_t pad = desktop_u(16);
+    uint32_t cy = my + pad;
+    fb_draw_string(mx + pad, cy, "Clipboard slots (click to paste)", desktop_color_accent(),
+                   desktop_color_surface());
+    cy += ch + desktop_u(4);
+    char line[96 + 8];
+    char slotbuf[48];
+    for (int i = 0; i < 4; i++) {
+        if (i < n && clipboard_get_slot(i, slotbuf, sizeof(slotbuf)) > 0) {
+            snprintf(line, sizeof(line), "%d. %s", i + 1, slotbuf);
+            fb_draw_string_fit(mx + pad, cy, mw - 2 * pad, line, desktop_color_fg(),
+                               desktop_color_surface());
+        } else {
+            snprintf(line, sizeof(line), "%d. (empty)", i + 1);
+            fb_draw_string(mx + pad, cy, line, desktop_color_dim(), desktop_color_surface());
+        }
+        cy += ch;
+    }
+    cy = my + mh - pad - fb_cell_h();
+    fb_draw_string(mx + pad, cy, "Esc to close · Ctrl+Shift+C toggle",
+                   desktop_color_dim(), desktop_color_surface());
+}
+
+int desktop_notify_hist_clear_all(int32_t mx, int32_t my) {
+    if (!notify_hist_open)
+        return 0;
+    struct framebuffer *fb = fb_get();
+    int n = notify_history_count();
+    uint32_t ch = fb_cell_h() + desktop_u(4);
+    uint32_t rows = (uint32_t)(n > 0 ? n : 1);
+    (void)rows;
+    uint32_t mw = desktop_u(480);
+    uint32_t mx0 = ((uint32_t)fb->width - mw) / 2;
+    uint32_t my0 = desktop_u(48);
+    uint32_t pad = desktop_u(16);
+    uint32_t cy = my0 + pad + ch + desktop_u(4);
+    if (n > 0)
+        cy += (uint32_t)(n > 8 ? 8 : n) * ch;
+    cy += desktop_u(4) + ch + desktop_u(8);
+    uint32_t btn_w = desktop_u(80);
+    uint32_t btn_h = ch;
+    if (!desktop_point_in(mx, my, mx0 + pad, cy, btn_w, btn_h))
+        return 0;
+    notify_history_clear();
+    notify_push("Notification history cleared");
+    dirty_bits |= DIRTY_FULL;
+    return 1;
+}
+
+int desktop_clipboard_picker_click(int32_t mx, int32_t my) {
+    if (!clipboard_picker_open)
+        return 0;
+    struct framebuffer *fb = fb_get();
+    uint32_t ch = fb_cell_h() + desktop_u(4);
+    uint32_t mw = desktop_u(420);
+    uint32_t mx0 = ((uint32_t)fb->width - mw) / 2;
+    uint32_t my0 = desktop_u(96);
+    uint32_t pad = desktop_u(16);
+    uint32_t cy = my0 + pad + ch + desktop_u(4);
+    for (int i = 0; i < 4; i++) {
+        if (desktop_point_in(mx, my, mx0 + pad, cy, mw - 2 * pad, ch)) {
+            char buf[CLIPBOARD_MAX];
+            if (clipboard_get_slot(i, buf, sizeof(buf)) > 0) {
+                clipboard_select_slot(i);
+                notify_push("Clipboard slot selected");
+            }
+            dirty_bits |= DIRTY_FULL;
+            return 1;
+        }
+        cy += ch;
+    }
+    return 0;
 }
 
 
@@ -239,6 +329,7 @@ void desktop_draw_help(void) {
         { "Drag title", "Snap left/right/top edges" },
         { "Title _ [] x", "Minimize / maximize / close" },
         { "Ctrl+Shift+H", "Notification history panel" },
+        { "Ctrl+Shift+C", "Clipboard slot picker" },
         { "Ctrl+Shift+V", "Paste previous clipboard" },
         { "Toast x", "Dismiss notification" },
         { "Wheel", "Scroll Files, Terminal, Browser" },
@@ -246,7 +337,7 @@ void desktop_draw_help(void) {
     };
     uint32_t key_w = desktop_u(100);
     int shown = 0;
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 17; i++) {
         if (!help_line_matches(lines[i].key, lines[i].desc)) continue;
         shown++;
         uint32_t kbg = desktop_color_bg();
@@ -339,9 +430,9 @@ void desktop_alttab_commit_if_open(void) {
 }
 
 int desktop_overlays_close_popups(void) {
-    if (!(alttab_open || help_open || notify_hist_open))
+    if (!(alttab_open || help_open || notify_hist_open || clipboard_picker_open))
         return 0;
-    alttab_open = help_open = notify_hist_open = 0;
+    alttab_open = help_open = notify_hist_open = clipboard_picker_open = 0;
     dirty_bits |= DIRTY_FULL;
     return 1;
 }
