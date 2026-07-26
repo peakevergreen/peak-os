@@ -325,6 +325,10 @@ grep -q 'post_body' kernel/user/utils_net.c
 grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
+echo "==> Wave 3 Pass 68 files breadcrumbs"
+grep -q files_crumb_click kernel/gui/desktop_files.c
+grep -q files_draw_crumbs kernel/gui/desktop_files.c
+
 echo "==> Wave 3 Pass 67 start menu pointer"
 grep -q 'desktop_menus_start_hover' kernel/gui/desktop_menus.c
 grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c

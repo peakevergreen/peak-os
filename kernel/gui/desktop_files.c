@@ -12,6 +12,13 @@ static char files_clip_path[VFS_PATH_MAX];
 static int files_sel, files_sel_anchor, files_scroll, files_del_arm, files_ctx_empty;
 static int files_clip_cut;
 
+#define FILES_CRUMB_MAX 16
+static struct {
+    uint32_t x, y, w, h;
+    char path[VFS_PATH_MAX];
+} files_crumb_hits[FILES_CRUMB_MAX];
+static int files_crumb_hit_n;
+
 void desktop_files_init(void) {
     files_sel = files_sel_anchor = files_scroll = files_del_arm = files_ctx_empty = 0;
     files_clip_cut = 0;
@@ -127,6 +134,116 @@ static void files_format_size(size_t sz, char *buf, size_t cap) {
     if (sz >= 1024 * 1024) snprintf(buf, cap, "%luk", (unsigned long)(sz / 1024));
     else if (sz >= 1024) snprintf(buf, cap, "%luK", (unsigned long)(sz / 1024));
     else snprintf(buf, cap, "%lu", (unsigned long)sz);
+}
+
+
+static void files_chdir_to(const char *path) {
+    if (!path || !path[0])
+        return;
+    size_t i = 0;
+    for (; path[i] && i + 1 < sizeof(files_cwd); i++)
+        files_cwd[i] = path[i];
+    files_cwd[i] = '\0';
+    files_sel = files_sel_anchor = 0;
+    files_scroll = 0;
+    files_disarm_del();
+    dirty_bits |= DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
+}
+
+static void files_crumb_hit_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const char *path) {
+    if (files_crumb_hit_n >= FILES_CRUMB_MAX || !path)
+        return;
+    files_crumb_hits[files_crumb_hit_n].x = x;
+    files_crumb_hits[files_crumb_hit_n].y = y;
+    files_crumb_hits[files_crumb_hit_n].w = w;
+    files_crumb_hits[files_crumb_hit_n].h = h;
+    size_t i = 0;
+    for (; path[i] && i + 1 < sizeof(files_crumb_hits[0].path); i++)
+        files_crumb_hits[files_crumb_hit_n].path[i] = path[i];
+    files_crumb_hits[files_crumb_hit_n].path[i] = '\0';
+    files_crumb_hit_n++;
+}
+
+static void files_draw_crumbs(uint32_t tx, uint32_t ty, uint32_t inner) {
+    files_crumb_hit_n = 0;
+    uint32_t ch = fb_cell_h();
+    uint32_t cw = fb_cell_w();
+    uint32_t cx = tx;
+    uint32_t max_x = tx + inner;
+    const char *segs[FILES_CRUMB_MAX];
+    char seg_paths[FILES_CRUMB_MAX][VFS_PATH_MAX];
+    int nseg = 0;
+    static char tmp[VFS_PATH_MAX];
+    size_t i = 0;
+    for (; files_cwd[i] && i + 1 < sizeof(tmp); i++)
+        tmp[i] = files_cwd[i];
+    tmp[i] = '\0';
+
+    if (tmp[0] == '/' && !tmp[1]) {
+        fb_draw_string(tx, ty, "/", desktop_color_accent(), desktop_color_bg());
+        files_crumb_hit_add(tx, ty, cw, ch, "/");
+        return;
+    }
+
+    char *p = tmp;
+    if (*p == '/')
+        p++;
+    while (*p && nseg < FILES_CRUMB_MAX) {
+        segs[nseg] = p;
+        while (*p && *p != '/')
+            p++;
+        if (*p == '/')
+            *p++ = '\0';
+        if (nseg == 0)
+            snprintf(seg_paths[nseg], sizeof(seg_paths[0]), "/%s", segs[nseg]);
+        else
+            snprintf(seg_paths[nseg], sizeof(seg_paths[0]), "%s/%s", seg_paths[nseg - 1], segs[nseg]);
+        nseg++;
+    }
+
+    int start = nseg > 3 ? nseg - 3 : 0;
+    if (start > 0) {
+        char ell_path[VFS_PATH_MAX];
+        if (start == 1)
+            snprintf(ell_path, sizeof(ell_path), "/");
+        else
+            snprintf(ell_path, sizeof(ell_path), "%s", seg_paths[start - 1]);
+        fb_draw_string(cx, ty, "...", desktop_color_dim(), desktop_color_bg());
+        files_crumb_hit_add(cx, ty, cw * 3, ch, ell_path);
+        cx += cw * 3 + desktop_u(4);
+    }
+
+    for (int s = start; s < nseg; s++) {
+        if (s > start) {
+            fb_draw_string(cx, ty, ">", desktop_color_dim(), desktop_color_bg());
+            cx += cw + desktop_u(2);
+        }
+        const char *lab = segs[s];
+        uint32_t lw = (uint32_t)strlen(lab) * cw;
+        if (cx + lw > max_x)
+            break;
+        uint32_t fg = (s == nseg - 1) ? desktop_color_accent() : desktop_color_dim();
+        fb_draw_string(cx, ty, lab, fg, desktop_color_bg());
+        files_crumb_hit_add(cx, ty, lw, ch, seg_paths[s]);
+        cx += lw + desktop_u(4);
+    }
+}
+
+static int files_crumb_click(struct win *w, int32_t mx, int32_t my) {
+    uint32_t th = desktop_title_h();
+    uint32_t ty = w->y + th + desktop_u(8);
+    uint32_t ch = fb_cell_h();
+    if ((uint32_t)my < ty || (uint32_t)my >= ty + ch)
+        return 0;
+    for (int i = 0; i < files_crumb_hit_n; i++) {
+if (desktop_point_in(mx, my, files_crumb_hits[i].x, files_crumb_hits[i].y,
+                             files_crumb_hits[i].w, files_crumb_hits[i].h)) {
+            files_chdir_to(files_crumb_hits[i].path);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static uint32_t files_status_h(void) {
@@ -306,29 +423,7 @@ void desktop_files_draw(struct win *w) {
     uint32_t inner = w->w > desktop_u(24) ? w->w - desktop_u(24) : w->w;
     uint32_t name_w = inner > desktop_u(120) ? inner - desktop_u(72) : inner / 2;
     uint32_t size_x = tx + name_w;
-    {
-        char crumb[VFS_PATH_MAX]; const char *segs[16]; int nseg = 0;
-        static char tmp[VFS_PATH_MAX]; size_t i = 0;
-        for (; files_cwd[i] && i + 1 < sizeof(tmp); i++) tmp[i] = files_cwd[i];
-        tmp[i] = '\0';
-        if (tmp[0] == '/' && !tmp[1]) snprintf(crumb, sizeof(crumb), "/");
-        else {
-            char *p = tmp; if (*p == '/') p++;
-            while (*p && nseg < 16) {
-                segs[nseg++] = p;
-                while (*p && *p != '/') p++;
-                if (*p == '/') *p++ = '\0';
-            }
-            int start = nseg > 3 ? nseg - 3 : 0; size_t o = 0;
-            if (start > 0) { crumb[o++]='.'; crumb[o++]='.'; crumb[o++]='.'; }
-            for (int s = start; s < nseg; s++) {
-                if (o && o + 3 < sizeof(crumb)) { crumb[o++]=' '; crumb[o++]='>'; crumb[o++]=' '; }
-                for (const char *q = segs[s]; *q && o + 1 < sizeof(crumb); q++) crumb[o++] = *q;
-            }
-            crumb[o] = '\0';
-        }
-        fb_draw_string_fit(tx, ty, inner, crumb, desktop_color_dim(), desktop_color_bg());
-    }
+    files_draw_crumbs(tx, ty, inner);
     if (files_del_arm)
         fb_draw_string_fit(tx, ty + ch, inner, "Delete: press d again to confirm · Esc cancel",
                            theme_get()->danger, desktop_color_bg());
@@ -589,7 +684,9 @@ int desktop_files_key(int key) {
 void desktop_files_wheel(int wheel) { files_move_sel(wheel > 0 ? -1 : 1, 0); }
 
 int desktop_files_click(struct win *w, int32_t mx, int32_t my, int dbl) {
-    (void)mx; int row;
+    if (files_crumb_click(w, mx, my))
+        return 1;
+    int row;
     if (!files_hit_row(w, my, &row)) return 0;
     struct vfs_dirent ents[FILES_ROWS]; int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
     if (n <= 0) return 0;
