@@ -275,6 +275,8 @@ static const struct help_entry help_table[] = {
     { "nc", "net", "TCP connect (+ optional send/recv)" },
     { "tlsinfo", "net", "TLS trust summary, last error, hostname -m test" },
     { "tar", "file", "ustar create/extract (-c/-x)" },
+    { "zip", "file", "PEAKZIP1 archive create (store/RLE)" },
+    { "unzip", "file", "extract PEAKZIP1 .zip" },
     { "js", "sys", "Peak JS: js -e 'code' | js file.js" },
     { NULL, NULL, NULL },
 };
@@ -290,7 +292,7 @@ void shell_help_topics(void) {
     console_write("        uname true false test [ yes time history sh reboot help man js\n");
     console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
     console_write("  net   ctr ctrd ifconfig ping wget curl nslookup host traceroute nc tlsinfo\n");
-    console_write("  file  … tar basename dirname realpath\n");
+    console_write("  file  … tar zip unzip basename dirname realpath\n");
     console_write("Shell: quotes, globs (* ?), pipes |, redirects > >> <\n");
     console_write("Try: man <cmd>   ls *.c   echo hi | wc   tar -c a.tar f   gui\n");
 }

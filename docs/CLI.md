@@ -128,6 +128,7 @@ CLI scrollback search: **Ctrl+F**, type a needle, **Enter** for next match (128 
 | `traceroute` | Staged reachability: local → gateway → DNS → dest (TCP :80) |
 | `nc` | TCP connect (`host port` or `host:port`; optional send + recv) |
 | `tar -c` / `tar -x` | ustar archive create/extract (64 KiB cap) |
+| `zip` `unzip` | PEAKZIP1 multi-file archive — store or RLE per entry (64 KiB / 32 files / 8 KiB each) |
 | `ctr` `ctrd` | Dockerfile staging / static HTTP (not OCI) — [containers.md](containers.md) |
 
 Prompt shows cwd: `peak:/home/dev/workspace> ` (append `[N]` after a non-zero exit).

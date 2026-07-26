@@ -140,6 +140,13 @@ echo "==> Pass 37 input/console"
 grep -q 'keyboard_set_repeat' kernel/keyboard.c
 grep -q 'console_scroll_find_next' kernel/console_scroll.c
 
+echo "==> Pass 47 zip/unzip"
+grep -q 'zip' kernel/user/ubin_cmds.def
+grep -q 'unzip' kernel/user/ubin_cmds.def
+grep -q 'utils_zip' Makefile
+grep -q 'test_cli_zip' Makefile
+grep -q 'PEAKZIP1' kernel/user/utils_zip.c
+
 echo "==> Pass 40 sed depth"
 grep -q 'parse_addr' kernel/user/utils_text3.c
 grep -q 'subst_global' kernel/user/utils_text3.c
