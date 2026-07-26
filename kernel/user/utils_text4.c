@@ -5,7 +5,7 @@
 #include "console.h"
 #include "util.h"
 
-#define READ_MAX 8192
+#define READ_MAX 32768
 #define YES_MAX_LINES 256
 
 static int resolve_in_path(const char *path, char *abs, size_t abs_len) {

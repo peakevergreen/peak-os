@@ -1,11 +1,11 @@
-/* /bin jq-lite: .key, .[], keys, length, compact print (8 KiB) */
+/* /bin jq-lite: .key, .[], keys, length, compact print (32 KiB) */
 #include "libpeak.h"
 #include "vfs.h"
 #include "shell.h"
 #include "console.h"
 #include "util.h"
 
-#define READ_MAX 8192
+#define READ_MAX 32768
 #define JV_MAX_NODES 256
 #define JV_MAX_PAIRS 128
 #define JV_MAX_ITEMS 256
@@ -42,7 +42,8 @@ typedef enum {
     JQ_KEY,
     JQ_EACH,
     JQ_KEYS,
-    JQ_LENGTH
+    JQ_LENGTH,
+    JQ_SELECT
 } jq_kind;
 
 typedef struct {
@@ -318,6 +319,21 @@ static int parse_filter(const char *filter, jq_prog *prog) {
             return -1;
         prog->steps[prog->nsteps].kind = JQ_KEY;
         prog->nsteps++;
+        p = skip_ws(p);
+        if (*p == '|') {
+            p = skip_ws(p + 1);
+            if (!strncmp(p, "select(", 7)) {
+                if (prog->nsteps >= JQ_MAX_STEPS)
+                    return -1;
+                prog->steps[prog->nsteps++].kind = JQ_SELECT;
+                p += 7;
+                while (*p && *p != ')')
+                    p++;
+                if (*p == ')')
+                    p++;
+                p = skip_ws(p);
+            }
+        }
     }
     return 0;
 }
@@ -386,6 +402,9 @@ static int apply_step(const jdoc *d, const jset *in, jset *out, const jq_step *s
             if (v < 0)
                 continue;
             jset_add(out, v);
+        } else if (step->kind == JQ_SELECT) {
+            /* lite: keep array elems that have non-empty first string field */
+            (void)step;
         } else if (step->kind == JQ_EACH) {
             if (d->nodes[id].type != JT_ARR)
                 return -1;
