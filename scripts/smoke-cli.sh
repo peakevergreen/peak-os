@@ -474,6 +474,11 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 133 images format status"
+grep -q 'img_format_label' kernel/gui/desktop_images.c
+grep -q 'img_set_format_from_path' kernel/gui/desktop_images.c
+grep -q 'PPM P6' kernel/gui/desktop_images.c
+
 echo "==> Wave 6 Pass 132 files multi-select batch delete"
 grep -q 'files_ctrl_toggle_sel' kernel/gui/desktop_files.c
 grep -q 'files_batch_delete' kernel/gui/desktop_files.c

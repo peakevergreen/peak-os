@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 133:** Images fit/1:1/zoom status line with PPM/BMP format label; folder next/prev
+
 - **Pass 132:** Files Ctrl+click multi-select toggle; batch delete confirm toast
 
 - **Pass 131:** Clipboard 4-slot picker overlay; notification history clear-all button
