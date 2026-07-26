@@ -174,6 +174,8 @@ static int tofu_try_match(const uint8_t *cert_msg, size_t len, const char *sni_h
 
 static int x509_names_match_sni(const uint8_t *cert, size_t cert_len, const char *sni_host) {
     struct x509_cert xc;
+    memset(&xc, 0, sizeof(xc));
+    xc.match_sni = sni_host;
     if (x509_parse_der(cert, cert_len, &xc) == 0) {
         int m = x509_cert_hostname_match(&xc, sni_host);
         if (m >= 0)

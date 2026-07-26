@@ -305,6 +305,9 @@ int webpki_verify_chain(const uint8_t *const *certs, const size_t *lens, int n,
         return 0;
     struct x509_cert parsed[8];
     for (int i = 0; i < n; i++) {
+        memset(&parsed[i], 0, sizeof(parsed[i]));
+        if (i == 0 && sni_host && sni_host[0])
+            parsed[i].match_sni = sni_host;
         if (x509_parse_der(certs[i], lens[i], &parsed[i]) != 0) {
             cert_fail_reason = "Malformed certificate in chain";
             return 0;

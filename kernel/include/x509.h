@@ -23,6 +23,10 @@ struct x509_cert {
     size_t spki_len;
     char sans[X509_SAN_MAX][X509_NAME_MAX];
     int san_count;
+    int san_total; /* SANs seen (may exceed X509_SAN_MAX) */
+    /* Optional: set match_sni before x509_parse_der to test every SAN (not just stored). */
+    const char *match_sni;
+    int match_sni_hit;
     int has_basic_constraints;
     int is_ca;
     int has_key_usage;
