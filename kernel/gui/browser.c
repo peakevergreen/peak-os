@@ -21,6 +21,7 @@ int needs_redraw = 1;
 static char *body_cache;
 
 uint32_t hit_tab_y, hit_tab_h, hit_tab_w;
+uint32_t hit_tab_close_x[BR_MAX_TABS], hit_tab_close_w[BR_MAX_TABS];
 uint32_t hit_plus_x, hit_go_x, hit_go_w, hit_bar_y, hit_bar_h;
 uint32_t hit_retry_x, hit_retry_y, hit_retry_w, hit_retry_h;
 uint32_t hit_back_x, hit_back_w, hit_fwd_x, hit_fwd_w;
@@ -170,6 +171,9 @@ void browser_reset(void) {
     active = 0;
     editing = 0;
     needs_redraw = 1;
+    memset(hit_tab_close_x, 0, sizeof(hit_tab_close_x));
+    memset(hit_tab_close_w, 0, sizeof(hit_tab_close_w));
+    browser_closed_clear();
 
     browser_bookmarks_init();
 

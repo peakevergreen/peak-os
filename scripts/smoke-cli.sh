@@ -104,6 +104,12 @@ grep -q 'desktop_images_drag' kernel/gui/desktop_images.c
 echo "==> Pass 30 browser JS UX"
 grep -q 'browser_bookmarks_init' kernel/gui/browser_bookmarks.c
 
+echo "==> Pass 51 browser tab chrome"
+grep -q 'browser_restore_closed_tab' kernel/gui/browser_nav.c
+grep -q 'browser_has_closed_tab' kernel/gui/browser_nav.c
+grep -q 'hit_tab_close_x' kernel/gui/browser_draw.c
+grep -q 'CTX_ACT_BROWSER_RESTORE' kernel/gui/desktop_internal.h
+
 echo "==> Pass 31 settings/theme"
 grep -q 'settings_draw_scale_preview' kernel/gui/desktop_settings.c
 grep -q 'test_wallpaper_cache' Makefile

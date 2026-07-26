@@ -26,6 +26,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Files app (Pass 08):** name/size columns, breadcrumbs, scroll overflow, copy path, context menus, open-with hooks
 - **Notepad app (Pass 09):** multi-line editor, VFS load/save, dirty flag, clipboard, context menu
 - **Images app (Pass 10):** PPM/BMP decode, fit/1:1/zoom-pan viewer, host test_img_decode
+- **Pass 51:** Browser tab strip labels (title/URL fit), per-tab close **x**, last-closed restore lite (**Shift+T** / context menu)
 - **Pass 48:** Images directory next/prev ([/] wheel), keyboard zoom/pan (0/1 fit/actual, Shift+arrows), status strip, drag-pan, Files open-with goto
 - **Disks app (Pass 11):** PeakDisk status, VFS/PMM stats, confirmed disksave, context menu
 - **Net Explorer (Pass 12):** link/IP/DNS pane, ping & nslookup, context menu
@@ -93,6 +94,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - In-guest IPv4 DHCP/DNS/TCP/TLS/HTTP; e1000 on PC; LAN web-demo containers
 - **Pass 24 (TLS/WebPKI polish):** `tls_err_name()` + RFC alert names; `[tag]` prefixes on structured TLS errors; `tlsinfo` CLI; `webpki_root_sha256()` root listing; ECH full HPKE remains NYI (scaffold fail-closed only)
 - **Pass 30 (Browser + Peak JS UX):** back/forward toolbar + **b**/**f** keys; VFS bookmarks bar + context menu; JS console panel (`console.log` capture); TLS/net error pages use `tls_last_error()` + `net_last_error()`
+- **Pass 51 (Browser tab chrome):** tab strip title/URL labels with fetch indicator; per-tab **x** close affordance; last-closed restore lite (**Shift+T**, context menu)
 
 ### Raspberry Pi
 
