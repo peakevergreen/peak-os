@@ -11,7 +11,9 @@ ask "create fib.c"
 js -e '1+2*3'
 ```
 
-Unclosed quotes treat the remainder of the line as one argument. Max 16 argv slots.
+Unclosed quotes treat the remainder of the line as one argument. Max 24 argv slots per stage.
+
+Shell builtins (not in `/bin`): `export NAME=val`, `read NAME` (one line from stdin into env), `unset NAME`.
 
 ## Pipes and redirection
 
@@ -30,9 +32,11 @@ false && echo no
 true || echo skipped
 true && echo yes
 expr 2 + 2
+echo value | read MYVAR
+unset MYVAR
 ```
 
-Limits: up to 4 pipeline stages; captured pipe/redirect buffers are capped at 32 KiB.
+Limits: up to 6 pipeline stages; captured pipe/redirect buffers are capped at 32 KiB.
 `cat` / `head` / `tail` / `wc` / `grep` accept `-` (or omit the path) to read shell stdin from `<` or a pipe.
 
 ## Globs

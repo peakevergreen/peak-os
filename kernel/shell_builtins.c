@@ -152,6 +152,17 @@ const char *shell_env_get(const char *name) {
     return NULL;
 }
 
+int shell_env_unset(const char *name) {
+    for (int i = 0; i < ENV_MAX; i++) {
+        if (env[i].used && !strcmp(env[i].key, name)) {
+            env[i].used = 0;
+            env[i].key[0] = env[i].val[0] = '\0';
+            return 0;
+        }
+    }
+    return -1;
+}
+
 void shell_env_list(void) {
     for (int i = 0; i < ENV_MAX; i++) {
         if (!env[i].used)

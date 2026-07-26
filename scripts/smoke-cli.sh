@@ -474,6 +474,12 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 121 shell read/unset"
+grep -q 'shell_env_unset' kernel/shell_builtins.c
+grep -q 'unset NAME' kernel/shell_dispatch.c
+grep -q 'SHELL_PIPE_MAX     6' kernel/include/shell_split.h
+grep -q 'read NAME' docs/CLI.md
+
 echo "==> Wave 6 Pass 120 awk/sed/jq depth"
 grep -q 'awk_var_get' kernel/user/utils_text6.c
 grep -q 'do_quit' kernel/user/utils_text3.c

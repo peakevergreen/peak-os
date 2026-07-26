@@ -30,6 +30,7 @@ const char *shell_stdin_path(void);
 
 /* env */
 int  shell_env_set(const char *name, const char *val);
+int  shell_env_unset(const char *name);
 const char *shell_env_get(const char *name);
 void shell_env_list(void);
 
