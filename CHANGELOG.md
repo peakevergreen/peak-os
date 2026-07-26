@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 82:** `mktemp` under `/tmp`; `install -D` parent-create lite
+
 - **Pass 81:** `sha1sum`, `basenc --base32`; hash I/O up to 64 KiB
 
 - **Pass 80:** `head`/`tail` `-c`; honest `timeout` wall limit (124, no fake success message)

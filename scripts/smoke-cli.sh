@@ -385,6 +385,11 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 82 mktemp/install"
+grep -q umktemp_main kernel/user/utils_file.c
+grep -q uinstall_main kernel/user/utils_file.c
+grep -q 'UBIN_CMD("mktemp"' kernel/user/ubin_cmds.def
+
 echo "==> Wave 4 Pass 81 crypto pack"
 grep -q 'void sha1(' kernel/net/crypto_hash.c
 grep -q usha1sum_main kernel/user/utils_crypto.c
