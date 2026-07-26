@@ -21,6 +21,8 @@ extern int ustat_main(int argc, char **argv);
 extern int udu_main(int argc, char **argv);
 extern int udf_main(int argc, char **argv);
 extern int utruncate_main(int argc, char **argv);
+extern int udd_main(int argc, char **argv);
+extern int usync_main(int argc, char **argv);
 extern int uhead_main(int argc, char **argv);
 extern int utail_main(int argc, char **argv);
 extern int uwc_main(int argc, char **argv);
