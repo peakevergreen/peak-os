@@ -62,6 +62,7 @@ void desktop_init(void) {
     settings_page = 0;
     desktop_compose_reset_cursor_cache();
     desktop_files_init();
+    desktop_settings_init();
     alttab_open = 0;
     help_open = 0;
     desktop_should_exit = 0;
@@ -181,6 +182,8 @@ void desktop_run(void) {
                        wins[focus].kind == APP_NETEXP;
         int nc_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
                        wins[focus].kind == APP_NETCTL;
+        int settings_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
+                             wins[focus].kind == APP_SETTINGS;
         int agent_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
                           wins[focus].kind == APP_AGENT;
 
@@ -216,6 +219,11 @@ void desktop_run(void) {
 
         if (key && nc_focus) {
             desktop_netctl_key(key);
+            key = 0;
+        }
+
+        if (key && settings_focus) {
+            desktop_settings_key(key);
             key = 0;
         }
 
