@@ -316,7 +316,11 @@ int desktop_open_app(enum app_kind k) {
     desktop_raise_win(slot);
     surface_ensure(&wins[slot].surf, wins[slot].w, wins[slot].h);
     surface_mark_dirty(&wins[slot].surf);
-    notify_push(desktop_app_title(k));
+    {
+        char opened[48];
+        snprintf(opened, sizeof(opened), "Opened %s", desktop_app_title(k));
+        notify_push(opened);
+    }
     dirty_bits |= DIRTY_FULL;
     return slot;
 }

@@ -169,16 +169,14 @@ int notify_click(int32_t mx, int32_t my, uint32_t screen_w) {
     uint32_t tw, th, pad, s;
     notify_toast_metrics(&tw, &th, &pad, &s);
     uint32_t x = screen_w > tw + pad ? screen_w - tw - pad : pad;
-    uint32_t y = pad;
-    uint32_t btn = 14 * s;
+    uint32_t y = pad + 2 * s;
     int display = 0;
     for (int i = 0; i < NOTIFY_MAX; i++) {
         if (!toasts[i].used)
             continue;
-        uint32_t bx = x + tw - btn - 4 * s;
-        uint32_t by = y + (th > btn ? (th - btn) / 2 : 0);
-        if ((uint32_t)mx >= bx && (uint32_t)mx < bx + btn &&
-            (uint32_t)my >= by && (uint32_t)my < by + btn) {
+        /* Whole toast dismisses on click (no chrome-like close box). */
+        if ((uint32_t)mx >= x && (uint32_t)mx < x + tw &&
+            (uint32_t)my >= y && (uint32_t)my < y + th) {
             notify_dismiss(display);
             return 1;
         }
@@ -226,11 +224,11 @@ void notify_bounds(uint32_t screen_w, uint32_t *x, uint32_t *y, uint32_t *w, uin
     if (x)
         *x = screen_w > tw + pad ? screen_w - tw - pad : pad;
     if (y)
-        *y = pad;
+        *y = pad + 2 * s;
     if (w)
         *w = tw;
     if (h)
-        *h = (uint32_t)n * (th + 4 * s);
+        *h = 2 * s + (uint32_t)n * (th + 4 * s);
 }
 
 int notify_draw(uint32_t screen_w, uint32_t screen_h) {
@@ -239,19 +237,17 @@ int notify_draw(uint32_t screen_w, uint32_t screen_h) {
     uint32_t tw, th, pad, s;
     notify_toast_metrics(&tw, &th, &pad, &s);
     int drawn = 0;
-    uint32_t y = pad;
+    /* Keep clear of typical window titlebars: top accent strip + no chrome-like x box. */
+    uint32_t y = pad + 2 * s;
     for (int i = 0; i < NOTIFY_MAX; i++) {
         if (!toasts[i].used)
             continue;
         uint32_t x = screen_w > tw + pad ? screen_w - tw - pad : pad;
         fb_fill_rect(x, y, tw, th, t->surface);
-        fb_fill_rect(x, y, 3 * s, th, t->accent);
-        fb_draw_string_fit(x + 8 * s, y + 5 * s, tw - 28 * s, toasts[i].msg, t->fg, t->surface);
-        uint32_t btn = 14 * s;
-        uint32_t bx = x + tw - btn - 4 * s;
-        uint32_t by = y + (th > btn ? (th - btn) / 2 : 0);
-        fb_fill_rect(bx, by, btn, btn, t->bg);
-        fb_draw_string(bx + 4 * s, by + 1 * s, "x", t->dim, t->bg);
+        fb_fill_rect(x, y, tw, 2 * s, t->accent);
+        fb_draw_string_fit(x + 6 * s, y + 4 * s, tw - 20 * s, toasts[i].msg, t->fg, t->surface);
+        /* Plain dim glyph — not a window close control. */
+        fb_draw_string(x + tw - 10 * s, y + 4 * s, "*", t->dim, t->surface);
         y += th + 4 * s;
         drawn = 1;
     }
