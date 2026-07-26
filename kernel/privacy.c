@@ -94,3 +94,52 @@ int privacy_listeners_localhost_only(void) {
 void privacy_set_listeners_localhost_only(int on) {
     listeners_localhost = on ? 1 : 0;
 }
+
+static const char *privacy_grant_names[] = {
+    "Outbound client",
+    "Listen (local)",
+    "LAN listen",
+};
+
+int privacy_grant_list_count(void) {
+    return 3;
+}
+
+const char *privacy_grant_label(int idx) {
+    if (idx < 0 || idx >= privacy_grant_list_count())
+        return "";
+    return privacy_grant_names[idx];
+}
+
+int privacy_grant_active(int idx) {
+    switch (idx) {
+    case 0: return net_client_grant;
+    case 1: return net_listen_grant;
+    case 2: return net_lan_grant;
+    default: return 0;
+    }
+}
+
+void privacy_revoke_grant(int idx) {
+    switch (idx) {
+    case 0:
+        net_client_grant = 0;
+        cap_set_current(cap_current() & ~CAP_NET_CLIENT);
+        break;
+    case 1:
+        net_listen_grant = 0;
+        cap_set_current(cap_current() & ~CAP_NET_LISTEN);
+        break;
+    case 2:
+        net_lan_grant = 0;
+        listeners_localhost = 1;
+        cap_set_current(cap_current() & ~CAP_NET_LAN);
+        break;
+    default:
+        break;
+    }
+}
+
+void privacy_revoke_net_client(void) {
+    privacy_revoke_grant(0);
+}

@@ -23,4 +23,9 @@ void privacy_grant_net_listen(int lan, int remember);
 int privacy_listeners_localhost_only(void);
 void privacy_set_listeners_localhost_only(int on);
 
+int privacy_grant_list_count(void);
+const char *privacy_grant_label(int idx);
+int privacy_grant_active(int idx);
+void privacy_revoke_grant(int idx);
+
 #endif

@@ -474,6 +474,12 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 137 privacy grant list"
+grep -q 'settings_draw_privacy_grants' kernel/gui/desktop_settings.c
+grep -q 'privacy_revoke_grant' kernel/privacy.c
+grep -q 'privacy_grant_list_count' kernel/privacy.c
+grep -q 'Active grants' docs/privacy.md
+
 echo "==> Wave 6 Pass 136 idle lock minutes"
 grep -q 'settings_idle_lock_minutes' kernel/settings.c
 grep -q 'idle_lock_honesty_copy' kernel/gui/desktop_overlays.c
