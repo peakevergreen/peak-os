@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 98:** Wave 4 lock-in — smoke-cli gates Passes 79–97, ROADMAP/CHANGELOG Wave 4 shipped, security-checklist CI note
+
 - **Pass 97:** heap/sched fairness under GUI load; ps share column label
 
 - **Pass 96:** nc listen/connect flag clarity; traceroute hop timeout/loss honesty

@@ -19,6 +19,10 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 **Pass 98 (Wave 4 lock-in):** smoke-cli gates Passes 79–97, ROADMAP/CHANGELOG Wave 4 shipped, security-checklist CI note.
 
+**Enhancement wave 4 (Passes 79–97 shipped):** CLI/util depth, desktop polish, TLS/net tables, PeakVec/agent UX.
+
+**Pass 98 (Wave 4 lock-in):** smoke-cli gates Passes 79–97, ROADMAP/CHANGELOG sync, security-checklist CI note.
+
 **Pass 78 (Wave 3 lock-in):** `smoke-cli.sh` gates for Passes 59–77 markers, ROADMAP/CHANGELOG sync, security-checklist automation notes — Wave 3 release acceptance.
 
 ## Enhancement wave 2 (Passes 39–58)
