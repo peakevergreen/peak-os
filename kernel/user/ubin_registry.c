@@ -59,6 +59,8 @@ extern int uawk_main(int argc, char **argv);
 extern int ujq_main(int argc, char **argv);
 extern int usha256sum_main(int argc, char **argv);
 extern int umd5sum_main(int argc, char **argv);
+extern int usha1sum_main(int argc, char **argv);
+extern int ubasenc_main(int argc, char **argv);
 extern int ubase64_main(int argc, char **argv);
 extern int uless_main(int argc, char **argv);
 extern int umore_main(int argc, char **argv);
