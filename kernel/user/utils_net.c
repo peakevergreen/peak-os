@@ -573,7 +573,7 @@ int utraceroute_main(int argc, char **argv) {
             failed = 1;
     }
     while (hop <= max_hops) {
-        console_printf("%2d  *  (not probed)\n", hop);
+        console_printf("%2d  *  hop timeout / loss (not probed)\n", hop);
         hop++;
     }
     return failed ? 1 : 0;
@@ -614,11 +614,39 @@ static int nc_parse_target(int argc, char **argv, uint32_t *ip, uint16_t *port) 
     return *ip ? 0 : -1;
 }
 
+static int nc_listen_mode(int argc, char **argv) {
+    uint16_t port = 0;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-l") && i + 1 < argc)
+            port = (uint16_t)peak_atoi(argv[++i]);
+    }
+    if (!port) return 0;
+    console_printf("nc: listen mode on :%u (accept one client, 400ms timeout)\n", (unsigned)port);
+    if (!net_ready()) {
+        peak_perror("nc", "network down");
+        return 1;
+    }
+    if (net_tcp_listen(port) != 0) {
+        net_print_failure("nc", "listen failed");
+        return 1;
+    }
+    console_write("nc: waiting for connection…\n");
+    if (net_tcp_accept(400) != 0) {
+        net_print_failure("nc", "accept timeout");
+        net_tcp_close();
+        return 1;
+    }
+    console_write("nc: client connected\n");
+    net_tcp_close();
+    return 0;
+}
+
 int unc_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("nc", "<host> <port> | <host:port>");
+        peak_usage("nc", "-l <port> | <host> <port> | <host:port>");
         return argc < 2 ? 1 : 0;
     }
+    for (int i = 1; i < argc; i++) if (!strcmp(argv[i], "-l")) return nc_listen_mode(argc, argv);
     uint32_t ip = 0;
     uint16_t port = 0;
     int pr = nc_parse_target(argc, argv, &ip, &port);

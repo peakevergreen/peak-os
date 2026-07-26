@@ -222,6 +222,7 @@ int desktop_taskbar_map_win(int slot, int *win_idx);
 int desktop_taskbar_visible_slots(void);
 void desktop_draw_alttab(void);
 void desktop_draw_help(void);
+int desktop_help_filter_key(int key);
 void desktop_draw_notify_history(void);
 void desktop_draw_session_overlays(void);
 void desktop_draw_desktop_bg(void);
@@ -352,3 +353,4 @@ extern int power_confirm;
 extern int desktop_should_exit;
 
 #endif
+void desktop_compose_note_gui_tick(void);

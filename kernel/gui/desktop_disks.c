@@ -84,6 +84,14 @@ void desktop_disks_tick(void) {
     disks_was_busy = busy;
 }
 
+static void disks_format_capacity_line(char *line, size_t cap) {
+    uint64_t total = pmm_total_pages() * (uint64_t)4096;
+    uint64_t free = pmm_free_pages() * (uint64_t)4096;
+    snprintf(line, cap, "Capacity: %llu B free / %llu B RAM  tree %llu B",
+             (unsigned long long)free, (unsigned long long)total,
+             (unsigned long long)vfs_tree_bytes("/"));
+}
+
 void desktop_disks_draw(struct win *w) {
     uint32_t ch = fb_cell_h();
     uint32_t th = desktop_title_h();
@@ -98,15 +106,30 @@ void desktop_disks_draw(struct win *w) {
     fb_draw_string(tx, ty, peakdisk_available() ? "Block device: present" : "Block device: none",
                    peakdisk_available() ? desktop_color_fg() : desktop_color_dim(), desktop_color_bg());
     ty += row;
-    if (peakdisk_busy())
-        fb_draw_string(tx, ty, "Status: saving workspace…", desktop_color_accent(), desktop_color_bg());
+    if (peakdisk_busy()) {
+        uint32_t pct = peakdisk_save_progress_pct();
+        snprintf(line, sizeof(line), "Status: saving… %u%%", (unsigned)pct);
+        fb_draw_string(tx, ty, line, desktop_color_accent(), desktop_color_bg());
+    }
     else if (peakdisk_last_save_bytes() > 0) {
         snprintf(line, sizeof(line), "Status: idle (last save %u bytes)",
                  (unsigned)peakdisk_last_save_bytes());
         fb_draw_string(tx, ty, line, desktop_color_dim(), desktop_color_bg());
     } else
         fb_draw_string(tx, ty, "Status: idle", desktop_color_dim(), desktop_color_bg());
-    ty += row * 2;
+    ty += row;
+    if (!peakdisk_busy()) {
+        const char *err = peakdisk_last_error();
+        if (err && err[0]) {
+            snprintf(line, sizeof(line), "Last error: %s", err);
+            fb_draw_string_fit(tx, ty, cw, line, theme_get()->danger, desktop_color_bg());
+            ty += row;
+        }
+    }
+    ty += row;
+    disks_format_capacity_line(line, sizeof(line));
+    fb_draw_string_fit(tx, ty, cw, line, desktop_color_dim(), desktop_color_bg());
+    ty += row;
     fb_draw_string(tx, ty, "Workspace", desktop_color_accent(), desktop_color_bg());
     ty += row;
     snprintf(line, sizeof(line), "VFS nodes: %d", vfs_node_count());

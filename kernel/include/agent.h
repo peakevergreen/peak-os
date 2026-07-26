@@ -22,6 +22,9 @@ int  agent_transcript_scroll(int delta);
 void agent_transcript_reset_scroll(void);
 int  agent_transcript_scroll_end(void);
 void agent_transcript_note_audit(const char *op, const char *target, const char *decision);
+void agent_transcript_note_recall(const char *msg);
 void agent_transcript_note_tool(const char *msg);
 
 #endif
+int agent_transcript_filter_key(int key);
+const char *agent_transcript_filter_text(void);

@@ -29,6 +29,7 @@ static struct task tasks[MAX_TASKS];
 static struct task *current;
 static int next_pid = 1;
 static volatile int need_resched;
+static unsigned sched_gui_fair_bias;
 static uint64_t ctx_switches;
 static struct spinlock sched_lock;
 static int zombie_stacks_freed;
@@ -216,6 +217,14 @@ static struct task *pick_next(void) {
         return current;
     }
 
+    if (sched_gui_fair_bias && current && current->pid > 0) {
+        uint32_t mask2 = ready_mask;
+        if (mask2) {
+            int i = __builtin_ctz(mask2);
+            if (i > 0 && tasks[i].pid > 0 && tasks[i].state == TASK_READY)
+                return &tasks[i];
+        }
+    }
     int start = 0;
     if (current) {
         start = task_slot(current) + 1;
@@ -421,3 +430,5 @@ void sched_start_background(void) {
     sched_spawn_kthread("netd", net_worker);
     sched_spawn_kthread("agentd", agent_worker);
 }
+
+void sched_note_gui_load(unsigned weight) { sched_gui_fair_bias = weight; }

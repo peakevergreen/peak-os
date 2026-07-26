@@ -68,3 +68,4 @@ uint64_t sched_ctx_switches(void);
 int  sched_kill(int pid);
 
 #endif
+void sched_note_gui_load(unsigned weight);

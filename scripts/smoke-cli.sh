@@ -385,6 +385,11 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 90 help shortcut ux"
+grep -q help_filter kernel/gui/desktop_overlays.c
+grep -q desktop_help_focus_hint kernel/gui/desktop_overlays.c
+grep -q desktop_help_filter_key kernel/gui/desktop_overlays.c
+
 echo "==> Wave 4 Pass 89 theme preview"
 grep -q settings_draw_theme_chrome_preview kernel/gui/desktop_settings.c
 grep -q settings_theme_preview kernel/gui/desktop_settings.c
@@ -438,6 +443,14 @@ grep -q ujoin_main kernel/user/utils_text2.c
 grep -q ucomm_main kernel/user/utils_text2.c
 grep -q 'UBIN_CMD("join"' kernel/user/ubin_cmds.def
 grep -q '`join`' docs/CLI.md
+
+
+echo "==> Wave 4 Pass 98 lock-in"
+grep -q 'Wave 4 Pass 79' scripts/smoke-cli.sh
+grep -q 'Wave 4 Pass 89' scripts/smoke-cli.sh
+grep -q 'Wave 4 Pass 97' scripts/smoke-cli.sh
+grep -q 'Enhancement wave 4' docs/ROADMAP.md
+grep -q 'Wave 4 / Pass 98' scripts/security-checklist.md
 
 echo "==> Wave 3 Pass 78 lock-in"
 grep -q 'Wave 3 Pass 59' scripts/smoke-cli.sh

@@ -12,6 +12,7 @@
 int alttab_open;
 int alttab_sel;
 int help_open;
+static char help_filter[24];
 int notify_hist_open;
 int session_lock;
 int power_confirm;
@@ -163,6 +164,31 @@ void desktop_draw_notify_history(void) {
                    desktop_color_dim(), desktop_color_surface());
 }
 
+
+static const char *desktop_help_focus_hint(void) {
+    if (focus < 0 || !wins[focus].open)
+        return "Focus an app window for context hints.";
+    switch (wins[focus].kind) {
+    case APP_TERM: return "Terminal: Ctrl+F find, wheel scrollback.";
+    case APP_FILES: return "Files: Tab/arrows select; drag row to open.";
+    case APP_NOTEPAD: return "Notepad: Ctrl+S save, Ctrl+F find.";
+    case APP_BROWSER: return "Browser: Shift+T restore tab; wheel scroll.";
+    case APP_AGENT: return "Agent: type to filter transcript; Y/N writes.";
+    case APP_MONITOR: return "Monitor: E or Export button -> /tmp/sysmon.txt.";
+    default: return "Right-click title bar for window menu.";
+    }
+}
+static int help_line_matches(const char *key, const char *desc) {
+    if (!help_filter[0]) return 1;
+    for (const char *f = help_filter; *f; f++) {
+        int found = 0;
+        for (const char *s = key; *s; s++) if (*s == *f) { found = 1; break; }
+        if (!found)
+            for (const char *s = desc; *s; s++) if (*s == *f) { found = 1; break; }
+        if (!found) return 0;
+    }
+    return 1;
+}
 void desktop_draw_help(void) {
     if (!help_open)
         return;
@@ -178,6 +204,10 @@ void desktop_draw_help(void) {
     uint32_t cy = my + pad;
     uint32_t ch = fb_cell_h() + desktop_u(4);
     fb_draw_string(mx + pad, cy, "Keyboard shortcuts", desktop_color_accent(), desktop_color_surface());
+    cy += ch + desktop_u(4);
+    fb_draw_string(mx + pad, cy, desktop_help_focus_hint(), desktop_color_dim(), desktop_color_surface());
+    cy += ch + desktop_u(2);
+    { char hf[40]; snprintf(hf, sizeof(hf), "Filter: %s_", help_filter); fb_draw_string(mx + pad, cy, hf, desktop_color_fg(), desktop_color_surface()); }
     cy += ch + desktop_u(4);
     fb_fill_rect(mx + pad, cy, mw - 2 * pad, desktop_u(1), desktop_color_dim());
     cy += desktop_u(8);
@@ -200,7 +230,10 @@ void desktop_draw_help(void) {
         { "Right-click", "Context menus" },
     };
     uint32_t key_w = desktop_u(100);
+    int shown = 0;
     for (int i = 0; i < 15; i++) {
+        if (!help_line_matches(lines[i].key, lines[i].desc)) continue;
+        shown++;
         uint32_t kbg = desktop_color_bg();
         fb_fill_rect(mx + pad, cy, key_w, fb_cell_h() + desktop_u(2), kbg);
         fb_draw_string(mx + pad + desktop_u(6), cy + desktop_u(1), lines[i].key,
@@ -209,6 +242,7 @@ void desktop_draw_help(void) {
                        desktop_color_fg(), desktop_color_surface());
         cy += ch;
     }
+    if (!shown) fb_draw_string(mx + pad, cy, "(no match)", desktop_color_dim(), desktop_color_surface());
     cy = my + mh - pad - fb_cell_h();
     fb_draw_string(mx + pad, cy, "Click anywhere or Esc to close",
                    desktop_color_dim(), desktop_color_surface());
@@ -320,4 +354,20 @@ int desktop_notify_click_dismiss(int32_t mx, int32_t my) {
         return 0;
     dirty_bits |= DIRTY_TOAST;
     return 1;
+}
+
+int desktop_help_filter_key(int key) {
+    if (!help_open) return 0;
+    if (key == 27) { help_filter[0] = 0; return 1; }
+    if (key == 8 || key == 127) {
+        size_t n = strlen(help_filter);
+        if (n) help_filter[n - 1] = 0;
+        return 1;
+    }
+    if (key >= 32 && key < 127) {
+        size_t n = strlen(help_filter);
+        if (n + 1 < sizeof(help_filter)) { help_filter[n] = (char)key; help_filter[n + 1] = 0; }
+        return 1;
+    }
+    return 0;
 }

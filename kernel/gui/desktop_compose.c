@@ -1,6 +1,7 @@
 #include "desktop_internal.h"
 #include "gui.h"
 #include "fb.h"
+#include "sched.h"
 #include "display.h"
 #include "display_clip.h"
 #include "sysmon.h"
@@ -732,3 +733,5 @@ void desktop_compose_reset_cursor_cache(void) {
     cursor_sprite_scale = 0;
     cursor_sprite_size = 0;
 }
+
+void desktop_compose_note_gui_tick(void) { sched_note_gui_load(1); }
