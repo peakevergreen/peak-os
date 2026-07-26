@@ -278,7 +278,7 @@ static const struct help_entry help_table[] = {
     { "host", "net", "DNS A lookup (compact dig)" },
     { "traceroute", "net", "staged TCP reachability probe" },
     { "nc", "net", "TCP connect (+ optional send/recv)" },
-    { "tlsinfo", "net", "TLS trust summary, last error, hostname -m test" },
+    { "tlsinfo", "net", "TLS trust summary, session cache -s, hostname -m test" },
     { "tar", "file", "ustar create/extract (-c/-x)" },
     { "zip", "file", "PEAKZIP1 archive create (store/RLE)" },
     { "unzip", "file", "extract PEAKZIP1 .zip" },

@@ -603,12 +603,34 @@ static void test_clienthello_goldens(void) {
     expect(ed[8] == 0x00 && ed[9] == 0x18, "advertises secp384r1");
     expect(ch_find_ext(ch, n, 0x0023, &ed, &el), "has session_ticket");
     expect(el == 0, "empty ticket without cache");
+    size_t n_base = n;
+
+    {
+        uint8_t psk_ticket[16];
+        memset(psk_ticket, 0xAB, sizeof(psk_ticket));
+        tls_session_clear();
+        struct tls_session_meta m13 = {.cipher = 0x1301, .tls13 = 1};
+        expect(tls_session_put("psk.example", psk_ticket, sizeof(psk_ticket), &m13) == 0,
+               "put psk");
+        memset(seed, 0xB7, sizeof(seed));
+        random_absorb_trusted(seed, sizeof(seed));
+        expect(tls_build_client_hello(ch, sizeof(ch), "psk.example", &n) == 0, "ch psk-lite");
+        expect(!ch_find_ext(ch, n, 0x0023, &ed, &el), "no session_ticket for 1.3 cache");
+        expect(ch_find_ext(ch, n, 0x0029, &ed, &el), "has pre_shared_key");
+        expect(el >= 16 + 32, "psk ext has identity+binder");
+        expect(ch_find_ext(ch, n, 0x002d, &ed, &el), "has psk_key_exchange_modes");
+        expect(el == 2 && ed[0] == 1 && ed[1] == 1, "psk_dhe_ke mode");
+        tls_session_clear();
+    }
+
+    memset(seed, 0xA5, sizeof(seed));
+    random_absorb_trusted(seed, sizeof(seed));
 
     /* Determinism under fixed timer + seeded DRBG: same structure length. */
     size_t n2 = 0;
     uint8_t ch2[768];
     expect(tls_build_client_hello(ch2, sizeof(ch2), "example.com", &n2) == 0, "ch build 2");
-    expect(n2 == n, "ch length stable");
+    expect(n2 == n_base, "ch length stable");
 }
 
 static void test_alert_mapping(void) {
@@ -670,6 +692,16 @@ static void test_session_resume_cache(void) {
     expect(tls_session_get("meta.example", out, &olen, &m_out) == 1, "get meta");
     expect(m_out.cipher == 0x1301, "meta cipher roundtrip");
     expect(m_out.tls13 == 1, "meta tls13 roundtrip");
+
+    {
+        char sni_buf[64];
+        size_t tlen_info = 0;
+        expect(tls_session_entry_info(0, sni_buf, 0, NULL, NULL) == -1, "entry_info bad cap");
+        expect(tls_session_entry_info(0, sni_buf, sizeof(sni_buf), &m_out, &tlen_info) == 0,
+               "entry_info ok");
+        expect(!strcmp(sni_buf, "meta.example"), "entry_info sni");
+        expect(tlen_info == 16, "entry_info ticket len");
+    }
 
     /* Resume roundtrip: cached ticket appears in ClientHello. */
     tls_session_clear();

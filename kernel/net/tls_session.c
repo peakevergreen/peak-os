@@ -129,12 +129,45 @@ int tls_session_get(const char *sni, uint8_t *ticket_out, size_t *ticket_len_ino
     return 0;
 }
 
-#ifdef PEAK_HOST_TEST
-int tls_session_slot_count(void) {
+int tls_session_used_count(void) {
     int n = 0;
     for (int i = 0; i < TLS_SESSION_SLOTS; i++)
         if (slots[i].used)
             n++;
     return n;
+}
+
+int tls_session_max_slots(void) {
+    return TLS_SESSION_SLOTS;
+}
+
+int tls_session_entry_info(int idx, char *sni_out, size_t sni_cap,
+                           struct tls_session_meta *meta_out, size_t *ticket_len_out) {
+    if (idx < 0 || !sni_out || sni_cap == 0)
+        return -1;
+    int seen = 0;
+    for (int i = 0; i < TLS_SESSION_SLOTS; i++) {
+        if (!slots[i].used)
+            continue;
+        if (seen++ != idx)
+            continue;
+        size_t j = 0;
+        for (; slots[i].sni[j] && j + 1 < sni_cap; j++)
+            sni_out[j] = slots[i].sni[j];
+        sni_out[j] = '\0';
+        if (meta_out) {
+            meta_out->cipher = slots[i].cipher;
+            meta_out->tls13 = slots[i].tls13;
+        }
+        if (ticket_len_out)
+            *ticket_len_out = slots[i].ticket_len;
+        return 0;
+    }
+    return -1;
+}
+
+#ifdef PEAK_HOST_TEST
+int tls_session_slot_count(void) {
+    return tls_session_used_count();
 }
 #endif

@@ -117,7 +117,7 @@ and ECDSA P-256/P-384 (SHA-256/SHA-384).
 | SKE / CertVerify | ECDSA-P256, RSA-PSS/PKCS1 | ECDSA-P256, RSA-PSS-SHA256 |
 | Finished check | PRF verify_data | HMAC-finished |
 | GREASE ClientHello | yes | yes |
-| Session tickets / PSK | cache+offer (1.2 NST) | — (PSK later) |
+| Session tickets / PSK | cache+offer (1.2 NST) | cache+offer (1.3 PSK-lite) |
 | ECH | scaffold (fail-closed) | scaffold (fail-closed) |
 | HTTP/2 ALPN `h2` | yes (HPACK headers, body limits) | yes |
 
@@ -167,7 +167,8 @@ until HPKE lands (interop note).
 - ClientHello GREASE (cipher, group, empty extension) per RFC 8701
 - Handshake DoS budgets: max message `TLS_HS_MSG_MAX`, max records `TLS_HS_RECORD_MAX`
 - Structured `tls_last_error_code()` alongside string `tls_last_error()`; `tls_err_name()` maps codes to short tags (`cert`, `alert`, …) and non-alert errors are prefixed `[tag]` in `tls_last_error()`
-- `tlsinfo` CLI: trust summary (embedded WebPKI root count, pin count, TOFU toggle), session verify flags, `cert_fail` reason, last error; `-r` dumps root SHA-256 digests; `-m pattern host` exercises hostname matching
+- `tlsinfo` CLI: trust summary (embedded WebPKI root count, pin count, TOFU toggle), session verify flags, bounded session ticket cache (`session_cache: used=N/4`), `-s` lists cached SNI/cipher/TLS version, `cert_fail` reason, last error; `-r` dumps root SHA-256 digests; `-m pattern host` exercises hostname matching
+- Session resume: TLS 1.2 offers cached tickets via `session_ticket`; TLS 1.3 PSK-lite offers `pre_shared_key` identity with stub binder (invalid binder → full handshake fallback; HKDF binder NYI). Post-handshake NewSessionTicket captured for both paths. ECH full HPKE remains NYI.
 
 ## Timeouts (100 Hz ticks)
 

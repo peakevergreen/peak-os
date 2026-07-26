@@ -4,6 +4,7 @@
  * send client Finished, install application traffic keys.
  */
 #include "tls_internal.h"
+#include "tls_session.h"
 #include "random.h"
 #include "serial.h"
 #include "timer.h"
@@ -498,6 +499,37 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
     if (derive_app_secrets() != 0 || install_app_keys() != 0) {
         tls_set_err_code(TLS_E_HANDSHAKE, "TLS 1.3 app key derive failed");
         return -1;
+    }
+
+    if (sni_host && sni_host[0]) {
+        uint64_t nst_start = timer_ticks();
+        uint32_t nst_budget = timeout_ticks > 50 ? 50 : timeout_ticks;
+        int nst_count = 0;
+        while (nst_count < 2 && timer_ticks() - nst_start < nst_budget) {
+            uint8_t type;
+            size_t n = 0;
+            if (tls_recv_record(&type, hs_reasm, sizeof(hs_reasm), &n, 50, 1) != 0)
+                break;
+            if (type == TLS_CONTENT_ALERT)
+                break;
+            if (type != TLS_CONTENT_HS || n < 15 || hs_reasm[0] != 4)
+                continue;
+            uint32_t hslen = tls_rd24(hs_reasm + 1);
+            if (4 + hslen > n || hslen < 7)
+                continue;
+            uint8_t nonce_len = hs_reasm[12];
+            size_t ticket_off = 13 + (size_t)nonce_len;
+            if (ticket_off + 2 > 4 + hslen)
+                continue;
+            uint16_t tlen = tls_rd16(hs_reasm + ticket_off);
+            ticket_off += 2;
+            if (ticket_off + tlen > 4 + hslen || tlen == 0 ||
+                tlen > TLS_SESSION_TICKET_MAX)
+                continue;
+            struct tls_session_meta meta = {.cipher = cs, .tls13 = 1};
+            tls_session_put(sni_host, hs_reasm + ticket_off, tlen, &meta);
+            nst_count++;
+        }
     }
 
     tls_up = 1;
