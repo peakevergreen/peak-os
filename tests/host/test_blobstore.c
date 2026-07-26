@@ -130,6 +130,35 @@ int main(void) {
     expect(blobstore_delete(id) == 0, "delete object");
     expect(blobstore_size(id) == 0, "deleted size zero");
 
+    /* Tip rewind: delete last object shrinks next_page high-water. */
+    struct blobstore_stats st0;
+    blobstore_stats(&st0);
+    uint32_t tip_id = 0;
+    size_t tip_sz = BLOBSTORE_PAGE_SIZE * 2;
+    expect(blobstore_create(&tip_id, tip_sz) == 0, "create tip object");
+    struct blobstore_stats st_tip;
+    blobstore_stats(&st_tip);
+    expect(st_tip.pages_used == st0.pages_used + 2, "tip alloc grows high-water");
+    expect(blobstore_delete(tip_id) == 0, "delete tip object");
+    blobstore_stats(&st_tip);
+    expect(st_tip.pages_used == st0.pages_used, "tip rewind restores high-water");
+
+    /* Free-list reuse: middle delete then recreate same size. */
+    uint32_t mid_a = 0, mid_b = 0;
+    expect(blobstore_create(&mid_a, BLOBSTORE_PAGE_SIZE) == 0, "create mid A");
+    expect(blobstore_create(&mid_b, BLOBSTORE_PAGE_SIZE) == 0, "create mid B");
+    expect(blobstore_delete(mid_a) == 0, "delete mid A (not tip)");
+    struct blobstore_stats st_free;
+    blobstore_stats(&st_free);
+    expect(st_free.pages_free >= 1, "deleted pages on free-list");
+    uint32_t free_before = st_free.pages_free;
+    uint32_t mid_c = 0;
+    expect(blobstore_create(&mid_c, BLOBSTORE_PAGE_SIZE) == 0, "reuse free-list page");
+    blobstore_stats(&st_free);
+    expect(st_free.pages_free == free_before - 1, "reuse consumes one free page");
+    expect(blobstore_delete(mid_b) == 0, "cleanup mid B");
+    expect(blobstore_delete(mid_c) == 0, "cleanup mid C");
+
     struct blobstore_stats st; blobstore_stats(&st);
     expect(st.pages_total > 0, "stats pages total");
     expect(blobstore_check() == 0, "integrity ok");
