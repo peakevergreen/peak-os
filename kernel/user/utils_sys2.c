@@ -28,9 +28,27 @@ int uhostname_main(int argc, char **argv) {
 }
 
 int uuptime_main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    int pretty = peak_has_flag(argc, argv, "-p");
+    int since = peak_has_flag(argc, argv, "-s");
     uint64_t secs = timer_uptime_secs();
+    if (since) {
+        console_printf("%lu\n", (unsigned long)secs);
+        return 0;
+    }
+    if (pretty) {
+        uint64_t days = secs / 86400;
+        uint64_t hrs = (secs % 86400) / 3600;
+        uint64_t mins = (secs % 3600) / 60;
+        if (days)
+            console_printf("up %lu days, %lu hours, %lu minutes\n",
+                           (unsigned long)days, (unsigned long)hrs, (unsigned long)mins);
+        else if (hrs)
+            console_printf("up %lu hours, %lu minutes\n",
+                           (unsigned long)hrs, (unsigned long)mins);
+        else
+            console_printf("up %lu minutes\n", (unsigned long)mins);
+        return 0;
+    }
     uint64_t days = secs / 86400;
     uint64_t hrs = (secs % 86400) / 3600;
     uint64_t mins = (secs % 3600) / 60;
@@ -174,6 +192,14 @@ static int gzip_decode(const uint8_t *in, size_t in_len, uint8_t *out, size_t ca
     if (o != expect)
         return -1;
     *out_len = o;
+    return 0;
+}
+
+int unproc_main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    /* Lite: report 1 processor (no SMP in guest). */
+    console_write("1\n");
     return 0;
 }
 

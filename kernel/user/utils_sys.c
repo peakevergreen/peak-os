@@ -445,11 +445,17 @@ int udate_main(int argc, char **argv) {
 }
 
 int ufree_main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    int human = peak_has_flag(argc, argv, "-h");
     uint64_t free_p = pmm_free_pages();
     uint64_t total_p = pmm_total_pages();
-    console_printf("pages free: %lu / %lu\n", free_p, total_p);
+    if (human) {
+        char fb[24], tb[24];
+        sysmon_format_bytes(free_p * 4096ull, fb, sizeof(fb));
+        sysmon_format_bytes(total_p * 4096ull, tb, sizeof(tb));
+        console_printf("Mem:  %s free / %s total (pages %lu / %lu)\n",
+                       fb, tb, (unsigned long)free_p, (unsigned long)total_p);
+    } else
+        console_printf("pages free: %lu / %lu\n", free_p, total_p);
     uint64_t used = 0, freeb = 0, blocks = 0;
     heap_get_stats(&used, &freeb, &blocks);
     struct heap_freelist_stats fl;

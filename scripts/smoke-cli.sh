@@ -723,6 +723,12 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 153 nproc uptime free depth"
+grep -q 'unproc_main' kernel/user/utils_sys2.c
+grep -q 'nproc' kernel/user/ubin_cmds.def
+grep -q 'up %lu hours' kernel/user/utils_sys2.c
+grep -q 'Mem:' kernel/user/utils_sys.c
+
 echo "==> Wave 7 Pass 152 timeout watch semantics"
 grep -q 'cooperative — checked after command' kernel/user/utils_sys2.c
 grep -q 'watch iter %d/%d' kernel/user/utils_sys2.c
