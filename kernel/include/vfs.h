@@ -64,6 +64,16 @@ int vfs_read_at(const char *path, size_t off, void *buf, size_t len, size_t *out
 int vfs_write_at(const char *path, size_t off, const void *buf, size_t len);
 int vfs_list(const char *path, char *out, size_t out_len);
 int vfs_load_ramdisk(const void *blob, size_t len);
+#define VFS_EXPORT_MAX_BYTES (32u * 1024u * 1024u)
+#define VFS_EXPORT_STREAM_CHUNK 4096u
+
+typedef int (*vfs_export_write_fn)(const void *data, size_t len, void *ctx);
+
+/* Stream PEAKFS1 export (chunked blob reads; no full-file materialize). */
+int vfs_export_ramdisk_stream(vfs_export_write_fn fn, void *ctx, uint32_t *out_bytes,
+                              uint32_t *out_count);
+const char *vfs_export_last_error(void);
+
 /* Serialize files under / into PEAKFS1 blob. Returns bytes written or -1. */
 int vfs_export_ramdisk(void *blob, size_t cap);
 /* Bytes needed for a full PEAKFS1 export (including header), or -1. */

@@ -20,7 +20,7 @@ PeakVec is a Peak-authored, in-guest vector index for session/workspace context.
 
 `blobstore_stats()` / `blobstore_check()` helpers validate object tables.
 
-PeakFS persistence itself is **streamed** (no fixed 512 KiB snapshot cap); see `peakdisk_save` / `vfs_export_ramdisk_size`.
+PeakFS persistence itself is **streamed** (no fixed 512 KiB snapshot cap); see `peakdisk_save` / `vfs_export_ramdisk_stream` (chunked blob reads; 32 MiB cap via `vfs_export_last_error`).
 
 ### VFS large files
 
