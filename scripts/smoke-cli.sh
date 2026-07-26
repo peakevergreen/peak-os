@@ -390,6 +390,10 @@ grep -q help_filter kernel/gui/desktop_overlays.c
 grep -q desktop_help_focus_hint kernel/gui/desktop_overlays.c
 grep -q desktop_help_filter_key kernel/gui/desktop_overlays.c
 
+echo "==> Wave 4 Pass 91 monitor export ux"
+grep -q monitor_export_btn kernel/gui/monitor.c
+grep -q monitor_export_click_at kernel/gui/monitor.c
+
 echo "==> Wave 4 Pass 89 theme preview"
 grep -q settings_draw_theme_chrome_preview kernel/gui/desktop_settings.c
 grep -q settings_theme_preview kernel/gui/desktop_settings.c
