@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 94:** PeakVec namespace CLI + Agent recall lines in transcript
+
 - **Pass 93:** Disks save progress, last-error, capacity/free clarity
 
 - **Pass 92:** Richer connection table + TLS session/resume status in Net Explorer/Control
