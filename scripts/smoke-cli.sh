@@ -474,6 +474,11 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 130 snap hud keyboard nudge"
+grep -q 'desktop_win_keyboard_nudge' kernel/gui/desktop_windows.c
+grep -q 'desktop_draw_snap_hud' kernel/gui/desktop_compose.c
+grep -q 'snap_hud_mode' kernel/gui/desktop.c
+
 echo "==> Wave 6 Pass 129 start filter taskbar preview"
 grep -q 'desktop_draw_taskbar_preview' kernel/gui/desktop_menus.c
 grep -q 'desktop_taskbar_preview_update' kernel/gui/desktop_menus.c

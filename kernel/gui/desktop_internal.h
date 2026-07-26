@@ -155,6 +155,7 @@ extern int move_live;
 extern uint32_t band_x, band_y, band_w, band_h;
 extern int band_live;
 extern int snap_live;
+extern int snap_hud_mode;
 
 extern struct damage_rect damage_list[MAX_DAMAGE];
 extern int damage_count;
@@ -241,6 +242,7 @@ int desktop_menus_close_popups(void);
 int desktop_snap_hint(int32_t mx, int32_t my);
 void desktop_snap_zone_rect(int mode, uint32_t *x, uint32_t *y, uint32_t *w, uint32_t *h);
 void desktop_snap_apply(int idx, int mode);
+void desktop_win_keyboard_nudge(int idx, int dx, int dy);
 
 void desktop_overlays_idle_lock(uint64_t last_input_tick);
 int desktop_overlays_block_input(int key);
