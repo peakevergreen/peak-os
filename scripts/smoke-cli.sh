@@ -518,6 +518,13 @@ grep -q 'desktop_win_keyboard_nudge' kernel/gui/desktop_windows.c
 grep -q 'desktop_draw_snap_hud' kernel/gui/desktop_compose.c
 grep -q 'snap_hud_mode' kernel/gui/desktop.c
 
+echo "==> Wave 6 Pass 128 zip tar list caps"
+grep -q 'ZIP_MAX_FILES 48' kernel/user/utils_zip.c
+grep -q 'TAR_MAX_FILES 48' kernel/user/utils_tar.c
+grep -q zip_list_archive kernel/user/utils_zip.c
+grep -q 'ustar lite' kernel/user/utils_tar.c
+grep -q 'zip -l' docs/CLI.md || grep -q '\[-l\]' docs/CLI.md
+
 echo "==> Wave 6 Pass 127 nc timeout listen"
 grep -q NC_LISTEN_TICKS_DEFAULT kernel/user/utils_net.c
 grep -q nc_timeout_ticks kernel/user/utils_net.c

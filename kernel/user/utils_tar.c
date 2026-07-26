@@ -7,7 +7,7 @@
 
 #define TAR_BLOCK 512
 #define TAR_MAX_BYTES (64 * 1024)
-#define TAR_MAX_FILES 32
+#define TAR_MAX_FILES 48
 
 static void put_octal(char *dst, size_t field, unsigned long val) {
     /* ustar: octal digits, NUL or space padded; leave last as NUL if field>1 */
@@ -181,7 +181,8 @@ int utar_main(int argc, char **argv) {
             }
             off += padded;
         }
-        console_printf("tar: listed %d entries\n", listed);
+        console_printf("tar: listed %d entries (cap %d files / %d KiB archive; ustar lite)\n",
+                       listed, TAR_MAX_FILES, TAR_MAX_BYTES / 1024);
         return listed ? 0 : 1;
     }
 

@@ -8,7 +8,7 @@
 #define ZIP_MAGIC "PEAKZIP1"
 #define ZIP_HDR 10
 #define ZIP_MAX_BYTES (64 * 1024)
-#define ZIP_MAX_FILES 32
+#define ZIP_MAX_FILES 48
 #define ZIP_FILE_MAX 8192
 #define ZIP_NAME_MAX 255
 
@@ -129,10 +129,77 @@ static const char *basename_only(const char *path) {
     return base;
 }
 
+static int zip_list_archive(const char *archive_path) {
+    char abs[VFS_PATH_MAX];
+    if (shell_resolve_path(archive_path, abs, sizeof(abs)))
+        return 1;
+    uint8_t archive[ZIP_MAX_BYTES];
+    size_t alen = 0;
+    if (vfs_read_file(abs, (char *)archive, sizeof(archive), &alen) != 0) {
+        peak_perror("zip", "cannot read archive");
+        return 1;
+    }
+    if (alen < ZIP_HDR || memcmp(archive, ZIP_MAGIC, 8) != 0) {
+        peak_perror("zip", "bad PEAKZIP1 archive");
+        return 1;
+    }
+    uint16_t nentries = zip_read_u16(archive + 8);
+    size_t off = ZIP_HDR;
+    int listed = 0;
+    console_printf("Archive:  %s\n", abs);
+    console_printf("  Length   Method    Name\n");
+    for (uint16_t e = 0; e < nentries; e++) {
+        if (off >= alen) {
+            peak_perror("zip", "truncated archive");
+            return 1;
+        }
+        uint8_t nlen = archive[off++];
+        if (nlen == 0 || off + nlen + 9 > alen) {
+            peak_perror("zip", "bad entry header");
+            return 1;
+        }
+        char name[ZIP_NAME_MAX + 1];
+        memcpy(name, archive + off, nlen);
+        name[nlen] = '\0';
+        off += nlen;
+        uint8_t method = archive[off++];
+        uint32_t orig_size = zip_read_u32(archive + off);
+        off += 4;
+        uint32_t comp_size = zip_read_u32(archive + off);
+        off += 4;
+        if (off + comp_size > alen) {
+            peak_perror("zip", "bad entry payload");
+            return 1;
+        }
+        off += comp_size;
+        console_printf("  %8u  %-8s  %s\n", (unsigned)orig_size,
+                       method == ZIP_RLE ? "RLE" : "stored", name);
+        listed++;
+    }
+    console_printf("zip: listed %d entries (cap %d files / %d KiB archive)\n",
+                   listed, ZIP_MAX_FILES, ZIP_MAX_BYTES / 1024);
+    return listed ? 0 : 1;
+}
+
 int uzip_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv) || argc < 3) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("zip", "[-l] <archive.zip> [file...]");
+        return 0;
+    }
+    if (peak_has_flag(argc, argv, "-l")) {
+        const char *archive_path = NULL;
+        for (int i = 1; i < argc; i++)
+            if (strcmp(argv[i], "-l"))
+                archive_path = argv[i];
+        if (!archive_path) {
+            peak_usage("zip", "[-l] <archive.zip>");
+            return 1;
+        }
+        return zip_list_archive(archive_path);
+    }
+    if (argc < 3) {
         peak_usage("zip", "<archive.zip> <file...>");
-        return argc < 3 ? 1 : 0;
+        return 1;
     }
     const char *archive_path = argv[1];
     const char *files[ZIP_MAX_FILES];
