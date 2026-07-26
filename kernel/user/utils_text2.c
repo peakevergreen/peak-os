@@ -53,13 +53,27 @@ static int split_lines(char *data, size_t len, char **lines, int max) {
 
 int udiff_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 3) {
-        peak_usage("diff", "<a> <b>");
+        peak_usage("diff", "[-u] <a> <b>");
         return argc < 3 ? 1 : 0;
+    }
+    int unified = peak_has_flag(argc, argv, "-u");
+    const char *fa = NULL, *fb = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-')
+            continue;
+        if (!fa)
+            fa = argv[i];
+        else if (!fb)
+            fb = argv[i];
+    }
+    if (!fa || !fb) {
+        peak_usage("diff", "[-u] <a> <b>");
+        return 1;
     }
     char a[READ_MAX], b[READ_MAX];
     size_t al = 0, bl = 0;
-    if (read_file(argv[1], a, sizeof(a), &al) != 0 ||
-        read_file(argv[2], b, sizeof(b), &bl) != 0) {
+    if (read_file(fa, a, sizeof(a), &al) != 0 ||
+        read_file(fb, b, sizeof(b), &bl) != 0) {
         peak_perror("diff", "cannot read");
         return 1;
     }
@@ -67,26 +81,112 @@ int udiff_main(int argc, char **argv) {
     int na = split_lines(a, al, la, MAX_LINES);
     int nb = split_lines(b, bl, lb, MAX_LINES);
     int i = 0, j = 0, diffs = 0;
+    if (unified) {
+        console_printf("--- %s\n", fa);
+        console_printf("+++ %s\n", fb);
+        console_printf("@@ -1,%d +1,%d @@\n", na, nb);
+    }
     while (i < na || j < nb) {
         if (i < na && j < nb && !strcmp(la[i], lb[j])) {
+            if (unified) {
+                console_write(" ");
+                console_write(la[i]);
+                console_write("\n");
+            }
             i++;
             j++;
             continue;
         }
         if (i < na) {
-            console_write("- ");
+            if (unified)
+                console_write("- ");
+            else
+                console_write("- ");
             console_write(la[i++]);
             console_write("\n");
             diffs++;
         }
         if (j < nb) {
-            console_write("+ ");
+            if (unified)
+                console_write("+ ");
+            else
+                console_write("+ ");
             console_write(lb[j++]);
             console_write("\n");
             diffs++;
         }
     }
     return diffs ? 1 : 0;
+}
+
+/* patch lite: apply +/- hunks from patch file to target */
+int upatch_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("patch", "<target> [patch-file|-]");
+        return argc < 2 ? 1 : 0;
+    }
+    const char *target = argv[1];
+    const char *patchp = argc >= 3 ? argv[2] : "-";
+    char tgt[READ_MAX], pat[READ_MAX];
+    size_t tl = 0, pl = 0;
+    if (read_file(target, tgt, sizeof(tgt), &tl) != 0) {
+        peak_perror("patch", "cannot read target");
+        return 1;
+    }
+    if (read_file(patchp, pat, sizeof(pat), &pl) != 0) {
+        peak_perror("patch", "cannot read patch");
+        return 1;
+    }
+    char *tlines[MAX_LINES];
+    int nt = split_lines(tgt, tl, tlines, MAX_LINES);
+    char *plines[MAX_LINES];
+    int np = split_lines(pat, pl, plines, MAX_LINES);
+    char out[READ_MAX];
+    size_t oo = 0;
+    int ti = 0;
+    for (int pi = 0; pi < np; pi++) {
+        const char *pln = plines[pi];
+        if (!strncmp(pln, "---", 3) || !strncmp(pln, "+++", 3))
+            continue;
+        if (pln[0] == '@')
+            continue;
+        if (pln[0] == '-' && pln[1] == ' ') {
+            if (ti < nt && !strcmp(pln + 2, tlines[ti]))
+                ti++;
+            continue;
+        }
+        if (pln[0] == '+' && pln[1] == ' ') {
+            const char *add = pln + 2;
+            for (; *add && oo + 1 < sizeof(out); add++)
+                out[oo++] = *add;
+            out[oo++] = '\n';
+            continue;
+        }
+        if (pln[0] == ' ' && pln[1] == ' ') {
+            if (ti < nt) {
+                const char *keep = tlines[ti++];
+                for (; *keep && oo + 1 < sizeof(out); keep++)
+                    out[oo++] = *keep;
+                out[oo++] = '\n';
+            }
+            continue;
+        }
+    }
+    while (ti < nt) {
+        const char *keep = tlines[ti++];
+        for (; *keep && oo + 1 < sizeof(out); keep++)
+            out[oo++] = *keep;
+        out[oo++] = '\n';
+    }
+    char abs[VFS_PATH_MAX];
+    if (shell_resolve_path(target, abs, sizeof(abs)))
+        return 1;
+    if (vfs_write_file(abs, out, oo) != 0) {
+        peak_perror("patch", "write failed");
+        return 1;
+    }
+    console_printf("patch: updated %s (%u bytes)\n", abs, (unsigned)oo);
+    return 0;
 }
 
 static int sort_key_cmp(const char *a, const char *b, int numeric) {

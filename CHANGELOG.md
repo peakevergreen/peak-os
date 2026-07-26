@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 105:** `diff -u`, `patch` lite, `sha*sum -c` check mode
+
 - **Pass 104:** `pgrep`/`pidof` + `dmesg` lite (scrollback ring, `-n`)
 
 - **Pass 103:** `shuf`, `cksum` (CRC32), `xxd` — new `/bin` tools
