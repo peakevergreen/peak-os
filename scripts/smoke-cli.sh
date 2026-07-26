@@ -385,6 +385,11 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 88 files dnd openwith"
+grep -q desktop_files_drop_at kernel/gui/desktop_files.c
+grep -q desktop_files_drag_begin_sel kernel/gui/desktop_files.c
+grep -q desktop_files_drop_at kernel/gui/desktop.c
+
 echo "==> Wave 4 Pass 87 js for-await"
 grep -q parse_for_await_of kernel/js/js_parse.c
 grep -q for-await.js tests/fixtures/js/for-await.js
