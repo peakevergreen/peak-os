@@ -79,10 +79,26 @@ static void test_id_and_tag(void) {
     expect(dom_get_element_by_id(&doc, "main") == b, "getElementById");
 }
 
+static void test_compound_selector(void) {
+    struct dom_document doc;
+    dom_doc_init(&doc);
+    int root = dom_create_element(&doc, "div");
+    int p1 = dom_create_element(&doc, "p");
+    int p2 = dom_create_element(&doc, "p");
+    expect(dom_append_child(&doc, root, p1) == 0, "append p1");
+    expect(dom_append_child(&doc, root, p2) == 0, "append p2");
+    expect(dom_set_attr(&doc, p1, "class", "note") == 0, "p1 class");
+    expect(dom_set_attr(&doc, p2, "class", "warn") == 0, "p2 class");
+    expect(dom_query_selector(&doc, root, "p.note") == p1, "compound p.note");
+    expect(dom_query_selector(&doc, root, "p.warn") == p2, "compound p.warn");
+    expect(dom_query_selector(&doc, root, "p.missing") == -1, "compound miss");
+}
+
 int main(void) {
     test_class_token_match();
     test_root_scoped_scan();
     test_id_and_tag();
+    test_compound_selector();
     if (fails) {
         fprintf(stderr, "test_dom: %d failure(s)\n", fails);
         return 1;

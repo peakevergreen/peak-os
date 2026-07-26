@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 142:** DOM `tag.class` querySelector depth; CSS named `blue` + display lite
+
 - **Pass 141:** Browser console clear/filter; honest fetch spinner (not fake % bar)
 
 - **Pass 140:** WebAPI `fetch` headers lite (plain object string pairs); method rejection depth; isolation enforce fail-closed reason

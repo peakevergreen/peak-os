@@ -194,11 +194,49 @@ static int query_tag_in_subtree(struct dom_document *doc, int root, const char *
     return -1;
 }
 
+static int query_tag_class_in_subtree(struct dom_document *doc, int root, const char *tag,
+                                      const char *cls, size_t cls_len) {
+    for (int i = root; i >= 0; i = dom_next_in_subtree(doc, root, i)) {
+        if (!doc->nodes[i].used || doc->nodes[i].type != DOM_ELEMENT)
+            continue;
+        if (!dom_tag_eq(doc->nodes[i].tag, tag))
+            continue;
+        const char *c = dom_get_attr(doc, i, "class");
+        if (c && class_has_token(c, cls, cls_len))
+            return i;
+    }
+    return -1;
+}
+
 int dom_query_selector(struct dom_document *doc, int root, const char *sel) {
     if (!doc || !sel)
         return -1;
     if (sel[0] == '#')
         return dom_get_element_by_id(doc, sel + 1);
+    /* Compound tag.class (Pass 142 depth). */
+    const char *dot = strchr(sel, '.');
+    if (dot && dot > sel && dot[1]) {
+        char tag[32];
+        size_t tlen = (size_t)(dot - sel);
+        if (tlen >= sizeof(tag))
+            tlen = sizeof(tag) - 1;
+        memcpy(tag, sel, tlen);
+        tag[tlen] = '\0';
+        const char *cls = dot + 1;
+        size_t cls_len = strlen(cls);
+        if (root >= 0)
+            return query_tag_class_in_subtree(doc, root, tag, cls, cls_len);
+        for (int i = 0; i < doc->nnodes; i++) {
+            if (!doc->nodes[i].used || doc->nodes[i].type != DOM_ELEMENT)
+                continue;
+            if (!dom_tag_eq(doc->nodes[i].tag, tag))
+                continue;
+            const char *c = dom_get_attr(doc, i, "class");
+            if (c && class_has_token(c, cls, cls_len))
+                return i;
+        }
+        return -1;
+    }
     if (sel[0] == '.') {
         const char *cls = sel + 1;
         size_t cls_len = strlen(cls);

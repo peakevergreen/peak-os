@@ -49,6 +49,13 @@ static int parse_color(const char *v, struct css_color *c) {
         c->set = 1;
         return 0;
     }
+    if (!strcmp(v, "blue")) {
+        c->r = 60;
+        c->g = 120;
+        c->b = 220;
+        c->set = 1;
+        return 0;
+    }
     return -1;
 }
 

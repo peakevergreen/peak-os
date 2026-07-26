@@ -723,6 +723,12 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 142 DOM querySelector CSS"
+grep -q 'query_tag_class_in_subtree' kernel/gui/dom_core.c
+grep -q 'p.note' tests/host/test_dom.c
+grep -q '"blue"' kernel/gui/css_parse.c
+grep -q 'display' kernel/gui/css_parse.c
+
 echo "==> Wave 7 Pass 141 browser console spinner"
 grep -q 'browser_console_clear' kernel/gui/browser_js.c
 grep -q 'browser_console_line_visible' kernel/gui/browser_js.c
