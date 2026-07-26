@@ -169,3 +169,99 @@ int ubase64_main(int argc, char **argv) {
         console_putc((char)out[i]);
     return 0;
 }
+
+
+int usha1sum_main(int argc, char **argv) {
+    return hash_file("sha1sum", (void (*)(const uint8_t *, size_t, uint8_t *))sha1, 20, argc, argv);
+}
+
+static const char B32[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+static size_t b32_encode(const uint8_t *in, size_t in_len, char *out, size_t cap) {
+    size_t o = 0;
+    uint32_t buf = 0;
+    int bits = 0;
+    for (size_t i = 0; i < in_len; i++) {
+        buf = (buf << 8) | in[i];
+        bits += 8;
+        while (bits >= 5) {
+            bits -= 5;
+            if (o + 1 >= cap)
+                return o;
+            out[o++] = B32[(buf >> bits) & 31];
+        }
+    }
+    if (bits > 0 && o + 1 < cap)
+        out[o++] = B32[(buf << (5 - bits)) & 31];
+    if (o < cap)
+        out[o] = '\0';
+    return o;
+}
+
+static int b32_val(int c) {
+    if (c >= 'A' && c <= 'Z')
+        return c - 'A';
+    if (c >= '2' && c <= '7')
+        return c - '2' + 26;
+    return -1;
+}
+
+static size_t b32_decode(const char *in, size_t in_len, uint8_t *out, size_t cap) {
+    size_t o = 0;
+    uint32_t acc = 0;
+    int bits = 0;
+    for (size_t i = 0; i < in_len; i++) {
+        char c = in[i];
+        if (c == '=' || c == '\n' || c == '\r' || c == ' ')
+            continue;
+        int v = b32_val(c);
+        if (v < 0)
+            continue;
+        acc = (acc << 5) | (uint32_t)v;
+        bits += 5;
+        if (bits >= 8) {
+            bits -= 8;
+            if (o >= cap)
+                break;
+            out[o++] = (uint8_t)((acc >> bits) & 0xFF);
+        }
+    }
+    return o;
+}
+
+int ubasenc_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("basenc", "[--base32] [-d] [path|-]");
+        return 0;
+    }
+    int decode = peak_has_flag(argc, argv, "-d") || peak_has_flag(argc, argv, "--decode");
+    int b32 = peak_has_flag(argc, argv, "--base32");
+    const char *path = "-";
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--decode") || !strcmp(argv[i], "--base32"))
+            continue;
+        path = argv[i];
+        break;
+    }
+    uint8_t data[HASH_MAX];
+    size_t len = 0;
+    if (read_input(path, data, sizeof(data), &len, "basenc") != 0)
+        return 1;
+    if (!b32) {
+        peak_usage("basenc", "[--base32] [-d] [path|-]");
+        return 1;
+    }
+    if (!decode) {
+        char out[(HASH_MAX / 5 + 1) * 8 + 4];
+        size_t n = b32_encode(data, len, out, sizeof(out));
+        console_write_n(out, n);
+        console_write("\n");
+        return 0;
+    }
+    uint8_t out[HASH_MAX];
+    size_t n = b32_decode((const char *)data, len, out, sizeof(out));
+    for (size_t i = 0; i < n; i++)
+        console_putc((char)out[i]);
+    return 0;
+}
+

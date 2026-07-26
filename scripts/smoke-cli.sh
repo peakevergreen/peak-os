@@ -385,6 +385,12 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 81 crypto pack"
+grep -q 'void sha1(' kernel/net/crypto_hash.c
+grep -q usha1sum_main kernel/user/utils_crypto.c
+grep -q ubasenc_main kernel/user/utils_crypto.c
+grep -q 'UBIN_CMD("sha1sum"' kernel/user/ubin_cmds.def
+
 echo "==> Wave 4 Pass 80 head/tail/timeout"
 grep -q 'byte_mode' kernel/user/utils_text.c
 grep -q 'wall-clock limit exceeded' kernel/user/utils_sys2.c
