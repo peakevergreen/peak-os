@@ -325,6 +325,10 @@ grep -q 'post_body' kernel/user/utils_net.c
 grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
+echo "==> Wave 3 Pass 70 keyboard snap"
+grep -q 'desktop_snap_apply(focus, 1)' kernel/gui/desktop.c
+grep -q 'KEY_LEFT' kernel/gui/desktop.c
+
 echo "==> Wave 3 Pass 69 notify clip UI"
 grep -q 'desktop_draw_notify_history' kernel/gui/desktop_overlays.c
 grep -q 'desktop_terminal_paste_previous' kernel/gui/desktop_terminal.c
