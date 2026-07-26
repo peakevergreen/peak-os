@@ -385,6 +385,10 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 89 theme preview"
+grep -q settings_draw_theme_chrome_preview kernel/gui/desktop_settings.c
+grep -q settings_theme_preview kernel/gui/desktop_settings.c
+
 echo "==> Wave 4 Pass 88 files dnd openwith"
 grep -q desktop_files_drop_at kernel/gui/desktop_files.c
 grep -q desktop_files_drag_begin_sel kernel/gui/desktop_files.c
