@@ -80,12 +80,17 @@ int main(void) {
     eval_eq(rt, "await Promise.resolve(42)", "42");
     eval_eq(rt, "async function f(){return 3;} await f()", "3");
     eval_eq(rt, "var f=async ()=>5; await f()", "5");
-    eval_fails(rt, "for await(var x of []){}", "await unsupported");
+    eval_eq(rt, "var a=[1,2]; a.length", "2");
+    eval_eq(rt, "var s=0; for await(x of [1,2]){s=s+x;} s", "3");
+    eval_fails(rt, "for await(;;){}", "for-await ident");
     {
         char mout[64];
         expect(js_eval_module(rt, "export var x=41;", "m1", mout, sizeof(mout)) == 0,
                "eval module");
         eval_eq(rt, "import {x} from \"m1\"; x+1", "42");
+        expect(js_eval_module(rt, "export var y=1;", "m2", mout, sizeof(mout)) == 0,
+               "eval module m2");
+        eval_eq(rt, "import {y} from \"m2\"; y+9", "10");
     }
 
     /* Hot-path regressions: string reuse, INC/DEC/ADD_LOCAL, LT_LOCAL_NUM, lazy call env */

@@ -656,6 +656,79 @@ static int parse_block(struct js_compiler *c) {
     return expect(c, T_RBRACE, "'}'");
 }
 
+
+static int parse_for_await_of(struct js_compiler *c) {
+    js_lex_next(c); /* await */
+    if (expect(c, T_LPAREN, "'('"))
+        return -1;
+    if (c->tok == T_VAR || c->tok == T_LET || c->tok == T_CONST)
+        js_lex_next(c);
+    if (c->tok != T_IDENT) {
+        js_lex_error(c, "for-await ident");
+        return -1;
+    }
+    char bind[32];
+    snprintf(bind, sizeof(bind), "%s", c->text);
+    js_lex_next(c);
+    if (c->tok != T_OF) {
+        js_lex_error(c, "for-await of");
+        return -1;
+    }
+    js_lex_next(c);
+    if (parse_expr(c))
+        return -1;
+    if (expect(c, T_RPAREN, "')'"))
+        return -1;
+    int gid_arr = js_intern_str(c, "__fa");
+    js_emit_op(c, OP_SET_GLOBAL);
+    js_emit_u16(c, (uint16_t)gid_arr);
+    js_emit_op(c, OP_POP);
+    int gid_i = js_intern_str(c, "__fi");
+    js_emit_op(c, OP_PUSH_NUM);
+    js_emit_f64(c, 0);
+    js_emit_op(c, OP_SET_GLOBAL);
+    js_emit_u16(c, (uint16_t)gid_i);
+    js_emit_op(c, OP_POP);
+    uint32_t cond = js_emit_here(c);
+    js_emit_op(c, OP_GET_GLOBAL);
+    js_emit_u16(c, (uint16_t)gid_i);
+    js_emit_op(c, OP_GET_GLOBAL);
+    js_emit_u16(c, (uint16_t)gid_arr);
+    int len_id = js_intern_str(c, "length");
+    js_emit_op(c, OP_GET_PROP);
+    js_emit_u16(c, (uint16_t)len_id);
+    js_emit_op(c, OP_LT);
+    uint32_t jf = js_emit_here(c);
+    js_emit_op(c, OP_JMP_IFN);
+    js_emit_i16(c, 0);
+    js_emit_op(c, OP_POP);
+    js_emit_op(c, OP_GET_GLOBAL);
+    js_emit_u16(c, (uint16_t)gid_arr);
+    js_emit_op(c, OP_GET_GLOBAL);
+    js_emit_u16(c, (uint16_t)gid_i);
+    js_emit_op(c, OP_GET_IDX);
+    js_emit_op(c, OP_AWAIT);
+    int gid_bind = js_intern_str(c, bind);
+    js_emit_op(c, OP_SET_GLOBAL);
+    js_emit_u16(c, (uint16_t)gid_bind);
+    js_emit_op(c, OP_POP);
+    if (parse_stmt(c))
+        return -1;
+    js_emit_op(c, OP_GET_GLOBAL);
+    js_emit_u16(c, (uint16_t)gid_i);
+    js_emit_op(c, OP_PUSH_NUM);
+    js_emit_f64(c, 1);
+    js_emit_op(c, OP_ADD);
+    js_emit_op(c, OP_SET_GLOBAL);
+    js_emit_u16(c, (uint16_t)gid_i);
+    js_emit_op(c, OP_POP);
+    js_emit_op(c, OP_JMP);
+    js_emit_i16(c, (int16_t)(cond - (js_emit_here(c) + 2)));
+    uint32_t end = js_emit_here(c);
+    js_emit_patch_i16(c, jf + 1, (int16_t)(end - (jf + 3)));
+    return 0;
+}
+
 static int parse_stmt(struct js_compiler *c) {
     if (c->tok == T_SEMI) {
         js_lex_next(c);
@@ -776,10 +849,8 @@ static int parse_stmt(struct js_compiler *c) {
     }
     if (c->tok == T_FOR) {
         js_lex_next(c);
-        if (c->tok == T_AWAIT) {
-            js_lex_error(c, "await unsupported");
-            return -1;
-        }
+        if (c->tok == T_AWAIT)
+            return parse_for_await_of(c);
         if (expect(c, T_LPAREN, "'('"))
             return -1;
         /* for (init; cond; step) */
