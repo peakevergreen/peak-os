@@ -723,6 +723,10 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 156 netexp disks ux"
+grep -q 'nx_conn_filter' kernel/gui/desktop_netexp.c
+grep -q 'Save cancelled' kernel/gui/desktop_disks.c
+
 echo "==> Wave 7 Pass 155 man help categories"
 grep -q 'shell_help_category' kernel/shell_builtins.c
 grep -q '"join"' kernel/shell_builtins.c
