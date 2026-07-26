@@ -285,13 +285,16 @@ int utimeout_main(int argc, char **argv) {
         return 124;
     }
     uint64_t deadline = timer_ticks() + (uint64_t)sec * 100;
+    /* Cooperative yield before run (no in-guest preemption). */
+    while (timer_ticks() + 1 < deadline)
+        hlt();
     int rc = ubin_run(path, argc - 2, argv + 2);
     if (rc == -999) {
         peak_perror("timeout", "unknown command");
         return 127;
     }
     if (timer_ticks() > deadline) {
-        console_write("timeout: wall-clock limit exceeded (no preemption)\n");
+        console_printf("timeout: limit %ds exceeded (cooperative — checked after command)\n", sec);
         return 124;
     }
     return rc;
@@ -299,18 +302,28 @@ int utimeout_main(int argc, char **argv) {
 
 int uwatch_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("watch", "[-n secs] <command> [args...]");
+        peak_usage("watch", "[-n secs] [-c] <command> [args...]");
         return argc < 2 ? 1 : 0;
     }
     int interval = 2;
+    int clear_screen = 0;
     int cmdi = 1;
-    if (argc >= 3 && !strcmp(argv[1], "-n")) {
-        interval = peak_atoi(argv[2]);
-        if (interval < 1)
-            interval = 1;
-        if (interval > 30)
-            interval = 30;
-        cmdi = 3;
+    for (; cmdi < argc; cmdi++) {
+        if (!strcmp(argv[cmdi], "-n") && cmdi + 1 < argc) {
+            interval = peak_atoi(argv[++cmdi]);
+            if (interval < 1)
+                interval = 1;
+            if (interval > 30)
+                interval = 30;
+            continue;
+        }
+        if (!strcmp(argv[cmdi], "-c")) {
+            clear_screen = 1;
+            continue;
+        }
+        if (argv[cmdi][0] == '-')
+            continue;
+        break;
     }
     if (cmdi >= argc) {
         peak_usage("watch", "[-n secs] <command> [args...]");
@@ -329,7 +342,9 @@ int uwatch_main(int argc, char **argv) {
 
     int last = 0;
     for (int iter = 0; iter < WATCH_MAX_ITERS; iter++) {
-        console_printf("--- watch iter %d ---\n", iter + 1);
+        if (clear_screen && iter > 0)
+            console_clear();
+        console_printf("--- watch iter %d/%d ---\n", iter + 1, WATCH_MAX_ITERS);
         last = ubin_run(path, argc - cmdi, argv + cmdi);
         if (last == -999) {
             peak_perror("watch", "unknown command");
@@ -341,6 +356,6 @@ int uwatch_main(int argc, char **argv) {
         while (timer_ticks() < target)
             hlt();
     }
-    console_write("watch: max iterations reached\n");
+    console_printf("watch: max iterations (%d) reached\n", WATCH_MAX_ITERS);
     return last;
 }
