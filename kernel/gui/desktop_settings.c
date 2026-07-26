@@ -310,7 +310,8 @@ static void settings_draw_theme_chrome_preview(uint32_t tx, uint32_t cy, int idx
     uint32_t sw = desktop_u(52);
     uint32_t h = desktop_u(10);
     uint32_t gap = desktop_u(8);
-    fb_draw_string(tx, cy, "Chrome preview (click apply)", desktop_color_dim(), desktop_color_bg());
+    fb_draw_string(tx, cy, "Preview — click swatch, click again to apply",
+                   desktop_color_dim(), desktop_color_bg());
     cy += fb_cell_h() + desktop_u(4);
     fb_fill_rect(tx, cy, sw, h, t->title);
     fb_draw_string_fit(tx, cy + desktop_u(1), sw, "title", t->fg, t->title);
@@ -345,7 +346,12 @@ static void settings_draw_theme_swatches(uint32_t tx, uint32_t cy, uint32_t cont
             fb_fill_rect(sx, cy, desktop_u(2), sw, t->accent);
             fb_fill_rect(sx + sw - desktop_u(2), cy, desktop_u(2), sw, t->accent);
         }
-        fb_draw_string_fit(sx, cy + sw + desktop_u(2), sw, t->name,
+        char swlab[20];
+        if (i == settings_theme_preview && i != theme_index())
+            snprintf(swlab, sizeof(swlab), "%s*", t->name);
+        else
+            snprintf(swlab, sizeof(swlab), "%s", t->name);
+        fb_draw_string_fit(sx, cy + sw + desktop_u(2), sw, swlab,
                            i == theme_index() ? desktop_color_accent() : desktop_color_dim(),
                            desktop_color_bg());
         settings_hit_add(sx, cy, sw, row_h, SHIT_THEME, i);

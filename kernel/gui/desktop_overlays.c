@@ -178,16 +178,30 @@ static const char *desktop_help_focus_hint(void) {
     default: return "Right-click title bar for window menu.";
     }
 }
-static int help_line_matches(const char *key, const char *desc) {
-    if (!help_filter[0]) return 1;
-    for (const char *f = help_filter; *f; f++) {
-        int found = 0;
-        for (const char *s = key; *s; s++) if (*s == *f) { found = 1; break; }
-        if (!found)
-            for (const char *s = desc; *s; s++) if (*s == *f) { found = 1; break; }
-        if (!found) return 0;
+static int help_substring_match(const char *hay, const char *needle) {
+    if (!needle || !needle[0])
+        return 1;
+    if (!hay)
+        return 0;
+    for (size_t i = 0; hay[i]; i++) {
+        size_t j = 0;
+        while (needle[j] && hay[i + j] &&
+               (hay[i + j] == needle[j] ||
+                (hay[i + j] >= 'A' && hay[i + j] <= 'Z' &&
+                 hay[i + j] + 32 == needle[j]) ||
+                (needle[j] >= 'A' && needle[j] <= 'Z' &&
+                 needle[j] + 32 == hay[i + j])))
+            j++;
+        if (!needle[j])
+            return 1;
     }
-    return 1;
+    return 0;
+}
+static int help_line_matches(const char *key, const char *desc) {
+    if (!help_filter[0])
+        return 1;
+    return help_substring_match(key, help_filter) ||
+           help_substring_match(desc, help_filter);
 }
 void desktop_draw_help(void) {
     if (!help_open)
