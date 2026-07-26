@@ -20,4 +20,7 @@ int tls_hostname_matches_sni(const char *pattern, const char *host);
  */
 int tls_tofu_check_store(const char *store, const char *host, const char *hexdigest);
 
+/* User-facing hostname mismatch detail (Pass 144). */
+const char *tls_hostname_mismatch_ux(const char *host, const char *cert_name);
+
 #endif

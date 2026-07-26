@@ -4,6 +4,7 @@
 #include "http2.h"
 #include "tls.h"
 #include "tls_hsts.h"
+#include "tls_util.h"
 #include "cap.h"
 #include "privacy.h"
 #include "timer.h"
@@ -69,6 +70,7 @@ static void tls_fail_page(char *body, size_t body_cap, const char *host, const c
         title = "Certificate expired or not yet valid";
     } else if (why && strstr(why, "hostname mismatch")) {
         title = "Certificate hostname mismatch";
+        detail = tls_hostname_mismatch_ux(host, why);
     } else if (why && (strstr(why, "Untrusted") || strstr(why, "WebPKI") ||
                        strstr(why, "changed"))) {
         title = "Untrusted certificate";
