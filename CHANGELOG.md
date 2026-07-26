@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 132:** Files Ctrl+click multi-select toggle; batch delete confirm toast
+
 - **Pass 131:** Clipboard 4-slot picker overlay; notification history clear-all button
 
 - **Pass 130:** Ctrl+Alt+Shift+arrow window nudge; snap zone HUD overlay while dragging

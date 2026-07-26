@@ -474,6 +474,11 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 132 files multi-select batch delete"
+grep -q 'files_ctrl_toggle_sel' kernel/gui/desktop_files.c
+grep -q 'files_batch_delete' kernel/gui/desktop_files.c
+grep -q 'files_sel_bits' kernel/gui/desktop_files.c
+
 echo "==> Wave 6 Pass 131 clipboard picker notify clear"
 grep -q 'desktop_draw_clipboard_picker' kernel/gui/desktop_overlays.c
 grep -q 'clipboard_get_slot' kernel/clipboard.c
