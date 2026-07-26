@@ -17,6 +17,12 @@ const char *peakdisk_last_error(void);
 uint32_t peakdisk_last_save_bytes(void);
 /* Set unlock passphrase for PEAKDSK3 save/load (cleared with NULL/empty). */
 void peakdisk_set_passphrase(const char *pass);
+uint32_t peakdisk_save_progress_pct(void);
+/* Workspace dirty tracking + optional autosave (interval 0 = off). */
+void peakdisk_mark_dirty(void);
+int  peakdisk_is_dirty(void);
+void peakdisk_set_autosave_interval_sec(uint32_t sec);
+uint32_t peakdisk_autosave_interval_sec(void);
+void peakdisk_autosave_tick(void);
 
 #endif
-uint32_t peakdisk_save_progress_pct(void);

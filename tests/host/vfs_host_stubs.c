@@ -160,3 +160,5 @@ void privacy_set_listeners_localhost_only(int on) {
     (void)on;
 }
 
+void peakdisk_mark_dirty(void) {}
+
