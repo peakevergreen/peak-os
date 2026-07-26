@@ -10,6 +10,8 @@
 #include "util.h"
 #include "tls_session.h"
 #include "tls.h"
+#include "tls_session.h"
+#include "tls.h"
 
 static int nc_kill_arm;
 static int nc_row; /* context target row */
