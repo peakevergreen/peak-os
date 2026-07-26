@@ -236,6 +236,16 @@ void desktop_run(void) {
         int agent_focus = focus >= 0 && wins[focus].open && !wins[focus].minimized &&
                           wins[focus].kind == APP_AGENT;
 
+        /* Help documents 1–7 as global app launchers; handle before focused apps. */
+        if (key >= '1' && key <= '7') {
+            static const enum app_kind launch_map[] = {
+                APP_TERM, APP_FILES, APP_SETTINGS, APP_AGENT,
+                APP_GAME, APP_BROWSER, APP_MONITOR
+            };
+            desktop_open_app(launch_map[key - '1']);
+            key = 0;
+        }
+
         if (key && agent_focus) {
             desktop_agent_key(key);
             key = 0;
@@ -290,21 +300,7 @@ void desktop_run(void) {
             monitor_input((char)key);
             dirty_bits |= DIRTY_MONITOR;
             desktop_mark_focus_surf_dirty();
-        } else if (key == '1')
-            desktop_open_app(APP_TERM);
-        else if (key == '2')
-            desktop_open_app(APP_FILES);
-        else if (key == '3')
-            desktop_open_app(APP_SETTINGS);
-        else if (key == '4')
-            desktop_open_app(APP_AGENT);
-        else if (key == '5')
-            desktop_open_app(APP_GAME);
-        else if (key == '6')
-            desktop_open_app(APP_BROWSER);
-        else if (key == '7')
-            desktop_open_app(APP_MONITOR);
-        else if (key == 't' || key == 'T') {
+        } else if (key == 't' || key == 'T') {
             theme_next();
             theme_persist();
             dirty_bits |= DIRTY_FULL;

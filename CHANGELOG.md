@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **GA-001:** Desktop hotkeys `1`–`7` launch apps even when Terminal/Browser/etc. has focus (Help overlay)
+
 - **Pass 158:** Wave 7 lock-in — smoke-cli gates Passes 139–157, ROADMAP/CHANGELOG Wave 7 shipped, security-checklist CI note
 
 - **Pass 157:** Fuzz corpus fixtures for DNS/ctr/blob parsers; `test_parser_corpus` host gate + `fuzz-parser-smoke.sh`
