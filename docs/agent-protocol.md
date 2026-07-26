@@ -23,9 +23,11 @@ Tool catalog and handlers live in `kernel/agent_tools.c`; policy in
 | `fs.rm` | implemented | Remove file or tree (audit/memory protected) |
 | `fs.search` | implemented | Capped substring scan of workspace files (paths) |
 | `fs.grep` | implemented | Content grep: `path:line:text` (policy-gated) |
+| `fs.diff` | implemented | Line diff between two allowlisted paths (bounded hunks) |
 | `fs.exec` | implemented | Allowlisted `/bin` builtins only (no shell metachar) |
 | `sys.info` | implemented | Uptime, memory/heap, load/idle, net rates, GUI timing |
 | `net.ping` | implemented | DNS + TCP/:80 probe; requires `privacy_grant_net_client` |
+| `net.fetch` | implemented | Bounded HTTP GET (2 KiB body cap); privacy-gated |
 | `mem.recall` | implemented | PeakVec + formatted session memory tail (policy-gated) |
 | `audit.tail` | implemented | Formatted tail of audit log (policy-gated) |
 | `console.print` | implemented | Prints to console / agent transcript |
@@ -39,6 +41,8 @@ Bounded in-guest rule/intent planner (not an LLM):
 - create / edit workspace files
 - summarize workspace (`fs.list`)
 - search workspace (`fs.search`) or grep content (`fs.grep`)
+- diff two workspace files (`fs.diff`)
+- fetch URL (`net.fetch`, privacy-gated, bounded body)
 - ping host (`net.ping`, privacy-gated)
 - read a file
 - recall prior goals (`mem.recall`)
@@ -52,7 +56,7 @@ Session memory is structured (`turn|goal=…|t=…|p=…`) under `/var/peak/sess
 
 `/etc/peak/agent.policy` — `allow_paths=`, `allow_tools=`, `deny_tools=`, `require_approval=`.
 
-Defaults allow `/home/dev/workspace` and `/var/peak/sessions`. Seeded policy includes `fs.exec`, `fs.grep`, `net.ping`, `mem.recall`, and `audit.tail`.
+Defaults allow `/home/dev/workspace` and `/var/peak/sessions`. Seeded policy includes `fs.exec`, `fs.grep`, `fs.diff`, `net.ping`, `net.fetch`, `mem.recall`, and `audit.tail`.
 
 Shell `policy` prints the active policy with labeled sections (paths, tools, approval).
 

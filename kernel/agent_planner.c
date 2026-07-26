@@ -127,6 +127,8 @@ enum agent_intent {
     INTENT_READ,
     INTENT_SYSINFO,
     INTENT_PING,
+    INTENT_FETCH,
+    INTENT_DIFF,
     INTENT_HELP,
 };
 
@@ -137,6 +139,10 @@ static enum agent_intent classify_intent(const char *goal) {
         return INTENT_RECALL;
     if (contains_ci(goal, "audit"))
         return INTENT_AUDIT;
+    if (contains_ci(goal, "fetch "))
+        return INTENT_FETCH;
+    if (contains_ci(goal, "diff "))
+        return INTENT_DIFF;
     if (contains_ci(goal, "sysinfo") || contains_ci(goal, "system info") ||
         contains_ci(goal, "uptime"))
         return INTENT_SYSINFO;
@@ -203,9 +209,10 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     if (intent == INTENT_HELP) {
         agent_tool_console_print(
             "Peak Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm "
-            "fs.search fs.grep sys.info net.ping mem.recall audit.tail console.print");
+            "fs.search fs.grep fs.diff sys.info net.ping net.fetch mem.recall audit.tail console.print");
         agent_tool_console_print(
-            "Try: ask \"summarize workspace\" | \"grep needle\" | \"ping example.com\" | audit | memory");
+            "Try: ask \"summarize workspace\" | \"grep needle\" | \"diff a b\" | "
+            "\"fetch http://example.com\" | \"ping example.com\" | audit | memory");
         agent_tool_console_print("CLI builtins: man <cmd> or help");
         TOOL_NOTE("console.print");
         set_summary(summary, summary_cap, "help");
@@ -281,7 +288,9 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     if (intent == INTENT_PING) {
         char host[64];
         host[0] = '\0';
-        const char *p = goal + 5;
+        const char *p = goal;
+        if (contains_ci(goal, "ping "))
+            p = goal + 5;
         while (*p == ' ')
             p++;
         size_t i = 0;
@@ -309,6 +318,83 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         memory_append_turn(goal, tools_used, host);
         return;
     }
+
+    if (intent == INTENT_FETCH) {
+        char url[128];
+        url[0] = '\0';
+        const char *p = goal + 6;
+        while (*p == ' ')
+            p++;
+        size_t i = 0;
+        for (; *p && *p != ' ' && i + 1 < sizeof(url); p++)
+            url[i++] = *p;
+        url[i] = '\0';
+        if (!url[0]) {
+            agent_tool_console_print("[agent] fetch needs a URL");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "fetch failed");
+            memory_append_turn(goal, tools_used, NULL);
+            return;
+        }
+        char result[AGENT_FETCH_BODY_MAX + 64];
+        if (agent_tool_net_fetch(url, result, sizeof(result)) == 0) {
+            TOOL_NOTE("net.fetch");
+            agent_tool_console_print(result);
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "fetch ok");
+        } else {
+            agent_tool_console_print(result[0] ? result : "[agent] fetch failed (tool denied or no net grant)");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "fetch failed");
+        }
+        memory_append_turn(goal, tools_used, url);
+        return;
+    }
+
+    if (intent == INTENT_DIFF) {
+        char path_a[VFS_PATH_MAX] = "/home/dev/workspace/README.md";
+        char path_b[VFS_PATH_MAX] = "/home/dev/workspace/hello.c";
+        const char *p = goal + 5;
+        while (*p == ' ')
+            p++;
+        size_t ai = 0;
+        for (; *p && *p != ' ' && ai + 1 < sizeof(path_a); p++)
+            path_a[ai++] = *p;
+        path_a[ai] = '\0';
+        while (*p == ' ')
+            p++;
+        if (*p) {
+            size_t bi = 0;
+            for (; *p && *p != ' ' && bi + 1 < sizeof(path_b); p++)
+                path_b[bi++] = *p;
+            path_b[bi] = '\0';
+        }
+        if (path_a[0] && path_a[0] != '/') {
+            char tmp[VFS_PATH_MAX];
+            snprintf(tmp, sizeof(tmp), "/home/dev/workspace/%s", path_a);
+            memcpy(path_a, tmp, strlen(tmp) + 1);
+        }
+        if (path_b[0] && path_b[0] != '/') {
+            char tmp[VFS_PATH_MAX];
+            snprintf(tmp, sizeof(tmp), "/home/dev/workspace/%s", path_b);
+            memcpy(path_b, tmp, strlen(tmp) + 1);
+        }
+        char diff[768];
+        if (agent_tool_fs_diff(path_a, path_b, diff, sizeof(diff)) == 0) {
+            TOOL_NOTE("fs.diff");
+            agent_tool_console_print("[agent] diff:");
+            TOOL_NOTE("console.print");
+            agent_tool_console_print(diff);
+            set_summary(summary, summary_cap, "diff ok");
+        } else {
+            agent_tool_console_print("[agent] diff failed");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "diff failed");
+        }
+        memory_append_turn(goal, tools_used, path_a);
+        return;
+    }
+
 
     if (intent == INTENT_SEARCH) {
         char needle[64];

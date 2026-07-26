@@ -278,6 +278,16 @@ int agent_queue_write_approval(const char *path, const char *content) {
     return -1;
 }
 
+void agent_transcript_note_audit(const char *op, const char *target, const char *decision) {
+    (void)op;
+    (void)target;
+    (void)decision;
+}
+
+void agent_transcript_note_tool(const char *msg) {
+    (void)msg;
+}
+
 void itoa_u(uint64_t val, char *buf, int base) {
     if (base != 10 && base != 16)
         base = 10;
@@ -378,6 +388,22 @@ void privacy_init(void) { g_net_client_grant = 0; }
 void privacy_clear_session(void) { g_net_client_grant = 0; }
 int privacy_persist_profile(void) { return 0; }
 void privacy_set_persist_profile(int profile) { (void)profile; }
+static int g_http_rc = 0;
+static int g_http_status = 200;
+static char g_http_body[512] = "hello from fetch stub";
+
+int net_http_get(const char *url, char *body, size_t body_cap, int *status_out) {
+    (void)url;
+    if (status_out)
+        *status_out = g_http_status;
+    if (body && body_cap)
+        snprintf(body, body_cap, "%s", g_http_body);
+    return g_http_rc;
+}
+
+int net_http_needs_tls(void) { return 0; }
+const char *net_http_tls_reject_name(void) { return "fetch: tls-handshake"; }
+
 int privacy_net_kill_switch(void) { return 0; }
 void privacy_set_net_kill_switch(int on) { (void)on; }
 int privacy_net_client_allowed(void) { return g_net_client_grant; }
@@ -407,9 +433,3 @@ int ubin_run(const char *path, int argc, char **argv) {
     (void)argv;
     return 0;
 }
-
-void agent_transcript_note_audit(const char *op, const char *target, const char *decision) {
-    (void)op; (void)target; (void)decision;
-}
-
-void agent_transcript_note_tool(const char *msg) { (void)msg; }

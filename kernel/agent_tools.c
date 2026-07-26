@@ -10,8 +10,8 @@
 #include "timer.h"
 
 static const char tools_catalog[] =
-    "fs.read,fs.write,fs.list,fs.exec,fs.stat,fs.mkdir,fs.rm,fs.search,fs.grep,"
-    "sys.info,net.ping,mem.recall,audit.tail,console.print";
+    "fs.read,fs.write,fs.list,fs.exec,fs.stat,fs.mkdir,fs.rm,fs.search,fs.grep,fs.diff,"
+    "sys.info,net.ping,net.fetch,mem.recall,audit.tail,console.print";
 
 const char *agent_tools_catalog(void) {
     return tools_catalog;
@@ -384,6 +384,108 @@ static int grep_walk_cb(const char *path, struct vfs_node *node, void *ctx) {
     return 0;
 }
 
+static int diff_next_line(const char *buf, size_t buf_len, size_t *pos,
+                          char *line, size_t line_cap) {
+    if (!buf || !pos || !line || line_cap < 2)
+        return 0;
+    if (*pos >= buf_len) {
+        line[0] = '\0';
+        return 0;
+    }
+    size_t i = 0;
+    while (*pos < buf_len && buf[*pos] != '\n' && i + 1 < line_cap)
+        line[i++] = buf[(*pos)++];
+    if (*pos < buf_len && buf[*pos] == '\n')
+        (*pos)++;
+    line[i] = '\0';
+    return 1;
+}
+
+int agent_tool_fs_diff(const char *path_a, const char *path_b, char *out, size_t out_len) {
+    char norm_a[VFS_PATH_MAX];
+    char norm_b[VFS_PATH_MAX];
+    if (!agent_policy_tool_allowed("fs.diff")) {
+        agent_audit_event("fs.diff", path_a ? path_a : "-", "deny-tool");
+        return -1;
+    }
+    if (!path_a || !path_b || !out || out_len < 16) {
+        agent_audit_event("fs.diff", "-", "fail");
+        return -1;
+    }
+    if (agent_policy_normalize_path(path_a, norm_a, sizeof(norm_a)) != 0 ||
+        !agent_policy_path_allowed(norm_a) ||
+        agent_policy_normalize_path(path_b, norm_b, sizeof(norm_b)) != 0 ||
+        !agent_policy_path_allowed(norm_b)) {
+        agent_audit_event("fs.diff", path_a, "deny-path");
+        return -1;
+    }
+    char body_a[AGENT_DIFF_BODY_MAX];
+    char body_b[AGENT_DIFF_BODY_MAX];
+    size_t na = 0, nb = 0;
+    if (vfs_read_file(norm_a, body_a, sizeof(body_a) - 1, &na) != 0 ||
+        vfs_read_file(norm_b, body_b, sizeof(body_b) - 1, &nb) != 0) {
+        agent_audit_event("fs.diff", norm_a, "fail");
+        return -1;
+    }
+    body_a[na < sizeof(body_a) ? na : sizeof(body_a) - 1] = '\0';
+    body_b[nb < sizeof(body_b) ? nb : sizeof(body_b) - 1] = '\0';
+
+    size_t o = 0;
+    char hdr[160];
+    int hl = snprintf(hdr, sizeof(hdr), "--- %s\n+++ %s\n", norm_a, norm_b);
+    for (int i = 0; i < hl && o + 1 < out_len; i++)
+        out[o++] = hdr[i];
+
+    size_t pa = 0, pb = 0;
+    char la[120], lb[120];
+    int line_no = 1;
+    int hunks = 0;
+    const int max_hunks = 24;
+    while ((pa < na || pb < nb) && hunks < max_hunks && o + 8 < out_len) {
+        int ha = diff_next_line(body_a, na, &pa, la, sizeof(la));
+        int hb = diff_next_line(body_b, nb, &pb, lb, sizeof(lb));
+        if (!ha && !hb)
+            break;
+        if (ha && hb && !strcmp(la, lb)) {
+            line_no++;
+            continue;
+        }
+        char hunk[32];
+        int hul = snprintf(hunk, sizeof(hunk), "@@ %d @@\n", line_no);
+        for (int i = 0; i < hul && o + 1 < out_len; i++)
+            out[o++] = hunk[i];
+        if (ha) {
+            if (o + 2 < out_len)
+                out[o++] = '-';
+            for (const char *p = la; *p && o + 1 < out_len; p++)
+                out[o++] = *p;
+            if (o + 1 < out_len)
+                out[o++] = '\n';
+        }
+        if (hb) {
+            if (o + 2 < out_len)
+                out[o++] = '+';
+            for (const char *p = lb; *p && o + 1 < out_len; p++)
+                out[o++] = *p;
+            if (o + 1 < out_len)
+                out[o++] = '\n';
+        }
+        line_no++;
+        hunks++;
+    }
+    out[o] = '\0';
+    if (!hunks) {
+        const char *same = "(no differences)\n";
+        for (const char *p = same; *p && o + 1 < out_len; p++)
+            out[o++] = *p;
+        out[o] = '\0';
+    }
+    char target[192];
+    snprintf(target, sizeof(target), "%s|%s", norm_a, norm_b);
+    agent_audit_event("fs.diff", target, hunks ? "ok" : "same");
+    return 0;
+}
+
 int agent_tool_fs_grep(const char *needle, char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("fs.grep")) {
         agent_audit_event("fs.grep", needle ? needle : "-", "deny-tool");
@@ -497,6 +599,65 @@ int agent_tool_sys_info(char *out, size_t out_len) {
              (unsigned)s->surf_pressure, (unsigned long)s->vfs_nodes, comp, pres,
              (unsigned)s->peakvec_us, (unsigned)s->agent_audit_us);
     agent_audit_event("sys.info", "-", "ok");
+    return 0;
+}
+
+static int fetch_url_allowed(const char *url) {
+    if (!url || !url[0])
+        return 0;
+    if (!strncmp(url, "http://", 7) || !strncmp(url, "https://", 8))
+        return 1;
+    return 0;
+}
+
+int agent_tool_net_fetch(const char *url, char *out, size_t out_len) {
+    if (!agent_policy_tool_allowed("net.fetch")) {
+        agent_audit_event("net.fetch", url ? url : "-", "deny-tool");
+        return -1;
+    }
+    if (!privacy_net_client_allowed()) {
+        agent_audit_event("net.fetch", url ? url : "-", "deny-privacy");
+        return -1;
+    }
+    if (!url || !url[0] || !out || out_len < 32) {
+        agent_audit_event("net.fetch", "-", "fail");
+        return -1;
+    }
+    if (!fetch_url_allowed(url)) {
+        agent_audit_event("net.fetch", url, "deny-scheme");
+        snprintf(out, out_len, "fetch: only http:// and https:// URLs allowed");
+        return -1;
+    }
+    if (!net_ready()) {
+        snprintf(out, out_len, "network down");
+        agent_audit_event("net.fetch", url, "down");
+        return -1;
+    }
+    char body[AGENT_FETCH_BODY_MAX];
+    int status = 0;
+    if (net_http_get(url, body, sizeof(body), &status) != 0 || status < 200 || status >= 300) {
+        if (net_http_needs_tls()) {
+            const char *why = net_http_tls_reject_name();
+            snprintf(out, out_len, "fetch failed%s%s (status=%d)",
+                     why && why[0] ? ": " : "", why ? why : "", status);
+            agent_audit_event("net.fetch", url, "tls-fail");
+            return -1;
+        }
+        const char *why = net_last_error();
+        snprintf(out, out_len, "fetch failed%s%s (status=%d)",
+                 why && why[0] ? ": " : "", why ? why : "", status);
+        agent_audit_event("net.fetch", url, status ? "http-fail" : "fail");
+        return -1;
+    }
+    size_t bl = strlen(body);
+    if (bl + 32 >= out_len) {
+        body[out_len > 40 ? out_len - 40 : 0] = '\0';
+        bl = strlen(body);
+        snprintf(out, out_len, "HTTP %d (%zu bytes, truncated)\n%s", status, bl, body);
+    } else {
+        snprintf(out, out_len, "HTTP %d (%zu bytes)\n%s", status, bl, body);
+    }
+    agent_audit_event("net.fetch", url, "ok");
     return 0;
 }
 
