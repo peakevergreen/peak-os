@@ -489,6 +489,8 @@ static void compose_damage(void) {
             desktop_draw_alttab();
         if (help_open)
             desktop_draw_help();
+        if (notify_hist_open)
+            desktop_draw_notify_history();
         if (session_lock || power_confirm)
             desktop_draw_session_overlays();
         {
@@ -504,7 +506,7 @@ static void compose_damage(void) {
 
 static int try_partial_present(void) {
     if (!fb_backbuffer_ok() || !scene_ready || menu_open || session_lock || power_confirm ||
-        alttab_open || help_open || ctx_menu)
+        alttab_open || help_open || notify_hist_open || ctx_menu)
         return 0;
     if (dirty_bits & (DIRTY_FULL | DIRTY_MOVE))
         return 0;
@@ -693,6 +695,7 @@ void desktop_draw(void) {
     desktop_draw_ctx_menu();
     desktop_draw_alttab();
     desktop_draw_help();
+    desktop_draw_notify_history();
     desktop_draw_session_overlays();
     notify_draw((uint32_t)fb_get()->width, (uint32_t)fb_get()->height);
 

@@ -4,6 +4,7 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "notify.h"
+#include "clipboard.h"
 #include "power.h"
 #include "timer.h"
 #include "util.h"
@@ -11,6 +12,7 @@
 int alttab_open;
 int alttab_sel;
 int help_open;
+int notify_hist_open;
 int session_lock;
 int power_confirm;
 
@@ -118,12 +120,55 @@ void desktop_draw_alttab(void) {
                    desktop_color_dim(), desktop_color_surface());
 }
 
+
+void desktop_draw_notify_history(void) {
+    if (!notify_hist_open)
+        return;
+    struct framebuffer *fb = fb_get();
+    int n = notify_history_count();
+    int clip_n = clipboard_history_count();
+    uint32_t ch = fb_cell_h() + desktop_u(4);
+    uint32_t rows = (uint32_t)(n > 0 ? n : 1);
+    if (rows > 8)
+        rows = 8;
+    uint32_t mw = desktop_u(480);
+    uint32_t mh = desktop_u(56) + rows * ch + desktop_u(36);
+    uint32_t mx = ((uint32_t)fb->width - mw) / 2;
+    uint32_t my = desktop_u(48);
+    fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
+    fb_fill_rect(mx, my, mw, desktop_u(3), desktop_color_accent());
+    uint32_t pad = desktop_u(16);
+    uint32_t cy = my + pad;
+    fb_draw_string(mx + pad, cy, "Notification history", desktop_color_accent(), desktop_color_surface());
+    cy += ch + desktop_u(4);
+    char line[96 + 8];
+    if (n == 0)
+        fb_draw_string(mx + pad, cy, "(empty)", desktop_color_dim(), desktop_color_surface());
+    else {
+        for (int i = 0; i < n && i < 8; i++) {
+            char msg[96];
+            if (!notify_history_get(i, msg, sizeof(msg)))
+                break;
+            snprintf(line, sizeof(line), "%d. %s", i + 1, msg);
+            fb_draw_string_fit(mx + pad, cy, mw - 2 * pad, line, desktop_color_fg(), desktop_color_surface());
+            cy += ch;
+        }
+    }
+    cy += desktop_u(4);
+    snprintf(line, sizeof(line), "Clipboard ring: %d entries · Ctrl+Shift+V paste previous",
+             clip_n);
+    fb_draw_string_fit(mx + pad, cy, mw - 2 * pad, line, desktop_color_dim(), desktop_color_surface());
+    cy = my + mh - pad - fb_cell_h();
+    fb_draw_string(mx + pad, cy, "Esc / click to close · Start menu → Alerts",
+                   desktop_color_dim(), desktop_color_surface());
+}
+
 void desktop_draw_help(void) {
     if (!help_open)
         return;
     struct framebuffer *fb = fb_get();
     uint32_t mw = desktop_u(460);
-    uint32_t mh = desktop_u(340);
+    uint32_t mh = desktop_u(380);
     uint32_t mx = ((uint32_t)fb->width - mw) / 2;
     uint32_t my = desktop_u(64);
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
@@ -147,12 +192,14 @@ void desktop_draw_help(void) {
         { "Peak menu", "Type to filter apps; Enter to launch" },
         { "Drag title", "Snap left/right/top edges" },
         { "Title _ [] x", "Minimize / maximize / close" },
+        { "Ctrl+Shift+H", "Notification history panel" },
+        { "Ctrl+Shift+V", "Paste previous clipboard" },
         { "Toast x", "Dismiss notification" },
         { "Wheel", "Scroll Files, Terminal, Browser" },
         { "Right-click", "Context menus" },
     };
     uint32_t key_w = desktop_u(100);
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 14; i++) {
         uint32_t kbg = desktop_color_bg();
         fb_fill_rect(mx + pad, cy, key_w, fb_cell_h() + desktop_u(2), kbg);
         fb_draw_string(mx + pad + desktop_u(6), cy + desktop_u(1), lines[i].key,
@@ -242,9 +289,18 @@ void desktop_alttab_commit_if_open(void) {
 }
 
 int desktop_overlays_close_popups(void) {
-    if (!(alttab_open || help_open))
+    if (!(alttab_open || help_open || notify_hist_open))
         return 0;
-    alttab_open = help_open = 0;
+    alttab_open = help_open = notify_hist_open = 0;
+    dirty_bits |= DIRTY_FULL;
+    return 1;
+}
+
+
+int desktop_notify_hist_click_dismiss(void) {
+    if (!notify_hist_open)
+        return 0;
+    notify_hist_open = 0;
     dirty_bits |= DIRTY_FULL;
     return 1;
 }

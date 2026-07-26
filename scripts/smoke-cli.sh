@@ -325,6 +325,11 @@ grep -q 'post_body' kernel/user/utils_net.c
 grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
+echo "==> Wave 3 Pass 69 notify clip UI"
+grep -q 'desktop_draw_notify_history' kernel/gui/desktop_overlays.c
+grep -q 'desktop_terminal_paste_previous' kernel/gui/desktop_terminal.c
+grep -q 'Ctrl+Shift+V' kernel/gui/desktop_overlays.c
+
 echo "==> Wave 3 Pass 68 files breadcrumbs"
 grep -q files_crumb_click kernel/gui/desktop_files.c
 grep -q files_draw_crumbs kernel/gui/desktop_files.c
