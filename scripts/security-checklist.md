@@ -43,3 +43,9 @@ Manual + automated gates for Phase S.
 
 - [ ] `PEAK_FIRMWARE=bios ./scripts/smoke-qemu.sh`
 - [ ] `PEAK_FIRMWARE=uefi ./scripts/smoke-qemu.sh` (when OVMF present)
+
+
+## CI automation (Wave 3 / Pass 78)
+
+- [ ] `PEAK_SKIP_ISO=1 PEAK_SKIP_HOST_TESTS=0 ./scripts/smoke-cli.sh` passes Wave 3 Pass 59–77 marker blocks
+- [ ] Host tests job (`make test-host`) green on main

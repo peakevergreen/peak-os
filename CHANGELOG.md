@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 78:** Wave 3 lock-in — smoke-cli gates Passes 59–77, ROADMAP/CHANGELOG Wave 3 shipped, security-checklist CI note
+
 - **Pass 77:** ctr build ENV meta + EXPOSE default port on `ctr run`; `X-Peak-Env` on static HTTP
 
 - **Pass 76:** Agent tools `fs.tree` + `sys.ps` with planner intent hooks
