@@ -212,6 +212,47 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         } \
     } while (0)
 
+    if (contains_ci(goal, "peakvec") || contains_ci(goal, "vector query")) {
+        char qbuf[512];
+        const char *q = goal;
+        if (contains_ci(goal, "peakvec "))
+            q = goal + 8;
+        if (agent_tool_peakvec_query("agent", q, qbuf, sizeof(qbuf)) == 0) {
+            TOOL_NOTE("peakvec.query");
+            agent_tool_console_print(qbuf);
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "peakvec query");
+        } else {
+            agent_tool_console_print("[agent] peakvec.query empty or denied");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "peakvec query failed");
+        }
+        memory_append_turn(goal, tools_used, NULL);
+        return;
+    }
+
+    if (contains_ci(goal, "remember ") || contains_ci(goal, "store memory")) {
+        const char *text = goal;
+        if (contains_ci(goal, "remember "))
+            text = goal + 9;
+        else if (contains_ci(goal, "store memory"))
+            text = goal + 12;
+        while (*text == ' ')
+            text++;
+        if (agent_tool_mem_store(text) == 0) {
+            TOOL_NOTE("mem.store");
+            agent_tool_console_print("[agent] stored in session memory + PeakVec");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "stored memory");
+        } else {
+            agent_tool_console_print("[agent] mem.store failed or denied");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "store failed");
+        }
+        memory_append_turn(goal, tools_used, text);
+        return;
+    }
+
     if (intent == INTENT_TREE) {
         char buf[2048];
         const char *root = "/home/dev/workspace";
@@ -243,7 +284,8 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     if (intent == INTENT_HELP) {
         agent_tool_console_print(
             "Peak Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm "
-            "fs.search fs.grep fs.diff fs.tree sys.info sys.ps net.ping net.fetch mem.recall audit.tail console.print");
+            "fs.search fs.grep fs.diff fs.tree sys.info sys.ps net.ping net.fetch "
+            "mem.recall mem.store peakvec.query audit.tail console.print");
         agent_tool_console_print(
             "Try: ask \"summarize workspace\" | \"grep needle\" | \"diff a b\" | "
             "\"fetch http://example.com\" | \"ping example.com\" | audit | memory");

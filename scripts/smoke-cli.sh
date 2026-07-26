@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 116 agent tools"
+grep -q agent_tool_mem_store kernel/agent_tools.c
+grep -q agent_tool_peakvec_query kernel/agent_tools.c
+grep -q '"patch"' kernel/agent_tools.c
+grep -q mem.store kernel/agent_policy.c
+
 echo "==> Wave 5 Pass 115 notepad monitor"
 grep -q np_find_count kernel/gui/desktop_notepad.c
 grep -q np_replace_all kernel/gui/desktop_notepad.c

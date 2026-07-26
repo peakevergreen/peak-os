@@ -12,7 +12,7 @@
 #define AGENT_ALLOW_PATH_LEN 96
 #define AGENT_PENDING_CONTENT_MAX 512
 #define AGENT_TOOL_NAME_MAX 32
-#define AGENT_TOOLS_MAX 16
+#define AGENT_TOOLS_MAX 20
 #define AGENT_READ_CONTENT_MAX 1024
 #define AGENT_DIFF_BODY_MAX 1024
 #define AGENT_DIFF_LINES_MAX 48
@@ -53,6 +53,8 @@ int agent_tool_sys_info(char *out, size_t out_len);
 int agent_tool_net_ping(const char *host, char *out, size_t out_len);
 int agent_tool_net_fetch(const char *url, char *out, size_t out_len);
 int agent_tool_mem_recall(const char *goal, char *out, size_t out_len);
+int agent_tool_mem_store(const char *text);
+int agent_tool_peakvec_query(const char *ns, const char *query, char *out, size_t out_len);
 int agent_tool_audit_tail(char *out, size_t out_len);
 
 void agent_plan_goal(const char *goal, char *summary, size_t summary_cap);

@@ -73,17 +73,21 @@ void agent_policy_load_defaults(void) {
     memcpy(allow_tools[3], "console.print", 14);
     memcpy(allow_tools[4], "fs.exec", 8);
     memcpy(allow_tools[5], "mem.recall", 11);
-    memcpy(allow_tools[6], "audit.tail", 11);
-    memcpy(allow_tools[7], "fs.stat", 8);
-    memcpy(allow_tools[8], "fs.mkdir", 9);
-    memcpy(allow_tools[9], "fs.rm", 6);
-    memcpy(allow_tools[10], "fs.search", 10);
-    memcpy(allow_tools[11], "fs.grep", 8);
-    memcpy(allow_tools[12], "fs.diff", 8);
-    memcpy(allow_tools[13], "sys.info", 9);
-    memcpy(allow_tools[14], "net.ping", 9);
-    memcpy(allow_tools[15], "net.fetch", 10);
-    allow_tool_count = 16;
+    memcpy(allow_tools[6], "mem.store", 10);
+    memcpy(allow_tools[7], "peakvec.query", 14);
+    memcpy(allow_tools[8], "audit.tail", 11);
+    memcpy(allow_tools[9], "fs.stat", 8);
+    memcpy(allow_tools[10], "fs.mkdir", 9);
+    memcpy(allow_tools[11], "fs.rm", 6);
+    memcpy(allow_tools[12], "fs.search", 10);
+    memcpy(allow_tools[13], "fs.grep", 8);
+    memcpy(allow_tools[14], "fs.diff", 8);
+    memcpy(allow_tools[15], "sys.info", 9);
+    memcpy(allow_tools[16], "net.ping", 9);
+    memcpy(allow_tools[17], "net.fetch", 10);
+    memcpy(allow_tools[18], "fs.tree", 8);
+    memcpy(allow_tools[19], "sys.ps", 7);
+    allow_tool_count = 20;
 }
 
 void agent_policy_reload(void) {
