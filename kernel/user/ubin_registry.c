@@ -125,6 +125,7 @@ extern int udnsflush_main(int argc, char **argv);
 extern int uhost_main(int argc, char **argv);
 extern int utraceroute_main(int argc, char **argv);
 extern int unc_main(int argc, char **argv);
+extern int uss_main(int argc, char **argv);
 extern int utlsinfo_main(int argc, char **argv);
 extern int utar_main(int argc, char **argv);
 extern int uzip_main(int argc, char **argv);

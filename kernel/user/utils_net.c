@@ -838,6 +838,28 @@ int utlsinfo_main(int argc, char **argv) {
     return 0;
 }
 
+int uss_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("ss", "[-t]");
+        return 0;
+    }
+    (void)peak_has_flag(argc, argv, "-t");
+    int rows = net_tcp_conn_row_count();
+    console_write("Netid  State     Peer:Port\n");
+    for (int r = 0; r < rows; r++) {
+        char host[32], state[12];
+        uint16_t port = 0;
+        if (net_tcp_conn_row(r, host, sizeof(host), &port, state, sizeof(state)) != 0)
+            continue;
+        console_printf("tcp    %-8s %s:%u\n", state, host, (unsigned)port);
+    }
+    if (rows == 0)
+        console_write("ss: no tracked TCP connections\n");
+    else
+        console_printf("ss: %d tcp row(s) from kernel conn table (lite netstat)\n", rows);
+    return 0;
+}
+
 int udnsflush_main(int argc, char **argv) {
     (void)argv;
     if (peak_wants_help(argc, argv)) {
