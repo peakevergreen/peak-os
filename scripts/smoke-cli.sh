@@ -723,6 +723,11 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 154 less more depth"
+grep -q 'show_numbers' kernel/user/utils_pager.c
+grep -q '\`-N\`' docs/CLI.md || grep -q '-N' kernel/user/utils_pager.c
+grep -q 'pager_find_next.*icase' kernel/user/utils_pager.c || grep -q 'icase' kernel/user/utils_pager.c
+
 echo "==> Wave 7 Pass 153 nproc uptime free depth"
 grep -q 'unproc_main' kernel/user/utils_sys2.c
 grep -q 'nproc' kernel/user/ubin_cmds.def

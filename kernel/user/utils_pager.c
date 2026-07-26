@@ -57,17 +57,22 @@ static int split_lines(char *data, size_t len, char **lines, int max) {
 }
 
 static void pager_show(const char *title, char **lines, int total, int start,
-                       int full) {
+                       int full, int show_numbers) {
     console_clear();
     console_write(title);
     if (full)
         console_write(" — space next, b prev, g/G top/bottom, / search, q quit\n\n");
     else
-        console_write(" — space next, q quit\n\n");
+        console_write(" — space next, / search, q quit\n\n");
     int end = start + PAGE_LINES;
     if (end > total)
         end = total;
     for (int i = start; i < end; i++) {
+        if (show_numbers) {
+            char ln[16];
+            snprintf(ln, sizeof(ln), "%6d  ", i + 1);
+            console_write(ln);
+        }
         console_write(lines[i]);
         console_write("\n");
     }
@@ -78,23 +83,33 @@ static void pager_show(const char *title, char **lines, int total, int start,
     }
 }
 
-static int line_contains(const char *line, const char *pat, size_t plen) {
+static int line_contains(const char *line, const char *pat, size_t plen, int icase) {
     if (plen == 0)
         return 1;
     size_t l = strlen(line);
     if (l < plen)
         return 0;
     for (size_t j = 0; j + plen <= l; j++) {
-        if (!memcmp(line + j, pat, plen))
+        int ok = 1;
+        for (size_t k = 0; k < plen; k++) {
+            char a = line[j + k];
+            char b = pat[k];
+            if (icase) {
+                if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+                if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+            }
+            if (a != b) { ok = 0; break; }
+        }
+        if (ok)
             return 1;
     }
     return 0;
 }
 
-static int pager_find_next(char **lines, int total, int from, const char *pat) {
+static int pager_find_next(char **lines, int total, int from, const char *pat, int icase) {
     size_t plen = strlen(pat);
     for (int i = from; i < total; i++) {
-        if (line_contains(lines[i], pat, plen))
+        if (line_contains(lines[i], pat, plen, icase))
             return i;
     }
     return -1;
@@ -167,15 +182,27 @@ static int more_main(int argc, char **argv) {
         return rc > 0 ? rc : 0;
 
     int pos = 0;
-    pager_show("more", lines, total, pos, 0);
+    char pat[PAT_MAX];
+    pager_show("more", lines, total, pos, 0, 0);
     for (;;) {
         char c = keyboard_try_getchar();
         if (c == 'q' || c == 'Q' || c == 27)
             break;
+        if (c == '/') {
+            if (read_search_pat(pat, sizeof(pat)) > 0) {
+                int hit = pager_find_next(lines, total, pos, pat, 0);
+                if (hit >= 0) {
+                    pos = hit;
+                    pager_show("more", lines, total, pos, 0, 0);
+                } else
+                    console_write("Pattern not found\n");
+            }
+            continue;
+        }
         if (c == ' ' || c == '\n' || c == '\r') {
             if (pos + PAGE_LINES < total) {
                 pos += PAGE_LINES;
-                pager_show("more", lines, total, pos, 0);
+                pager_show("more", lines, total, pos, 0, 0);
             } else {
                 break;
             }
@@ -187,17 +214,37 @@ static int more_main(int argc, char **argv) {
 }
 
 static int less_main(int argc, char **argv) {
+    int show_numbers = 0;
+    int icase = 0;
+    int pathi = 1;
+    for (; pathi < argc; pathi++) {
+        if (!strcmp(argv[pathi], "-N")) { show_numbers = 1; continue; }
+        if (!strcmp(argv[pathi], "-i")) { icase = 1; continue; }
+        if (argv[pathi][0] == '-')
+            continue;
+        break;
+    }
     char data[PAGE_MAX];
     char *lines[MAX_LINES];
     int total = 0;
-    int rc = pager_load("less", argc, argv, data, sizeof(data), lines, &total);
+    char fake_argv[3][64];
+    char *fav[3];
+    int fargc = 1;
+    fav[0] = fake_argv[0];
+    snprintf(fake_argv[0], sizeof(fake_argv[0]), "less");
+    if (pathi < argc) {
+        snprintf(fake_argv[1], sizeof(fake_argv[1]), "%s", argv[pathi]);
+        fav[1] = fake_argv[1];
+        fargc = 2;
+    }
+    int rc = pager_load("less", fargc, fav, data, sizeof(data), lines, &total);
     if (rc < 0)
         return rc > 0 ? rc : 0;
 
     int pos = 0;
     int search_from = 0;
     char pat[PAT_MAX];
-    pager_show("less", lines, total, pos, 1);
+    pager_show("less", lines, total, pos, 1, show_numbers);
     for (;;) {
         char c = keyboard_try_getchar();
         if (c == 'q' || c == 'Q' || c == 27)
@@ -206,7 +253,7 @@ static int less_main(int argc, char **argv) {
             if (pos + PAGE_LINES < total) {
                 pos += PAGE_LINES;
                 search_from = pos;
-                pager_show("less", lines, total, pos, 1);
+                pager_show("less", lines, total, pos, 1, show_numbers);
             } else {
                 break;
             }
@@ -216,25 +263,25 @@ static int less_main(int argc, char **argv) {
                 if (pos < 0)
                     pos = 0;
                 search_from = pos;
-                pager_show("less", lines, total, pos, 1);
+                pager_show("less", lines, total, pos, 1, show_numbers);
             }
         } else if (c == 'g') {
             pos = 0;
             search_from = 0;
-            pager_show("less", lines, total, pos, 1);
+            pager_show("less", lines, total, pos, 1, show_numbers);
         } else if (c == 'G') {
             pos = pager_align_page(total - 1, total);
             search_from = pos;
-            pager_show("less", lines, total, pos, 1);
+            pager_show("less", lines, total, pos, 1, show_numbers);
         } else if (c == '/') {
             if (read_search_pat(pat, sizeof(pat)) > 0) {
-                int hit = pager_find_next(lines, total, search_from, pat);
+                int hit = pager_find_next(lines, total, search_from, pat, icase);
                 if (hit < 0 && search_from > 0)
-                    hit = pager_find_next(lines, total, 0, pat);
+                    hit = pager_find_next(lines, total, 0, pat, icase);
                 if (hit >= 0) {
                     pos = pager_align_page(hit, total);
                     search_from = hit + 1;
-                    pager_show("less", lines, total, pos, 1);
+                    pager_show("less", lines, total, pos, 1, show_numbers);
                 } else {
                     console_write("Pattern not found\n");
                 }
