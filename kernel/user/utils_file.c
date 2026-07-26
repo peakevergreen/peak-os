@@ -8,6 +8,7 @@
 #include "peakdisk.h"
 #include "blockdev.h"
 #include "blobstore.h"
+#include "timer.h"
 
 #define PEAK_PAGE_BYTES 4096ull
 
@@ -690,3 +691,126 @@ int ufile_main(int argc, char **argv) {
     }
     return err;
 }
+
+
+static int mkdir_parents_of(const char *filepath) {
+    char path[VFS_PATH_MAX];
+    size_t i = 0;
+    for (; filepath[i] && i + 1 < sizeof(path); i++)
+        path[i] = filepath[i];
+    path[i] = '\0';
+    for (int j = (int)strlen(path) - 1; j >= 0; j--) {
+        if (path[j] == '/') {
+            path[j] = '\0';
+            break;
+        }
+    }
+    if (!path[0])
+        return 0;
+    char acc[VFS_PATH_MAX];
+    acc[0] = '\0';
+    const char *p = path;
+    if (*p == '/') {
+        acc[0] = '/';
+        acc[1] = '\0';
+        p++;
+    }
+    while (*p) {
+        const char *slash = p;
+        while (*slash && *slash != '/')
+            slash++;
+        size_t n = (size_t)(slash - p);
+        if (n) {
+            size_t al2 = strlen(acc);
+            if (al2 + 1 + n + 1 >= sizeof(acc))
+                return -1;
+            if (al2 > 0 && acc[al2 - 1] != '/')
+                acc[al2++] = '/';
+            memcpy(acc + al2, p, n);
+            acc[al2 + n] = '\0';
+            vfs_mkdir(acc);
+        }
+        if (*slash == '/')
+            p = slash + 1;
+        else
+            break;
+    }
+    return 0;
+}
+
+int umktemp_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("mktemp", "[-p dir] [template]");
+        return 0;
+    }
+    const char *dir = "/tmp";
+    const char *tpl = "peak.XXXXXX";
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-p") && i + 1 < argc) {
+            dir = argv[++i];
+            continue;
+        }
+        if (argv[i][0] != '-')
+            tpl = argv[i];
+    }
+    char path[VFS_PATH_MAX];
+    snprintf(path, sizeof(path), "%s/%s", dir, tpl);
+    char *xs = strstr(path, "XXXXXX");
+    if (!xs) {
+        peak_perror("mktemp", "template must contain XXXXXX");
+        return 1;
+    }
+    vfs_mkdir(dir);
+    uint64_t t = timer_ticks();
+    for (int n = 0; n < 6; n++) {
+        xs[n] = 'A' + (char)((t >> (n * 4)) & 0xF);
+    }
+    if (!vfs_create_file(path)) {
+        peak_perror("mktemp", "cannot create");
+        return 1;
+    }
+    console_write(path);
+    console_write("\n");
+    return 0;
+}
+
+int uinstall_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 3) {
+        peak_usage("install", "[-D] <src> <dest>");
+        return argc < 3 ? 1 : 0;
+    }
+    int mkparents = peak_has_flag(argc, argv, "-D");
+    const char *src = NULL, *dest = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-D"))
+            continue;
+        if (!src)
+            src = argv[i];
+        else
+            dest = argv[i];
+    }
+    if (!src || !dest) {
+        peak_usage("install", "[-D] <src> <dest>");
+        return 1;
+    }
+    char src_abs[VFS_PATH_MAX], dst_abs[VFS_PATH_MAX];
+    if (shell_resolve_path(src, src_abs, sizeof(src_abs)) ||
+        shell_resolve_path(dest, dst_abs, sizeof(dst_abs))) {
+        peak_perror("install", "bad path");
+        return 1;
+    }
+    if (mkparents)
+        mkdir_parents_of(dst_abs);
+    static char buf[65536];
+    size_t n = 0;
+    if (vfs_read_file(src_abs, buf, sizeof(buf), &n) != 0) {
+        peak_perror("install", "cannot read src");
+        return 1;
+    }
+    if (vfs_write_file(dst_abs, buf, n) != 0) {
+        peak_perror("install", "cannot write dest");
+        return 1;
+    }
+    return 0;
+}
+

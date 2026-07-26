@@ -9,6 +9,8 @@ extern int uedit_main(int argc, char **argv);
 extern int upeak_main(int argc, char **argv);
 extern int upwd_main(int argc, char **argv);
 extern int ucd_main(int argc, char **argv);
+extern int umktemp_main(int argc, char **argv);
+extern int uinstall_main(int argc, char **argv);
 extern int umkdir_main(int argc, char **argv);
 extern int utouch_main(int argc, char **argv);
 extern int urm_main(int argc, char **argv);
