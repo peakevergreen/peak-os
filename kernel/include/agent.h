@@ -20,5 +20,8 @@ void agent_transcript_clear(void);
 void agent_transcript_push(const char *line);
 int  agent_transcript_scroll(int delta);
 void agent_transcript_reset_scroll(void);
+int  agent_transcript_scroll_end(void);
+void agent_transcript_note_audit(const char *op, const char *target, const char *decision);
+void agent_transcript_note_tool(const char *msg);
 
 #endif

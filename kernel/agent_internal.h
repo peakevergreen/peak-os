@@ -29,6 +29,9 @@ int agent_queue_write_approval(const char *path, const char *content);
 void agent_audit_append(const char *line);
 void agent_audit_event(const char *op, const char *target, const char *decision);
 
+void agent_transcript_note_audit(const char *op, const char *target, const char *decision);
+void agent_transcript_note_tool(const char *msg);
+
 const char *agent_tools_catalog(void);
 size_t agent_tools_catalog_len(void);
 

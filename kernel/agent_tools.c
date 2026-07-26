@@ -29,6 +29,7 @@ int agent_tool_console_print(const char *msg) {
     console_write_ui(msg ? msg : "");
     if (msg && msg[0] && msg[strlen(msg) - 1] != '\n')
         console_write_ui("\n");
+    agent_transcript_note_tool(msg);
     agent_audit_event("console.print", "-", "ok");
     return 0;
 }
@@ -195,9 +196,8 @@ int agent_tool_fs_stat(const char *path, char *out, size_t out_len) {
         return -1;
     }
     if (out && out_len) {
-        snprintf(out, out_len, "%s %c %llu refs=%u children=%u",
-                 norm, st.type == VFS_DIR ? 'd' : 'f', (unsigned long long)st.size,
-                 (unsigned)st.refs, (unsigned)st.nchildren);
+        char modebuf[12]; vfs_mode_string(st.type, st.mode, modebuf, sizeof(modebuf));
+        snprintf(out, out_len, "%s %04o %s %llu refs=%u children=%u", norm, (unsigned)st.mode, modebuf, (unsigned long long)st.size, (unsigned)st.refs, (unsigned)st.nchildren);
     }
     agent_audit_event("fs.stat", norm, "ok");
     return 0;

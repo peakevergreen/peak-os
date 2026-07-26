@@ -134,6 +134,12 @@ echo "==> Pass 45 pager depth"
 grep -q 'pager_find_next' kernel/user/utils_pager.c
 grep -q 'less_main' kernel/user/utils_pager.c
 
+echo "==> Pass 49 agent GUI UX"
+grep -q 'AGENT_INPUT_MAX 256' kernel/gui/desktop_agent.c
+grep -q 'agent_transcript_note_audit' kernel/agent.c
+grep -q 'AGENT_TLINES 48' kernel/agent.c
+grep -q 'agent_approval_draw' kernel/gui/desktop_agent.c
+
 echo "==> theme names"
 grep -q evergreen kernel/theme.c
 grep -q midnight kernel/theme.c
