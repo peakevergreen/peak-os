@@ -46,6 +46,8 @@ int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks);
 int net_tcp_send(const void *data, size_t len);
 int net_tcp_recv(void *buf, size_t cap, size_t *out_len, uint32_t timeout_ticks);
 void net_tcp_close(void);
+int net_tcp_conn_row_count(void);
+int net_tcp_conn_row(int idx, char *host, size_t host_cap, uint16_t *port, char *state, size_t state_cap);
 int net_tcp_active_count(void);
 
 /* Passive server API (non-blocking accept). listen returns listener id >= 0. */

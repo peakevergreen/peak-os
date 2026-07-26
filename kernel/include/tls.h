@@ -44,3 +44,4 @@ int tls_trust_pin_sha256(const uint8_t pin[32]);
 void tls_trust_clear_all(void);
 
 #endif
+int tls_last_handshake_resumed(void);
