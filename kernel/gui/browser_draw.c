@@ -206,14 +206,16 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     if (t->fetching) {
         uint32_t bar_x = ax;
         uint32_t bar_w = aw;
-        uint32_t bar_h = 3;
+        uint32_t bar_h = ch + 2;
         uint32_t prog_y = bar_y + ch + 6;
         fb_fill_rect(bar_x, prog_y, bar_w, bar_h, th->border);
+        /* Honest spinner (not a fake % bar). */
+        static const char *frames[] = { "|", "/", "-", "\\" };
         uint64_t elapsed = timer_ticks() - t->fetch_start;
-        uint32_t pct = (uint32_t)((elapsed * 37) % (bar_w > 8 ? bar_w - 8 : 1)) + 4;
-        if (pct > bar_w)
-            pct = bar_w / 3;
-        fb_fill_rect(bar_x, prog_y, pct, bar_h, th->accent);
+        const char *spin = frames[(unsigned)(elapsed / 8) % 4];
+        char spinbuf[32];
+        snprintf(spinbuf, sizeof(spinbuf), "%s fetching...", spin);
+        fb_draw_string(bar_x + 4, prog_y + 1, spinbuf, th->accent, th->border);
     }
 
     hit_bm_y = hit_bm_h = 0;
@@ -371,17 +373,31 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     }
 
     if (t->jsh.console_n > 0 && (t->show_console || t->js_ok)) {
-        int nlines = t->jsh.console_n < 4 ? t->jsh.console_n : 4;
+        int nlines = 0;
+        int start = t->jsh.console_n - (t->jsh.console_n < 4 ? t->jsh.console_n : 4);
+        if (start < 0)
+            start = 0;
+        for (int i = start; i < t->jsh.console_n; i++) {
+            int slot = i % 8;
+            if (browser_console_line_visible(&t->jsh, t->jsh.console_log[slot]))
+                nlines++;
+        }
+        if (nlines == 0)
+            nlines = 1;
         console_extra = (uint32_t)(nlines + 1) * (ch + 2) + 6;
         uint32_t con_y = y + h - ch - 4 - console_extra;
         fb_fill_rect(x + 2, con_y, w - 4, console_extra, th->border);
-        fb_draw_string(x + pad, con_y + 2, "Console", th->accent, th->border);
+        char con_hdr[48];
+        if (t->jsh.console_filter[0])
+            snprintf(con_hdr, sizeof(con_hdr), "Console filter:%s", t->jsh.console_filter);
+        else
+            snprintf(con_hdr, sizeof(con_hdr), "Console");
+        fb_draw_string(x + pad, con_y + 2, con_hdr, th->accent, th->border);
         uint32_t ly = con_y + ch + 4;
-        int start = t->jsh.console_n - nlines;
-        if (start < 0)
-            start = 0;
-        for (int i = 0; i < nlines; i++) {
-            int slot = (start + i) % 8;
+        for (int i = start; i < t->jsh.console_n; i++) {
+            int slot = i % 8;
+            if (!browser_console_line_visible(&t->jsh, t->jsh.console_log[slot]))
+                continue;
             fb_draw_string(x + pad + 4, ly, t->jsh.console_log[slot], th->dim, th->border);
             ly += ch + 2;
         }

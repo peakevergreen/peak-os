@@ -723,6 +723,13 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 141 browser console spinner"
+grep -q 'browser_console_clear' kernel/gui/browser_js.c
+grep -q 'browser_console_line_visible' kernel/gui/browser_js.c
+grep -q 'nat_console_clear' kernel/gui/browser_js.c
+grep -q 'fetching...' kernel/gui/browser_draw.c
+grep -q 'console_filter' kernel/include/browser_js.h
+
 echo "==> Wave 7 Pass 140 WebAPI fetch headers isolation"
 grep -q 'stub_fetch_parse_headers' kernel/gui/webapi_stubs.c
 grep -q 'browser_isolation_fetch_denied_reason' kernel/gui/browser_isolation.c

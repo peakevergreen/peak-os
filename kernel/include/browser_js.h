@@ -12,6 +12,7 @@ struct browser_js_host {
     uint32_t handle_gen; /* bumped on navigate; stale DOM handles fail closed */
     char console_log[8][96];
     int console_n;
+    char console_filter[32]; /* substring filter; empty = show all */
     /* Simple event listeners: element id hash → function (one click listener). */
     struct {
         int used;
@@ -30,5 +31,8 @@ int browser_js_install_dom(struct browser_js_host *h);
 int browser_js_run_scripts(struct browser_js_host *h);
 int browser_js_dispatch_click(struct browser_js_host *h, int node_id);
 int browser_js_dispatch_input(struct browser_js_host *h, int node_id, const char *value);
+void browser_console_clear(struct browser_js_host *h);
+void browser_console_set_filter(struct browser_js_host *h, const char *substr);
+int browser_console_line_visible(const struct browser_js_host *h, const char *line);
 
 #endif
