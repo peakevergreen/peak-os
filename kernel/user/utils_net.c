@@ -242,42 +242,64 @@ int uifconfig_main(int argc, char **argv) {
 
 int uping_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("ping", "<host>");
+        peak_usage("ping", "[-c N] <host>");
         return argc < 2 ? 1 : 0;
     }
     if (!net_ready()) {
         peak_perror("ping", "network down");
         return 1;
     }
-    uint32_t ip = net_dns_resolve(argv[1], 300);
+    int count = 1;
+    const char *host = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-c") && i + 1 < argc) {
+            count = peak_atoi(argv[++i]);
+            if (count < 1)
+                count = 1;
+            if (count > 10)
+                count = 10;
+            continue;
+        }
+        if (argv[i][0] != '-')
+            host = argv[i];
+    }
+    if (!host) {
+        peak_usage("ping", "[-c N] <host>");
+        return 1;
+    }
+    uint32_t ip = net_dns_resolve(host, 300);
     if (!ip) {
         net_print_failure("ping", "DNS failed");
         return 1;
     }
     char buf[32];
     net_format_ip(ip, buf, sizeof(buf));
-    console_printf("PING %s (%s)\n", argv[1], buf);
-    uint64_t t0 = timer_ticks();
-    int cr = net_tcp_connect(ip, 80, 300);
-    uint64_t dt = timer_ticks() - t0;
-    if (cr == 0) {
-        net_tcp_close();
-        console_printf("tcp/:80 open from %s time=%lums\n", buf, (unsigned long)(dt * 10));
-        return 0;
+    console_printf("PING %s (%s)\n", host, buf);
+    int ok = 0;
+    for (int n = 0; n < count; n++) {
+        uint64_t t0 = timer_ticks();
+        int cr = net_tcp_connect(ip, 80, 300);
+        uint64_t dt = timer_ticks() - t0;
+        if (cr == 0) {
+            net_tcp_close();
+            console_printf("seq=%d tcp/:80 open time=%lums\n", n + 1, (unsigned long)(dt * 10));
+            ok++;
+        } else {
+            const char *why = net_last_error();
+            if (why && why[0])
+                console_printf("seq=%d tcp/:80 failed: %s\n", n + 1, why);
+            else
+                console_printf("seq=%d tcp/:80 no response (%s)\n", n + 1, peak_strerror(cr));
+        }
     }
-    const char *why = net_last_error();
-    if (why && why[0])
-        console_printf("tcp/:80 failed from %s: %s\n", buf, why);
-    else
-        console_printf("tcp/:80 no response from %s (%s)\n", buf, peak_strerror(cr));
-    console_printf("DNS ok - stack is talking to the network.\n");
-    return 1;
+    console_printf("--- %s ping statistics ---\n%d/%d probes succeeded\n", host, ok, count);
+    return ok ? 0 : 1;
 }
 
 int uwget_main(int argc, char **argv) {
     privacy_grant_net_client(0);
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("wget", "[-X METHOD] [-d data] [-i] [-O path] <url>");
+        peak_usage("wget", "[-H hdr] [-I] [-X METHOD] [-d data] [-i] [-O path] <url>");
         return argc < 2 ? 1 : 0;
     }
     if (!net_ready()) {
@@ -288,10 +310,26 @@ int uwget_main(int argc, char **argv) {
     const char *out_path = 0;
     const char *method = "GET";
     const char *post_body = 0;
-    char hdr_extra[128];
+    char hdr_extra[512];
     hdr_extra[0] = '\0';
     int show_headers = 0;
+    int head_only = 0;
     for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-H") && i + 1 < argc) {
+            const char *h = argv[++i];
+            size_t cur = strlen(hdr_extra);
+            if (cur + strlen(h) + 3 < sizeof(hdr_extra)) {
+                if (cur)
+                    hdr_extra[cur++] = '\n';
+                memcpy(hdr_extra + cur, h, strlen(h) + 1);
+            }
+            continue;
+        }
+        if (!strcmp(argv[i], "-I")) {
+            head_only = 1;
+            show_headers = 1;
+            continue;
+        }
         if (!strcmp(argv[i], "-O") && i + 1 < argc) {
             out_path = argv[++i];
             continue;
@@ -312,7 +350,7 @@ int uwget_main(int argc, char **argv) {
             url = argv[i];
     }
     if (!url) {
-        peak_usage("wget", "[-X METHOD] [-d data] [-i] [-O path] <url>");
+        peak_usage("wget", "[-H hdr] [-I] [-X METHOD] [-d data] [-i] [-O path] <url>");
         return 1;
     }
     char body[HTTP_BODY_MAX];
@@ -320,7 +358,9 @@ int uwget_main(int argc, char **argv) {
     int st = 0;
     struct net_http_request req;
     memset(&req, 0, sizeof(req));
-    if (post_body && (!method[0] || !strcmp(method, "GET")))
+    if (head_only)
+        method = "HEAD";
+    else if (post_body && (!method[0] || !strcmp(method, "GET")))
         method = "POST";
     snprintf(req.method, sizeof(req.method), "%.7s", method ? method : "GET");
     req.url = url;
@@ -342,11 +382,13 @@ int uwget_main(int argc, char **argv) {
         console_printf("HTTP %d\n", st);
     if (show_headers && hdrs[0]) {
         console_write(hdrs);
-    } else {
+    } else if (!head_only) {
         char ct[128];
         if (http_header_value(hdrs, "content-type", ct, sizeof(ct)) == 0)
             console_printf("  Content-Type: %s\n", ct);
     }
+    if (head_only)
+        return st >= 200 && st < 400 ? 0 : 1;
     console_printf("  %lu bytes", (unsigned long)strlen(body));
     if (net_http_last_body_truncated()) {
         console_printf(" [truncated: received=%lu limit=%lu policy=client-buffer]",
@@ -381,13 +423,22 @@ int uwget_main(int argc, char **argv) {
 
 int ucurl_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("curl", "[-X METHOD] [-d data] [-i] [-o path] <url>");
+        peak_usage("curl", "[-H hdr] [-I] [-X METHOD] [-d data] [-i] [-o path] <url>");
         return argc < 2 ? 1 : 0;
     }
     char *av[16];
     int ac = 0;
     av[ac++] = (char *)"wget";
     for (int i = 1; i < argc && ac < 15; i++) {
+        if (!strcmp(argv[i], "-H") && i + 1 < argc) {
+            av[ac++] = (char *)"-H";
+            av[ac++] = argv[++i];
+            continue;
+        }
+        if (!strcmp(argv[i], "-I")) {
+            av[ac++] = (char *)"-I";
+            continue;
+        }
         if (!strcmp(argv[i], "-o") && i + 1 < argc) {
             av[ac++] = (char *)"-O";
             av[ac++] = argv[++i];
