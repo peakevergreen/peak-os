@@ -353,6 +353,47 @@ void shell_execute(char *cmd) {
         return;
     }
 
+    /* unset NAME — remove shell env var */
+    if (!strncmp(cmd, "unset ", 6)) {
+        char *name = cmd + 6;
+        while (*name == ' ')
+            name++;
+        if (!*name || strchr(name, ' ')) {
+            console_write("unset: usage: unset NAME\n");
+            shell_set_last_status(1);
+            return;
+        }
+        shell_set_last_status(shell_env_unset(name) == 0 ? 0 : 1);
+        return;
+    }
+
+    /* read NAME — read one line from stdin into env var */
+    if (!strncmp(cmd, "read ", 5)) {
+        char *name = cmd + 5;
+        while (*name == ' ')
+            name++;
+        if (!*name || strchr(name, ' ')) {
+            console_write("read: usage: read NAME\n");
+            shell_set_last_status(1);
+            return;
+        }
+        char buf[96];
+        buf[0] = '\0';
+        const char *sin = shell_stdin_path();
+        if (sin) {
+            size_t n = 0;
+            if (vfs_read_file(sin, buf, sizeof(buf) - 1, &n) == 0) {
+                buf[n] = '\0';
+                /* trim trailing newline */
+                while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r'))
+                    buf[--n] = '\0';
+            }
+        }
+        shell_env_set(name, buf);
+        shell_set_last_status(0);
+        return;
+    }
+
     (void)vfs_mkdir("/tmp");
 
     /* && / || list above pipelines (outside quotes). */
@@ -402,7 +443,8 @@ void shell_execute(char *cmd) {
         if (*seg) {
             struct shell_pipeline pl;
             if (shell_parse_pipeline(seg, &pl) != 0) {
-                console_write("shell: parse error (pipes/redirects)\n");
+                console_write("shell: parse error (pipes/redirects; max ");
+                console_printf("%d stages, %d args/stage)\n", SHELL_PIPE_MAX, SHELL_ARGV_MAX - 1);
                 shell_set_last_status(1);
                 return;
             }
