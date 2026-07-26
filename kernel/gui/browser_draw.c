@@ -137,13 +137,13 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
             fb_fill_rect(tx + 1, y + hit_tab_h - 3, hit_tab_w - 2, 2, th->accent);
         char lab[BR_TITLE_MAX];
         tab_label(&tabs[i], lab, sizeof(lab));
-        uint32_t label_max = hit_tab_w - 8 - close_w;
+        uint32_t label_max = hit_tab_w > close_w + 16 ? hit_tab_w - close_w - 16 : cw * 4;
         fb_draw_string_fit(tx + 4, y + 3, label_max, lab,
                            (i == active) ? th->fg : th->dim, bg);
         if (close_w > 0) {
-            uint32_t cx = tx + hit_tab_w - close_w - 2;
+            uint32_t cx = tx + hit_tab_w - close_w - 4;
             hit_tab_close_x[i] = cx - x;
-            hit_tab_close_w[i] = close_w;
+            hit_tab_close_w[i] = close_w + 4;
             fb_draw_string(cx, y + 3, "x", th->dim, bg);
         }
     }

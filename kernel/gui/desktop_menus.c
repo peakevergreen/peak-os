@@ -139,10 +139,11 @@ void desktop_draw_desktop_bg(void) {
     else
         fb_fill_rect(0, 0, w, desk_h, desktop_color_bg());
     if (settings_show_brand()) {
-        uint32_t lx = desktop_u(24), ly = desktop_u(24);
+        uint32_t lx = desktop_u(24), ly = desktop_u(28);
         uint32_t ch = fb_cell_h();
         uint32_t scrim = wallpaper_enabled() ? desktop_color_surface() : desktop_color_bg();
-        fb_fill_rect(lx - desktop_u(8), ly - desktop_u(6), desktop_u(120), ch + desktop_u(12), scrim);
+        uint32_t pad_y = desktop_u(10);
+        fb_fill_rect(lx - desktop_u(8), ly - pad_y, desktop_u(120), ch + pad_y * 2, scrim);
         fb_draw_string(lx, ly, "PeakOS", desktop_color_fg(), scrim);
     }
 }

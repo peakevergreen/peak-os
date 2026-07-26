@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **GA-105–108/112/113/115:** Scale-3 clipping — Settings hint+chips, Monitor Export/footer, brand scrim pad, Browser tab close gap, short export toast
+
 - **GA-104:** Files toolbar hints wrap to two lines so Shift+range is not clipped at scale 3
 
 - **GA-109:** Toasts use top accent + "Opened App" copy (no chrome-like x); clears ghost titlebar look

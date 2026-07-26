@@ -140,7 +140,7 @@ static void monitor_export_btn(uint32_t x, uint32_t y, uint32_t w, uint32_t h, u
     mon_export_x = x; mon_export_y = y; mon_export_w = w; mon_export_h = h;
     fb_fill_rect(x, y, w, h, bg);
     fb_fill_rect(x, y, w, U(2), acc);
-    fb_draw_string_fit(x + U(4), y + U(2), w - U(8), "Export snapshot", fg, bg);
+    fb_draw_string_fit(x + U(4), y + U(2), w - U(8), "Export", fg, bg);
 }
 static void draw_spark(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                        const uint32_t *vals, int n, uint32_t color, uint32_t bg) {
@@ -442,13 +442,13 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     }
 
     uint32_t foot = y + h - ch - pad;
-    uint32_t bw = U(118), bh = ch + U(4);
+    uint32_t bw = U(72), bh = ch + U(4);
     uint32_t bx = text_x + (inner_w > bw ? inner_w - bw : 0);
     uint32_t by = foot > bh + U(6) ? foot - bh - U(6) : foot;
     monitor_export_btn(bx, by, bw, bh, fg, surface, accent);
     fb_draw_string_fit(text_x, foot, inner_w > bw ? inner_w - bw - U(4) : inner_w,
-                       paused ? "PAUSED  P resume  1/2/3  R reset  E export"
-                              : "1/2/3  P pause  R reset  E export  [/]",
+                       paused ? "PAUSED  P resume  1-3  R reset  E export"
+                              : "1-3  P pause  R reset  E export",
                        dim, bg);
     if (mon_last_export[0])
         fb_draw_string_fit(text_x, foot + ch + U(2), inner_w, mon_last_export, dim, bg);
