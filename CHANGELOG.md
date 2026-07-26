@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 101:** `grep -c`/`-l`/`-o` + `-A`/`-B` context lite (≤32 lines)
+
 - **Pass 100:** `expr` + shell `&&`/`||` lists and `2>`/`2>>` lite redirects
 
 - **Pass 99:** CLI.md sync — document `mktemp`/`install`/`sha1sum`/`basenc`/`reboot`/`disksave`

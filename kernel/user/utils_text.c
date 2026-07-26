@@ -271,8 +271,15 @@ struct grep_opts {
     int show_n;
     int invert;
     int show_path;
+    int count_only;
+    int list_only;
+    int only_match;
+    int ctx_after;
+    int ctx_before;
     int matches;
 };
+
+#define GREP_MAX_LINES 256
 
 static void grep_emit_line(const struct grep_opts *o, const char *path, int lineno,
                            const char *line, size_t llen) {
@@ -287,26 +294,111 @@ static void grep_emit_line(const struct grep_opts *o, const char *path, int line
     console_putc('\n');
 }
 
+static void grep_emit_match_only(struct grep_opts *o, const char *path, int lineno,
+                                 const char *line, size_t llen) {
+    if (o->plen == 0)
+        return;
+    for (size_t j = 0; j + o->plen <= llen; j++) {
+        size_t k = 0;
+        for (; k < o->plen; k++) {
+            char a = line[j + k], b = o->pat[k];
+            if (o->icase) {
+                a = grep_fold(a);
+                b = grep_fold(b);
+            }
+            if (a != b)
+                break;
+        }
+        if (k == o->plen) {
+            if (o->show_path && path && path[0]) {
+                console_write(path);
+                console_putc(':');
+            }
+            if (o->show_n)
+                console_printf("%d:", lineno);
+            for (size_t m = 0; m < o->plen; m++)
+                console_putc(line[j + m]);
+            console_putc('\n');
+            o->matches++;
+        }
+    }
+}
+
 static int grep_file(struct grep_opts *o, const char *abs) {
     char data[READ_MAX];
     size_t len = 0;
     if (read_abs(abs, data, sizeof(data), &len) != 0)
         return -1;
+
+    char *lines[GREP_MAX_LINES];
+    int match[GREP_MAX_LINES];
+    int nlines = 0;
+    int prev_matches = o->matches;
     size_t start = 0;
-    int lineno = 1;
-    for (size_t i = 0; i <= len; i++) {
+    for (size_t i = 0; i <= len && nlines < GREP_MAX_LINES; i++) {
         if (i == len || data[i] == '\n') {
-            size_t l = i - start;
-            int match = grep_line_match(data + start, l, o->pat, o->plen, o->icase);
+            lines[nlines] = data + start;
+            if (i < len)
+                data[i] = '\0';
+            int m = grep_line_match(lines[nlines], i - start, o->pat, o->plen, o->icase);
             if (o->invert)
-                match = !match;
-            if (match) {
-                grep_emit_line(o, abs, lineno, data + start, l);
+                m = !m;
+            match[nlines] = m;
+            if (m && !o->only_match)
                 o->matches++;
-            }
-            lineno++;
+            nlines++;
             start = i + 1;
         }
+    }
+
+    if (o->list_only) {
+        if (o->matches > prev_matches) {
+            console_write(abs);
+            console_putc('\n');
+        }
+        return 0;
+    }
+    if (o->count_only) {
+        int n = o->matches - prev_matches;
+        if (o->show_path && n > 0) {
+            console_write(abs);
+            console_putc(':');
+        }
+        console_printf("%d\n", n);
+        return 0;
+    }
+    if (o->only_match) {
+        o->matches = prev_matches;
+        for (int li = 0; li < nlines; li++) {
+            if (match[li])
+                grep_emit_match_only(o, abs, li + 1, lines[li], strlen(lines[li]));
+        }
+        return 0;
+    }
+
+    int ctx_b = o->ctx_before;
+    int ctx_a = o->ctx_after;
+    if (ctx_b < 0)
+        ctx_b = 0;
+    if (ctx_a < 0)
+        ctx_a = 0;
+    if (ctx_b > 32)
+        ctx_b = 32;
+    if (ctx_a > 32)
+        ctx_a = 32;
+
+    for (int li = 0; li < nlines; li++) {
+        int emit = match[li];
+        if (!emit && (ctx_b || ctx_a)) {
+            for (int j = 0; j < nlines && !emit; j++) {
+                if (!match[j])
+                    continue;
+                if (li >= j - ctx_b && li <= j + ctx_a)
+                    emit = 1;
+            }
+        }
+        if (emit)
+            grep_emit_line(o, abs, li + 1, lines[li], strlen(lines[li]));
     }
     return 0;
 }
@@ -325,14 +417,26 @@ static int grep_walk_cb(const char *path, struct vfs_node *node, void *ud) {
 
 int ugrep_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage("grep", "[-i] [-n] [-v] [-r] <pattern> [path...]");
+        peak_usage("grep", "[-i] [-n] [-v] [-r] [-c] [-l] [-o] [-A N] [-B N] <pattern> [path...]");
         return 0;
     }
     int icase = 0, show_n = 0, invert = 0, recur = 0;
+    int count_only = 0, list_only = 0, only_match = 0;
+    int ctx_after = 0, ctx_before = 0;
     int argi = 1;
     while (argi < argc && argv[argi][0] == '-' && argv[argi][1]) {
         if (!strcmp(argv[argi], "-"))
             break;
+        if (!strcmp(argv[argi], "-A") && argi + 1 < argc) {
+            ctx_after = peak_atoi(argv[++argi]);
+            argi++;
+            continue;
+        }
+        if (!strcmp(argv[argi], "-B") && argi + 1 < argc) {
+            ctx_before = peak_atoi(argv[++argi]);
+            argi++;
+            continue;
+        }
         const char *f = argv[argi] + 1;
         int known = 1;
         for (; *f; f++) {
@@ -344,6 +448,12 @@ int ugrep_main(int argc, char **argv) {
                 invert = 1;
             else if (*f == 'r' || *f == 'R')
                 recur = 1;
+            else if (*f == 'c')
+                count_only = 1;
+            else if (*f == 'l')
+                list_only = 1;
+            else if (*f == 'o')
+                only_match = 1;
             else {
                 known = 0;
                 break;
@@ -354,7 +464,7 @@ int ugrep_main(int argc, char **argv) {
         argi++;
     }
     if (argi >= argc) {
-        peak_usage("grep", "[-i] [-n] [-v] [-r] <pattern> [path...]");
+        peak_usage("grep", "[-i] [-n] [-v] [-r] [-c] [-l] [-o] [-A N] [-B N] <pattern> [path...]");
         return 1;
     }
     const char *pat = argv[argi++];
@@ -365,6 +475,11 @@ int ugrep_main(int argc, char **argv) {
         .show_n = show_n,
         .invert = invert,
         .show_path = 0,
+        .count_only = count_only,
+        .list_only = list_only,
+        .only_match = only_match,
+        .ctx_after = ctx_after,
+        .ctx_before = ctx_before,
         .matches = 0,
     };
     int npaths = argc - argi;

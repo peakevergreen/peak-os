@@ -482,6 +482,11 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 101 grep flags"
+grep -q 'count_only' kernel/user/utils_text.c
+grep -q 'ctx_before' kernel/user/utils_text.c
+grep -q '\`-o\`' docs/CLI.md || grep -q '-o' docs/CLI.md
+
 echo "==> Wave 5 Pass 100 shell scripting"
 grep -q uexpr_main kernel/user/utils_text4.c
 grep -q 'UBIN_CMD("expr"' kernel/user/ubin_cmds.def
