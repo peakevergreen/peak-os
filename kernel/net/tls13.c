@@ -10,6 +10,11 @@
 #include "timer.h"
 #include "util.h"
 
+static uint8_t tls13_pending_res_master[48];
+static size_t tls13_pending_res_len;
+static int tls13_pending_res_sha384;
+static int tls13_pending_res_valid;
+
 static void transcript_hash(uint8_t *out) {
     if (tls13_sha384) {
         struct sha384_ctx tmp = transcript384;
@@ -336,7 +341,21 @@ static int send_client_finished(void) {
     memcpy(msg + 4, verify, tls13_hash_len);
     size_t mlen = 4 + tls13_hash_len;
     transcript_add(msg, mlen);
+    tls13_note_resumption_master();
     return tls_send_record(TLS_CONTENT_HS, msg, mlen, 1);
+}
+
+void tls13_note_resumption_master(void) {
+    uint8_t th[48];
+    transcript_hash(th);
+    if (tls13_derive_secret(tls13_sha384, tls13_master_secret, tls13_hash_len, "res master", th,
+                            tls13_hash_len, tls13_pending_res_master, tls13_hash_len) == 0) {
+        tls13_pending_res_len = tls13_hash_len;
+        tls13_pending_res_sha384 = tls13_sha384;
+        tls13_pending_res_valid = 1;
+    } else {
+        tls13_pending_res_valid = 0;
+    }
 }
 
 int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout_ticks) {
@@ -526,7 +545,16 @@ int tls13_handshake_after_sh(uint16_t cs, const char *sni_host, uint32_t timeout
             if (ticket_off + tlen > 4 + hslen || tlen == 0 ||
                 tlen > TLS_SESSION_TICKET_MAX)
                 continue;
-            struct tls_session_meta meta = {.cipher = cs, .tls13 = 1};
+            struct tls_session_meta meta = {.cipher = cs, .tls13 = 1,
+                                            .sha384 = (uint8_t)(tls13_sha384 ? 1 : 0)};
+            if (tls13_pending_res_valid) {
+                meta.res_master_len = (uint8_t)tls13_pending_res_len;
+                memcpy(meta.res_master, tls13_pending_res_master, meta.res_master_len);
+            }
+            if (nonce_len > 0 && nonce_len <= TLS_SESSION_NONCE_MAX) {
+                meta.ticket_nonce_len = nonce_len;
+                memcpy(meta.ticket_nonce, hs_reasm + 13, nonce_len);
+            }
             tls_session_put(sni_host, hs_reasm + ticket_off, tlen, &meta);
             nst_count++;
         }

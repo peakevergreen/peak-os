@@ -6,6 +6,9 @@
 #include "tls_ech.h"
 #include "timer.h"
 #include "util.h"
+#include "random.h"
+#include "util.h"
+#include "random.h"
 
 static void wr16(uint8_t *p, uint16_t v) {
     p[0] = (uint8_t)(v >> 8);
@@ -255,14 +258,43 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
         wr32(out + o, 0);
         o += 4;
 
-        wr16(out + o, 33);
-        o += 2;
-        out[o++] = 32;
-        memset(out + o, 0, 32);
-        o += 32;
+        size_t binders_len_at = o;
+        o += 2; /* binders length placeholder */
+        size_t binder_entry_at = o;
+        size_t hash_len_pre = resume_meta.sha384 ? 48u : 32u;
+        out[o++] = (uint8_t)hash_len_pre;
+        memset(out + o, 0, hash_len_pre);
+        o += hash_len_pre;
 
         wr16(out + psk_ext_len_at, (uint16_t)(o - psk_ext_len_at - 2));
+
+        wr16(out + ext_len_at, (uint16_t)(o - ext_start));
+        wr24(out + 1, (uint32_t)(o - 4));
+        if (o > cap)
+            return -2;
+
+        uint8_t binder[48];
+        size_t hash_len = resume_meta.sha384 ? 48u : 32u;
+        int sha384 = resume_meta.sha384 ? 1 : 0;
+        int br = -1;
+        if (resume_meta.res_master_len)
+            br = tls13_compute_psk_binder(sha384, resume_meta.res_master, resume_meta.res_master_len,
+                                          resume_meta.ticket_nonce_len ? resume_meta.ticket_nonce
+                                                                         : NULL,
+                                          resume_meta.ticket_nonce_len, out, o, binders_len_at,
+                                          binder, hash_len);
+        else
+            br = tls13_compute_psk_binder_from_ticket(sha384, resume_ticket, resume_tlen, out, o,
+                                                      binders_len_at, binder, hash_len);
+        if (br != 0)
+            return -2;
+        memcpy(out + binder_entry_at + 1, binder, hash_len);
+        memzero_explicit(binder, sizeof(binder));
+        wr16(out + binders_len_at, (uint16_t)(1 + hash_len));
+        *out_len = o;
+        return 0;
     }
+
 
     wr16(out + ext_len_at, (uint16_t)(o - ext_start));
     wr24(out + 1, (uint32_t)(o - 4));

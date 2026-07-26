@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 73:** TLS 1.3 PSK HKDF/HMAC binder; session cache resumption master + ticket nonce; `tlsinfo -s` resume fields
+
 Baseline comparison: git tag `v0.1.0-mvp`.
 
 ### Boot and purity

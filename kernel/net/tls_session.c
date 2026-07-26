@@ -16,6 +16,11 @@ struct tls_session_entry {
     uint32_t stamp;
     uint16_t cipher;
     uint8_t tls13;
+    uint8_t sha384;
+    uint8_t res_master_len;
+    uint8_t res_master[48];
+    uint8_t ticket_nonce_len;
+    uint8_t ticket_nonce[TLS_SESSION_NONCE_MAX];
     uint8_t used;
 };
 
@@ -102,6 +107,17 @@ int tls_session_put(const char *sni, const uint8_t *ticket, size_t ticket_len,
     slots[slot].stamp = ++stamp_seq;
     slots[slot].cipher = meta ? meta->cipher : 0;
     slots[slot].tls13 = meta ? meta->tls13 : 0;
+    slots[slot].sha384 = meta ? meta->sha384 : 0;
+    slots[slot].res_master_len = meta ? meta->res_master_len : 0;
+    if (meta && meta->res_master_len)
+        memcpy(slots[slot].res_master, meta->res_master, meta->res_master_len);
+    else
+        memzero_explicit(slots[slot].res_master, sizeof(slots[slot].res_master));
+    slots[slot].ticket_nonce_len = meta ? meta->ticket_nonce_len : 0;
+    if (meta && meta->ticket_nonce_len)
+        memcpy(slots[slot].ticket_nonce, meta->ticket_nonce, meta->ticket_nonce_len);
+    else
+        memzero_explicit(slots[slot].ticket_nonce, sizeof(slots[slot].ticket_nonce));
     slots[slot].used = 1;
     return 0;
 }
@@ -122,6 +138,17 @@ int tls_session_get(const char *sni, uint8_t *ticket_out, size_t *ticket_len_ino
         if (meta_out) {
             meta_out->cipher = slots[i].cipher;
             meta_out->tls13 = slots[i].tls13;
+            meta_out->sha384 = slots[i].sha384;
+            meta_out->res_master_len = slots[i].res_master_len;
+            if (slots[i].res_master_len)
+                memcpy(meta_out->res_master, slots[i].res_master, slots[i].res_master_len);
+            else
+                memzero_explicit(meta_out->res_master, sizeof(meta_out->res_master));
+            meta_out->ticket_nonce_len = slots[i].ticket_nonce_len;
+            if (slots[i].ticket_nonce_len)
+                memcpy(meta_out->ticket_nonce, slots[i].ticket_nonce, slots[i].ticket_nonce_len);
+            else
+                memzero_explicit(meta_out->ticket_nonce, sizeof(meta_out->ticket_nonce));
         }
         slots[i].stamp = ++stamp_seq; /* LRU touch */
         return 1;
@@ -158,6 +185,17 @@ int tls_session_entry_info(int idx, char *sni_out, size_t sni_cap,
         if (meta_out) {
             meta_out->cipher = slots[i].cipher;
             meta_out->tls13 = slots[i].tls13;
+            meta_out->sha384 = slots[i].sha384;
+            meta_out->res_master_len = slots[i].res_master_len;
+            if (slots[i].res_master_len)
+                memcpy(meta_out->res_master, slots[i].res_master, slots[i].res_master_len);
+            else
+                memzero_explicit(meta_out->res_master, sizeof(meta_out->res_master));
+            meta_out->ticket_nonce_len = slots[i].ticket_nonce_len;
+            if (slots[i].ticket_nonce_len)
+                memcpy(meta_out->ticket_nonce, slots[i].ticket_nonce, slots[i].ticket_nonce_len);
+            else
+                memzero_explicit(meta_out->ticket_nonce, sizeof(meta_out->ticket_nonce));
         }
         if (ticket_len_out)
             *ticket_len_out = slots[i].ticket_len;
