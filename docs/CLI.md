@@ -87,7 +87,8 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `basename` `dirname` `realpath` | path helpers |
 | `hexdump` `strings` | binary helpers |
 | `sha256sum` `md5sum` `base64` | digests and base64 encode/decode (`-d`; 64 KiB cap) |
-| `less` `more` | simple pager (space next page, q quit) |
+| `less` | pager with page-up (`b`), go top/bottom (`g`/`G`), forward search (`/pat`) |
+| `more` | simple pager (space next page, q quit) |
 | `echo` `printf` `tee` `yes` `clear` `edit` | misc (`printf` `%s %d %u %x`; `tee` stdin→stdout+files `-a`; `test`/`[` predicates; `yes` bounded) |
 
 ## System / meta

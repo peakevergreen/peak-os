@@ -130,6 +130,10 @@ echo "==> Pass 37 input/console"
 grep -q 'keyboard_set_repeat' kernel/keyboard.c
 grep -q 'console_scroll_find_next' kernel/console_scroll.c
 
+echo "==> Pass 45 pager depth"
+grep -q 'pager_find_next' kernel/user/utils_pager.c
+grep -q 'less_main' kernel/user/utils_pager.c
+
 echo "==> theme names"
 grep -q evergreen kernel/theme.c
 grep -q midnight kernel/theme.c
