@@ -70,7 +70,9 @@ Quarantined (logged, never pulls):
   not an image pull. Build logs emit `QUARANTINE FROM …` and a final warning when
   a Dockerfile used FROM.
 
-Ignored (logged): `WORKDIR`, `CMD`, `EXPOSE`, `ENV`, `RUN`, `ENTRYPOINT`.
+Parsed: `FROM` (quarantine log), `COPY` (file or directory tree), `EXPOSE`, `ENV`, `WORKDIR` (stored in image meta).
+
+Ignored (logged): `CMD`, `RUN`, `ENTRYPOINT`.
 
 ## Limits
 

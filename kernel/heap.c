@@ -89,6 +89,18 @@ static void *alloc_pages_block(size_t size) {
     return (void *)(b + 1);
 }
 
+static struct heap_block *heap_freelist_steal(int cls) {
+    for (int c = cls + 1; c < HEAP_NCLASSES; c++) {
+        struct heap_block *b = free_lists[c];
+        if (!b)
+            continue;
+        free_lists[c] = b->free_next;
+        b->free_next = NULL;
+        return b;
+    }
+    return NULL;
+}
+
 void *kmalloc(size_t size) {
     if (size == 0)
         return NULL;
@@ -118,6 +130,24 @@ void *kmalloc(size_t size) {
             }
             b->free = 0;
             void *ret = (void *)(b + 1);
+            spin_unlock(&heap_lock);
+            return ret;
+        }
+        struct heap_block *stolen = heap_freelist_steal(cls);
+        if (stolen) {
+            if (stolen->size >= size + sizeof(struct heap_block) + 64) {
+                uint8_t *split_at = (uint8_t *)(stolen + 1) + size;
+                struct heap_block *n = (struct heap_block *)split_at;
+                n->size = stolen->size - size - sizeof(struct heap_block);
+                n->free = 1;
+                n->free_next = NULL;
+                n->next = stolen->next;
+                stolen->next = n;
+                stolen->size = size;
+                freelist_push(n);
+            }
+            stolen->free = 0;
+            void *ret = (void *)(stolen + 1);
             spin_unlock(&heap_lock);
             return ret;
         }

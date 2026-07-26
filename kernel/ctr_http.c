@@ -35,6 +35,55 @@ static int resolve_rootfs_file(const char *rootfs, const char *path,
     return -1;
 }
 
+static int parse_content_range(const char *req, size_t total, size_t *start, size_t *end) {
+    if (!req || !start || !end)
+        return -1;
+    const char *p = req;
+    while (*p) {
+        if ((p[0] == 'R' || p[0] == 'r') &&
+            (p[1] == 'a' || p[1] == 'A') &&
+            (p[2] == 'n' || p[2] == 'N') &&
+            (p[3] == 'g' || p[3] == 'G') &&
+            (p[4] == 'e' || p[4] == 'E') && p[5] == ':') {
+            p += 6;
+            while (*p == ' ')
+                p++;
+            if (strncmp(p, "bytes=", 6))
+                return -1;
+            p += 6;
+            *start = 0;
+            *end = total ? total - 1 : 0;
+            size_t a = 0;
+            while (*p >= '0' && *p <= '9')
+                a = a * 10 + (size_t)(*p++ - '0');
+            *start = a;
+            if (*p == '-') {
+                p++;
+                if (*p >= '0' && *p <= '9') {
+                    size_t b = 0;
+                    while (*p >= '0' && *p <= '9')
+                        b = b * 10 + (size_t)(*p++ - '0');
+                    *end = b;
+                } else if (*p == '\0' || *p == '\r' || *p == '\n') {
+                    *end = total ? total - 1 : 0;
+                }
+            }
+            if (*start >= total)
+                return -1;
+            if (*end >= total)
+                *end = total - 1;
+            if (*end < *start)
+                return -1;
+            return 0;
+        }
+        while (*p && *p != '\n')
+            p++;
+        if (*p == '\n')
+            p++;
+    }
+    return -1;
+}
+
 static void serve_http_conn(struct ctr_container *c, int fd) {
     char req[CTR_HTTP_REQ_MAX];
     size_t total = 0;
@@ -110,11 +159,36 @@ static void serve_http_conn(struct ctr_container *c, int fd) {
             mime = "text/html; charset=utf-8";
         else
             mime = http_mime_for_path(path);
-        if (c->env_note[0])
+        size_t rs = 0, re = blen ? blen - 1 : 0;
+        int partial = parse_content_range(req, blen, &rs, &re) == 0;
+        size_t send_off = partial ? rs : 0;
+        size_t send_len = partial ? (re - rs + 1) : blen;
+        if (partial) {
+            if (c->env_note[0])
+                snprintf(hdr, sizeof(hdr),
+                         "HTTP/1.0 206 Partial Content\r\n"
+                         "Content-Type: %s\r\n"
+                         "Content-Length: %u\r\n"
+                         "Content-Range: bytes %zu-%zu/%u\r\n"
+                         "Accept-Ranges: bytes\r\n"
+                         "X-Peak-Env: %s\r\n"
+                         "Connection: close\r\n\r\n",
+                         mime, (unsigned)send_len, rs, re, (unsigned)blen, c->env_note);
+            else
+                snprintf(hdr, sizeof(hdr),
+                         "HTTP/1.0 206 Partial Content\r\n"
+                         "Content-Type: %s\r\n"
+                         "Content-Length: %u\r\n"
+                         "Content-Range: bytes %zu-%zu/%u\r\n"
+                         "Accept-Ranges: bytes\r\n"
+                         "Connection: close\r\n\r\n",
+                         mime, (unsigned)send_len, rs, re, (unsigned)blen);
+        } else if (c->env_note[0])
             snprintf(hdr, sizeof(hdr),
                      "HTTP/1.0 200 OK\r\n"
                      "Content-Type: %s\r\n"
                      "Content-Length: %u\r\n"
+                     "Accept-Ranges: bytes\r\n"
                      "X-Peak-Env: %s\r\n"
                      "Connection: close\r\n\r\n",
                      mime, (unsigned)blen, c->env_note);
@@ -123,13 +197,15 @@ static void serve_http_conn(struct ctr_container *c, int fd) {
                      "HTTP/1.0 200 OK\r\n"
                      "Content-Type: %s\r\n"
                      "Content-Length: %u\r\n"
+                     "Accept-Ranges: bytes\r\n"
                      "Connection: close\r\n\r\n",
                      mime, (unsigned)blen);
         net_tcp_fd_send(fd, hdr, strlen(hdr));
-        if (strcmp(method, "HEAD") != 0 && blen)
-            net_tcp_fd_send(fd, body, blen);
+        if (strcmp(method, "HEAD") != 0 && send_len)
+            net_tcp_fd_send(fd, body + send_off, send_len);
         char msg[160];
-        snprintf(msg, sizeof(msg), "GET %s -> 200 (%u bytes)", path, (unsigned)blen);
+        snprintf(msg, sizeof(msg), "GET %s -> %s (%u bytes)", path,
+                 partial ? "206" : "200", (unsigned)send_len);
         ctr_log_append(c->log, sizeof(c->log), msg);
     }
     net_tcp_fd_close(fd);

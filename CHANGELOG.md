@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 117:** ctr WORKDIR + dir COPY; HTTP Range; heap freelist steal + ps starvation counters
+
 - **Pass 116:** Agent `mem.store` + `peakvec.query`; expanded `fs.exec` allowlist (approvals unchanged)
 
 - **Pass 115:** Notepad find n/m + replace-all; Monitor timestamped export footer

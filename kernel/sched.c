@@ -35,6 +35,8 @@ static struct spinlock sched_lock;
 static int zombie_stacks_freed;
 static uint32_t ready_mask;
 /* Earliest TASK_BLOCKED wake_tick, or 0 if no timed sleepers (UP cooperative). */
+static uint32_t sched_starvation_events;
+static uint32_t sched_starvation_slot[MAX_TASKS];
 static uint64_t next_sleeper_wake;
 
 static int task_slot(const struct task *t) {
@@ -221,8 +223,12 @@ static struct task *pick_next(void) {
         uint32_t mask2 = ready_mask;
         if (mask2) {
             int i = __builtin_ctz(mask2);
-            if (i > 0 && tasks[i].pid > 0 && tasks[i].state == TASK_READY)
+            if (i > 0 && tasks[i].pid > 0 && tasks[i].state == TASK_READY &&
+                i != task_slot(current)) {
+                sched_starvation_events++;
+                sched_starvation_slot[task_slot(current)]++;
                 return &tasks[i];
+            }
         }
     }
     int start = 0;
@@ -432,3 +438,23 @@ void sched_start_background(void) {
 }
 
 void sched_note_gui_load(unsigned weight) { sched_gui_fair_bias = weight; }
+
+uint32_t sched_starvation_count(void) {
+    return sched_starvation_events;
+}
+
+uint32_t sched_task_starvation(int slot) {
+    if (slot < 0 || slot >= MAX_TASKS)
+        return 0;
+    return sched_starvation_slot[slot];
+}
+
+int sched_slot_for_pid(int pid) {
+    for (int i = 0; i < MAX_TASKS; i++) {
+        if (tasks[i].state == TASK_UNUSED || tasks[i].state == TASK_ZOMBIE)
+            continue;
+        if (tasks[i].pid == pid)
+            return i;
+    }
+    return -1;
+}
