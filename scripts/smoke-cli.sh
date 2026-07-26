@@ -382,6 +382,14 @@ echo "==> Wave 3 Pass 67 start menu pointer"
 grep -q 'desktop_menus_start_hover' kernel/gui/desktop_menus.c
 grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
+
+echo "==> Wave 3 Pass 78 lock-in"
+grep -q 'Wave 3 Pass 59' scripts/smoke-cli.sh
+grep -q 'Wave 3 Pass 73' scripts/smoke-cli.sh
+grep -q 'Wave 3 Pass 77' scripts/smoke-cli.sh
+grep -q 'Enhancement wave 3' docs/ROADMAP.md
+grep -q 'Wave 3 / Pass 78' scripts/security-checklist.md
+
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c kernel/net/tls_handshake.c

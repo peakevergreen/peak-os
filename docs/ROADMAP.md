@@ -10,6 +10,13 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 **Pass 38 (S9-lite):** `smoke-cli.sh` gates for Pass 19–37 markers, host-test coverage, ROADMAP/CHANGELOG sync, security-checklist automation notes — release acceptance without a separate signing ceremony.
 
+
+## Enhancement wave 3 (Passes 59–78) — shipped
+
+**Shipped on `main` (Passes 59–78):** CLI grep/find/sort depth, pipe buffer, net POST/AAAA, desktop UX (start menu through Files/Notepad a11y), TLS 1.3 PSK binder, streaming PeakFS export, browser downloads/bookmarks, agent `fs.tree`/`sys.ps`, container ENV/EXPOSE depth, and Wave 3 smoke-cli lock-in (Pass 78).
+
+**Pass 78 (Wave 3 lock-in):** `smoke-cli.sh` gates for Passes 59–77 markers, ROADMAP/CHANGELOG sync, security-checklist automation notes — Wave 3 release acceptance.
+
 ## Enhancement wave 2 (Passes 39–58)
 
 **Shipped on `main` (Passes 39–58):** `awk`/`sed`/`jq`/`zip` CLI depth; VFS `chmod`, symlinks, human-readable sizes; `uname` flags; `less` pager search; Images and Agent GUI UX; files clipboard path ops; browser tab chrome; HTTP/2 client, WebAPI stubs, TLS session resume, PeakVec query, and expanded agent tools catalog — plus S9 remainder smoke-cli lock-in.

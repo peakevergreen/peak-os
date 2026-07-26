@@ -87,3 +87,6 @@ Build staging rules:
   escape).
 
 See [docs/from-scratch.md](from-scratch.md) and [docs/network.md](network.md).
+
+
+**Pass 77:** `ENV KEY=VAL` lines are recorded in image meta; `ctr run` without an explicit port uses the Dockerfile `EXPOSE` value. Static HTTP may include `X-Peak-Env` (not OCI).
