@@ -147,7 +147,7 @@ CLI scrollback search: **Ctrl+F**, type a needle, **Enter** for next match (128 
 | Command | Notes |
 |---------|-------|
 | `ifconfig` `ping [-c N]` `wget` `curl` `dnsflush` | IPv4 + HTTP (`dnsflush` clears DNS cache; CNAME follow up to 4 hops) — [network.md](network.md) |
-| `tlsinfo` | TLS trust summary, session cache, `-s` cache list, `-r` root digests, `-m` hostname test |
+| `tlsinfo` | TLS trust summary, HSTS host count, resume depth, `-s` cache list (ticket/PSK unavailable strings), `-r` root digests, `-m` hostname test |
 | `nslookup` `host` | DNS A (`-6` AAAA diagnostic, `-x` PTR reverse); IPv4 routing only |
 | `traceroute` | Staged reachability: local → gateway → DNS → dest (TCP :80) |
 | `nc` | TCP connect (`host port` or `host:port`; optional send + recv) |

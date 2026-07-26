@@ -171,6 +171,15 @@ int hsts_should_upgrade(const char *host) {
     return 0;
 }
 
+int hsts_host_count(void) {
+    load();
+    int n = 0;
+    for (const char *s = store; *s; s++)
+        if (*s == '\n')
+            n++;
+    return n;
+}
+
 #ifdef PEAK_HOST_TEST
 void hsts_host_put(const char *host, uint32_t expiry_ticks) {
     load();

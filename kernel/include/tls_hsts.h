@@ -14,6 +14,8 @@ int hsts_should_upgrade(const char *host);
 
 void hsts_clear(void);
 
+int hsts_host_count(void);
+
 #ifdef PEAK_HOST_TEST
 void hsts_host_put(const char *host, uint32_t expiry_ticks);
 int hsts_host_test_count(void);
