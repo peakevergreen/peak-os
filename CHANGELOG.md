@@ -29,6 +29,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Images app (Pass 10):** PPM/BMP decode, fit/1:1/zoom-pan viewer, host test_img_decode
 - **Pass 51:** Browser tab strip labels (title/URL fit), per-tab close **x**, last-closed restore lite (**Shift+T** / context menu)
 - **Pass 48:** Images directory next/prev ([/] wheel), keyboard zoom/pan (0/1 fit/actual, Shift+arrows), status strip, drag-pan, Files open-with goto
+- **Pass 50:** Files copy/cut/paste path ops (Ctrl+C/X/V), status strip, empty-folder paste hints
 - **Disks app (Pass 11):** PeakDisk status, VFS/PMM stats, confirmed disksave, context menu
 - **Net Explorer (Pass 12):** link/IP/DNS pane, ping & nslookup, context menu
 - **Net Control (Pass 13):** net-allow, kill switch, persist, DHCP renew, RNG; Settings deep-link

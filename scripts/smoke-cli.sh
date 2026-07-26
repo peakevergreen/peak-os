@@ -105,6 +105,12 @@ grep -q 'desktop_files_goto' kernel/gui/desktop_files.c
 grep -q 'img_refresh_index' kernel/gui/desktop_images.c
 grep -q 'desktop_images_drag' kernel/gui/desktop_images.c
 
+echo "==> Pass 50 files clipboard"
+grep -q 'files_paste_into_cwd' kernel/gui/desktop_files.c
+grep -q 'files_clip_cut' kernel/gui/desktop_files.c
+grep -q 'files_draw_status' kernel/gui/desktop_files.c
+grep -q 'CTX_ACT_FILES_PASTE' kernel/gui/desktop_internal.h
+
 echo "==> Pass 30 browser JS UX"
 grep -q 'browser_bookmarks_init' kernel/gui/browser_bookmarks.c
 
