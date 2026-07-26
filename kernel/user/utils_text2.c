@@ -282,3 +282,119 @@ int utr_main(int argc, char **argv) {
         console_putc('\n');
     return 0;
 }
+
+static const char *line_field(const char *line, int field, char *buf, size_t cap) {
+    if (!line || field < 1 || !buf || cap < 2)
+        return "";
+    const char *p = line;
+    int f = 1;
+    while (*p && f < field) {
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (!*p)
+            break;
+        while (*p && *p != ' ' && *p != '\t')
+            p++;
+        f++;
+    }
+    while (*p == ' ' || *p == '\t')
+        p++;
+    size_t i = 0;
+    while (*p && *p != ' ' && *p != '\t' && i + 1 < cap)
+        buf[i++] = *p++;
+    buf[i] = '\0';
+    return buf;
+}
+
+int ujoin_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 3) {
+        peak_usage("join", "[-1] <file1> <file2>");
+        return argc < 3 ? 1 : 0;
+    }
+    int field = 1;
+    const char *f1 = NULL, *f2 = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-1")) {
+            field = 1;
+            continue;
+        }
+        if (argv[i][0] == '-')
+            continue;
+        if (!f1)
+            f1 = argv[i];
+        else
+            f2 = argv[i];
+    }
+    if (!f1 || !f2) {
+        peak_usage("join", "[-1] <file1> <file2>");
+        return 1;
+    }
+    char a[READ_MAX], b[READ_MAX];
+    size_t al = 0, bl = 0;
+    if (read_file(f1, a, sizeof(a), &al) != 0 || read_file(f2, b, sizeof(b), &bl) != 0) {
+        peak_perror("join", "cannot read");
+        return 1;
+    }
+    char *la[MAX_LINES], *lb[MAX_LINES];
+    int na = split_lines(a, al, la, MAX_LINES);
+    int nb = split_lines(b, bl, lb, MAX_LINES);
+    for (int i = 0; i < na; i++) {
+        char key[LINE_MAX];
+        line_field(la[i], field, key, sizeof(key));
+        if (!key[0])
+            continue;
+        for (int j = 0; j < nb; j++) {
+            char keyb[LINE_MAX];
+            line_field(lb[j], field, keyb, sizeof(keyb));
+            if (!strcmp(key, keyb)) {
+                console_write(la[i]);
+                console_putc(' ');
+                console_write(lb[j]);
+                console_putc('\n');
+                break;
+            }
+        }
+    }
+    return 0;
+}
+
+int ucomm_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 3) {
+        peak_usage("comm", "<file1> <file2>");
+        return argc < 3 ? 1 : 0;
+    }
+    char a[READ_MAX], b[READ_MAX];
+    size_t al = 0, bl = 0;
+    if (read_file(argv[1], a, sizeof(a), &al) != 0 || read_file(argv[2], b, sizeof(b), &bl) != 0) {
+        peak_perror("comm", "cannot read");
+        return 1;
+    }
+    char *la[MAX_LINES], *lb[MAX_LINES];
+    int na = split_lines(a, al, la, MAX_LINES);
+    int nb = split_lines(b, bl, lb, MAX_LINES);
+    int i = 0, j = 0;
+    while (i < na || j < nb) {
+        int cmp = 0;
+        if (i < na && j < nb)
+            cmp = strcmp(la[i], lb[j]);
+        else if (i < na)
+            cmp = -1;
+        else
+            cmp = 1;
+        if (cmp < 0) {
+            console_write(la[i++]);
+            console_putc('\n');
+        } else if (cmp > 0) {
+            console_write("\t");
+            console_write(lb[j++]);
+            console_putc('\n');
+        } else {
+            console_write("\t\t");
+            console_write(la[i++]);
+            console_putc('\n');
+            j++;
+        }
+    }
+    return 0;
+}
+

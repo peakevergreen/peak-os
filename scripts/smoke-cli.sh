@@ -383,6 +383,13 @@ grep -q 'desktop_menus_start_hover' kernel/gui/desktop_menus.c
 grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
+
+echo "==> Wave 4 Pass 79 join/comm"
+grep -q ujoin_main kernel/user/utils_text2.c
+grep -q ucomm_main kernel/user/utils_text2.c
+grep -q 'UBIN_CMD("join"' kernel/user/ubin_cmds.def
+grep -q '`join`' docs/CLI.md
+
 echo "==> Wave 3 Pass 78 lock-in"
 grep -q 'Wave 3 Pass 59' scripts/smoke-cli.sh
 grep -q 'Wave 3 Pass 73' scripts/smoke-cli.sh

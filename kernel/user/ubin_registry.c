@@ -29,6 +29,8 @@ extern int utail_main(int argc, char **argv);
 extern int uwc_main(int argc, char **argv);
 extern int ugrep_main(int argc, char **argv);
 extern int udiff_main(int argc, char **argv);
+extern int ujoin_main(int argc, char **argv);
+extern int ucomm_main(int argc, char **argv);
 extern int usort_main(int argc, char **argv);
 extern int uuniq_main(int argc, char **argv);
 extern int ucut_main(int argc, char **argv);
