@@ -38,10 +38,16 @@ const char *tls_alert_desc_name(uint8_t desc);
 const char *tls_cert_fail_reason(void);
 int tls_trust_pin_count(void);
 int tls_alpn_is_h2(void);
+/* When 0, ClientHello offers http/1.1 only (used for empty-H2 fallback). */
+void tls_alpn_set_offer_h2(int on);
 /* Pin a SHA-256 digest of a trusted root/SPKI (32 bytes). Returns 0 on success. */
 int tls_trust_pin_sha256(const uint8_t pin[32]);
 /* Clear in-memory pins + PeakFS TOFU + HSTS stores. */
 void tls_trust_clear_all(void);
+/* Error-page Accept: remember last failed cert digest for its SNI host. */
+int tls_trust_accept_last(void);
+/* Forget a TOFU host (NULL = last failed host). */
+int tls_trust_forget_host(const char *host);
 
 #endif
 int tls_last_handshake_resumed(void);

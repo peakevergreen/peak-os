@@ -176,16 +176,26 @@ int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *ou
 
     wr16(out + o, 0x0010);
     o += 2;
-    wr16(out + o, 14);
-    o += 2;
-    wr16(out + o, 12);
-    o += 2;
-    out[o++] = 2;
-    memcpy(out + o, "h2", 2);
-    o += 2;
-    out[o++] = 8;
-    memcpy(out + o, "http/1.1", 8);
-    o += 8;
+    if (tls_alpn_offer_h2) {
+        wr16(out + o, 14);
+        o += 2;
+        wr16(out + o, 12);
+        o += 2;
+        out[o++] = 2;
+        memcpy(out + o, "h2", 2);
+        o += 2;
+        out[o++] = 8;
+        memcpy(out + o, "http/1.1", 8);
+        o += 8;
+    } else {
+        wr16(out + o, 11);
+        o += 2;
+        wr16(out + o, 9);
+        o += 2;
+        out[o++] = 8;
+        memcpy(out + o, "http/1.1", 8);
+        o += 8;
+    }
 
     wr16(out + o, 0x0017);
     o += 2;

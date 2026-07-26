@@ -568,6 +568,11 @@ int tls_connect(uint32_t ip, uint16_t port, const char *sni_host, uint32_t timeo
                     goto fail;
                 }
                 cert_verified = tls_verify_cert_chain(hs_reasm + off, 4 + hslen, sni_host);
+                if (!cert_verified) {
+                    tls_set_err_code(TLS_E_CERT, cert_fail_reason ? cert_fail_reason
+                                                                   : "TLS certificate unverified");
+                    goto fail;
+                }
             } else if (hstype == HS_SERVER_KEY_EX) {
                 if (parse_server_key_exchange(hs_reasm + off, 4 + hslen, &peer_curve,
                                               peer_pub, sizeof(peer_pub),

@@ -94,9 +94,10 @@ int snprintf(char *buf, size_t size, const char *fmt, ...) {
             continue;
         }
         p++;
-        /* Flags / width: %0N, %N, %*, then length l / ll. */
+        /* Flags / width / precision: %0N, %N, %*, %.N, %.*, then length l / ll. */
         int pad_zero = 0;
         int width = 0;
+        int precision = -1;
         if (*p == '0') {
             pad_zero = 1;
             p++;
@@ -112,6 +113,21 @@ int snprintf(char *buf, size_t size, const char *fmt, ...) {
                 p++;
             }
         }
+        if (*p == '.') {
+            p++;
+            if (*p == '*') {
+                precision = va_arg(ap, int);
+                if (precision < 0)
+                    precision = 0;
+                p++;
+            } else {
+                precision = 0;
+                while (*p >= '0' && *p <= '9') {
+                    precision = precision * 10 + (*p - '0');
+                    p++;
+                }
+            }
+        }
         int long_count = 0;
         while (*p == 'l') {
             long_count++;
@@ -121,8 +137,11 @@ int snprintf(char *buf, size_t size, const char *fmt, ...) {
             const char *s = va_arg(ap, const char *);
             if (!s)
                 s = "(null)";
-            while (*s && o + 1 < size)
+            int n = 0;
+            while (*s && o + 1 < size && (precision < 0 || n < precision)) {
                 buf[o++] = *s++;
+                n++;
+            }
         } else if (*p == 'd' || *p == 'u') {
             uint64_t v;
             if (long_count >= 2)

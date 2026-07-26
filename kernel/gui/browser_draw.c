@@ -359,9 +359,12 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
                        t->page_muted, t->page_bg);
 
     hit_retry_w = hit_retry_h = 0;
+    hit_accept_w = hit_accept_h = 0;
+    hit_forget_w = hit_forget_h = 0;
     if (t->show_retry) {
         uint32_t btn_w = fb_cell_w() * 8;
         uint32_t btn_h = ch + 6;
+        uint32_t gap = fb_cell_w();
         hit_retry_x = cx;
         hit_retry_y = cy + ch;
         if (hit_retry_y + btn_h > max_y - ch)
@@ -370,6 +373,22 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         hit_retry_h = btn_h;
         fb_fill_rect(hit_retry_x, hit_retry_y, btn_w, btn_h, th->accent);
         fb_draw_string(hit_retry_x + 8, hit_retry_y + 3, "Retry", th->bg, th->accent);
+        if (t->show_tls_accept) {
+            uint32_t aw = fb_cell_w() * 10;
+            uint32_t fw = fb_cell_w() * 10;
+            hit_accept_x = hit_retry_x + btn_w + gap;
+            hit_accept_y = hit_retry_y;
+            hit_accept_w = aw;
+            hit_accept_h = btn_h;
+            fb_fill_rect(hit_accept_x, hit_accept_y, aw, btn_h, th->accent);
+            fb_draw_string(hit_accept_x + 8, hit_accept_y + 3, "Accept", th->bg, th->accent);
+            hit_forget_x = hit_accept_x + aw + gap;
+            hit_forget_y = hit_retry_y;
+            hit_forget_w = fw;
+            hit_forget_h = btn_h;
+            fb_fill_rect(hit_forget_x, hit_forget_y, fw, btn_h, t->page_muted);
+            fb_draw_string(hit_forget_x + 8, hit_forget_y + 3, "Forget", th->bg, t->page_muted);
+        }
     }
 
     if (t->jsh.console_n > 0 && (t->show_console || t->js_ok)) {

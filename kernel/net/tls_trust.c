@@ -74,6 +74,104 @@ static void tofu_remember(const char *host, const char *hexdigest) {
     vfs_write_file(TOFU_PATH, tofu_buf, o);
 }
 
+static void tofu_forget_host(const char *host) {
+    size_t n = 0;
+    if (!host || !host[0])
+        return;
+    if (vfs_read_file(TOFU_PATH, tofu_buf, sizeof(tofu_buf) - 1, &n) != 0 || n == 0)
+        return;
+    tofu_buf[n] = '\0';
+    char out[TOFU_MAX];
+    size_t o = 0;
+    size_t hlen = strlen(host);
+    const char *p = tofu_buf;
+    while (*p) {
+        const char *line = p;
+        while (*p && *p != '\n')
+            p++;
+        size_t llen = (size_t)(p - line);
+        int drop = 0;
+        if (llen > hlen && !strncmp(line, host, hlen) && line[hlen] == ':')
+            drop = 1;
+        if (!drop && o + llen + 1 < sizeof(out)) {
+            memcpy(out + o, line, llen);
+            o += llen;
+            out[o++] = '\n';
+        }
+        if (*p == '\n')
+            p++;
+    }
+    vfs_write_file(TOFU_PATH, out, o);
+}
+
+static uint8_t last_fail_digest[32];
+static char last_fail_host[128];
+static int last_fail_ok;
+
+static void stash_fail_digest(const char *host, const uint8_t digest[32]) {
+    if (!host || !host[0] || !digest)
+        return;
+    memcpy(last_fail_digest, digest, 32);
+    size_t i = 0;
+    for (; host[i] && i + 1 < sizeof(last_fail_host); i++)
+        last_fail_host[i] = host[i];
+    last_fail_host[i] = '\0';
+    last_fail_ok = 1;
+}
+
+int tls_trust_accept_last(void) {
+    if (!last_fail_ok || !last_fail_host[0])
+        return -1;
+    char hexd[65];
+    tls_hex_encode(last_fail_digest, 32, hexd);
+    tofu_forget_host(last_fail_host);
+    tofu_remember(last_fail_host, hexd);
+    serial_log(SERIAL_LOG_INFO, "tls: Accept remembered host in TOFU store\n");
+    return 0;
+}
+
+int tls_trust_forget_host(const char *host) {
+    if (!host || !host[0])
+        host = last_fail_host;
+    if (!host || !host[0])
+        return -1;
+    tofu_forget_host(host);
+    if (!strcmp(host, last_fail_host))
+        last_fail_ok = 0;
+    serial_log(SERIAL_LOG_INFO, "tls: Forgot TOFU host\n");
+    return 0;
+}
+
+static int verify_cert_hostname(const uint8_t *cert_msg, size_t len, const char *sni_host);
+
+static int tofu_try_match(const uint8_t *cert_msg, size_t len, const char *sni_host,
+                          const uint8_t digest[32]) {
+    char hexd[65];
+    tls_hex_encode(digest, 32, hexd);
+    int t = tofu_check(sni_host, hexd);
+    if (t == 1) {
+        int hn = verify_cert_hostname(cert_msg, len, sni_host);
+        if (hn == 0) {
+            cert_fail_reason = tls_hostname_mismatch_ux(sni_host, "leaf cert CN/SAN");
+            return 0;
+        }
+        if (hn == -2) {
+            cert_fail_reason = "Malformed Certificate message";
+            return 0;
+        }
+        hostname_matched = 1;
+        if (hn < 0)
+            hostname_parse_skipped = 1;
+        return 1;
+    }
+    if (t < 0) {
+        cert_fail_reason = "Cert changed for known host; Forget or rm /etc/peak/tls-tofu";
+        stash_fail_digest(sni_host, digest);
+        return 0;
+    }
+    return -1; /* unknown */
+}
+
 static int x509_names_match_sni(const uint8_t *cert, size_t cert_len, const char *sni_host) {
     struct x509_cert xc;
     if (x509_parse_der(cert, cert_len, &xc) == 0) {
@@ -223,35 +321,25 @@ int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_h
     }
 webpki_fail:
 
-    /* 3. Opt-in TOFU continuity. */
+    /* 3. Previously Accept'd hosts (TOFU store) — even when global TOFU is off. */
+    {
+        int tm = tofu_try_match(cert_msg, len, sni_host, digest);
+        if (tm == 1)
+            return 1;
+        if (tm == 0)
+            return 0;
+    }
+
+    /* 4. Opt-in TOFU: remember new hosts when Settings enables trust-on-first-use. */
     if (settings_tls_tofu()) {
         char hexd[65];
         tls_hex_encode(digest, 32, hexd);
-        int t = tofu_check(sni_host, hexd);
-        if (t == 1) {
-            int hn = verify_cert_hostname(cert_msg, len, sni_host);
-            if (hn == 0) {
-                cert_fail_reason = tls_hostname_mismatch_ux(sni_host, "leaf cert CN/SAN");
-                return 0;
-            }
-            if (hn == -2) {
-                cert_fail_reason = "Malformed Certificate message";
-                return 0;
-            }
-            hostname_matched = 1;
-            if (hn < 0)
-                hostname_parse_skipped = 1;
-            return 1;
-        }
-        if (t < 0) {
-            cert_fail_reason = "Cert changed for known host; rm /etc/peak/tls-tofu to re-trust";
-            return 0;
-        }
         tofu_remember(sni_host, hexd);
         serial_log(SERIAL_LOG_INFO, "tls: TOFU remembered (opt-in)\n");
         int hn = verify_cert_hostname(cert_msg, len, sni_host);
         if (hn == 0) {
             cert_fail_reason = tls_hostname_mismatch_ux(sni_host, "leaf cert CN/SAN");
+            stash_fail_digest(sni_host, digest);
             return 0;
         }
         if (hn == -2) {
@@ -264,7 +352,10 @@ webpki_fail:
         return 1;
     }
 
-    cert_fail_reason = "Untrusted certificate (WebPKI path failed)";
+    /* Preserve specific reasons set by webpki_verify_chain (expiry, hostname, …). */
+    if (!cert_fail_reason)
+        cert_fail_reason = "Untrusted certificate (WebPKI path failed)";
+    stash_fail_digest(sni_host, digest);
     serial_log(SERIAL_LOG_WARN, "tls: WebPKI verify failed\n");
     return 0;
 }

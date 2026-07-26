@@ -59,6 +59,7 @@ struct br_tab {
     size_t last_body_len;
     uint64_t fetch_start;
     int show_retry;
+    int show_tls_accept; /* TLS untrusted: Accept / Forget TOFU buttons */
     char prev_url[BR_URL_MAX];
     char forward_url[BR_URL_MAX];
     int show_console;
@@ -74,6 +75,8 @@ extern uint32_t hit_tab_y, hit_tab_h, hit_tab_w;
 extern uint32_t hit_tab_close_x[BR_MAX_TABS], hit_tab_close_w[BR_MAX_TABS];
 extern uint32_t hit_plus_x, hit_go_x, hit_go_w, hit_bar_y, hit_bar_h;
 extern uint32_t hit_retry_x, hit_retry_y, hit_retry_w, hit_retry_h;
+extern uint32_t hit_accept_x, hit_accept_y, hit_accept_w, hit_accept_h;
+extern uint32_t hit_forget_x, hit_forget_y, hit_forget_w, hit_forget_h;
 extern uint32_t hit_back_x, hit_back_w, hit_fwd_x, hit_fwd_w;
 extern uint32_t hit_bm_y, hit_bm_h, hit_bm_x[4], hit_bm_w[4];
 

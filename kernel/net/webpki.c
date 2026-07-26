@@ -30,6 +30,22 @@ static int root_match(const uint8_t *der, size_t len) {
     return 0;
 }
 
+/* Trust anchors often appear cross-signed in the server chain (same SPKI, different DER). */
+static int root_spki_match(const uint8_t *spki, size_t spki_len) {
+    if (!spki || spki_len == 0)
+        return 0;
+    for (int i = 0; i < webpki_root_count; i++) {
+        struct x509_cert root;
+        if (x509_parse_der(webpki_roots[i].der, webpki_roots[i].der_len, &root) != 0)
+            continue;
+        if (!root.spki || root.spki_len != spki_len)
+            continue;
+        if (!memcmp(root.spki, spki, spki_len))
+            return 1;
+    }
+    return 0;
+}
+
 /* sig_alg_hint: 1 = RSA-PKCS1-SHA256, 2 = ECDSA-SHA256, 3 = ECDSA-SHA384 */
 static int cert_tbs_and_sig(const uint8_t *der, size_t der_len, const uint8_t **tbs, size_t *tbs_len,
                             const uint8_t **sig, size_t *sig_len, uint16_t *sig_alg_hint) {
@@ -127,7 +143,14 @@ static int cert_tbs_and_sig(const uint8_t *der, size_t der_len, const uint8_t **
 static int der_ecdsa_sig_to_raw32(const uint8_t *sig, size_t sig_len, uint8_t raw[64]) {
     if (sig_len < 8 || sig[0] != 0x30)
         return -1;
-    size_t off = 2;
+    size_t off = 1;
+    uint8_t lb = sig[off++];
+    if (lb & 0x80) {
+        uint8_t nbytes = lb & 0x7f;
+        if (nbytes == 0 || nbytes > 2 || off + nbytes > sig_len)
+            return -1;
+        off += nbytes;
+    }
     memset(raw, 0, 64);
     for (int part = 0; part < 2; part++) {
         if (off >= sig_len || sig[off++] != 0x02 || off >= sig_len)
@@ -179,6 +202,38 @@ static int der_ecdsa_sig_to_raw48(const uint8_t *sig, size_t sig_len, uint8_t ra
     return 0;
 }
 
+/* Locate uncompressed EC point in SPKI BIT STRING (avoid false positives in key bytes). */
+static int spki_ec_point(const uint8_t *spki, size_t spki_len, const uint8_t **pt, size_t *pt_len) {
+    if (!spki || !pt || !pt_len)
+        return -1;
+    for (size_t i = 0; i + 3 < spki_len; i++) {
+        if (spki[i] != 0x03)
+            continue;
+        size_t j = i + 1;
+        size_t blen;
+        if (j >= spki_len)
+            continue;
+        uint8_t b = spki[j++];
+        if (b < 0x80)
+            blen = b;
+        else if (b == 0x81 && j < spki_len)
+            blen = spki[j++];
+        else if (b == 0x82 && j + 1 < spki_len) {
+            blen = ((size_t)spki[j] << 8) | spki[j + 1];
+            j += 2;
+        } else
+            continue;
+        if (blen < 2 || j + blen > spki_len)
+            continue;
+        if (spki[j] != 0x00 || spki[j + 1] != 0x04)
+            continue;
+        *pt = spki + j + 1;
+        *pt_len = blen - 1;
+        return 0;
+    }
+    return -1;
+}
+
 static int verify_cert_sig(const uint8_t *subject, size_t subject_len, const uint8_t *issuer_spki,
                            size_t issuer_spki_len) {
     const uint8_t *tbs, *sig;
@@ -194,51 +249,39 @@ static int verify_cert_sig(const uint8_t *subject, size_t subject_len, const uin
         rsa_verify_sha256(issuer_spki, issuer_spki_len, digest32, 32, sig, sig_len, 0) == 0)
         return 0;
 
-    /* ECDSA P-384: BIT STRING length 0x61 = unused(1) + uncompressed point(97). */
-    {
+    const uint8_t *pt = NULL;
+    size_t pt_len = 0;
+    if (spki_ec_point(issuer_spki, issuer_spki_len, &pt, &pt_len) != 0)
+        return -1;
+
+    if (pt_len == 97) {
         uint8_t pub96[96], raw96[96];
-        int found384 = 0;
-        for (size_t i = 0; i + 97 <= issuer_spki_len; i++) {
-            if (issuer_spki[i] == 0x04 && i >= 2 && issuer_spki[i - 1] == 0x00 &&
-                issuer_spki[i - 2] == 0x61) {
-                memcpy(pub96, issuer_spki + i + 1, 96);
-                found384 = 1;
-                break;
-            }
-        }
-        if (found384) {
-            if (der_ecdsa_sig_to_raw48(sig, sig_len, raw96) != 0)
-                return -1;
+        memcpy(pub96, pt + 1, 96);
+        if (der_ecdsa_sig_to_raw48(sig, sig_len, raw96) == 0) {
             if (hint == 3) {
                 sha384(tbs, tbs_len, digest48);
-                return p384_ecdsa_verify(raw96, pub96, digest48, 48) == 0 ? 0 : -1;
+                if (p384_ecdsa_verify(raw96, pub96, digest48, 48) == 0)
+                    return 0;
+            } else if (p384_ecdsa_verify(raw96, pub96, digest32, 32) == 0) {
+                return 0;
             }
-            /* ecdsa-with-SHA256 over P-384: left-pad / use 32-byte digest. */
-            return p384_ecdsa_verify(raw96, pub96, digest32, 32) == 0 ? 0 : -1;
         }
+        return -1;
     }
 
-    /* ECDSA P-256: BIT STRING length 0x42 = unused(1) + uncompressed point(65). */
-    uint8_t pub[64], raw[64];
-    int found = 0;
-    for (size_t i = 0; i + 65 <= issuer_spki_len; i++) {
-        if (issuer_spki[i] == 0x04 && i >= 2 && issuer_spki[i - 1] == 0x00 &&
-            issuer_spki[i - 2] == 0x42) {
-            memcpy(pub, issuer_spki + i + 1, 64);
-            found = 1;
-            break;
+    if (pt_len == 65) {
+        uint8_t pub[64], raw[64];
+        memcpy(pub, pt + 1, 64);
+        if (der_ecdsa_sig_to_raw32(sig, sig_len, raw) != 0)
+            return -1;
+        if (hint == 3) {
+            sha384(tbs, tbs_len, digest48);
+            /* P-256 with SHA-384: verify uses leftmost 256 bits of the digest. */
+            return p256_ecdsa_verify(raw, pub, digest48, 48) == 0 ? 0 : -1;
         }
+        return p256_ecdsa_verify(raw, pub, digest32, 32) == 0 ? 0 : -1;
     }
-    if (!found)
-        return -1;
-    if (der_ecdsa_sig_to_raw32(sig, sig_len, raw) != 0)
-        return -1;
-    if (hint == 3) {
-        sha384(tbs, tbs_len, digest48);
-        /* P-256 with SHA-384: verify uses leftmost 256 bits of the digest. */
-        return p256_ecdsa_verify(raw, pub, digest48, 48) == 0 ? 0 : -1;
-    }
-    return p256_ecdsa_verify(raw, pub, digest32, 32) == 0 ? 0 : -1;
+    return -1;
 }
 
 static int time_ok(const struct x509_cert *c) {
@@ -262,26 +305,41 @@ int webpki_verify_chain(const uint8_t *const *certs, const size_t *lens, int n,
         return 0;
     struct x509_cert parsed[8];
     for (int i = 0; i < n; i++) {
-        if (x509_parse_der(certs[i], lens[i], &parsed[i]) != 0)
+        if (x509_parse_der(certs[i], lens[i], &parsed[i]) != 0) {
+            cert_fail_reason = "Malformed certificate in chain";
             return 0;
+        }
         if (!time_ok(&parsed[i])) {
             cert_fail_reason = "Certificate expired or not yet valid";
             return 0;
         }
     }
-    if (x509_cert_hostname_match(&parsed[0], sni_host) != 1)
+    if (x509_cert_hostname_match(&parsed[0], sni_host) != 1) {
+        cert_fail_reason = "Certificate hostname mismatch";
         return 0;
-    /* Verify signatures leaf→…→last */
-    for (int i = 0; i < n - 1; i++) {
-        if (!parsed[i + 1].spki ||
-            verify_cert_sig(certs[i], lens[i], parsed[i + 1].spki, parsed[i + 1].spki_len) != 0)
-            return 0;
-        if (parsed[i + 1].has_basic_constraints && !parsed[i + 1].is_ca)
-            return 0;
     }
-    /* Anchor: last cert is a trust anchor, or signed by one. */
-    if (root_match(certs[n - 1], lens[n - 1]))
+    /* Verify signatures leaf→… toward a trust anchor (may sit mid-chain). */
+    int anchor = -1;
+    for (int i = 0; i < n; i++) {
+        if (root_match(certs[i], lens[i]) || root_spki_match(parsed[i].spki, parsed[i].spki_len)) {
+            anchor = i;
+            break;
+        }
+        if (i + 1 >= n)
+            break;
+        if (!parsed[i + 1].spki ||
+            verify_cert_sig(certs[i], lens[i], parsed[i + 1].spki, parsed[i + 1].spki_len) != 0) {
+            cert_fail_reason = "Certificate chain signature verify failed";
+            return 0;
+        }
+        if (parsed[i + 1].has_basic_constraints && !parsed[i + 1].is_ca) {
+            cert_fail_reason = "Certificate chain signature verify failed";
+            return 0;
+        }
+    }
+    if (anchor >= 0)
         return 1;
+    /* Last cert not an embedded anchor: accept if signed by a trust-root SPKI. */
     for (int r = 0; r < webpki_root_count; r++) {
         struct x509_cert root;
         if (x509_parse_der(webpki_roots[r].der, webpki_roots[r].der_len, &root) != 0)
@@ -291,6 +349,7 @@ int webpki_verify_chain(const uint8_t *const *certs, const size_t *lens, int n,
         if (verify_cert_sig(certs[n - 1], lens[n - 1], root.spki, root.spki_len) == 0)
             return 1;
     }
+    cert_fail_reason = "Untrusted certificate (WebPKI path failed)";
     return 0;
 }
 

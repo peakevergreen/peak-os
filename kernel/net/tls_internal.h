@@ -84,6 +84,7 @@ extern int tls13_sha384;
 
 extern char tls_alpn[16];
 extern int tls_alpn_h2;
+extern int tls_alpn_offer_h2;
 
 /* tls.c */
 void tls_set_err(const char *msg);
@@ -92,6 +93,7 @@ void tls_set_alert_err(const uint8_t *alert, size_t n);
 void tls_scrub_secrets(void);
 void tls_alpn_clear(void);
 int tls_alpn_is_h2(void);
+void tls_alpn_set_offer_h2(int on);
 void tls_alpn_set_from_ext(const uint8_t *data, size_t len);
 
 /* tls_record.c */

@@ -45,6 +45,7 @@ size_t tls13_hash_len;
 int tls13_sha384;
 char tls_alpn[16];
 int tls_alpn_h2;
+int tls_alpn_offer_h2 = 1;
 
 void tls_alpn_clear(void) {
     tls_alpn[0] = '\0';
@@ -53,6 +54,10 @@ void tls_alpn_clear(void) {
 
 int tls_alpn_is_h2(void) {
     return tls_alpn_h2;
+}
+
+void tls_alpn_set_offer_h2(int on) {
+    tls_alpn_offer_h2 = on ? 1 : 0;
 }
 
 void tls_alpn_set_from_ext(const uint8_t *data, size_t len) {

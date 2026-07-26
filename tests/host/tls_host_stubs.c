@@ -24,6 +24,11 @@ int last_err_code;
 uint8_t client_random[32];
 uint8_t tls13_priv[32];
 uint8_t tls13_client_pub[32];
+int tls_alpn_offer_h2 = 1;
+
+void tls_alpn_set_offer_h2(int on) {
+    tls_alpn_offer_h2 = on ? 1 : 0;
+}
 
 void tls_set_err_code(int code, const char *msg) {
     size_t i = 0;

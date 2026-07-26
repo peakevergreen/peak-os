@@ -25,6 +25,8 @@ uint32_t hit_tab_y, hit_tab_h, hit_tab_w;
 uint32_t hit_tab_close_x[BR_MAX_TABS], hit_tab_close_w[BR_MAX_TABS];
 uint32_t hit_plus_x, hit_go_x, hit_go_w, hit_bar_y, hit_bar_h;
 uint32_t hit_retry_x, hit_retry_y, hit_retry_w, hit_retry_h;
+uint32_t hit_accept_x, hit_accept_y, hit_accept_w, hit_accept_h;
+uint32_t hit_forget_x, hit_forget_y, hit_forget_w, hit_forget_h;
 uint32_t hit_back_x, hit_back_w, hit_fwd_x, hit_fwd_w;
 uint32_t hit_bm_y, hit_bm_h, hit_bm_x[4], hit_bm_w[4];
 
@@ -209,6 +211,7 @@ void browser_error_page(struct br_tab *t, enum br_err_kind kind,
     t->tls_verified = 0;
     t->fetching = 0;
     t->show_retry = 1;
+    t->show_tls_accept = 0;
 
     switch (kind) {
     case BR_ERR_NETWORK:
@@ -226,15 +229,18 @@ void browser_error_page(struct br_tab *t, enum br_err_kind kind,
             title = "Certificate expired";
         else if (detail && !strcmp(detail, "fetch: tls-mismatch"))
             title = "Certificate hostname mismatch";
-        else if (detail && !strcmp(detail, "fetch: tls-untrusted"))
+        else if (detail && !strcmp(detail, "fetch: tls-untrusted")) {
             title = "Untrusted certificate";
-        else if (detail && !strcmp(detail, "fetch: tls-rng"))
+            t->show_tls_accept = 1;
+        } else if (detail && !strcmp(detail, "fetch: tls-rng"))
             title = "Secure connection unavailable";
         else if (detail && !strcmp(detail, "fetch: tls-alert"))
             title = "Server rejected the connection";
         else
             title = "Secure connection failed";
-        hint = "Settings → Network: trust-on-first-use or forget saved certificates.";
+        hint = t->show_tls_accept
+                   ? "Accept once to trust this host, or Forget saved trust. Retry reloads."
+                   : "Settings → Network: trust-on-first-use or forget saved certificates.";
         break;
     case BR_ERR_HTTP:
         title = "Page request failed";
@@ -310,6 +316,7 @@ void browser_go(const char *url) {
     snprintf(t->url, sizeof(t->url), "%s", norm);
     t->scroll_y = 0;
     t->show_retry = 0;
+    t->show_tls_accept = 0;
 
     if (!strcmp(t->url, "peak://demo") || !strcmp(t->url, "about:js") ||
         !strcmp(t->url, "peak:demo")) {
