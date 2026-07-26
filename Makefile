@@ -360,7 +360,7 @@ HOST_TEST_NAMES := \
 	phase7 gfx boot lan http_tcp js webapi random tls libpeak ubin_registry \
 	shell_split console_scroll display_present wallpaper_cache \
 	peakdisk peakvec guiproto vmm_usercopy blobstore heap_pmm agent_policy \
-	agent_tools desktop_titles ctr_path dom vfs cli_crypto cli_text5 cli_sys2 cli_awk cli_sed cli_zip img_decode
+	agent_tools desktop_titles ctr_path dom vfs cli_crypto cli_text5 cli_sys2 cli_awk cli_sed cli_jq cli_zip img_decode
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
 
 test: test-host
