@@ -16,6 +16,8 @@
 static char nx_lines[NETEXP_LINES][NETEXP_COLS + 1];
 static int nx_count;
 static char nx_host[64] = "example.com";
+static char nx_conn_filter[20];
+static int nx_filter_mode;
 static uint32_t nx_last_ip;
 
 static void nx_clear(void) {
@@ -39,7 +41,9 @@ static void nx_mark_dirty(void) {
 void desktop_netexp_init(void) {
     nx_clear();
     nx_last_ip = 0;
-    nx_append("Net Explorer — Enter=ping  Tab=nslookup");
+    nx_conn_filter[0] = '\0';
+    nx_filter_mode = 0;
+    nx_append("Net Explorer — Enter=ping Tab=nslookup /=filter");
     struct net_info ni;
     net_get_info(&ni);
     char ip[32], dns[32];
@@ -120,25 +124,74 @@ static void nx_run_nslookup(void) {
 }
 
 
+static int nx_row_matches_filter(const char *host, uint16_t port, const char *state) {
+    if (!nx_conn_filter[0])
+        return 1;
+    char line[NETEXP_COLS + 1];
+    snprintf(line, sizeof(line), "%s:%u %s", host, (unsigned)port, state);
+    for (size_t i = 0; line[i]; i++) {
+        char a = line[i];
+        if (a >= 'A' && a <= 'Z')
+            a = (char)(a - 'A' + 'a');
+        int found = 0;
+        for (size_t j = 0; nx_conn_filter[j]; j++) {
+            char b = nx_conn_filter[j];
+            if (b >= 'A' && b <= 'Z')
+                b = (char)(b - 'A' + 'a');
+            if (a == b) {
+                found = 1;
+                break;
+            }
+        }
+        if (!found)
+            continue;
+        size_t fi = 0;
+        for (; nx_conn_filter[fi]; fi++) {
+            char b = nx_conn_filter[fi];
+            if (b >= 'A' && b <= 'Z')
+                b = (char)(b - 'A' + 'a');
+            if (line[i + fi] == '\0')
+                return 0;
+            char c = line[i + fi];
+            if (c >= 'A' && c <= 'Z')
+                c = (char)(c - 'A' + 'a');
+            if (c != b)
+                break;
+        }
+        if (!nx_conn_filter[fi])
+            return 1;
+    }
+    return 0;
+}
+
 static void netexp_draw_conn_table(uint32_t tx, uint32_t *pty, uint32_t cw) {
     char line[NETEXP_COLS + 1];
-    fb_draw_string_fit(tx, *pty, cw, "Connections (recent TCP)", desktop_color_accent(), desktop_color_bg());
+    if (nx_conn_filter[0])
+        snprintf(line, sizeof(line), "Connections filter: %s", nx_conn_filter);
+    else
+        snprintf(line, sizeof(line), "Connections (recent TCP)  /=filter");
+    fb_draw_string_fit(tx, *pty, cw, line, desktop_color_accent(), desktop_color_bg());
     *pty += fb_cell_h() + desktop_u(2);
     int rows = net_tcp_conn_row_count();
+    int shown = 0;
     if (rows <= 0) {
-        nx_append("  (no active TCP sessions)");
         fb_draw_string_fit(tx, *pty, cw, "  (no active TCP sessions)", desktop_color_dim(), desktop_color_bg());
         *pty += fb_cell_h();
     } else {
-        for (int r = 0; r < rows && r < 3; r++) {
+        for (int r = 0; r < rows && shown < 3; r++) {
             char host[48], state[16];
             uint16_t port = 0;
             if (net_tcp_conn_row(r, host, sizeof(host), &port, state, sizeof(state)) != 0)
                 break;
+            if (!nx_row_matches_filter(host, port, state))
+                continue;
             snprintf(line, sizeof(line), "  %s:%u  %s", host, (unsigned)port, state);
             fb_draw_string_fit(tx, *pty, cw, line, desktop_color_fg(), desktop_color_bg());
             *pty += fb_cell_h();
+            shown++;
         }
+        if (shown == 0)
+            fb_draw_string_fit(tx, *pty, cw, "  (no rows match filter)", desktop_color_dim(), desktop_color_bg());
     }
     int ts = tls_session_used_count();
     int tmax = tls_session_max_slots();
@@ -155,7 +208,10 @@ void desktop_netexp_draw(struct win *w) {
     uint32_t ty = w->y + th + desktop_u(8);
     uint32_t cw = w->w > desktop_u(20) ? w->w - desktop_u(20) : w->w;
     char prompt[80];
-    snprintf(prompt, sizeof(prompt), "host: %s  (Enter=ping Tab=nslookup)", nx_host);
+    if (nx_filter_mode)
+        snprintf(prompt, sizeof(prompt), "filter: %s_", nx_conn_filter);
+    else
+        snprintf(prompt, sizeof(prompt), "host: %s  (Enter=ping Tab=nslookup /=filter)", nx_host);
     fb_draw_string_fit(tx, ty, cw, prompt, desktop_color_accent(), desktop_color_bg());
     ty += ch + desktop_u(4);
     int vis = NETEXP_LINES;
@@ -169,6 +225,35 @@ void desktop_netexp_draw(struct win *w) {
 }
 
 int desktop_netexp_key(int key) {
+    if (key == '/') {
+        nx_filter_mode = !nx_filter_mode;
+        nx_mark_dirty();
+        return 1;
+    }
+    if (nx_filter_mode) {
+        if (key == '\n' || key == 27) {
+            nx_filter_mode = 0;
+            nx_mark_dirty();
+            return 1;
+        }
+        if (key == '\b') {
+            size_t n = strlen(nx_conn_filter);
+            if (n)
+                nx_conn_filter[n - 1] = '\0';
+            nx_mark_dirty();
+            return 1;
+        }
+        if (key >= 32 && key < 127) {
+            size_t n = strlen(nx_conn_filter);
+            if (n + 1 < sizeof(nx_conn_filter)) {
+                nx_conn_filter[n] = (char)key;
+                nx_conn_filter[n + 1] = '\0';
+            }
+            nx_mark_dirty();
+            return 1;
+        }
+        return 0;
+    }
     if (key == '\n') {
         nx_run_ping();
         return 1;

@@ -184,7 +184,11 @@ int desktop_disks_key(int key) {
         return 1;
     }
     if (key == 27) {
-        disks_confirm_save = 0;
+        if (disks_confirm_save) {
+            disks_confirm_save = 0;
+            notify_push("Save cancelled (Esc)");
+            dirty_bits |= DIRTY_TOAST;
+        }
         dirty_bits |= DIRTY_WIN;
         desktop_mark_focus_surf_dirty();
         return 1;
