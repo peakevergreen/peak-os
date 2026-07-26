@@ -94,15 +94,27 @@ int snprintf(char *buf, size_t size, const char *fmt, ...) {
             continue;
         }
         p++;
-        /* Optional zero-pad width, e.g. %02u. */
+        /* Flags / width: %0N, %N, %*, then length l / ll. */
         int pad_zero = 0;
         int width = 0;
         if (*p == '0') {
             pad_zero = 1;
             p++;
         }
-        while (*p >= '0' && *p <= '9') {
-            width = width * 10 + (*p - '0');
+        if (*p == '*') {
+            width = va_arg(ap, int);
+            if (width < 0)
+                width = 0;
+            p++;
+        } else {
+            while (*p >= '0' && *p <= '9') {
+                width = width * 10 + (*p - '0');
+                p++;
+            }
+        }
+        int long_count = 0;
+        while (*p == 'l') {
+            long_count++;
             p++;
         }
         if (*p == 's') {
@@ -112,8 +124,16 @@ int snprintf(char *buf, size_t size, const char *fmt, ...) {
             while (*s && o + 1 < size)
                 buf[o++] = *s++;
         } else if (*p == 'd' || *p == 'u') {
-            uint64_t v = (*p == 'd') ? (uint64_t)(int64_t)va_arg(ap, int)
-                                     : (uint64_t)va_arg(ap, unsigned);
+            uint64_t v;
+            if (long_count >= 2)
+                v = (*p == 'd') ? (uint64_t)va_arg(ap, long long)
+                                : (uint64_t)va_arg(ap, unsigned long long);
+            else if (long_count == 1)
+                v = (*p == 'd') ? (uint64_t)va_arg(ap, long)
+                                : (uint64_t)va_arg(ap, unsigned long);
+            else
+                v = (*p == 'd') ? (uint64_t)(int64_t)va_arg(ap, int)
+                                : (uint64_t)va_arg(ap, unsigned);
             char tmp[24];
             itoa_u(v, tmp, 10);
             int len = 0;
@@ -123,15 +143,14 @@ int snprintf(char *buf, size_t size, const char *fmt, ...) {
                 buf[o++] = pad_zero ? '0' : ' ';
             for (char *t = tmp; *t && o + 1 < size; t++)
                 buf[o++] = *t;
-        } else if (*p == 'l' && *(p + 1) == 'u') {
-            p++;
-            uint64_t v = va_arg(ap, uint64_t);
-            char tmp[24];
-            itoa_u(v, tmp, 10);
-            for (char *t = tmp; *t && o + 1 < size; t++)
-                buf[o++] = *t;
         } else if (*p == 'x' || *p == 'X') {
-            uint64_t v = (uint64_t)va_arg(ap, unsigned);
+            uint64_t v;
+            if (long_count >= 2)
+                v = (uint64_t)va_arg(ap, unsigned long long);
+            else if (long_count == 1)
+                v = (uint64_t)va_arg(ap, unsigned long);
+            else
+                v = (uint64_t)va_arg(ap, unsigned);
             char tmp[24];
             itoa_u(v, tmp, 16);
             int len = 0;
