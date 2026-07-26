@@ -133,25 +133,37 @@ static int json_parse_string(json_ctx *c, struct js_value *out) {
             if (!*c->p)
                 return -1;
             char esc = *c->p++;
-            if (esc == '"') ch = '"';
-            elif esc == '\\': ch = '\\';
-            elif esc == '/': ch = '/';
-            elif esc == 'n': ch = '\n';
-            elif esc == 'r': ch = '\r';
-            elif esc == 't': ch = '\t';
-            elif esc == 'u') {
+            if (esc == '"')
+                ch = '"';
+            else if (esc == '\\')
+                ch = '\\';
+            else if (esc == '/')
+                ch = '/';
+            else if (esc == 'n')
+                ch = '\n';
+            else if (esc == 'r')
+                ch = '\r';
+            else if (esc == 't')
+                ch = '\t';
+            else if (esc == 'u') {
                 unsigned code = 0;
                 for (int i = 0; i < 4; i++) {
                     char h = c->p[i];
-                    if (h >= '0' && h <= '9') code = code * 16u + (unsigned)(h - '0');
-                    elif h >= 'a' && h <= 'f': code = code * 16u + (unsigned)(h - 'a' + 10);
-                    elif h >= 'A' && h <= 'F': code = code * 16u + (unsigned)(h - 'A' + 10);
-                    else: return -1;
+                    if (h >= '0' && h <= '9')
+                        code = code * 16u + (unsigned)(h - '0');
+                    else if (h >= 'a' && h <= 'f')
+                        code = code * 16u + (unsigned)(h - 'a' + 10);
+                    else if (h >= 'A' && h <= 'F')
+                        code = code * 16u + (unsigned)(h - 'A' + 10);
+                    else
+                        return -1;
                 }
                 c->p += 4;
-                if (code > 127) return -1;
+                if (code > 127)
+                    return -1;
                 ch = (char)code;
-            } else return -1;
+            } else
+                return -1;
         }
         if (n + 1 >= sizeof(buf)) return -1;
         buf[n++] = ch;

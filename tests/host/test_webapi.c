@@ -131,7 +131,7 @@ int main(void) {
     /* Active mixed content blocked on HTTPS pages. */
     eval_fails(rt, "fetch('http://evil.example/x')", "mixed-content");
 
-    /* Storage: localStorage VFS-backed; session in-memory; quota fail closed. */; quota / empty / oversized fail closed. */
+    /* Storage: localStorage VFS-backed; session in-memory; quota fail closed. */
     eval_ok(rt, "localStorage.setItem('a','1'); localStorage.getItem('a')", "\"1\"");
     eval_ok(rt, "localStorage.removeItem('a'); localStorage.getItem('a')", "null");
     eval_ok(rt, "sessionStorage.setItem('b','2'); sessionStorage.getItem('b')", "\"2\"");
@@ -173,7 +173,7 @@ int main(void) {
         eval_fails(rt, src, "quota exceeded");
     }
 
-    /* Tab clear isolates in-memory store; private tab never uses durable local. */
+    /* Tab clear isolates session; private tab never uses durable local. */
     webapi_clear_tab(0);
     eval_ok(rt, "localStorage.getItem('a')", "null");
     webapi_set_tab(0, 1);
@@ -184,6 +184,27 @@ int main(void) {
     webapi_host_vfs_reset();
     expect(webapi_install(rt, "https://example.com/page") == 0, "reinstall normal");
     eval_ok(rt, "localStorage.getItem('priv')", "null");
+
+    /* localStorage survives runtime reinstall when origin matches (VFS persist). */
+    webapi_host_vfs_reset();
+    webapi_clear_tab(0);
+    expect(webapi_install(rt, "https://example.com/page") == 0, "persist install");
+    eval_ok(rt, "localStorage.setItem('persist','yes')", "undefined");
+    js_rt_destroy(rt);
+    rt = js_rt_create();
+    expect(rt != NULL, "recreate runtime");
+    webapi_set_tab(0, 0);
+    webapi_clear_tab(0);
+    expect(webapi_install(rt, "https://example.com/page") == 0, "persist reload");
+    eval_ok(rt, "localStorage.getItem('persist')", "\"yes\"");
+    eval_ok(rt, "sessionStorage.setItem('ephem','1'); sessionStorage.getItem('ephem')", "\"1\"");
+    js_rt_destroy(rt);
+    rt = js_rt_create();
+    expect(rt != NULL, "recreate runtime 2");
+    webapi_set_tab(0, 0);
+    webapi_clear_tab(0);
+    expect(webapi_install(rt, "https://example.com/page") == 0, "session reload");
+    eval_ok(rt, "sessionStorage.getItem('ephem')", "null");
 
     js_rt_destroy(rt);
     if (fails) {
