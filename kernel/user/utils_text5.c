@@ -366,22 +366,51 @@ int utac_main(int argc, char **argv) {
 }
 
 /* ---- xargs ---- */
-int uxargs_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("xargs", "<command> [fixed-args...]");
-        return argc < 2 ? 1 : 0;
+static int xargs_run_cmd(int cmd_argi, int argc, char **argv, char **extra, int nextra) {
+    char *av[16];
+    int ac = 0;
+    for (int j = cmd_argi; j < argc && ac < 14; j++)
+        av[ac++] = argv[j];
+    for (int j = 0; j < nextra && ac < 15; j++)
+        av[ac++] = extra[j];
+    av[ac] = NULL;
+    if (ac <= 0)
+        return 0;
+    char path[64];
+    size_t pi = 0;
+    path[pi++] = '/';
+    path[pi++] = 'b';
+    path[pi++] = 'i';
+    path[pi++] = 'n';
+    path[pi++] = '/';
+    for (const char *s = av[0]; *s && pi + 1 < sizeof(path); s++)
+        path[pi++] = *s;
+    path[pi] = '\0';
+    int rc = ubin_run(path, ac, av);
+    if (rc == -999) {
+        peak_perror("xargs", "unknown command");
+        return 127;
     }
-    char buf[READ_MAX];
-    size_t len = 0;
-    if (read_in("-", buf, sizeof(buf), &len) != 0) {
-        peak_perror("xargs", "no stdin (use pipe or <)");
-        return 1;
-    }
-    /* Tokenize stdin on whitespace into args */
-    char *toks[MAX_XARGS];
+    return rc;
+}
+
+static int xargs_tokenize(char *buf, size_t len, int null_delim, char **toks, int max) {
     int nt = 0;
+    if (null_delim) {
+        size_t i = 0;
+        while (i < len && nt < max) {
+            if (buf[i] == '\0') {
+                i++;
+                continue;
+            }
+            toks[nt++] = buf + i;
+            while (i < len && buf[i])
+                i++;
+        }
+        return nt;
+    }
     size_t i = 0;
-    while (i < len && nt < MAX_XARGS) {
+    while (i < len && nt < max) {
         while (i < len && (buf[i] == ' ' || buf[i] == '\t' || buf[i] == '\n' || buf[i] == '\r'))
             i++;
         if (i >= len)
@@ -392,33 +421,110 @@ int uxargs_main(int argc, char **argv) {
         if (i < len)
             buf[i++] = '\0';
     }
+    return nt;
+}
+
+int uxargs_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("xargs", "[-0] [-n N] [-I repl] <command> [fixed-args...]");
+        return argc < 2 ? 1 : 0;
+    }
+    int null_delim = 0;
+    int batch_n = 0;
+    const char *repl = NULL;
+    int cmd_argi = 1;
+    for (; cmd_argi < argc; cmd_argi++) {
+        if (!strcmp(argv[cmd_argi], "-0")) {
+            null_delim = 1;
+            continue;
+        }
+        if (!strcmp(argv[cmd_argi], "-n") && cmd_argi + 1 < argc) {
+            batch_n = peak_atoi(argv[++cmd_argi]);
+            if (batch_n < 1)
+                batch_n = 1;
+            if (batch_n > MAX_XARGS)
+                batch_n = MAX_XARGS;
+            continue;
+        }
+        if (!strcmp(argv[cmd_argi], "-I") && cmd_argi + 1 < argc) {
+            repl = argv[++cmd_argi];
+            continue;
+        }
+        break;
+    }
+    if (cmd_argi >= argc) {
+        peak_usage("xargs", "[-0] [-n N] [-I repl] <command> [fixed-args...]");
+        return 1;
+    }
+    char buf[READ_MAX];
+    size_t len = 0;
+    if (read_in("-", buf, sizeof(buf), &len) != 0) {
+        peak_perror("xargs", "no stdin (use pipe or <)");
+        return 1;
+    }
+    char *toks[MAX_XARGS];
+    int nt = xargs_tokenize(buf, len, null_delim, toks, MAX_XARGS);
     if (nt == 0)
         return 0;
 
-    /* argv: command + fixed args + tokens */
-    char *av[16];
-    int ac = 0;
-    for (int j = 1; j < argc && ac < 15; j++)
-        av[ac++] = argv[j];
-    for (int j = 0; j < nt && ac < 15; j++)
-        av[ac++] = toks[j];
-    av[ac] = NULL;
-
-    char path[64];
-    size_t pi = 0;
-    path[pi++] = '/';
-    path[pi++] = 'b';
-    path[pi++] = 'i';
-    path[pi++] = 'n';
-    path[pi++] = '/';
-    for (const char *s = argv[1]; *s && pi + 1 < sizeof(path); s++)
-        path[pi++] = *s;
-    path[pi] = '\0';
-
-    int rc = ubin_run(path, ac, av);
-    if (rc == -999) {
-        peak_perror("xargs", "unknown command");
-        return 127;
+    if (repl) {
+        int last = 0;
+        for (int t = 0; t < nt; t++) {
+            char argbuf[8][128];
+            char *av[16];
+            int ac = 0;
+            int bi = 0;
+            size_t rlen = strlen(repl);
+            for (int j = cmd_argi; j < argc && ac < 15 && bi < 8; j++) {
+                const char *src = argv[j];
+                size_t o = 0;
+                for (; *src && o + 1 < sizeof(argbuf[bi]); ) {
+                    if (rlen && !strncmp(src, repl, rlen)) {
+                        const char *s = toks[t];
+                        for (; *s && o + 1 < sizeof(argbuf[bi]); s++)
+                            argbuf[bi][o++] = *s;
+                        src += rlen;
+                        continue;
+                    }
+                    argbuf[bi][o++] = *src++;
+                }
+                argbuf[bi][o] = '\0';
+                av[ac++] = argbuf[bi++];
+            }
+            av[ac] = NULL;
+            char path[64];
+            size_t pi = 0;
+            path[pi++] = '/';
+            path[pi++] = 'b';
+            path[pi++] = 'i';
+            path[pi++] = 'n';
+            path[pi++] = '/';
+            for (const char *s = av[0]; *s && pi + 1 < sizeof(path); s++)
+                path[pi++] = *s;
+            path[pi] = '\0';
+            int rc = ubin_run(path, ac, av);
+            if (rc == -999) {
+                peak_perror("xargs", "unknown command");
+                return 127;
+            }
+            if (rc != 0)
+                last = rc;
+        }
+        return last;
     }
-    return rc;
+
+    if (batch_n > 0) {
+        int last = 0;
+        for (int t = 0; t < nt; t += batch_n) {
+            int n = nt - t;
+            if (n > batch_n)
+                n = batch_n;
+            int rc = xargs_run_cmd(cmd_argi, argc, argv, toks + t, n);
+            if (rc != 0)
+                last = rc;
+        }
+        return last;
+    }
+
+    return xargs_run_cmd(cmd_argi, argc, argv, toks, nt);
 }

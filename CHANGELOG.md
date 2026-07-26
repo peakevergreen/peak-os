@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 102:** `xargs -n`/`-I`/`-0`; `find -print0`/`-exec` bounded (8 invocations)
+
 - **Pass 101:** `grep -c`/`-l`/`-o` + `-A`/`-B` context lite (≤32 lines)
 
 - **Pass 100:** `expr` + shell `&&`/`||` lists and `2>`/`2>>` lite redirects

@@ -65,7 +65,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `cd [path]` | change directory (default workspace) |
 | `ls [-l] [-h] [path]` | list directory (`-lh` human KiB/MiB; symlinks: l / @; `-l` shows `-> target`) |
 | `tree [path]` | directory tree |
-| `find <dir> [-name <name>] [-iname <pat>] [-type f|d] [-maxdepth N]` | basename / icase / type / depth |
+| `find <dir> [-name pat] [-iname pat] [-type f|d] [-maxdepth N] [-print0] [-exec cmd {} ;]` | basename/icase/type/depth; `-print0` NUL-separated; `-exec` bounded (8) |
 
 ## Files
 | Command | Notes |
@@ -97,7 +97,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `sed` | sed-lite: `[N\|[N,M]] s/old/new/[g]`, `y/from/to/`, `d`, `p`, `-n` (32 KiB) |
 | `fold` `rev` `nl` `tac` | wrap lines (`-w`), reverse chars/lines, number lines |
 | `od` `split` `paste` | byte dump (`-tx1`/`-to1`), split by bytes (`-b`), merge two files |
-| `xargs` | build `/bin` argv from stdin tokens (pipe/`<`; max 12 tokens) |
+| `xargs` | build `/bin` argv from stdin (`-0` null-delimited, `-n N` batch, `-I repl` replace; max 12 tokens) |
 | `awk` | awk-lite: `-F fs`, `$0`/`$n`, `NR`/`NF`, `/pat/ { print … }` (32 KiB) |
 | `jq` | jq-lite: `.key`, `.[]`, `keys`, `length`, compact print (32 KiB) |
 | `basename` `dirname` `realpath` | path helpers |
