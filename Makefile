@@ -148,6 +148,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/user/utils_text6.c \
 	kernel/user/utils_text7.c \
 	kernel/user/utils_text8.c \
+	kernel/user/utils_text9.c \
 	kernel/user/utils_crypto.c \
 	kernel/user/utils_pager.c \
 	kernel/user/utils_sys.c \
