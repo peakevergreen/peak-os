@@ -36,7 +36,7 @@ echo value | read MYVAR
 unset MYVAR
 ```
 
-Limits: up to 6 pipeline stages; captured pipe/redirect buffers are capped at 32 KiB.
+Limits: up to 6 pipeline stages; captured pipe/redirect buffers are capped at 64 KiB (`PEAK_IO_CAP`).
 `cat` / `head` / `tail` / `wc` / `grep` accept `-` (or omit the path) to read shell stdin from `<` or a pipe.
 
 ## Globs

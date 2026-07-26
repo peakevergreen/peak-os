@@ -1,5 +1,6 @@
 /* /bin network utilities: ifconfig, ping, wget, traceroute-lite, tlsinfo. */
 #include "libpeak.h"
+#include "peak_io.h"
 #include "cap.h"
 #include "privacy.h"
 #include "shell.h"
@@ -16,7 +17,7 @@
 #include "timer.h"
 #include "util.h"
 
-#define HTTP_BODY_MAX 32768
+#define HTTP_BODY_MAX PEAK_IO_CAP
 #include "vfs.h"
 
 #define NC_LISTEN_TICKS_DEFAULT 80u   /* 800ms at 100 Hz */

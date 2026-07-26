@@ -5,6 +5,7 @@
 #include "util.h"
 #include "vfs.h"
 #include "peak_errno.h"
+#include "peak_io.h"
 
 static const char PIPE_PATH[] = "/tmp/.peak_pipe";
 
@@ -486,8 +487,8 @@ void shell_execute(char *cmd) {
 
                 if (capture_for_pipe) {
                     if (n >= sizeof(pipe_data) - 2)
-                        console_printf("shell: pipe output truncated at %u bytes\n",
-                                       (unsigned)sizeof(pipe_data));
+                        console_printf("shell: pipe output truncated at %u bytes (%u KiB cap)\n",
+                                       (unsigned)sizeof(pipe_data), PEAK_IO_CAP_KIB);
                     if (n >= sizeof(pipe_data))
                         n = sizeof(pipe_data) - 1;
                     memcpy(pipe_data, cap, n);

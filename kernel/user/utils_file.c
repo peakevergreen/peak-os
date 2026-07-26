@@ -1,5 +1,6 @@
 /* /bin file utilities: ls, mkdir, touch, rm, cp, mv, ln, stat, chmod, du, df, truncate. */
 #include "libpeak.h"
+#include "peak_io.h"
 #include "vfs.h"
 #include "shell.h"
 #include "console.h"
@@ -556,7 +557,7 @@ int utruncate_main(int argc, char **argv) {
     return vfs_write_file(abs, zbuf, (size_t)sz) == 0 ? 0 : 1;
 }
 
-#define DD_IO_MAX   (32 * 1024)
+#define DD_IO_MAX   PEAK_IO_CAP
 #define DD_BS_DEF   512
 
 static int dd_parse_eq(const char *arg, const char *key, const char **val) {
@@ -593,7 +594,7 @@ int udd_main(int argc, char **argv) {
         return 1;
     }
     if (bs <= 0 || bs > DD_IO_MAX) {
-        peak_perror("dd", "bs out of range (1..32768)");
+        peak_perror("dd", "bs out of range (1..65536)");
         return 1;
     }
     char if_abs[VFS_PATH_MAX];

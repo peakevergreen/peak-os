@@ -1,11 +1,12 @@
 /* /bin jq-lite: .key, .[], keys, length, compact print (32 KiB) */
 #include "libpeak.h"
+#include "peak_io.h"
 #include "vfs.h"
 #include "shell.h"
 #include "console.h"
 #include "util.h"
 
-#define READ_MAX 32768
+#define READ_MAX PEAK_IO_CAP
 #define JV_MAX_NODES 256
 #define JV_MAX_PAIRS 128
 #define JV_MAX_ITEMS 256

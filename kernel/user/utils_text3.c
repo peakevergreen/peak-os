@@ -1,11 +1,12 @@
 /* /bin: sed-lite, cmp, basename, dirname, realpath */
 #include "libpeak.h"
+#include "peak_io.h"
 #include "vfs.h"
 #include "shell.h"
 #include "console.h"
 #include "util.h"
 
-#define READ_MAX 32768
+#define READ_MAX PEAK_IO_CAP
 #define MAX_LINES 256
 #define LINE_MAX 512
 
