@@ -39,6 +39,7 @@ struct settings_hit {
 static struct settings_hit settings_hits[SETTINGS_HIT_MAX];
 static int settings_hit_n;
 static int settings_kfocus;
+static int settings_theme_preview = -1;
 
 void desktop_settings_init(void) {
     settings_kfocus = settings_page;
@@ -301,6 +302,28 @@ static void settings_draw_scale_preview(uint32_t x, uint32_t y, uint32_t w, uint
                  w - desktop_u(8), desktop_u(6), t->accent);
 }
 
+
+static void settings_draw_theme_chrome_preview(uint32_t tx, uint32_t cy, int idx) {
+    if (idx < 0 || idx >= theme_count())
+        idx = theme_index();
+    const struct peak_theme *t = theme_at(idx);
+    uint32_t sw = desktop_u(52);
+    uint32_t h = desktop_u(10);
+    uint32_t gap = desktop_u(8);
+    fb_draw_string(tx, cy, "Chrome preview (click apply)", desktop_color_dim(), desktop_color_bg());
+    cy += fb_cell_h() + desktop_u(4);
+    fb_fill_rect(tx, cy, sw, h, t->title);
+    fb_draw_string_fit(tx, cy + desktop_u(1), sw, "title", t->fg, t->title);
+    uint32_t tx2 = tx + sw + gap;
+    fb_fill_rect(tx2, cy, sw, h, t->surface);
+    fb_fill_rect(tx2, cy + h - desktop_u(3), sw, desktop_u(3), t->accent);
+    fb_draw_string_fit(tx2, cy + desktop_u(1), sw, "task", t->fg, t->surface);
+    uint32_t tx3 = tx2 + sw + gap;
+    fb_fill_rect(tx3, cy, sw, h, t->surface);
+    fb_fill_rect(tx3, cy, desktop_u(3), h, t->accent);
+    fb_draw_string_fit(tx3 + desktop_u(4), cy + desktop_u(1), sw - desktop_u(4), "toast", t->fg, t->surface);
+}
+
 static void settings_draw_theme_swatches(uint32_t tx, uint32_t cy, uint32_t content_w) {
     uint32_t sw = desktop_u(40);
     uint32_t gap = desktop_u(6);
@@ -423,7 +446,19 @@ void desktop_settings_draw(struct win *w) {
     } else if (settings_page == 1) {
         cy = settings_section(tx, cy, "Theme");
         settings_draw_theme_swatches(tx, cy, content_w);
-        cy += desktop_u(40) + ch + desktop_u(12);
+        {
+            int prev = settings_theme_preview;
+            if (settings_kfocus >= 0 && settings_kfocus < settings_hit_n &&
+                settings_hits[settings_kfocus].act == SHIT_THEME)
+                settings_theme_preview = settings_hits[settings_kfocus].param;
+            else if (settings_theme_preview < 0)
+                settings_theme_preview = theme_index();
+            if (prev != settings_theme_preview)
+                (void)prev;
+        }
+        cy += desktop_u(40) + ch + desktop_u(8);
+        settings_draw_theme_chrome_preview(tx, cy, settings_theme_preview);
+        cy += desktop_u(10) + ch + desktop_u(12);
         cy = settings_divider(tx, cy, content_w);
         cy = settings_section(tx, cy, "Wallpaper");
         settings_draw_wallpaper_row(tx, cy, content_w);
@@ -544,11 +579,19 @@ static void settings_hit_dispatch(enum settings_hit_act act, int param) {
         desktop_rescale_windows();
         break;
     case SHIT_THEME:
-        if (param >= 0 && param < theme_count())
-            theme_set_index(param);
-        else
+        if (param >= 0 && param < theme_count()) {
+            if (settings_theme_preview == param && param != theme_index()) {
+                theme_set_index(param);
+                theme_persist();
+            } else {
+                settings_theme_preview = param;
+                settings_kf_dirty();
+            }
+        } else {
             theme_next();
-        theme_persist();
+            theme_persist();
+            settings_theme_preview = theme_index();
+        }
         break;
     case SHIT_WALLPAPER:
         if (param >= 0 && param < wallpaper_option_count())

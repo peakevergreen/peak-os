@@ -33,3 +33,4 @@ Also see at the repo root:
 | [scripts/pi3-hw-checklist.md](../scripts/pi3-hw-checklist.md) | Pi 3 HDMI/USB/persist acceptance |
 | [scripts/lan-web-checklist.md](../scripts/lan-web-checklist.md) | LAN web container |
 | [scripts/security-checklist.md](../scripts/security-checklist.md) | Security smoke |
+- Settings Look tab: theme chrome preview (titlebar/taskbar/toast) before apply (Pass 89).

@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 89:** Settings theme chrome mock preview (titlebar/taskbar/toast) before apply
+
 - **Pass 88:** Drag Files row onto Notepad/Images to open
 
 - **Pass 87:** JS for-await lite + module import depth fixture
