@@ -9,6 +9,7 @@
  * |----------------------|----------------------------------------|-------------------------------------|
  * | fetch(url)           | GET/POST http(s), same-origin/CORS     | empty URL, non-string, non-http(s)  |
  * | fetch init.method    | GET, POST (case-insensitive)           | HEAD, PUT, DELETE, …                |
+ * | fetch init.headers   | plain object, string key/value pairs   | arrays, Headers instances           |
  * | fetch init.body      | string with POST only                  | body on GET, objects/streams        |
  * | fetch init.signal    | AbortController().signal               | non-object signal                   |
  * | fetch init.*         | method, body, signal                   | headers, credentials, mode, cache…  |
@@ -99,12 +100,16 @@ static int method_is_allowed(struct js_runtime *rt, const struct js_value *v,
         }
         return 1;
     }
+    if (rt && out_method && out_len) {
+        snprintf(rt->err, sizeof(rt->err), "fetch: method %s not supported (only GET/POST)",
+                 buf);
+    }
     return 0;
 }
 
 /* Init keys beyond method/signal/body that would imply unsupported fetch features. */
 static const char *const k_fetch_unsupported_init[] = {
-    "headers", "credentials", "mode", "redirect", "cache", "referrer",
+    "credentials", "mode", "redirect", "cache", "referrer",
     "referrerPolicy", "integrity", "keepalive", "duplex", NULL,
 };
 
@@ -335,9 +340,39 @@ static int cors_ok(const char *page_url, const char *req_url, const char *hdrs) 
     return 0;
 }
 
+static int stub_fetch_parse_headers(struct js_runtime *rt, const struct js_value *init,
+                                    char *hdr_out, size_t hdr_cap, void *ret) {
+    struct js_value hv;
+    if (js_val_get_prop(rt, init, "headers", &hv) != 0 ||
+        js_val_is_undefined(&hv) || js_val_is_null(&hv))
+        return 0;
+    if (!js_val_is_object(&hv))
+        return stub_fail(rt, ret, "fetch: headers must be plain object");
+    if (hv.type == JT_ARR && hv.u.o && hv.u.o->is_array)
+        return stub_fail(rt, ret, "fetch: headers array not supported");
+    hdr_out[0] = '\0';
+    size_t off = 0;
+    if (!hv.u.o)
+        return 0;
+    for (struct js_prop *p = hv.u.o->props; p; p = p->next) {
+        if (!p->key || p->key[0] == '\0')
+            continue;
+        if (!js_val_is_string(&p->val))
+            return stub_fail(rt, ret, "fetch: header values must be strings");
+        char val[256];
+        js_val_to_cstring(rt, &p->val, val, sizeof(val));
+        size_t need = strlen(p->key) + strlen(val) + 4;
+        if (off + need >= hdr_cap)
+            return stub_fail(rt, ret, "fetch: headers too large");
+        off += (size_t)snprintf(hdr_out + off, hdr_cap - off, "%s: %s\r\n", p->key, val);
+    }
+    return 0;
+}
+
 static int stub_fetch_check_init(struct js_runtime *rt, const struct js_value *init,
                                  void *ret, char *method_out, size_t method_len,
                                  char *body_out, size_t body_len,
+                                 char *hdr_out, size_t hdr_cap,
                                  int *have_body, struct js_value *signal_out) {
     struct js_value v;
     snprintf(method_out, method_len, "GET");
@@ -347,7 +382,8 @@ static int stub_fetch_check_init(struct js_runtime *rt, const struct js_value *i
     if (js_val_get_prop(rt, init, "method", &v) == 0 && !js_val_is_undefined(&v) &&
         !js_val_is_null(&v)) {
         if (!method_is_allowed(rt, &v, method_out, method_len))
-            return stub_fail(rt, ret, "fetch: only GET/POST supported");
+            return stub_fail(rt, ret,
+                             rt->err[0] ? rt->err : "fetch: only GET/POST supported");
     }
     if (js_val_get_prop(rt, init, "signal", &v) == 0 && !js_val_is_undefined(&v) &&
         !js_val_is_null(&v)) {
@@ -367,6 +403,8 @@ static int stub_fetch_check_init(struct js_runtime *rt, const struct js_value *i
             return stub_fail(rt, ret, "fetch: body too large");
         *have_body = 1;
     }
+    if (stub_fetch_parse_headers(rt, init, hdr_out, hdr_cap, ret) != 0)
+        return -1;
     for (size_t i = 0; k_fetch_unsupported_init[i]; i++) {
         if (js_val_get_prop(rt, init, k_fetch_unsupported_init[i], &v) == 0 &&
             !js_val_is_undefined(&v) && !js_val_is_null(&v))
@@ -387,7 +425,7 @@ static int signal_is_aborted(struct js_runtime *rt, const struct js_value *sig) 
 static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
     if (!browser_isolation_net_allowed()) {
         js_val_set_undefined((struct js_value *)ret);
-        snprintf(rt->err, sizeof(rt->err), "fetch blocked: ring-3 isolation unavailable");
+        snprintf(rt->err, sizeof(rt->err), "%s", browser_isolation_fetch_denied_reason());
         return -1;
     }
     (void)ud;
@@ -403,16 +441,19 @@ static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, vo
 
     char method[8] = "GET";
     char body_buf[4096];
+    char req_hdrs[512];
     int have_body = 0;
     struct js_value signal;
     js_val_set_undefined(&signal);
     body_buf[0] = '\0';
+    req_hdrs[0] = '\0';
 
     if (argc >= 2 && !js_val_is_undefined(&args[1]) && !js_val_is_null(&args[1])) {
         if (!js_val_is_object(&args[1]))
             return stub_fail(rt, ret, "fetch: init must be object");
         if (stub_fetch_check_init(rt, &args[1], ret, method, sizeof(method),
-                                  body_buf, sizeof(body_buf), &have_body, &signal) != 0)
+                                  body_buf, sizeof(body_buf), req_hdrs, sizeof(req_hdrs),
+                                  &have_body, &signal) != 0)
             return -1;
     }
 
@@ -451,6 +492,7 @@ static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, vo
     memset(&req, 0, sizeof(req));
     snprintf(req.method, sizeof(req.method), "%s", method);
     req.url = abs;
+    req.headers = req_hdrs[0] ? req_hdrs : NULL;
     if (have_body) {
         req.body = body_buf;
         req.body_len = strlen(body_buf);

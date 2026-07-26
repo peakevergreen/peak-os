@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 140:** WebAPI `fetch` headers lite (plain object string pairs); method rejection depth; isolation enforce fail-closed reason
+
 - **Pass 139:** JS `Promise.allSettled`/`Promise.race` lite; fixture + host tests
 
 - **Pass 138:** Wave 6 lock-in — smoke-cli gates Passes 119–137, ROADMAP/CHANGELOG Wave 6 shipped, security-checklist CI note
