@@ -274,6 +274,8 @@ int desktop_files_key(int key);
 void desktop_files_wheel(int wheel);
 void desktop_files_drag_begin_sel(void);
 int desktop_files_drag_active(void);
+void desktop_files_drag_cancel(void);
+void desktop_files_drag_paint(int32_t mx, int32_t my);
 void desktop_files_drop_at(int32_t mx, int32_t my);
 int desktop_files_click(struct win *w, int32_t mx, int32_t my, int dbl);
 void desktop_files_ctx_prepare(struct win *w, int32_t mx, int32_t my);

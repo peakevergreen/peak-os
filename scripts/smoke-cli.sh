@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 112 files dnd ghost"
+grep -q desktop_files_drag_paint kernel/gui/desktop_files.c
+grep -q desktop_files_drag_cancel kernel/gui/desktop_files.c
+grep -q 'Not a text file for Notepad' kernel/gui/desktop_files.c
+grep -q desktop_files_drag_paint kernel/gui/desktop.c
+
 echo "==> Wave 5 Pass 111 blobstore reclaim"
 grep -q blob_rewind_tip kernel/blobstore.c
 grep -q free_span_take kernel/blobstore.c

@@ -732,6 +732,72 @@ int desktop_files_key(int key) {
 static int files_drag_active;
 static char files_drag_path[VFS_PATH_MAX];
 static char files_drag_name[64];
+static int files_drag_text;
+static int files_drag_image;
+
+void desktop_files_drag_cancel(void) {
+    if (!files_drag_active)
+        return;
+    files_drag_active = 0;
+    files_drag_text = files_drag_image = 0;
+    notify_push("Drag cancelled");
+    dirty_bits |= DIRTY_TOAST | DIRTY_MOVE;
+}
+
+static int files_drag_hit_target(int32_t mx, int32_t my, enum app_kind *kind_out) {
+    for (int i = 0; i < MAX_WINS; i++) {
+        struct win *w = &wins[i];
+        if (!w->open || w->minimized)
+            continue;
+        if (w->kind != APP_NOTEPAD && w->kind != APP_IMAGES)
+            continue;
+        if (!desktop_point_in(mx, my, w->x, w->y, w->w, w->h))
+            continue;
+        if (kind_out)
+            *kind_out = w->kind;
+        return 1;
+    }
+    return 0;
+}
+
+void desktop_files_drag_paint(int32_t mx, int32_t my) {
+    if (!files_drag_active)
+        return;
+    struct framebuffer *fb = fb_get();
+    enum app_kind target = APP_TERM;
+    int over = files_drag_hit_target(mx, my, &target);
+    if (over) {
+        for (int i = 0; i < MAX_WINS; i++) {
+            struct win *w = &wins[i];
+            if (!w->open || w->minimized || w->kind != target)
+                continue;
+            if (!desktop_point_in(mx, my, w->x, w->y, w->w, w->h))
+                continue;
+            uint32_t ring = desktop_color_accent();
+            int mismatch = (target == APP_NOTEPAD && !files_drag_text) ||
+                           (target == APP_IMAGES && !files_drag_image);
+            if (mismatch)
+                ring = theme_get()->danger;
+            uint32_t t = desktop_u(2);
+            fb_fill_rect(w->x, w->y, w->w, t, ring);
+            fb_fill_rect(w->x, w->y + w->h - t, w->w, t, ring);
+            fb_fill_rect(w->x, w->y, t, w->h, ring);
+            fb_fill_rect(w->x + w->w - t, w->y, t, w->h, ring);
+            break;
+        }
+    }
+    uint32_t gw = (uint32_t)strlen(files_drag_name) * fb_cell_w() + desktop_u(16);
+    uint32_t gh = fb_cell_h() + desktop_u(6);
+    int32_t gx = mx + desktop_u(10);
+    int32_t gy = my + desktop_u(10);
+    if ((uint32_t)gx + gw > fb->width)
+        gx = (int32_t)fb->width - (int32_t)gw;
+    if ((uint32_t)gy + gh > fb->height)
+        gy = (int32_t)fb->height - (int32_t)gh;
+    fb_fill_rect((uint32_t)gx, (uint32_t)gy, gw, gh, desktop_color_surface());
+    fb_draw_string((uint32_t)gx + desktop_u(6), (uint32_t)gy + desktop_u(2),
+                   files_drag_name, desktop_color_fg(), desktop_color_surface());
+}
 
 void desktop_files_drag_begin_sel(void) {
     struct vfs_dirent ents[FILES_ROWS];
@@ -742,6 +808,8 @@ void desktop_files_drag_begin_sel(void) {
         return;
     files_build_path(files_sel, files_drag_path, sizeof(files_drag_path));
     snprintf(files_drag_name, sizeof(files_drag_name), "%s", ents[files_sel].name);
+    files_drag_text = files_is_text(files_drag_name);
+    files_drag_image = files_is_image(files_drag_name);
     files_drag_active = 1;
 }
 
@@ -753,23 +821,30 @@ void desktop_files_drop_at(int32_t mx, int32_t my) {
     if (!files_drag_active)
         return;
     files_drag_active = 0;
-    for (int i = 0; i < MAX_WINS; i++) {
-        struct win *w = &wins[i];
-        if (!w->open || w->minimized)
-            continue;
-        if (w->kind != APP_NOTEPAD && w->kind != APP_IMAGES)
-            continue;
-        if (!desktop_point_in(mx, my, w->x, w->y, w->w, w->h))
-            continue;
-        if (w->kind == APP_NOTEPAD)
-            files_open_text(files_drag_path, files_drag_name);
-        else
-            files_open_image(files_drag_path, files_drag_name);
-        notify_push("Drag-open");
+    enum app_kind target = APP_TERM;
+    if (!files_drag_hit_target(mx, my, &target)) {
+        notify_push("Drop on Notepad or Images");
         dirty_bits |= DIRTY_TOAST | DIRTY_WIN;
-        desktop_mark_focus_surf_dirty();
         return;
     }
+    if (target == APP_NOTEPAD) {
+        if (!files_drag_text) {
+            notify_push("Not a text file for Notepad");
+            dirty_bits |= DIRTY_TOAST;
+            return;
+        }
+        files_open_text(files_drag_path, files_drag_name);
+    } else {
+        if (!files_drag_image) {
+            notify_push("Not an image file for Images");
+            dirty_bits |= DIRTY_TOAST;
+            return;
+        }
+        files_open_image(files_drag_path, files_drag_name);
+    }
+    notify_push("Drag-open");
+    dirty_bits |= DIRTY_TOAST | DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
 }
 
 void desktop_files_wheel(int wheel) { files_move_sel(wheel > 0 ? -1 : 1, 0); }
