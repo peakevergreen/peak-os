@@ -257,6 +257,7 @@ static const char *start_sys_labels[START_SYS] = {
 
 static int start_visible_rows;
 static int start_visible_map[START_APPS + START_SYS];
+static int start_scroll; /* first visible list row when menu is height-clamped */
 
 static void start_rebuild_visible(void) {
     start_visible_rows = 0;
@@ -274,29 +275,68 @@ static void start_rebuild_visible(void) {
         start_sel = 0;
 }
 
-static void start_menu_rect(uint32_t *mx, uint32_t *my, uint32_t *mw, uint32_t *mh) {
+/* Layout above the taskbar. At UI scale 3 on 1080p the full list is taller than
+ * the screen; without clamping, my underflows as uint32_t, the panel fill is
+ * clipped away, row Y wraps into view, and click hit-tests never match. */
+static void start_menu_layout(uint32_t *mx, uint32_t *my, uint32_t *mw, uint32_t *mh,
+                              uint32_t *row_h, int *first_row, int *view_rows) {
     struct framebuffer *fb = fb_get();
     uint32_t th = desktop_taskbar_h();
+    uint32_t margin = desktop_u(4);
     start_rebuild_visible();
     uint32_t row = fb_cell_h() + desktop_u(4);
-    uint32_t rows = (uint32_t)start_visible_rows;
-    if (rows == 0)
-        rows = 1;
+    uint32_t rows = (uint32_t)(start_visible_rows > 0 ? start_visible_rows : 1);
+    uint32_t want_h = START_SEARCH_H + desktop_u(8) + rows * row + desktop_u(12);
+    uint32_t max_h = row * 3;
+    if ((uint32_t)fb->height > th + margin + margin)
+        max_h = (uint32_t)fb->height - th - margin - margin;
     *mw = desktop_u(220);
-    *mh = START_SEARCH_H + desktop_u(8) + rows * row + desktop_u(12);
+    *mh = want_h <= max_h ? want_h : max_h;
     *mx = desktop_u(8);
-    *my = (uint32_t)fb->height - th - *mh - desktop_u(4);
+    *my = (uint32_t)fb->height - th - *mh - margin;
+    if (*my >= (uint32_t)fb->height || *my + *mh > (uint32_t)fb->height - th)
+        *my = margin;
+
+    uint32_t chrome = START_SEARCH_H + desktop_u(8) + desktop_u(12);
+    int fit = 1;
+    if (*mh > chrome)
+        fit = (int)((*mh - chrome) / row);
+    if (fit < 1)
+        fit = 1;
+    if (start_visible_rows > 0 && fit > start_visible_rows)
+        fit = start_visible_rows;
+
+    if (start_sel < start_scroll)
+        start_scroll = start_sel;
+    if (start_sel >= start_scroll + fit)
+        start_scroll = start_sel - fit + 1;
+    if (start_scroll < 0)
+        start_scroll = 0;
+    if (start_visible_rows > 0 && start_scroll > start_visible_rows - fit)
+        start_scroll = start_visible_rows - fit;
+    if (start_scroll < 0)
+        start_scroll = 0;
+
+    *row_h = row;
+    *first_row = start_scroll;
+    *view_rows = start_visible_rows > 0 ? fit : 0;
+}
+
+static void start_menu_rect(uint32_t *mx, uint32_t *my, uint32_t *mw, uint32_t *mh) {
+    uint32_t row_h;
+    int first_row, view_rows;
+    start_menu_layout(mx, my, mw, mh, &row_h, &first_row, &view_rows);
 }
 
 void desktop_draw_start_menu(void) {
     if (!menu_open)
         return;
-    uint32_t mx, my, mw, mh;
-    start_menu_rect(&mx, &my, &mw, &mh);
+    uint32_t mx, my, mw, mh, row;
+    int first_row, view_rows;
+    start_menu_layout(&mx, &my, &mw, &mh, &row, &first_row, &view_rows);
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
     fb_fill_rect(mx, my, mw, desktop_u(2), desktop_color_accent());
     uint32_t cy = my + desktop_u(6);
-    uint32_t row = fb_cell_h() + desktop_u(4);
     uint32_t search_bg = desktop_color_bg();
     fb_fill_rect(mx + desktop_u(8), cy, mw - desktop_u(16), START_SEARCH_H - desktop_u(2), search_bg);
     fb_fill_rect(mx + desktop_u(8), cy, mw - desktop_u(16), desktop_u(1), desktop_color_dim());
@@ -311,7 +351,8 @@ void desktop_draw_start_menu(void) {
         fb_draw_string(mx + desktop_u(12), cy, "No matches", desktop_color_dim(), desktop_color_surface());
         return;
     }
-    for (int vi = 0; vi < start_visible_rows; vi++) {
+    for (int i = 0; i < view_rows; i++) {
+        int vi = first_row + i;
         int row_idx = start_visible_map[vi];
         const char *label = row_idx < START_APPS ? start_app_labels[row_idx]
                                                  : start_sys_labels[row_idx - START_APPS];
@@ -792,25 +833,28 @@ static int start_row_action(int row) {
 }
 
 void desktop_menu_click(int32_t mx, int32_t my) {
-    uint32_t mx0, my0, mw, mh;
-    start_menu_rect(&mx0, &my0, &mw, &mh);
+    uint32_t mx0, my0, mw, mh, row_h;
+    int first_row, view_rows;
+    start_menu_layout(&mx0, &my0, &mw, &mh, &row_h, &first_row, &view_rows);
     if (!desktop_point_in(mx, my, mx0, my0, mw, mh)) {
         menu_open = 0;
         start_filter[0] = 0;
         start_sel = 0;
+        start_scroll = 0;
         menus_damage_start();
         dirty_bits |= DIRTY_MOVE;
         return;
     }
-    uint32_t row_h = fb_cell_h() + desktop_u(4);
     uint32_t cy = my0 + desktop_u(6) + START_SEARCH_H + desktop_u(4);
-    if ((uint32_t)my >= cy && start_visible_rows > 0) {
-        int vi = (int)(((uint32_t)my - cy) / row_h);
-        if (vi >= 0 && vi < start_visible_rows) {
+    if ((uint32_t)my >= cy && view_rows > 0) {
+        int i = (int)(((uint32_t)my - cy) / row_h);
+        if (i >= 0 && i < view_rows) {
+            int vi = first_row + i;
             int row = start_visible_map[vi];
             menu_open = 0;
             start_filter[0] = 0;
             start_sel = 0;
+            start_scroll = 0;
             menus_damage_start();
             start_row_action(row);
             dirty_bits |= DIRTY_MOVE;
@@ -827,6 +871,7 @@ int desktop_menus_start_key(int key) {
             menu_open = 0;
             start_filter[0] = 0;
             start_sel = 0;
+            start_scroll = 0;
             menus_damage_start();
             start_row_action(row);
             dirty_bits |= DIRTY_MOVE;
@@ -838,6 +883,7 @@ int desktop_menus_start_key(int key) {
         if (len > 0) {
             start_filter[len - 1] = 0;
             start_sel = 0;
+            start_scroll = 0;
             menus_damage_start();
             dirty_bits |= DIRTY_MOVE;
         }
@@ -864,6 +910,7 @@ int desktop_menus_start_key(int key) {
             start_filter[len] = (char)key;
             start_filter[len + 1] = 0;
             start_sel = 0;
+            start_scroll = 0;
             menus_damage_start();
             dirty_bits |= DIRTY_MOVE;
         }
@@ -880,6 +927,7 @@ int desktop_menus_toggle_start(int32_t mx, int32_t my, uint32_t taskbar_y, uint3
     if (menu_open) {
         start_filter[0] = 0;
         start_sel = 0;
+        start_scroll = 0;
     }
     dirty_bits |= DIRTY_MOVE;
     return 1;
@@ -895,6 +943,7 @@ int desktop_menus_close_popups(void) {
     menu_open = ctx_menu = 0;
     start_filter[0] = 0;
     start_sel = 0;
+    start_scroll = 0;
     dirty_bits |= DIRTY_MOVE;
     return 1;
 }
