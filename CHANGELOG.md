@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 138:** Wave 6 lock-in — smoke-cli gates Passes 119–137, ROADMAP/CHANGELOG Wave 6 shipped, security-checklist CI note
+
 - **Pass 128:** raise ZIP/TAR file caps to 48; `zip -l` listing; tar list honesty footer
 
 - **Pass 127:** `nc -w` timeout flag; 800ms listen window default; documented limits
