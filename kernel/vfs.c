@@ -730,56 +730,105 @@ int vfs_rename(const char *oldp, const char *newp) {
     return 0;
 }
 
-int vfs_copy_file(const char *src, const char *dst) {
-    struct vfs_node *s = vfs_lookup(src);
-    if (!s || s->type != VFS_FILE)
-        return PEAK_ENOENT;
-    if (vfs_write_file(dst, s->data ? s->data : (const uint8_t *)"", s->size) != 0)
-        return PEAK_EIO;
+#define VFS_COPY_CHUNK (32 * 1024)
+
+static int vfs_copy_stream(const char *src, const char *dst, size_t size,
+                           int promote_blob, uint16_t mode) {
+    if (promote_blob && blobstore_available()) {
+        if (vfs_create_blob_file(dst, size) != 0)
+            return PEAK_EIO;
+    } else if (size == 0) {
+        if (vfs_write_file(dst, (const uint8_t *)"", 0) != 0)
+            return PEAK_EIO;
+    }
+    static uint8_t chunk[VFS_COPY_CHUNK];
+    size_t off = 0;
+    while (off < size) {
+        size_t want = size - off;
+        if (want > sizeof(chunk))
+            want = sizeof(chunk);
+        size_t n = 0;
+        if (vfs_read_at(src, off, chunk, want, &n) != 0)
+            return PEAK_EIO;
+        if (n == 0)
+            break;
+        if (promote_blob && blobstore_available()) {
+            if (vfs_write_at(dst, off, chunk, n) != 0)
+                return PEAK_EIO;
+        } else if (off == 0) {
+            if (vfs_write_file(dst, chunk, n) != 0)
+                return PEAK_EIO;
+        } else if (vfs_write_at(dst, off, chunk, n) != 0) {
+            return PEAK_EIO;
+        }
+        off += n;
+    }
     struct vfs_node *d = vfs_lookup(dst);
     if (d)
-        d->mode = s->mode;
+        d->mode = mode;
     return 0;
 }
 
-static int copy_tree_rec(struct vfs_node *src, const char *dst_path) {
-    if (src->type == VFS_FILE) {
-        if (vfs_write_file(dst_path, src->data ? src->data : (const uint8_t *)"", src->size) != 0)
-            return PEAK_EIO;
-        struct vfs_node *d = vfs_lookup(dst_path);
-        if (d)
-            d->mode = src->mode;
-        return 0;
-    }
+int vfs_copy_file_ex(const char *src, const char *dst, int promote_blob) {
+    struct vfs_node *s = vfs_lookup(src);
+    if (!s || s->type != VFS_FILE)
+        return PEAK_ENOENT;
+    return vfs_copy_stream(src, dst, s->size, promote_blob, s->mode);
+}
+
+int vfs_copy_file(const char *src, const char *dst) {
+    return vfs_copy_file_ex(src, dst, 0);
+}
+
+static int copy_tree_rec(struct vfs_node *src, const char *src_path,
+                         const char *dst_path, int promote_blob) {
+    if (src->type == VFS_FILE)
+        return vfs_copy_stream(src_path, dst_path, src->size, promote_blob, src->mode);
     if (!vfs_mkdir(dst_path))
         return PEAK_EIO;
     struct vfs_node *d = vfs_lookup(dst_path);
     if (d)
         d->mode = src->mode;
     for (struct vfs_node *c = src->child; c; c = c->sibling) {
-        char child[VFS_PATH_MAX];
+        char child_src[VFS_PATH_MAX];
+        char child_dst[VFS_PATH_MAX];
         size_t o = 0;
-        while (dst_path[o] && o + 1 < VFS_PATH_MAX) {
-            child[o] = dst_path[o];
+        while (src_path[o] && o + 1 < VFS_PATH_MAX) {
+            child_src[o] = src_path[o];
             o++;
         }
         if (o + 1 >= VFS_PATH_MAX)
             return PEAK_ENOSPC;
-        child[o++] = '/';
+        child_src[o++] = '/';
         for (size_t k = 0; c->name[k] && o + 1 < VFS_PATH_MAX; k++)
-            child[o++] = c->name[k];
-        child[o] = '\0';
-        if (copy_tree_rec(c, child) != 0)
+            child_src[o++] = c->name[k];
+        child_src[o] = '\0';
+        o = 0;
+        while (dst_path[o] && o + 1 < VFS_PATH_MAX) {
+            child_dst[o] = dst_path[o];
+            o++;
+        }
+        if (o + 1 >= VFS_PATH_MAX)
+            return PEAK_ENOSPC;
+        child_dst[o++] = '/';
+        for (size_t k = 0; c->name[k] && o + 1 < VFS_PATH_MAX; k++)
+            child_dst[o++] = c->name[k];
+        child_dst[o] = '\0';
+        if (copy_tree_rec(c, child_src, child_dst, promote_blob) != 0)
             return PEAK_EIO;
     }
     return 0;
 }
 
-int vfs_copy_tree(const char *src, const char *dst) {
+int vfs_copy_tree_ex(const char *src, const char *dst, int promote_blob) {
     struct vfs_node *s = vfs_lookup(src);
     if (!s)
         return PEAK_ENOENT;
-    return copy_tree_rec(s, dst);
+    return copy_tree_rec(s, src, dst, promote_blob);
+}
+
+int vfs_copy_tree(const char *src, const char *dst) {
+    return vfs_copy_tree_ex(src, dst, 0);
 }
 
 int vfs_link(const char *target, const char *linkname) {

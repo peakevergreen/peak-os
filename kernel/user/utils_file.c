@@ -186,12 +186,15 @@ int urm_main(int argc, char **argv) {
 
 int ucp_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 3) {
-        peak_usage("cp", "[-r] <src> <dst>");
+        peak_usage("cp", "[-r] [--promote-blob] <src> <dst>");
         return argc < 3 ? 1 : 0;
     }
     int rec = peak_has_flag(argc, argv, "-r");
+    int promote = peak_has_flag(argc, argv, "--promote-blob");
     const char *src = NULL, *dst = NULL;
     for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "--promote-blob"))
+            continue;
         if (argv[i][0] == '-')
             continue;
         if (!src)
@@ -200,7 +203,7 @@ int ucp_main(int argc, char **argv) {
             dst = argv[i];
     }
     if (!src || !dst) {
-        peak_usage("cp", "[-r] <src> <dst>");
+        peak_usage("cp", "[-r] [--promote-blob] <src> <dst>");
         return 1;
     }
     char as[VFS_PATH_MAX], ad[VFS_PATH_MAX];
@@ -211,9 +214,9 @@ int ucp_main(int argc, char **argv) {
             peak_perror("cp", "omitting directory (use -r)");
             return 1;
         }
-        return vfs_copy_tree(as, ad) == 0 ? 0 : 1;
+        return vfs_copy_tree_ex(as, ad, promote) == 0 ? 0 : 1;
     }
-    return vfs_copy_file(as, ad) == 0 ? 0 : 1;
+    return vfs_copy_file_ex(as, ad, promote) == 0 ? 0 : 1;
 }
 
 int umv_main(int argc, char **argv) {
