@@ -713,9 +713,9 @@ int utlsinfo_main(int argc, char **argv) {
             size_t tlen = 0;
             if (tls_session_entry_info(i, sni, sizeof(sni), &meta, &tlen) != 0)
                 continue;
-            console_printf("  [%d] sni=%s tls=%s cipher=0x%04x ticket_len=%u\n",
+            console_printf("  [%d] sni=%s tls=%s cipher=0x%04x ticket_len=%u res_master=%s binder=hkdf\n",
                            i, sni, meta.tls13 ? "1.3" : "1.2", meta.cipher,
-                           (unsigned)tlen);
+                           (unsigned)tlen, meta.res_master_len ? "yes" : "no");
         }
     }
     {

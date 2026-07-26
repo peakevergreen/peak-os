@@ -325,6 +325,14 @@ grep -q 'post_body' kernel/user/utils_net.c
 grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
+
+echo "==> Wave 3 Pass 73 TLS PSK binder"
+grep -q 'tls13_compute_psk_binder' kernel/net/tls_psk.c
+grep -q 'tls13_note_resumption_master' kernel/net/tls13.c
+grep -q 'res_master_len' kernel/include/tls_session.h
+grep -q 'binder=hkdf' kernel/user/utils_net.c
+grep -q 'HKDF/HMAC binder' docs/network.md
+
 echo "==> Wave 3 Pass 72 files/notepad a11y"
 grep -q files_draw_focus_ring kernel/gui/desktop_files.c
 grep -q np_draw_focus_ring kernel/gui/desktop_notepad.c

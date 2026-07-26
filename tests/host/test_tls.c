@@ -620,6 +620,13 @@ static void test_clienthello_goldens(void) {
         expect(el >= 16 + 32, "psk ext has identity+binder");
         expect(ch_find_ext(ch, n, 0x002d, &ed, &el), "has psk_key_exchange_modes");
         expect(el == 2 && ed[0] == 1 && ed[1] == 1, "psk_dhe_ke mode");
+        {
+            int nz = 0;
+            for (int bi = (int)el - 32; bi < (int)el; bi++)
+                if (bi >= 0 && ed[bi])
+                    nz = 1;
+            expect(nz, "binder nonzero hkdf");
+        }
         tls_session_clear();
     }
 

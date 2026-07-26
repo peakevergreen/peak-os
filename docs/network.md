@@ -168,7 +168,7 @@ until HPKE lands (interop note).
 - Handshake DoS budgets: max message `TLS_HS_MSG_MAX`, max records `TLS_HS_RECORD_MAX`
 - Structured `tls_last_error_code()` alongside string `tls_last_error()`; `tls_err_name()` maps codes to short tags (`cert`, `alert`, …) and non-alert errors are prefixed `[tag]` in `tls_last_error()`
 - `tlsinfo` CLI: trust summary (embedded WebPKI root count, pin count, TOFU toggle), session verify flags, bounded session ticket cache (`session_cache: used=N/4`), `-s` lists cached SNI/cipher/TLS version, `cert_fail` reason, last error; `-r` dumps root SHA-256 digests; `-m pattern host` exercises hostname matching
-- Session resume: TLS 1.2 offers cached tickets via `session_ticket`; TLS 1.3 PSK-lite offers `pre_shared_key` identity with stub binder (invalid binder → full handshake fallback; HKDF binder NYI). Post-handshake NewSessionTicket captured for both paths. ECH full HPKE remains NYI.
+- Session resume: TLS 1.2 offers cached tickets via `session_ticket`; TLS 1.3 PSK-lite offers `pre_shared_key` with HKDF/HMAC binder (RFC 8446); cached resumption master + ticket nonce when captured from NewSessionTicket. Post-handshake NewSessionTicket captured for both paths. ECH full HPKE remains NYI.
 
 ## Timeouts (100 Hz ticks)
 

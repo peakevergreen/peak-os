@@ -107,6 +107,17 @@ int tls_recv_record(uint8_t *type_out, uint8_t *buf, size_t cap, size_t *out_len
 int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_host);
 
 /* tls_clienthello.c */
+int tls13_compute_psk_binder(int sha384, const uint8_t *res_master, size_t res_len,
+                             const uint8_t *ticket_nonce, size_t nonce_len,
+                             const uint8_t *client_hello, size_t ch_len,
+                             size_t binders_len_off, uint8_t *binder_out,
+                             size_t binder_len);
+int tls13_compute_psk_binder_from_ticket(int sha384, const uint8_t *ticket, size_t ticket_len,
+                                         const uint8_t *client_hello, size_t ch_len,
+                                         size_t binders_len_off, uint8_t *binder_out,
+                                         size_t binder_len);
+void tls13_note_resumption_master(void);
+
 int tls_build_client_hello(uint8_t *out, size_t cap, const char *sni, size_t *out_len);
 
 /* tls13.c — continue after TLS 1.3 ServerHello (transcript already includes SH). */
