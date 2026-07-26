@@ -304,6 +304,13 @@ grep -q file_describe kernel/user/utils_file.c
 grep -q test_cli_filemagic Makefile
 grep -q 'file <path>' docs/CLI.md
 
+
+echo "==> Wave 3 Pass 64 date/printf"
+grep -q date_format kernel/user/utils_sys.c
+grep -q test_cli_date Makefile
+grep -q '+%s' docs/CLI.md
+grep -q 'escapes:' kernel/user/utils_text4.c
+
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c kernel/net/tls_handshake.c

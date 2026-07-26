@@ -247,9 +247,103 @@ int ufind_main(int argc, char **argv) {
     return 0;
 }
 
+
+static int rtc_is_leap(unsigned y) {
+    return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+}
+
+static uint64_t rtc_unix_secs(const struct rtc_time *t) {
+    static const int mdays[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    uint64_t days = 0;
+    for (unsigned y = 1970; y < t->year; y++)
+        days += rtc_is_leap(y) ? 366u : 365u;
+    for (unsigned m = 1; m < t->month; m++) {
+        days += (uint64_t)mdays[m - 1];
+        if (m == 2 && rtc_is_leap(t->year))
+            days++;
+    }
+    days += (uint64_t)(t->day - 1);
+    return days * 86400ull + (uint64_t)t->hour * 3600ull + (uint64_t)t->min * 60ull +
+           (uint64_t)t->sec;
+}
+
+static void date_pad2(unsigned v, char *out, size_t *o, size_t cap) {
+    if (*o + 2 >= cap)
+        return;
+    out[(*o)++] = (char)('0' + (v / 10) % 10);
+    out[(*o)++] = (char)('0' + v % 10);
+}
+
+static void date_format(const struct rtc_time *t, const char *fmt, char *out, size_t cap) {
+    size_t o = 0;
+    for (const char *p = fmt; *p && o + 1 < cap; p++) {
+        if (*p != '%') {
+            out[o++] = *p;
+            continue;
+        }
+        p++;
+        if (!*p)
+            break;
+        if (*p == '%') {
+            out[o++] = '%';
+            continue;
+        }
+        if (*p == 's') {
+            uint64_t u = rtc_unix_secs(t);
+            char tmp[24];
+            snprintf(tmp, sizeof(tmp), "%lu", (unsigned long)u);
+            for (size_t i = 0; tmp[i] && o + 1 < cap; i++)
+                out[o++] = tmp[i];
+            continue;
+        }
+        if (*p == 'Y') {
+            if (o + 4 >= cap)
+                break;
+            unsigned y = t->year;
+            out[o++] = (char)('0' + (y / 1000) % 10);
+            out[o++] = (char)('0' + (y / 100) % 10);
+            out[o++] = (char)('0' + (y / 10) % 10);
+            out[o++] = (char)('0' + y % 10);
+            continue;
+        }
+        if (*p == 'm' || *p == 'd' || *p == 'H' || *p == 'M' || *p == 'S') {
+            unsigned v = 0;
+            if (*p == 'm')
+                v = t->month;
+            else if (*p == 'd')
+                v = t->day;
+            else if (*p == 'H')
+                v = t->hour;
+            else if (*p == 'M')
+                v = t->min;
+            else
+                v = t->sec;
+            date_pad2(v, out, &o, cap);
+            continue;
+        }
+        out[o++] = '%';
+        out[o++] = *p;
+    }
+    out[o] = '\0';
+}
+
 int udate_main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("date", "[+format]");
+        console_write("  formats: +%s +%Y-%m-%d (RTC when available)\n");
+        return 0;
+    }
+    struct rtc_time t;
+    if (rtc_read(&t) != 0) {
+        peak_perror("date", "RTC unavailable");
+        return 1;
+    }
+    if (argc >= 2 && argv[1][0] == '+' && argv[1][1]) {
+        char buf[64];
+        date_format(&t, argv[1] + 1, buf, sizeof(buf));
+        console_printf("%s\n", buf);
+        return 0;
+    }
     char wall[40];
     rtc_format_date(wall, sizeof(wall));
     if (wall[0])

@@ -68,6 +68,7 @@ static void hex_lower(unsigned v, int width) {
 int uprintf_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("printf", "<format> [args...]");
+        console_write("  escapes: \\n \\t \\\\n");
         return argc < 2 ? 1 : 0;
     }
     const char *fmt = argv[1];
