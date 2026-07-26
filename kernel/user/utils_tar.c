@@ -93,10 +93,12 @@ static int append_payload(char *archive, size_t *off, size_t cap,
 
 int utar_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 3) {
-        peak_usage("tar", "-c <archive.tar> <file...> | -x <archive.tar> [dir]");
+        peak_usage("tar", "-c|-x|-t [-v] <archive> [paths...]");
+        console_write("  ustar lite, 64 KiB archive cap\n");
         return argc < 3 ? 1 : 0;
     }
-    int mode = 0; /* 1=c 2=x */
+    int mode = 0; /* 1=c 2=x 3=t */
+    int verbose = 0;
     const char *archive_path = 0;
     const char *files[TAR_MAX_FILES];
     int nfiles = 0;
@@ -109,6 +111,14 @@ int utar_main(int argc, char **argv) {
         }
         if (!strcmp(argv[i], "-x")) {
             mode = 2;
+            continue;
+        }
+        if (!strcmp(argv[i], "-t")) {
+            mode = 3;
+            continue;
+        }
+        if (!strcmp(argv[i], "-v")) {
+            verbose = 1;
             continue;
         }
         if (!archive_path) {
@@ -126,8 +136,53 @@ int utar_main(int argc, char **argv) {
         }
     }
     if (!mode || !archive_path) {
-        peak_usage("tar", "-c <archive.tar> <file...> | -x <archive.tar> [dir]");
+        peak_usage("tar", "-c|-x|-t [-v] <archive> [paths...]");
         return 1;
+    }
+
+    char abs[VFS_PATH_MAX];
+    if (shell_resolve_path(archive_path, abs, sizeof(abs)))
+        return 1;
+    char archive[TAR_MAX_BYTES];
+    size_t alen = 0;
+    if (vfs_read_file(abs, archive, sizeof(archive), &alen) != 0) {
+        peak_perror("tar", "cannot read archive");
+        return 1;
+    }
+
+    if (mode == 3) {
+        size_t off = 0;
+        int listed = 0;
+        while (off + TAR_BLOCK <= alen) {
+            char *h = archive + off;
+            int empty = 1;
+            for (int i = 0; i < TAR_BLOCK; i++)
+                if (h[i]) {
+                    empty = 0;
+                    break;
+                }
+            if (empty)
+                break;
+            off += TAR_BLOCK;
+            char name[100];
+            memcpy(name, h, 99);
+            name[99] = '\0';
+            size_t size = (size_t)parse_octal(h + 124, 12);
+            char type = h[156];
+            size_t padded = (size + TAR_BLOCK - 1) & ~(size_t)(TAR_BLOCK - 1);
+            if (off + padded > alen)
+                break;
+            if (type == '0' || type == '\0') {
+                if (verbose)
+                    console_printf("-rw-r--r-- 0/0 %8lu %s\n", (unsigned long)size, name);
+                else
+                    console_printf("%s\n", name);
+                listed++;
+            }
+            off += padded;
+        }
+        console_printf("tar: listed %d entries\n", listed);
+        return listed ? 0 : 1;
     }
 
     if (mode == 1) {
@@ -179,15 +234,6 @@ int utar_main(int argc, char **argv) {
     }
 
     /* extract */
-    char abs[VFS_PATH_MAX];
-    if (shell_resolve_path(archive_path, abs, sizeof(abs)))
-        return 1;
-    char archive[TAR_MAX_BYTES];
-    size_t alen = 0;
-    if (vfs_read_file(abs, archive, sizeof(archive), &alen) != 0) {
-        peak_perror("tar", "cannot read archive");
-        return 1;
-    }
     char outabs[VFS_PATH_MAX];
     if (shell_resolve_path(outdir, outabs, sizeof(outabs)))
         return 1;
@@ -220,7 +266,10 @@ int utar_main(int argc, char **argv) {
                 peak_perror("tar", "extract write failed");
                 return 1;
             }
-            console_printf("x %s\n", name);
+            if (verbose)
+                console_printf("x %s (%lu bytes)\n", name, (unsigned long)size);
+            else
+                console_printf("x %s\n", name);
             extracted++;
         }
         off += padded;

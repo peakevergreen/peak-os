@@ -8,7 +8,7 @@
 #include "rtc.h"
 #include "ubin.h"
 
-#define COMP_MAX 8192
+#define COMP_MAX (32 * 1024)
 #define WATCH_MAX_ITERS 32
 
 int uhostname_main(int argc, char **argv) {
@@ -179,6 +179,7 @@ static int gzip_decode(const uint8_t *in, size_t in_len, uint8_t *out, size_t ca
 int ugzip_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
         peak_usage("gzip", "<path>");
+        console_write("  Peak RLE PEAKGZ1, 32 KiB input cap\n");
         return argc < 2 ? 1 : 0;
     }
     char abs[VFS_PATH_MAX];

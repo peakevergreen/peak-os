@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 106:** `tar -t`/`-v`; raise `dd`/`gzip` caps to 32 KiB with printed limits
+
 - **Pass 105:** `diff -u`, `patch` lite, `sha*sum -c` check mode
 
 - **Pass 104:** `pgrep`/`pidof` + `dmesg` lite (scrollback ring, `-n`)
