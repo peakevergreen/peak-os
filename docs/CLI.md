@@ -122,6 +122,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `watch` | run once with deadline note; repeat (`-n`, max 32 iters) |
 | `top` `sysmon` | live system monitor (sparklines, legend; `q` quit, `r` reset, `e` export, `-n` once) |
 | `ps` | task list (state, CPU ticks, age, wake, share %) sorted by CPU ticks |
+| `pgrep` `pidof` `dmesg` | find tasks by name substring; print PIDs; console scrollback ring (`dmesg -n N`) |
 | `kill <pid or name>` | mark READY/BLOCKED task zombie (not idle/self) |
 | `true` `false` `test` `[` `sh` | exit status helpers; `test -f/-d/-e/-z/-n`, `= != -eq …`; nested `ush>` loop |
 | `history` | numbered command history |

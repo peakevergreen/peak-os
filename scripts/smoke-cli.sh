@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 104 pgrep dmesg"
+grep -q upgrep_main kernel/user/utils_monitor.c
+grep -q udmesg_main kernel/user/utils_monitor.c
+grep -q console_scrollback_line_count kernel/user/utils_monitor.c
+grep -q 'UBIN_CMD("dmesg"' kernel/user/ubin_cmds.def
+
 echo "==> Wave 5 Pass 103 shuf cksum xxd"
 grep -q 'UBIN_CMD("shuf"' kernel/user/ubin_cmds.def
 grep -q ushuf_main kernel/user/utils_text8.c

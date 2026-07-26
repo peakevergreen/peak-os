@@ -126,6 +126,9 @@ extern int uunzip_main(int argc, char **argv);
 extern int utop_main(int argc, char **argv);
 extern int usysmon_main(int argc, char **argv);
 extern int ups_main(int argc, char **argv);
+extern int upgrep_main(int argc, char **argv);
+extern int upidof_main(int argc, char **argv);
+extern int udmesg_main(int argc, char **argv);
 extern int ukill_main(int argc, char **argv);
 extern int ujs_main(int argc, char **argv);
 
