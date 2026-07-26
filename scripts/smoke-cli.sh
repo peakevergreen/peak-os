@@ -410,9 +410,13 @@ echo "==> Wave 4 Pass 95 agent gui search"
 grep -q agent_transcript_filter kernel/agent.c
 grep -q agent_transcript_filter_key kernel/agent.c
 
+echo "==> Wave 4 Pass 97 heap sched gui"
+grep -q sched_note_gui_load kernel/sched.c
+grep -q desktop_compose_note_gui_tick kernel/gui/desktop_compose.c
+
 echo "==> Wave 4 Pass 96 nc traceroute depth"
 grep -q nc_listen_mode kernel/user/utils_net.c
-grep -q hop timeout / loss kernel/user/utils_net.c
+grep -q 'hop timeout / loss' kernel/user/utils_net.c
 
 echo "==> Wave 4 Pass 89 theme preview"
 grep -q settings_draw_theme_chrome_preview kernel/gui/desktop_settings.c
