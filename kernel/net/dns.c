@@ -92,6 +92,37 @@ static void dns_cache_store(const char *host, uint32_t ip) {
     dns_cache_store_ex(host, ip, 0, NET_DNS_CACHE_TTL_TICKS);
 }
 
+static void dns_decode_name(const uint8_t *dns, size_t payload, size_t i, size_t rdlen,
+                            char *out, size_t out_cap) {
+    (void)payload;
+    size_t off = i;
+    size_t o = 0;
+    out[0] = '\0';
+    while (off < i + rdlen && o + 1 < out_cap) {
+        uint8_t len = dns[off];
+        if (len == 0) {
+            off++;
+            break;
+        }
+        if ((len & 0xC0) == 0xC0)
+            break;
+        if (len > 63 || off + 1 + len > i + rdlen)
+            break;
+        if (o)
+            out[o++] = '.';
+        memcpy(out + o, dns + off + 1, len);
+        o += len;
+        off += (size_t)len + 1;
+    }
+    out[o] = '\0';
+}
+
+void net_dns_flush(void) {
+    for (int i = 0; i < DNS_CACHE_SLOTS; i++)
+        dns_cache[i].in_use = 0;
+    dns_last_neg_cached = 0;
+}
+
 static void dns_cache_store_neg(const char *host) {
     dns_cache_store_ex(host, 0, 1, NET_DNS_NEG_TTL_TICKS);
 }
@@ -134,27 +165,14 @@ void net_handle_dns_udp(const uint8_t *pkt, uint16_t ulen) {
             dns_answer_got_aaaa = 1;
             if (dns_want_qtype == 28)
                 dns_done = 1;
+        } else if (typ == 5 && rdlen > 0 && i + rdlen <= payload) {
+            dns_decode_name(dns, payload, i, rdlen, dns_answer_cname,
+                            sizeof(dns_answer_cname));
+            if (dns_answer_cname[0])
+                dns_answer_got_cname = 1;
         } else if (typ == 12 && rdlen > 0 && i + rdlen <= payload) {
-            size_t off = i;
-            size_t o = 0;
-            while (off < i + rdlen && o + 1 < sizeof(dns_answer_ptr)) {
-                uint8_t len = dns[off];
-                if (len == 0) {
-                    off++;
-                    break;
-                }
-                if ((len & 0xC0) == 0xC0)
-                    break;
-                if (len > 63 || off + 1 + len > i + rdlen)
-                    break;
-                if (o)
-                    dns_answer_ptr[o++] = '.';
-                memcpy(dns_answer_ptr + o, dns + off + 1, len);
-                o += len;
-                off += (size_t)len + 1;
-            }
-            dns_answer_ptr[o] = '\0';
-            if (o)
+            dns_decode_name(dns, payload, i, rdlen, dns_answer_ptr, sizeof(dns_answer_ptr));
+            if (dns_answer_ptr[0])
                 dns_answer_got_ptr = 1;
             if (dns_want_qtype == 12)
                 dns_done = 1;
@@ -163,6 +181,8 @@ void net_handle_dns_udp(const uint8_t *pkt, uint16_t ulen) {
         if (dns_done)
             return;
     }
+    if (dns_want_qtype == 1 && dns_answer_ip)
+        dns_done = 1;
 }
 
 int net_dns_last_negative_cached(void) { return dns_last_neg_cached; }
@@ -217,75 +237,84 @@ uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
         return 0;
     }
 
-    uint8_t q[256];
-    size_t o = 0;
-    dns_txid++;
-    q[o++] = (uint8_t)(dns_txid >> 8);
-    q[o++] = (uint8_t)(dns_txid & 0xFF);
-    q[o++] = 0x01;
-    q[o++] = 0x00; /* recursion */
-    q[o++] = 0x00;
-    q[o++] = 0x01; /* QDCOUNT */
-    q[o++] = 0x00;
-    q[o++] = 0x00;
-    q[o++] = 0x00;
-    q[o++] = 0x00;
-    q[o++] = 0x00;
-    q[o++] = 0x00;
-    /* QNAME */
-    const char *h = hostname;
-    while (*h) {
-        const char *dot = h;
-        while (*dot && *dot != '.')
-            dot++;
-        size_t lab = (size_t)(dot - h);
-        if (lab == 0 || lab > 63 || o + lab + 1 >= sizeof(q)) {
-            net_set_last_error(PEAK_EINVAL, "invalid hostname label");
-            return 0;
-        }
-        q[o++] = (uint8_t)lab;
-        memcpy(q + o, h, lab);
-        o += lab;
-        if (*dot == '.')
-            h = dot + 1;
-        else {
-            h = dot;
-            break;
-        }
-    }
-    q[o++] = 0;
-    q[o++] = 0x00;
-    q[o++] = 0x01; /* A */
-    q[o++] = 0x00;
-    q[o++] = 0x01; /* IN */
-
-    dns_done = 0;
-    dns_answer_ip = 0;
-    dns_want_qtype = 1;
-    dns_sport = ephem_port++;
-    if (ephem_port < 40000)
-        ephem_port = 40000;
-    if (net_udp_send(local_dns, dns_sport, 53, q, (uint16_t)o) != 0) {
-        net_set_last_error(PEAK_ENETUNREACH, "DNS query send failed (ARP?)");
-        return 0;
-    }
-
-    uint64_t start = timer_ticks();
-    while (!net_timed_out(start, timeout_ticks)) {
-        net_poll();
-        if (dns_done) {
-            if (dns_answer_ip) {
-                dns_cache_store(hostname, dns_answer_ip);
-                return dns_answer_ip;
+    char cname_step[256];
+    const char *query_name = hostname;
+    for (int cname_hop = 0; cname_hop < 4; cname_hop++) {
+        uint8_t q[256];
+        size_t o = 0;
+        dns_txid++;
+        q[o++] = (uint8_t)(dns_txid >> 8);
+        q[o++] = (uint8_t)(dns_txid & 0xFF);
+        q[o++] = 0x01;
+        q[o++] = 0x00; /* recursion */
+        q[o++] = 0x00;
+        q[o++] = 0x01; /* QDCOUNT */
+        q[o++] = 0x00;
+        q[o++] = 0x00;
+        q[o++] = 0x00;
+        q[o++] = 0x00;
+        q[o++] = 0x00;
+        q[o++] = 0x00;
+        const char *h = query_name;
+        while (*h) {
+            const char *dot = h;
+            while (*dot && *dot != '.')
+                dot++;
+            size_t lab = (size_t)(dot - h);
+            if (lab == 0 || lab > 63 || o + lab + 1 >= sizeof(q)) {
+                net_set_last_error(PEAK_EINVAL, "invalid hostname label");
+                return 0;
             }
-            dns_cache_store_neg(hostname);
-            net_set_last_error(PEAK_ENOENT, "no A record in DNS response");
+            q[o++] = (uint8_t)lab;
+            memcpy(q + o, h, lab);
+            o += lab;
+            if (*dot == '.')
+                h = dot + 1;
+            else {
+                h = dot;
+                break;
+            }
+        }
+        q[o++] = 0;
+        q[o++] = 0x00;
+        q[o++] = 0x01; /* A */
+        q[o++] = 0x00;
+        q[o++] = 0x01; /* IN */
+
+        dns_done = 0;
+        dns_answer_ip = 0;
+        dns_answer_got_cname = 0;
+        dns_answer_cname[0] = '\0';
+        dns_want_qtype = 1;
+        dns_sport = ephem_port++;
+        if (ephem_port < 40000)
+            ephem_port = 40000;
+        if (net_udp_send(local_dns, dns_sport, 53, q, (uint16_t)o) != 0) {
+            net_set_last_error(PEAK_ENETUNREACH, "DNS query send failed (ARP?)");
             return 0;
         }
-        hlt_if_enabled();
+
+        uint64_t start = timer_ticks();
+        while (!net_timed_out(start, timeout_ticks)) {
+            net_poll();
+            if (dns_done) {
+                if (dns_answer_ip) {
+                    dns_cache_store(hostname, dns_answer_ip);
+                    return dns_answer_ip;
+                }
+                break;
+            }
+            hlt_if_enabled();
+        }
+        if (dns_answer_got_cname && dns_answer_cname[0]) {
+            snprintf(cname_step, sizeof(cname_step), "%s", dns_answer_cname);
+            query_name = cname_step;
+            continue;
+        }
+        break;
     }
     dns_cache_store_neg(hostname);
-    net_set_last_error(PEAK_ETIMEOUT, "DNS query timed out (~3s)");
+    net_set_last_error(PEAK_ENOENT, "no A record in DNS response");
     return 0;
 }
 
@@ -344,7 +373,9 @@ static int dns_query_once(const char *qname, uint16_t qtype, uint32_t timeout_ti
     dns_answer_ip = 0;
     dns_answer_got_aaaa = 0;
     dns_answer_got_ptr = 0;
+    dns_answer_got_cname = 0;
     dns_answer_ptr[0] = '\0';
+    dns_answer_cname[0] = '\0';
     dns_sport = ephem_port++;
     if (ephem_port < 40000)
         ephem_port = 40000;

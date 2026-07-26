@@ -34,6 +34,7 @@ void net_format_ipv6(const uint8_t addr[16], char *buf, size_t cap);
 
 int net_dns_last_negative_cached(void);
 uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks);
+void net_dns_flush(void);
 
 #define NET_TCP_MAX     16
 #define NET_LISTEN_MAX  8

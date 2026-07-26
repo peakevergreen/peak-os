@@ -118,8 +118,10 @@ extern int dns_done;
 extern uint16_t dns_want_qtype;
 extern uint8_t dns_answer_aaaa[16];
 extern char dns_answer_ptr[256];
+extern char dns_answer_cname[256];
 extern int dns_answer_got_aaaa;
 extern int dns_answer_got_ptr;
+extern int dns_answer_got_cname;
 extern uint16_t dns_sport;
 
 extern int http_needs_tls_flag;
