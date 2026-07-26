@@ -19,6 +19,24 @@
 #define HTTP_BODY_MAX 32768
 #include "vfs.h"
 
+#define NC_LISTEN_TICKS_DEFAULT 80u   /* 800ms at 100 Hz */
+#define NC_CONNECT_TICKS_DEFAULT 400u /* 4s */
+#define NC_TIMEOUT_MAX_SEC 30
+
+static uint32_t nc_timeout_ticks(int argc, char **argv, uint32_t default_ticks) {
+    for (int i = 1; i < argc - 1; i++) {
+        if (!strcmp(argv[i], "-w")) {
+            int sec = peak_atoi(argv[i + 1]);
+            if (sec <= 0)
+                sec = 1;
+            if (sec > NC_TIMEOUT_MAX_SEC)
+                sec = NC_TIMEOUT_MAX_SEC;
+            return (uint32_t)sec * 100u;
+        }
+    }
+    return default_ticks;
+}
+
 static void net_print_failure(const char *tool, const char *what) {
     const char *detail = net_last_error();
     if (detail && detail[0])
@@ -672,8 +690,11 @@ static int nc_listen_mode(int argc, char **argv) {
         if (!strcmp(argv[i], "-l") && i + 1 < argc)
             port = (uint16_t)peak_atoi(argv[++i]);
     }
-    if (!port) return 0;
-    console_printf("nc: listen mode on :%u (accept one client, 400ms timeout)\n", (unsigned)port);
+    if (!port)
+        return 0;
+    uint32_t ticks = nc_timeout_ticks(argc, argv, NC_LISTEN_TICKS_DEFAULT);
+    unsigned ms = (unsigned)(ticks * 10u);
+    console_printf("nc: listen mode on :%u (accept one client, %ums timeout)\n", (unsigned)port, ms);
     if (!net_ready()) {
         peak_perror("nc", "network down");
         return 1;
@@ -683,8 +704,8 @@ static int nc_listen_mode(int argc, char **argv) {
         net_print_failure("nc", "listen failed");
         return 1;
     }
-    console_write("nc: waiting for connection (400ms)…\n");
-    uint64_t deadline = timer_ticks() + 40;
+    console_printf("nc: waiting for connection (%ums; -w max %ds)…\n", ms, NC_TIMEOUT_MAX_SEC);
+    uint64_t deadline = timer_ticks() + ticks;
     int fd = -1;
     while (timer_ticks() < deadline) {
         net_poll();
@@ -704,10 +725,13 @@ static int nc_listen_mode(int argc, char **argv) {
 
 int unc_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("nc", "-l <port> | <host> <port> | <host:port>");
+        peak_usage("nc", "[-w sec] -l <port> | [-w sec] <host> <port> | <host:port>");
+        console_write("  listen default 800ms; connect default 4s; -w capped at 30s\n");
         return argc < 2 ? 1 : 0;
     }
-    for (int i = 1; i < argc; i++) if (!strcmp(argv[i], "-l")) return nc_listen_mode(argc, argv);
+    for (int i = 1; i < argc; i++)
+        if (!strcmp(argv[i], "-l"))
+            return nc_listen_mode(argc, argv);
     uint32_t ip = 0;
     uint16_t port = 0;
     int pr = nc_parse_target(argc, argv, &ip, &port);
@@ -721,8 +745,10 @@ int unc_main(int argc, char **argv) {
     }
     char addr[32];
     net_format_ip(ip, addr, sizeof(addr));
-    console_printf("nc: connect %s:%u\n", addr, (unsigned)port);
-    if (net_tcp_connect(ip, port, 400) != 0) {
+    uint32_t cticks = nc_timeout_ticks(argc, argv, NC_CONNECT_TICKS_DEFAULT);
+    console_printf("nc: connect %s:%u (timeout %ums)\n", addr, (unsigned)port,
+                   (unsigned)(cticks * 10u));
+    if (net_tcp_connect(ip, port, cticks) != 0) {
         net_print_failure("nc", "connect failed");
         return 1;
     }

@@ -518,6 +518,12 @@ grep -q 'desktop_win_keyboard_nudge' kernel/gui/desktop_windows.c
 grep -q 'desktop_draw_snap_hud' kernel/gui/desktop_compose.c
 grep -q 'snap_hud_mode' kernel/gui/desktop.c
 
+echo "==> Wave 6 Pass 127 nc timeout listen"
+grep -q NC_LISTEN_TICKS_DEFAULT kernel/user/utils_net.c
+grep -q nc_timeout_ticks kernel/user/utils_net.c
+grep -q 'NC_TIMEOUT_MAX_SEC' kernel/user/utils_net.c
+grep -q '800ms' docs/CLI.md
+
 echo "==> Wave 6 Pass 126 tlsinfo depth"
 grep -q hsts_host_count kernel/net/tls_hsts.c
 grep -q 'hsts: hosts=' kernel/user/utils_net.c
