@@ -446,3 +446,14 @@ void sched_sort_tasks(struct task *list, int n) {
     (void)list;
     (void)n;
 }
+
+/* Pass 117 sys.ps starvation columns — unused on empty host task table. */
+uint32_t sched_task_starvation(int slot) {
+    (void)slot;
+    return 0;
+}
+
+int sched_slot_for_pid(int pid) {
+    (void)pid;
+    return -1;
+}
