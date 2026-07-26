@@ -518,6 +518,13 @@ grep -q 'desktop_win_keyboard_nudge' kernel/gui/desktop_windows.c
 grep -q 'desktop_draw_snap_hud' kernel/gui/desktop_compose.c
 grep -q 'snap_hud_mode' kernel/gui/desktop.c
 
+echo "==> Wave 6 Pass 125 ss netstat"
+grep -q 'UBIN_CMD("ss"' kernel/user/ubin_cmds.def
+grep -q uss_main kernel/user/utils_net.c
+grep -q net_tcp_conn_row_count kernel/user/utils_net.c
+grep -q net_tcp_conn_row kernel/user/utils_net.c
+grep -q '`ss`' docs/CLI.md || grep -q 'ss \[-t\]' docs/CLI.md
+
 echo "==> Wave 6 Pass 124 ln chmod install"
 grep -q 'peak_has_flag(argc, argv, "-f")' kernel/user/utils_file.c
 grep -q 'ugo' kernel/user/utils_file.c
