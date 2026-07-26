@@ -77,6 +77,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `truncate <path> <n>` | resize (max 4096) |
 | `dd if=<in> of=<out> [bs=N] [count=N]` | lite block copy (default bs=512; 8 KiB total cap) |
 | `sync` | flush block device when ATA/SD present |
+| `file <path>…` | magic sniff (ELF, PPM P6, BMP, PEAKZIP1, PEAKGZ1, text vs data) |
 
 ## Text
 | Command | Notes |

@@ -297,6 +297,13 @@ grep -q 'UBIN_CMD("dd"' kernel/user/ubin_cmds.def
 grep -q 'blockdev_flush' kernel/user/utils_file.c
 grep -q 'dd if=' docs/CLI.md
 
+
+echo "==> Wave 3 Pass 63 file magic"
+grep -q ufile_main kernel/user/utils_file.c
+grep -q file_describe kernel/user/utils_file.c
+grep -q test_cli_filemagic Makefile
+grep -q 'file <path>' docs/CLI.md
+
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c kernel/net/tls_handshake.c

@@ -609,3 +609,84 @@ int usync_main(int argc, char **argv) {
         console_write("sync: no block device (nothing to flush)\n");
     return 0;
 }
+
+#define FILE_SNIFF_MAX 512
+
+static int file_is_text(const uint8_t *buf, size_t n) {
+    if (!n)
+        return 1;
+    for (size_t i = 0; i < n; i++) {
+        uint8_t c = buf[i];
+        if (c == 0)
+            return 0;
+        if (c == '\n' || c == '\r' || c == '\t')
+            continue;
+        if (c < 32 || c == 127)
+            return 0;
+    }
+    return 1;
+}
+
+static void file_describe(const uint8_t *buf, size_t n, char *out, size_t cap) {
+    if (!out || !cap) {
+        return;
+    }
+    out[0] = '\0';
+    if (n >= 4 && buf[0] == 0x7F && buf[1] == 'E' && buf[2] == 'L' && buf[3] == 'F') {
+        snprintf(out, cap, "ELF executable");
+        return;
+    }
+    if (n >= 8 && !memcmp(buf, "PEAKZIP1", 8)) {
+        snprintf(out, cap, "Peak PEAKZIP1 archive");
+        return;
+    }
+    if (n >= 7 && !memcmp(buf, "PEAKGZ1", 7)) {
+        snprintf(out, cap, "Peak PEAKGZ1 compressed data");
+        return;
+    }
+    if (n >= 2 && buf[0] == 'B' && buf[1] == 'M') {
+        snprintf(out, cap, "BMP image data");
+        return;
+    }
+    if (n >= 3 && buf[0] == 'P' && buf[1] == '6' && (buf[2] == '\n' || buf[2] == '\r' || buf[2] == ' ')) {
+        snprintf(out, cap, "PPM (P6) image data");
+        return;
+    }
+    if (n >= 2 && buf[0] == 'P' && buf[1] == '6') {
+        snprintf(out, cap, "PPM (P6) image data");
+        return;
+    }
+    if (file_is_text(buf, n))
+        snprintf(out, cap, "ASCII text");
+    else
+        snprintf(out, cap, "data");
+}
+
+int ufile_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("file", "<path>...");
+        return argc < 2 ? 1 : 0;
+    }
+    int err = 0;
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-')
+            continue;
+        char abs[VFS_PATH_MAX];
+        if (shell_resolve_path(argv[i], abs, sizeof(abs)) != 0) {
+            peak_perror("file", "bad path");
+            err = 1;
+            continue;
+        }
+        static uint8_t sniff[FILE_SNIFF_MAX];
+        size_t n = 0;
+        if (vfs_read_file(abs, sniff, sizeof(sniff), &n) != 0) {
+            console_printf("%s: cannot open\n", abs);
+            err = 1;
+            continue;
+        }
+        char kind[64];
+        file_describe(sniff, n, kind, sizeof(kind));
+        console_printf("%s: %s\n", abs, kind);
+    }
+    return err;
+}

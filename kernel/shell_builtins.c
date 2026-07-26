@@ -189,6 +189,7 @@ static const struct help_entry help_table[] = {
     { "truncate", "file", "set file size" },
     { "dd", "file", "block copy lite (if=/of= bs count; 8 KiB cap)" },
     { "sync", "file", "flush block device caches" },
+    { "file", "file", "sniff file type (ELF/PPM/BMP/PEAKZIP1/PEAKGZ1/text)" },
     { "cat", "text", "print file" },
     { "head", "text", "first N lines" },
     { "tail", "text", "last N lines" },
@@ -291,7 +292,7 @@ static const struct help_entry help_table[] = {
 void shell_help_topics(void) {
     console_write("Peak CLI — categories:\n");
     console_write("  nav   pwd cd ls tree find\n");
-    console_write("  file  mkdir touch rm cp mv ln readlink chmod stat du df truncate dd sync basename dirname realpath\n");
+    console_write("  file  mkdir touch rm cp mv ln readlink chmod stat du df truncate dd sync file basename dirname realpath\n");
     console_write("  text  cat head tail wc grep diff sort uniq cut tr sed cmp hexdump strings echo printf tee yes\n");
     console_write("        fold rev od split paste nl tac xargs awk sha256sum md5sum base64 less more edit\n");
     console_write("  sys   date free top sysmon ps kill env which seq sleep theme wallpaper scale\n");
