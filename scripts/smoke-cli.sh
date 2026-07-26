@@ -385,6 +385,10 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 84 http body policy"
+grep -q 'HTTP_BODY_MAX 32768' kernel/user/utils_net.c
+grep -q '32768' docs/network.md
+
 echo "==> Wave 4 Pass 83 text buffer depth"
 grep -q 'READ_MAX 32768' kernel/user/utils_text6.c
 grep -q JQ_SELECT kernel/user/utils_text7.c

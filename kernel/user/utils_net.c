@@ -14,6 +14,8 @@
 #include "random.h"
 #include "timer.h"
 #include "util.h"
+
+#define HTTP_BODY_MAX 32768
 #include "vfs.h"
 
 static void net_print_failure(const char *tool, const char *what) {
@@ -306,7 +308,7 @@ int uwget_main(int argc, char **argv) {
         peak_usage("wget", "[-X METHOD] [-d data] [-i] [-O path] <url>");
         return 1;
     }
-    char body[8192];
+    char body[HTTP_BODY_MAX];
     char hdrs[2048];
     int st = 0;
     struct net_http_request req;
@@ -340,7 +342,7 @@ int uwget_main(int argc, char **argv) {
     }
     console_printf("  %lu bytes", (unsigned long)strlen(body));
     if (net_http_last_body_truncated()) {
-        console_printf(" (truncated, received %lu, limit %lu)",
+        console_printf(" [truncated: received=%lu limit=%lu policy=client-buffer]",
                        (unsigned long)net_http_last_body_total(),
                        (unsigned long)sizeof(body));
     }

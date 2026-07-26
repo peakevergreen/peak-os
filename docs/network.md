@@ -74,7 +74,7 @@ ctr build … && ctr run -p 8080 …
 
 `wget` / `curl` print `fetching...` before the transfer, label **HTTP/2** when ALPN
 `h2` is negotiated, show **Content-Type** (or full response headers with `-i`), and
-warn when the body hits the **8192-byte** client limit (`truncated, received …`).
+warn when the body hits the **32768-byte (32 KiB)** client limit (`structured meta: truncated, received …`).
 TLS failures surface `tls_last_error()` plus stable reject names (`fetch: tls-*`).
 
 HTTPS trust is **WebPKI** (embedded roots + path build + hostname/time) by default.
