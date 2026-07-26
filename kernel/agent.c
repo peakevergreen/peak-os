@@ -17,8 +17,8 @@ static char write_path[VFS_PATH_MAX];
 static char write_content[AGENT_PENDING_CONTENT_MAX];
 static int write_approved;
 
-#define AGENT_TLINES 24
-#define AGENT_TLINE 96
+#define AGENT_TLINES 48
+#define AGENT_TLINE 128
 static char tlines[AGENT_TLINES][AGENT_TLINE];
 static int tcount;
 static int tscroll;
@@ -89,6 +89,21 @@ void agent_transcript_reset_scroll(void) {
     tscroll = 0;
 }
 
+int agent_transcript_scroll_end(void) {
+    if (tcount <= 0) return 0;
+    int max_scroll = tcount > 1 ? tcount - 1 : 0;
+    if (tscroll == max_scroll) return 0;
+    tscroll = max_scroll; return 1;
+}
+void agent_transcript_note_audit(const char *op, const char *target, const char *decision) {
+    char line[AGENT_TLINE];
+    snprintf(line, sizeof(line), "[audit] %s %s -> %s", op?op:"?", target?target:"-", decision?decision:"?");
+    agent_transcript_push(line);
+}
+void agent_transcript_note_tool(const char *msg) {
+    if (!msg||!msg[0]) return;
+    char line[AGENT_TLINE]; snprintf(line, sizeof(line), "[tool] %s", msg); agent_transcript_push(line);
+}
 int agent_queue_write_approval(const char *path, const char *content) {
     if (write_wait)
         return -1;
@@ -106,7 +121,7 @@ int agent_queue_write_approval(const char *path, const char *content) {
     console_printf_ui("[agent] approval required: fs.write %s (Y/N in Agent)\n", path);
     serial_log(SERIAL_LOG_DEBUG, "agent: write approval pending\n");
     notify_push("Agent: write needs Y/N approval");
-    agent_transcript_push("[pending write — press Y to approve, N to deny]");
+    agent_transcript_push("[pending write — Y approve, N deny]");
     return 0;
 }
 
@@ -206,7 +221,6 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     uint32_t fg = th->fg;
     uint32_t acc = th->accent;
     uint32_t dim = th->dim;
-    uint32_t danger = th->danger;
     uint32_t s = fb_ui_scale();
     uint32_t ch = fb_char_h();
     uint32_t line_h = ch + 4 * s;
@@ -236,13 +250,13 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
             txt = tlines[idx];
         else if (tcount == 0 && row == vis - 1)
             txt = last_summary[0] ? last_summary : txt;
-        fb_draw_string_fit(x + 8 * s, ty + (uint32_t)row * line_h, w - 16 * s, txt, fg, bg);
+        uint32_t line_fg = fg; if (txt[0]=='[' && (!strncmp(txt,"[audit]",7)||!strncmp(txt,"[tool]",6)||!strncmp(txt,"[pending",8)||!strncmp(txt,"[write",6))) line_fg = dim; fb_draw_string_fit(x + 8 * s, ty + (uint32_t)row * line_h, w - 16 * s, txt, line_fg, bg);
     }
 
     if (tcount > vis) {
-        char hint[48];
-        snprintf(hint, sizeof(hint), "scroll %d/%d (Up/Down)", tscroll, tcount - vis);
-        fb_draw_string(x + 8 * s, ty + (uint32_t)vis * line_h, hint, dim, bg);
+        char hint[64];
+        snprintf(hint, sizeof(hint), "scroll %d/%d  Up/Down  Ctrl+Up/Down  Home/End", tscroll, tcount - vis);
+        fb_draw_string_fit(x + 8 * s, ty + (uint32_t)vis * line_h, w - 16 * s, hint, dim, bg);
     }
 
     uint32_t fy = ty + (uint32_t)(vis + (tcount > vis ? 1 : 0)) * line_h + 4 * s;
@@ -250,13 +264,4 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     snprintf(pend, sizeof(pend), "pending approvals: %d", pending);
     fb_draw_string(x + 8 * s, fy, pend, fg, bg);
 
-    if (write_wait) {
-        fb_fill_rect(x + 6 * s, fy + line_h, w - 12 * s, 3 * line_h + 8 * s, th->border);
-        fb_draw_string(x + 10 * s, fy + line_h + 4 * s,
-                       "WRITE APPROVAL REQUIRED", danger, th->border);
-        fb_draw_string(x + 10 * s, fy + 2 * line_h + 4 * s,
-                       "Y = approve   N = deny", acc, th->border);
-        fb_draw_string_fit(x + 10 * s, fy + 3 * line_h + 4 * s, w - 20 * s,
-                           write_path, fg, th->border);
-    }
 }

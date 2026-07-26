@@ -220,4 +220,5 @@ void agent_audit_event(const char *op, const char *target, const char *decision)
     }
     line[o] = '\0';
     agent_audit_append(line);
+    agent_transcript_note_audit(op, target, decision);
 }

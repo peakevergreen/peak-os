@@ -76,6 +76,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - Agent tools expanded: fs.stat, fs.mkdir, fs.rm, fs.search, fs.grep, sys.info, net.ping, mem.recall, audit.tail; AGENT_TOOLS_MAX 16; fs.exec allowlist widened
 - Policy seed uses `fs.exec` (no phantom `proc.exec` deny)
 - Agent GUI uses theme colors, scrollable transcript, write-approval toasts, search-aware summarize
+- **Pass 49:** Agent GUI — 256-char input, scrollable transcript with tool/audit lines, clearer write-approval prompt (Y/N + path)
 - PeakVec embeddings + recall; streamed PeakFS / blobstore
 - **Pass 36:** peakvec_stats, blobstore_stats/check, peakvec builtin
 
