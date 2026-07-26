@@ -28,6 +28,7 @@ enum settings_hit_act {
     SHIT_TLS_FORGET,
     SHIT_NETCTL,
     SHIT_IDLE_LOCK,
+    SHIT_PRIV_REVOKE,
 };
 
 struct settings_hit {
@@ -281,6 +282,24 @@ static const char *settings_persist_footer(void) {
     return "Look/Display prefs survive reboot after disksave";
 }
 
+static void settings_draw_privacy_grants(uint32_t tx, uint32_t cy, uint32_t content_w) {
+    int n = privacy_grant_list_count();
+    for (int i = 0; i < n; i++) {
+        char line[64];
+        snprintf(line, sizeof(line), "%s: %s", privacy_grant_label(i),
+                 privacy_grant_active(i) ? "granted" : "off");
+        fb_draw_string(tx, cy, line, desktop_color_fg(), desktop_color_bg());
+        cy += fb_cell_h() + desktop_u(4);
+        if (privacy_grant_active(i)) {
+            uint32_t bx = tx + desktop_u(12);
+            fb_draw_string(bx, cy, "[Revoke]", desktop_color_accent(), desktop_color_bg());
+            settings_hit_add(bx, cy, desktop_u(72), fb_cell_h() + desktop_u(4), SHIT_PRIV_REVOKE, i);
+            cy += fb_cell_h() + desktop_u(6);
+        }
+    }
+    (void)content_w;
+}
+
 static uint32_t settings_section(uint32_t tx, uint32_t cy, const char *title) {
     fb_draw_string(tx, cy, title, desktop_color_accent(), desktop_color_bg());
     return cy + fb_cell_h() + desktop_u(6);
@@ -532,6 +551,10 @@ void desktop_settings_draw(struct win *w) {
                        desktop_color_bg());
         cy += row;
         cy = settings_divider(tx, cy, content_w);
+        cy = settings_section(tx, cy, "Active grants");
+        settings_draw_privacy_grants(tx, cy, content_w);
+        cy += (uint32_t)privacy_grant_list_count() * (fb_cell_h() + desktop_u(4));
+        cy = settings_divider(tx, cy, content_w);
         cy = settings_section(tx, cy, "Session lock");
         {
             char iline[48];
@@ -681,6 +704,12 @@ static void settings_hit_dispatch(enum settings_hit_act act, int param) {
         settings_cycle_idle_lock_minutes();
         settings_persist();
         settings_notify_persist("/etc/peak/display", "Display");
+        break;
+    case SHIT_PRIV_REVOKE:
+        if (param >= 0 && param < privacy_grant_list_count()) {
+            privacy_revoke_grant(param);
+            notify_push("Grant revoked");
+        }
         break;
     case SHIT_CLEAR_SESSION:
         privacy_kill_arm = 0;

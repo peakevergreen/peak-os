@@ -21,6 +21,8 @@ Privacy is a first-class product property, not an accident of being unfinished.
 | `full` | `/home`, `/etc/peak`, opted-in `/var/peak` |
 
 Agent memory, net grants, and browser storage are session-scoped unless the user opts in.
+Revoke individual grants under Settings → Privacy → Active grants, or use Clear session
+to reset all grants and clipboard state at once.
 
 ## Network defaults
 
@@ -49,9 +51,9 @@ toggle by accident.
 ## UI surfaces
 
 Settings → General: plain-language storage summary (disk present, what persists).  
-Settings → Privacy: persist profile (private / workspace / full), idle lock minutes
-(1–60), network kill switch (double-click to enable), clear session (revokes grants,
-caps, clipboard).  
+Settings → Privacy: persist profile (private / workspace / full), active grant list
+with per-grant revoke, idle lock minutes (1–60), network kill switch
+(double-click to enable), clear session (revokes all grants, caps, clipboard).  
 Settings → Network: link info, trust-on-first-use toggle, forget saved TLS certificates.
 
 CLI: `privacy persist private|workspace|full`, `privacy net-allow`,
