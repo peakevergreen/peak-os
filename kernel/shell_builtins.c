@@ -213,6 +213,7 @@ static const struct help_entry help_table[] = {
     { "nl", "text", "number non-empty lines" },
     { "tac", "text", "print lines in reverse order" },
     { "xargs", "text", "build argv from stdin tokens" },
+    { "awk", "text", "awk-lite: fields $n, print, /pat/ { }" },
     { "sha256sum", "text", "SHA-256 digest (64 KiB cap)" },
     { "md5sum", "text", "MD5 digest (64 KiB cap)" },
     { "base64", "text", "base64 encode/decode (-d)" },
@@ -282,7 +283,7 @@ void shell_help_topics(void) {
     console_write("  nav   pwd cd ls tree find\n");
     console_write("  file  mkdir touch rm cp mv ln stat du df truncate basename dirname realpath\n");
     console_write("  text  cat head tail wc grep diff sort uniq cut tr sed cmp hexdump strings echo printf tee yes\n");
-    console_write("        fold rev od split paste nl tac xargs sha256sum md5sum base64 less more edit\n");
+    console_write("        fold rev od split paste nl tac xargs awk sha256sum md5sum base64 less more edit\n");
     console_write("  sys   date free top sysmon ps kill env which seq sleep theme wallpaper scale\n");
     console_write("        hostname uptime whoami id cal gzip gunzip timeout watch\n");
     console_write("        uname true false test [ yes time history sh reboot help man js\n");
