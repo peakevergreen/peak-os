@@ -16,6 +16,7 @@
 #include "cap.h"
 #include "privacy.h"
 #include "peakdisk.h"
+#include "bootinfo.h"
 
 int upwd_main(int argc, char **argv) {
     (void)argc;
@@ -489,14 +490,53 @@ int ugui_main(int argc, char **argv) {
     return 0;
 }
 
+static const char *uname_node(void) {
+    const char *h = shell_env_get("HOSTNAME");
+    return (h && h[0]) ? h : "peak";
+}
+
 int uuname_main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-#if defined(__aarch64__)
-    console_write("PeakOS 0.2.0-ai aarch64\n");
-#else
-    console_write("PeakOS 0.2.0-ai x86_64\n");
-#endif
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("uname", "[-asnmr]");
+        return 0;
+    }
+
+    int all = peak_has_flag(argc, argv, "-a");
+    int show_s = all || peak_has_flag(argc, argv, "-s");
+    int show_n = all || peak_has_flag(argc, argv, "-n");
+    int show_r = all || peak_has_flag(argc, argv, "-r");
+    int show_m = all || peak_has_flag(argc, argv, "-m");
+    if (!show_s && !show_n && !show_r && !show_m)
+        show_s = 1;
+
+    char line[192];
+    size_t o = 0;
+#define UNAME_APPEND(s) do { \
+    const char *p = (s); \
+    if (o > 0 && o + 1 < sizeof(line)) \
+        line[o++] = ' '; \
+    while (*p && o + 1 < sizeof(line)) \
+        line[o++] = *p++; \
+} while (0)
+
+    if (show_s)
+        UNAME_APPEND(bootinfo_sysname());
+    if (show_n)
+        UNAME_APPEND(uname_node());
+    if (show_r)
+        UNAME_APPEND(bootinfo_release());
+    if (show_m)
+        UNAME_APPEND(bootinfo_machine());
+    if (all) {
+        UNAME_APPEND(bootinfo_sysname());
+        UNAME_APPEND(bootinfo_release());
+        char ver[48];
+        bootinfo_format_version(ver, sizeof(ver));
+        UNAME_APPEND(ver);
+    }
+#undef UNAME_APPEND
+    line[o] = '\0';
+    console_printf("%s\n", line);
     return 0;
 }
 

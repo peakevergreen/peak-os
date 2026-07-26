@@ -1,4 +1,5 @@
 #include "peak_boot.h"
+#include "bootinfo.h"
 #include "types.h"
 #include "serial.h"
 #include "fb.h"
@@ -83,6 +84,8 @@ void kernel_entry(struct peak_bootinfo *info) {
         serial_write_str("Missing HHDM or memmap\n");
         hang();
     }
+
+    bootinfo_init(info);
 
     g_have_fb = (info->fb.addr != 0 && info->fb.width != 0 &&
                  info->fb.height != 0);

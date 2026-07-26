@@ -32,6 +32,7 @@ endif
 # ---- Shared portable kernel sources ----
 KERNEL_COMMON_SRCS := \
 	kernel/boot.c \
+	kernel/bootinfo.c \
 	kernel/serial.c \
 	kernel/fb.c \
 	kernel/display.c \

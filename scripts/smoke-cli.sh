@@ -165,6 +165,11 @@ grep -q 'agent_transcript_note_audit' kernel/agent.c
 grep -q 'AGENT_TLINES 48' kernel/agent.c
 grep -q 'agent_approval_draw' kernel/gui/desktop_agent.c
 
+echo "==> Pass 44 uname flags"
+grep -q 'bootinfo_init' kernel/boot.c
+grep -q 'bootinfo_format_version' kernel/bootinfo.c
+grep -q 'peak_has_flag(argc, argv, "-a")' kernel/user/utils_sys.c
+
 echo "==> theme names"
 grep -q evergreen kernel/theme.c
 grep -q midnight kernel/theme.c
