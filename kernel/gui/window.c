@@ -22,5 +22,6 @@ void window_draw_frame(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
     fb_fill_rect(x, y, s, h, border);
     fb_fill_rect(x + w - s, y, s, h, border);
     fb_fill_rect(x + s, y + s, w - 2 * s, title_h, title_bg);
-    fb_draw_string(x + 5 * s, y + 2 * s, title, title_fg, title_bg);
+    /* Leave room past outer border so glyphs are not flush/clipped. */
+    fb_draw_string(x + 8 * s, y + 3 * s, title, title_fg, title_bg);
 }
