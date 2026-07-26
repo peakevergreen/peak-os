@@ -168,7 +168,7 @@ void desktop_draw_help(void) {
         return;
     struct framebuffer *fb = fb_get();
     uint32_t mw = desktop_u(460);
-    uint32_t mh = desktop_u(380);
+    uint32_t mh = desktop_u(400);
     uint32_t mx = ((uint32_t)fb->width - mw) / 2;
     uint32_t my = desktop_u(64);
     fb_fill_rect(mx, my, mw, mh, desktop_color_surface());
@@ -190,6 +190,7 @@ void desktop_draw_help(void) {
         { "S / T", "Scale / theme" },
         { "Esc", "Close menus & overlays" },
         { "Peak menu", "Type to filter apps; Enter to launch" },
+        { "Ctrl+Alt+←/→/↑", "Snap window left/right/maximize" },
         { "Drag title", "Snap left/right/top edges" },
         { "Title _ [] x", "Minimize / maximize / close" },
         { "Ctrl+Shift+H", "Notification history panel" },
@@ -199,7 +200,7 @@ void desktop_draw_help(void) {
         { "Right-click", "Context menus" },
     };
     uint32_t key_w = desktop_u(100);
-    for (int i = 0; i < 14; i++) {
+    for (int i = 0; i < 15; i++) {
         uint32_t kbg = desktop_color_bg();
         fb_fill_rect(mx + pad, cy, key_w, fb_cell_h() + desktop_u(2), kbg);
         fb_draw_string(mx + pad + desktop_u(6), cy + desktop_u(1), lines[i].key,

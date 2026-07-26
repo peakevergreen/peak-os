@@ -154,6 +154,20 @@ void desktop_run(void) {
             key = 0;
         }
 
+
+        if (key && keyboard_ctrl_down() && keyboard_alt_down() && focus >= 0 && wins[focus].open) {
+            if (key == KEY_LEFT) {
+                desktop_snap_apply(focus, 1);
+                key = 0;
+            } else if (key == KEY_RIGHT) {
+                desktop_snap_apply(focus, 2);
+                key = 0;
+            } else if (key == KEY_UP) {
+                desktop_snap_apply(focus, 3);
+                key = 0;
+            }
+        }
+
         if (key == 20) {
             theme_next();
             theme_persist();
