@@ -172,7 +172,7 @@ int tls_verify_cert_chain(const uint8_t *cert_msg, size_t len, const char *sni_h
         if (!memcmp(digest, trust_pins[i], 32)) {
             int hn = verify_cert_hostname(cert_msg, len, sni_host);
             if (hn == 0) {
-                cert_fail_reason = "Certificate hostname mismatch";
+                cert_fail_reason = tls_hostname_mismatch_ux(sni_host, "leaf cert CN/SAN");
                 return 0;
             }
             if (hn == -2) {
@@ -231,7 +231,7 @@ webpki_fail:
         if (t == 1) {
             int hn = verify_cert_hostname(cert_msg, len, sni_host);
             if (hn == 0) {
-                cert_fail_reason = "Certificate hostname mismatch";
+                cert_fail_reason = tls_hostname_mismatch_ux(sni_host, "leaf cert CN/SAN");
                 return 0;
             }
             if (hn == -2) {
@@ -251,7 +251,7 @@ webpki_fail:
         serial_log(SERIAL_LOG_INFO, "tls: TOFU remembered (opt-in)\n");
         int hn = verify_cert_hostname(cert_msg, len, sni_host);
         if (hn == 0) {
-            cert_fail_reason = "Certificate hostname mismatch";
+            cert_fail_reason = tls_hostname_mismatch_ux(sni_host, "leaf cert CN/SAN");
             return 0;
         }
         if (hn == -2) {

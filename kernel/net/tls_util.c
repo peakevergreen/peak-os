@@ -2,6 +2,7 @@
 #include "../include/tls.h"
 #include "../include/tls_util.h"
 #include <string.h>
+#include <stdio.h>
 #else
 #include "tls.h"
 #include "tls_util.h"
@@ -86,6 +87,19 @@ int tls_hostname_matches_sni(const char *pattern, const char *host) {
         return ci_eq(pattern + 1, dot);
     }
     return ci_eq(pattern, host);
+}
+
+static char tls_mismatch_buf[160];
+
+const char *tls_hostname_mismatch_ux(const char *host, const char *cert_name) {
+    if (!host)
+        host = "(unknown)";
+    if (!cert_name || !cert_name[0])
+        cert_name = "(no CN/SAN)";
+    snprintf(tls_mismatch_buf, sizeof(tls_mismatch_buf),
+             "Certificate is for %s but you connected to %s — check URL or pin",
+             cert_name, host);
+    return tls_mismatch_buf;
 }
 
 int tls_tofu_check_store(const char *store, const char *host, const char *hexdigest) {

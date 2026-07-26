@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 144:** TLS alert desc mapping depth; hostname mismatch UX strings
+
 - **Pass 143:** HTTP redirect cap `HTTP_REDIRECT_MAX`; cookie jar lite honesty
 
 - **Pass 142:** DOM `tag.class` querySelector depth; CSS named `blue` + display lite

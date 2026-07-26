@@ -723,6 +723,12 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 144 TLS alert hostname UX"
+grep -q 'tls_hostname_mismatch_ux' kernel/net/tls_util.c
+grep -q 'tls_alert_desc_name' kernel/net/tls_util.c
+grep -q 'tls_hostname_mismatch_ux' kernel/include/tls_util.h
+grep -q 'Server alert' kernel/net/tls.c
+
 echo "==> Wave 7 Pass 143 HTTP redirect cookie jar"
 grep -q 'HTTP_REDIRECT_MAX' kernel/include/http_util.h
 grep -q 'http_cookie_jar_store' kernel/net/http_util.c
