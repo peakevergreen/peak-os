@@ -23,6 +23,12 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 **Pass 98 (Wave 4 lock-in):** `smoke-cli.sh` gates for Passes 79–97 markers, ROADMAP/CHANGELOG sync, security-checklist CI note — Wave 4 release acceptance.
 
+## Enhancement wave 5 (Passes 99–118) — shipped
+
+**Shipped on `main` (Passes 99–117):** CLI docs sync, shell scripting depth, grep/find/xargs, shuf/cksum/xxd, pgrep/dmesg, diff/patch/sha, tar/dd/gzip caps, curl/ping, HTTP chunked/H2 POST, DNS CNAME/dnsflush, blob-aware cp, blobstore reclaim, Files DnD ghost, Help/theme UX, Browser polish, Notepad/Monitor export, Agent mem.store/peakvec.query, ctr WORKDIR/Range, heap/sched starvation counters.
+
+**Pass 118 (Wave 5 lock-in):** `smoke-cli.sh` gates for Passes 99–117 markers, ROADMAP/CHANGELOG sync, security-checklist CI note — Wave 5 release acceptance.
+
 ## Enhancement wave 2 (Passes 39–58)
 
 **Shipped on `main` (Passes 39–58):** `awk`/`sed`/`jq`/`zip` CLI depth; VFS `chmod`, symlinks, human-readable sizes; `uname` flags; `less` pager search; Images and Agent GUI UX; files clipboard path ops; browser tab chrome; HTTP/2 client, WebAPI stubs, TLS session resume, PeakVec query, and expanded agent tools catalog — plus S9 remainder smoke-cli lock-in.
