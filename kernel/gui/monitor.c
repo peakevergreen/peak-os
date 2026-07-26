@@ -461,7 +461,7 @@ int monitor_export_click_at(int32_t mx, int32_t my) {
     if ((uint32_t)mx >= mon_export_x + mon_export_w || (uint32_t)my >= mon_export_y + mon_export_h) return 0;
     if (monitor_do_export() == 0) {
         char msg[96];
-        snprintf(msg, sizeof(msg), "Saved %s", mon_last_export);
+        snprintf(msg, sizeof(msg), "Saved export");
         notify_push(msg);
         return 1;
     }
