@@ -385,6 +385,10 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 85 dns negcache ux"
+grep -q net_dns_last_negative_cached kernel/net/dns.c
+grep -q 'cached negative' kernel/user/utils_net.c
+
 echo "==> Wave 4 Pass 84 http body policy"
 grep -q 'HTTP_BODY_MAX 32768' kernel/user/utils_net.c
 grep -q '32768' docs/network.md

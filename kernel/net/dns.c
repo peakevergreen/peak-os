@@ -14,6 +14,8 @@ struct dns_cache_ent {
 };
 
 static struct dns_cache_ent dns_cache[DNS_CACHE_SLOTS];
+static int dns_last_neg_cached;
+
 
 static void dns_host_norm(const char *in, char *out, size_t out_len) {
     size_t i = 0;
@@ -163,7 +165,10 @@ void net_handle_dns_udp(const uint8_t *pkt, uint16_t ulen) {
     }
 }
 
+int net_dns_last_negative_cached(void) { return dns_last_neg_cached; }
+
 uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
+    dns_last_neg_cached = 0;
     attempt_stats.dns++;
     net_set_last_error(0, NULL);
     if (!net_ready()) {
@@ -207,6 +212,7 @@ uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks) {
     if (hit > 0)
         return cached;
     if (hit < 0) {
+        dns_last_neg_cached = 1;
         net_set_last_error(PEAK_ENOENT, "cached failure (no A record, ~10s TTL)");
         return 0;
     }

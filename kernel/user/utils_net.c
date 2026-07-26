@@ -172,7 +172,14 @@ static int dns_lookup_dig(const char *tool, const char *hostname, int verbose) {
             console_printf(";; SERVER: %s#53\n", dns);
             console_printf(";; QUESTION SECTION:\n");
             console_printf(";%s.\t\tIN\tA\n\n", hostname);
-            console_printf(";; status: SERVFAIL\n");
+            if (net_dns_last_negative_cached())
+                console_printf(";; status: NXDOMAIN (cached negative, ~10s TTL)\n");
+            else if (net_last_error_code() == PEAK_ETIMEOUT)
+                console_printf(";; status: TIMEOUT (fresh query)\n");
+            else
+                console_printf(";; status: NXDOMAIN (fresh query)\n");
+        } else if (net_dns_last_negative_cached()) {
+            console_printf(";; NXDOMAIN cached for %s\n", hostname);
         }
         net_print_failure(tool, "DNS failed");
         return 1;
