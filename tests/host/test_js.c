@@ -143,6 +143,25 @@ int main(void) {
         expect(ins < 8000 && objs < 64, "hot loop budget sanity");
     }
 
+    /* Promise.allSettled / Promise.race lite (Pass 139). */
+    eval_eq(rt, "typeof Promise.allSettled", "\"function\"");
+    eval_eq(rt, "typeof Promise.race", "\"function\"");
+    eval_eq(rt,
+            "Promise.race([Promise.resolve(7),Promise.resolve(1)])",
+            "7");
+    eval_eq(rt,
+            "var a=Promise.allSettled([Promise.resolve(2),3]); a.length",
+            "2");
+    eval_eq(rt,
+            "var a=Promise.allSettled([Promise.resolve(2),3]); a[0].status",
+            "\"fulfilled\"");
+    eval_eq(rt,
+            "var a=Promise.allSettled([Promise.resolve(2),3]); a[0].value",
+            "2");
+    eval_eq(rt,
+            "var a=Promise.allSettled([Promise.resolve(2),3]); a[1].value",
+            "3");
+
     /* Budgets: runaway loop must fail */
     js_rt_set_budgets(rt, 1000, 256);
     char out[64];
