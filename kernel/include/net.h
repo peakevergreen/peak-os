@@ -32,6 +32,7 @@ int net_dns_resolve_aaaa(const char *hostname, uint32_t timeout_ticks,
 int net_dns_reverse_ptr(uint32_t ip, uint32_t timeout_ticks, char *name_out, size_t cap);
 void net_format_ipv6(const uint8_t addr[16], char *buf, size_t cap);
 
+int net_dns_last_negative_cached(void);
 uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks);
 
 #define NET_TCP_MAX     16
