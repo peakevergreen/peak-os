@@ -114,7 +114,7 @@ int peakdisk_save(void) {
 
     int need = vfs_export_ramdisk_size();
     if (need < 12) {
-        peakdisk_set_err("export size invalid (empty workspace?)");
+        peakdisk_set_err(vfs_export_last_error()[0] ? vfs_export_last_error() : "export size invalid (empty workspace?)");
         serial_log(SERIAL_LOG_WARN, "peakdisk: export size invalid\n");
         save_busy = 0;
         return -1;
@@ -136,7 +136,7 @@ int peakdisk_save(void) {
     }
     int n = vfs_export_ramdisk(blob, (size_t)need);
     if (n < 12) {
-        peakdisk_set_err("PeakFS export failed");
+        peakdisk_set_err(vfs_export_last_error()[0] ? vfs_export_last_error() : "PeakFS export failed");
         serial_log(SERIAL_LOG_WARN, "peakdisk: export failed\n");
         kfree(blob);
         save_busy = 0;

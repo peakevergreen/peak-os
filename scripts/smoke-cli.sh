@@ -326,6 +326,12 @@ grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
 
+echo "==> Wave 3 Pass 74 VFS stream export"
+grep -q 'vfs_export_ramdisk_stream' kernel/vfs_peakfs.c
+grep -q 'VFS_EXPORT_STREAM_CHUNK' kernel/include/vfs.h
+grep -q 'vfs_export_last_error' kernel/peakdisk.c
+grep -q 'vfs_export_ramdisk_stream' docs/peakvec.md
+
 echo "==> Wave 3 Pass 73 TLS PSK binder"
 grep -q 'tls13_compute_psk_binder' kernel/net/tls_psk.c
 grep -q 'tls13_note_resumption_master' kernel/net/tls13.c

@@ -124,77 +124,6 @@ int vfs_load_ramdisk(const void *blob, size_t len) {
     return 0;
 }
 
-struct export_ctx {
-    uint8_t *blob;
-    size_t cap;
-    size_t off;
-    uint32_t count;
-    int err;
-};
-
-static int export_write_entry(struct export_ctx *c, const char *path,
-                              const void *data, size_t dlen) {
-    size_t nlen = strlen(path);
-    if (nlen == 0 || nlen >= 65535)
-        return 0;
-    size_t need = 2 + nlen + 4 + dlen;
-    if (c->off + need > c->cap) {
-        c->err = 1;
-        return 1;
-    }
-    uint16_t nl = (uint16_t)nlen;
-    memcpy(c->blob + c->off, &nl, 2);
-    c->off += 2;
-    memcpy(c->blob + c->off, path, nlen);
-    c->off += nlen;
-    uint32_t dl = (uint32_t)dlen;
-    memcpy(c->blob + c->off, &dl, 4);
-    c->off += 4;
-    if (dlen && data)
-        memcpy(c->blob + c->off, data, dlen);
-    c->off += dlen;
-    c->count++;
-    return 0;
-}
-
-static int export_cb(const char *path, struct vfs_node *node, void *vctx) {
-    struct export_ctx *c = vctx;
-    if (!node || !path || !peakfs_path_allowed(path))
-        return 0;
-    if (node->type == VFS_DIR) {
-        char dpath[VFS_PATH_MAX];
-        size_t pl = strlen(path);
-        if (pl + 2 >= sizeof(dpath))
-            return 0;
-        memcpy(dpath, path, pl);
-        dpath[pl] = '/';
-        dpath[pl + 1] = '\0';
-        return export_write_entry(c, dpath, NULL, 0);
-    }
-    if (node->type != VFS_FILE)
-        return 0;
-    /* Blob-backed large files: materialize through the LRU for PeakFS export.
-     * Streaming export can replace this once the backend is fully wired. */
-    if (node->blob_id) {
-        if (node->size == 0)
-            return export_write_entry(c, path, NULL, 0);
-        uint8_t *tmp = (uint8_t *)kmalloc(node->size);
-        if (!tmp) {
-            c->err = 1;
-            return -1;
-        }
-        if (blobstore_read(node->blob_id, 0, tmp, node->size) != (int)node->size) {
-            kfree(tmp);
-            c->err = 1;
-            return -1;
-        }
-        int r = export_write_entry(c, path, tmp, node->size);
-        kfree(tmp);
-        return r;
-    }
-    return export_write_entry(c, path, node->data, node->size);
-}
-
 struct size_ctx {
     size_t bytes;
     uint32_t count;
@@ -210,9 +139,160 @@ static int size_cb(const char *path, struct vfs_node *node, void *vctx) {
     if (nlen == 0 || nlen >= 65535)
         return 0;
     size_t dlen = (node->type == VFS_FILE) ? node->size : 0;
+    if (c->bytes + 2 + nlen + 4 + dlen > VFS_EXPORT_MAX_BYTES)
+        return 1;
     c->bytes += 2 + nlen + 4 + dlen;
     c->count++;
     return 0;
+}
+
+
+static char vfs_export_err[96];
+
+const char *vfs_export_last_error(void) {
+    return vfs_export_err[0] ? vfs_export_err : "";
+}
+
+static void vfs_export_set_err(const char *msg) {
+    snprintf(vfs_export_err, sizeof(vfs_export_err), "%s", msg ? msg : "export failed");
+}
+
+struct stream_ctx {
+    vfs_export_write_fn fn;
+    void *user;
+    size_t off;
+    uint32_t count;
+    int err;
+};
+
+static int stream_write(struct stream_ctx *c, const void *data, size_t len) {
+    if (c->err)
+        return -1;
+    if (c->off + len > VFS_EXPORT_MAX_BYTES) {
+        vfs_export_set_err("PeakFS export exceeds 32 MiB cap");
+        c->err = 1;
+        return -1;
+    }
+    if (c->fn(data, len, c->user) != 0) {
+        vfs_export_set_err("export stream write failed");
+        c->err = 1;
+        return -1;
+    }
+    c->off += len;
+    return 0;
+}
+
+static int stream_write_entry(struct stream_ctx *c, const char *path, const void *data,
+                              size_t dlen) {
+    size_t nlen = strlen(path);
+    if (nlen == 0 || nlen >= 65535)
+        return 0;
+    uint16_t nl = (uint16_t)nlen;
+    if (stream_write(c, &nl, 2) != 0)
+        return -1;
+    if (stream_write(c, path, nlen) != 0)
+        return -1;
+    uint32_t dl = (uint32_t)dlen;
+    if (stream_write(c, &dl, 4) != 0)
+        return -1;
+    if (dlen && data) {
+        const uint8_t *p = data;
+        size_t left = dlen;
+        while (left) {
+            size_t chunk = left > VFS_EXPORT_STREAM_CHUNK ? VFS_EXPORT_STREAM_CHUNK : left;
+            if (stream_write(c, p, chunk) != 0)
+                return -1;
+            p += chunk;
+            left -= chunk;
+        }
+    }
+    c->count++;
+    return 0;
+}
+
+static int export_stream_cb(const char *path, struct vfs_node *node, void *vctx) {
+    struct stream_ctx *c = vctx;
+    if (!node || !path || !peakfs_path_allowed(path))
+        return 0;
+    if (node->type == VFS_DIR) {
+        char dpath[VFS_PATH_MAX];
+        size_t pl = strlen(path);
+        if (pl + 2 >= sizeof(dpath))
+            return 0;
+        memcpy(dpath, path, pl);
+        dpath[pl] = '/';
+        dpath[pl + 1] = '\0';
+        return stream_write_entry(c, dpath, NULL, 0);
+    }
+    if (node->type != VFS_FILE)
+        return 0;
+    if (node->blob_id && node->size > 0) {
+        size_t nlen = strlen(path);
+        if (nlen == 0 || nlen >= 65535)
+            return 0;
+        uint16_t nl = (uint16_t)nlen;
+        if (stream_write(c, &nl, 2) != 0)
+            return -1;
+        if (stream_write(c, path, nlen) != 0)
+            return -1;
+        uint32_t dl = (uint32_t)node->size;
+        if (stream_write(c, &dl, 4) != 0)
+            return -1;
+        uint8_t chunk[VFS_EXPORT_STREAM_CHUNK];
+        for (size_t pos = 0; pos < node->size;) {
+            size_t want = node->size - pos;
+            if (want > sizeof(chunk))
+                want = sizeof(chunk);
+            if (blobstore_read(node->blob_id, pos, chunk, want) != (int)want) {
+                vfs_export_set_err("blob read failed during export");
+                c->err = 1;
+                return -1;
+            }
+            if (stream_write(c, chunk, want) != 0)
+                return -1;
+            pos += want;
+        }
+        c->count++;
+        return 0;
+    }
+    return stream_write_entry(c, path, node->data, node->size);
+}
+
+struct mem_export_ctx {
+    uint8_t *base;
+    size_t cap;
+};
+
+static int mem_export_write(const void *data, size_t len, void *ctx) {
+    struct mem_export_ctx *m = ctx;
+    if (m->cap < len)
+        return -1;
+    memcpy(m->base, data, len);
+    m->base += len;
+    m->cap -= len;
+    return 0;
+}
+
+int vfs_export_ramdisk_stream(vfs_export_write_fn fn, void *ctx, uint32_t *out_bytes,
+                              uint32_t *out_count) {
+    vfs_export_err[0] = '\0';
+    uint8_t hdr[12];
+    memcpy(hdr, "PEAKFS1", 7);
+    hdr[7] = 0;
+    memset(hdr + 8, 0, 4);
+    struct stream_ctx sc = { .fn = fn, .user = ctx, .off = 0, .count = 0, .err = 0 };
+    if (stream_write(&sc, hdr, 12) != 0)
+        return -1;
+    vfs_walk("/home", export_stream_cb, &sc);
+    vfs_walk("/etc/peak", export_stream_cb, &sc);
+    vfs_walk("/var/peak", export_stream_cb, &sc);
+    if (sc.err)
+        return -1;
+    if (out_bytes)
+        *out_bytes = (uint32_t)sc.off;
+    if (out_count)
+        *out_count = sc.count;
+    return (int)sc.off;
 }
 
 int vfs_export_ramdisk_size(void) {
@@ -220,25 +300,29 @@ int vfs_export_ramdisk_size(void) {
     vfs_walk("/home", size_cb, &c);
     vfs_walk("/etc/peak", size_cb, &c);
     vfs_walk("/var/peak", size_cb, &c);
-    if (c.bytes > (size_t)0x7fffffff)
+    if (c.bytes > VFS_EXPORT_MAX_BYTES || c.bytes > (size_t)0x7fffffff) {
+        vfs_export_set_err("PeakFS export exceeds 32 MiB cap");
         return -1;
+    }
     return (int)c.bytes;
 }
 
 int vfs_export_ramdisk(void *blob, size_t cap) {
-    if (!blob || cap < 12)
+    if (!blob || cap < 12) {
+        vfs_export_set_err("export buffer too small");
         return -1;
-    uint8_t *p = blob;
-    memcpy(p, "PEAKFS1", 7);
-    p[7] = 0;
-    struct export_ctx c = { .blob = p, .cap = cap, .off = 12, .count = 0, .err = 0 };
-    vfs_walk("/home", export_cb, &c);
-    vfs_walk("/etc/peak", export_cb, &c);
-    vfs_walk("/var/peak", export_cb, &c);
-    if (c.err)
+    }
+    struct mem_export_ctx m = { .base = blob, .cap = cap };
+    uint32_t bytes = 0, count = 0;
+    int n = vfs_export_ramdisk_stream(mem_export_write, &m, &bytes, &count);
+    if (n < 0)
         return -1;
-    memcpy(p + 8, &c.count, 4);
-    return (int)c.off;
+    if ((size_t)n > cap) {
+        vfs_export_set_err("export buffer too small");
+        return -1;
+    }
+    memcpy(blob + 8, &count, 4);
+    return n;
 }
 
 void vfs_seed_defaults(void) {
