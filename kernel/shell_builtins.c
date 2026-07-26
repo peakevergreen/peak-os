@@ -246,7 +246,7 @@ static const struct help_entry help_table[] = {
     { "theme", "sys", "list/set/next theme" },
     { "wallpaper", "sys", "set desktop wallpaper (PPM)" },
     { "scale", "sys", "UI scale 1..4" },
-    { "uname", "sys", "system name" },
+    { "uname", "sys", "kernel identity (-asnmr)" },
     { "true", "sys", "exit 0" },
     { "false", "sys", "exit 1" },
     { "sh", "sys", "nested shell loop" },

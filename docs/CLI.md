@@ -102,6 +102,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `scale [1-4]` | UI glyph scale |
 | `date` `free` `env` `export` `which` `seq` `sleep` `time` | (`free`: PMM pages + heap used/free/frag/freelist/oom) |
 | `hostname` `uptime` `whoami` `id` `cal` | identity + calendar |
+| `uname [-asnmr]` | kernel identity (`-s` sysname, `-n` `$HOSTNAME`, `-r` release, `-m` machine, `-a` all + BootInfo platform) |
 | `gzip` `gunzip` | Peak RLE compress/decompress (PEAKGZ1 `.gz`, 8 KiB cap) |
 | `timeout` `watch` | run once with deadline note; repeat (`-n`, max 32 iters) |
 | `top` `sysmon` | live system monitor (sparklines, legend; `q` quit, `r` reset, `e` export, `-n` once) |
