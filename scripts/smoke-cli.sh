@@ -721,6 +721,15 @@ grep -q 'Wave 5 Pass 117' scripts/smoke-cli.sh
 grep -q 'Enhancement wave 5' docs/ROADMAP.md
 grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
+grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
+
+echo "==> Wave 7 Pass 139 JS Promise allSettled race"
+grep -q 'nat_promise_all_settled' kernel/js/js_vm.c
+grep -q 'nat_promise_race' kernel/js/js_vm.c
+grep -q 'js_promise_unwrap' kernel/js/js_vm.c
+grep -q 'promise-allsettled-race.js' tests/fixtures/js/promise-allsettled-race.js
+grep -q 'Promise.allSettled' tests/host/test_js.c
+
 echo "==> Wave 4 Pass 98 lock-in"
 grep -q 'Wave 4 Pass 79' scripts/smoke-cli.sh
 grep -q 'Wave 4 Pass 89' scripts/smoke-cli.sh

@@ -942,6 +942,93 @@ static int nat_promise_resolve(struct js_runtime *rt, int argc, void *argv, void
     return 0;
 }
 
+/* Unwrap settled Promise.resolve shape (__v); identity otherwise. */
+static struct js_value js_promise_unwrap(struct js_runtime *rt, struct js_value v) {
+    if (v.type == JT_OBJ && v.u.o) {
+        struct js_value vv;
+        if (js_obj_get(rt, v.u.o, "__v", &vv) == 0)
+            return vv;
+    }
+    return v;
+}
+
+static int js_array_len(struct js_runtime *rt, struct js_value *arr) {
+    (void)rt;
+    if (!arr || !arr->u.o)
+        return 0;
+    if (arr->type != JT_OBJ && arr->type != JT_ARR)
+        return 0;
+    if (!arr->u.o->is_array)
+        return 0;
+    return (int)arr->u.o->arr_len;
+}
+
+static int js_array_get(struct js_runtime *rt, struct js_value *arr, int idx,
+                        struct js_value *out) {
+    char key[12];
+    snprintf(key, sizeof(key), "%d", idx);
+    if (js_val_get_prop(rt, arr, key, out) != 0)
+        js_val_set_undefined(out);
+    return 0;
+}
+
+static int js_make_fulfilled_entry(struct js_runtime *rt, struct js_value val,
+                                   struct js_value *out) {
+    struct js_value entry;
+    if (js_val_new_object(rt, &entry) != 0)
+        return -1;
+    struct js_value st;
+    js_val_set_string(rt, &st, "fulfilled");
+    js_val_set_prop(rt, &entry, "status", &st);
+    js_val_set_prop(rt, &entry, "value", &val);
+    *out = entry;
+    return 0;
+}
+
+/* Promise.allSettled(iterable) — lite: arrays only; settled promises unwrapped. */
+static int nat_promise_all_settled(struct js_runtime *rt, int argc, void *argv, void *ret,
+                                   void *ud) {
+    (void)ud;
+    js_val_set_undefined(ret);
+    if (!rt || argc < 1)
+        return 0;
+    struct js_value *arg = &((struct js_value *)argv)[0];
+    int n = js_array_len(rt, arg);
+    if (n <= 0 || n > 32)
+        return 0;
+    struct js_value arr;
+    if (js_val_new_array(rt, &arr) != 0)
+        return 0;
+    for (int i = 0; i < n; i++) {
+        struct js_value item, unwrapped, entry;
+        js_array_get(rt, arg, i, &item);
+        unwrapped = js_promise_unwrap(rt, item);
+        if (js_make_fulfilled_entry(rt, unwrapped, &entry) != 0)
+            return 0;
+        char key[12];
+        snprintf(key, sizeof(key), "%d", i);
+        js_val_set_prop(rt, &arr, key, &entry);
+    }
+    *(struct js_value *)ret = arr;
+    return 0;
+}
+
+/* Promise.race(iterable) — lite: first array element wins (settled unwrap). */
+static int nat_promise_race(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    (void)ud;
+    js_val_set_undefined(ret);
+    if (!rt || argc < 1)
+        return 0;
+    struct js_value *arg = &((struct js_value *)argv)[0];
+    int n = js_array_len(rt, arg);
+    if (n <= 0)
+        return 0;
+    struct js_value item;
+    js_array_get(rt, arg, 0, &item);
+    *(struct js_value *)ret = js_promise_unwrap(rt, item);
+    return 0;
+}
+
 void js_install_builtins(struct js_runtime *rt) {
     js_rt_set_global_fn(rt, "print", nat_print, NULL);
     js_rt_set_global_fn(rt, "parseInt", nat_parse_int, NULL);
@@ -1009,6 +1096,26 @@ void js_install_builtins(struct js_runtime *rt) {
         pv.type = JT_NATIVE;
         pv.u.o = pres;
         js_val_set_prop(rt, &promise, "resolve", &pv);
+    }
+    struct js_object *pas = js_obj_new(rt, 0);
+    if (pas) {
+        pas->is_native = 1;
+        pas->is_func = 1;
+        pas->native = nat_promise_all_settled;
+        struct js_value av;
+        av.type = JT_NATIVE;
+        av.u.o = pas;
+        js_val_set_prop(rt, &promise, "allSettled", &av);
+    }
+    struct js_object *prc = js_obj_new(rt, 0);
+    if (prc) {
+        prc->is_native = 1;
+        prc->is_func = 1;
+        prc->native = nat_promise_race;
+        struct js_value rv;
+        rv.type = JT_NATIVE;
+        rv.u.o = prc;
+        js_val_set_prop(rt, &promise, "race", &rv);
     }
     js_obj_set(rt, rt->global, "Promise", promise);
 
