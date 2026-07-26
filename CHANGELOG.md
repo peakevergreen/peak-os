@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 127:** `nc -w` timeout flag; 800ms listen window default; documented limits
+
 - **Pass 126:** `tlsinfo` HSTS/resume/ticket PSK unavailable field depth
 
 - **Pass 125:** `ss` netstat-lite over kernel TCP conn table
