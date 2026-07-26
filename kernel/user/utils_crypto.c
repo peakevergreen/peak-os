@@ -51,13 +51,114 @@ static void print_hex_digest(const uint8_t *d, size_t n) {
     }
 }
 
+static int hex_nibble(char c) {
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+static int parse_hex_digest(const char *s, uint8_t *out, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        int hi = hex_nibble(s[i * 2]);
+        int lo = hex_nibble(s[i * 2 + 1]);
+        if (hi < 0 || lo < 0)
+            return -1;
+        out[i] = (uint8_t)((hi << 4) | lo);
+    }
+    return 0;
+}
+
+static int digest_equal(const uint8_t *a, const uint8_t *b, size_t n) {
+    for (size_t i = 0; i < n; i++)
+        if (a[i] != b[i])
+            return 0;
+    return 1;
+}
+
+static int hash_check(const char *tool, void (*fn)(const uint8_t *, size_t, uint8_t *),
+                      size_t out_len, int argc, char **argv) {
+    const char *listp = "-";
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-c"))
+            continue;
+        listp = argv[i];
+    }
+    char list[HASH_MAX];
+    size_t ll = 0;
+    if (read_input(listp, (uint8_t *)list, sizeof(list), &ll, tool) != 0)
+        return 1;
+    char *lines[256];
+    int nl = 0;
+    size_t start = 0;
+    for (size_t i = 0; i <= ll && nl < 256; i++) {
+        if (i == ll || list[i] == '\n') {
+            lines[nl++] = list + start;
+            if (i < ll)
+                list[i] = '\0';
+            start = i + 1;
+        }
+    }
+    int failed = 0;
+    for (int li = 0; li < nl; li++) {
+        char *ln = lines[li];
+        if (!ln[0] || ln[0] == '#')
+            continue;
+        char *sp = NULL;
+        for (char *p = ln; *p; p++) {
+            if (*p == ' ' || *p == '\t') {
+                sp = p;
+                break;
+            }
+        }
+        if (!sp)
+            continue;
+        *sp = '\0';
+        const char *path = sp + 1;
+        while (*path == ' ' || *path == '\t')
+            path++;
+        if (*path == '*')
+            path++;
+        uint8_t expect[32];
+        if (parse_hex_digest(ln, expect, out_len) != 0) {
+            failed = 1;
+            continue;
+        }
+        uint8_t data[HASH_MAX];
+        size_t len = 0;
+        if (read_input(path, data, sizeof(data), &len, tool) != 0) {
+            console_printf("%s: FAILED open %s\n", tool, path);
+            failed = 1;
+            continue;
+        }
+        uint8_t got[32];
+        fn(data, len, got);
+        if (digest_equal(expect, got, out_len))
+            console_printf("%s: OK\n", path);
+        else {
+            console_printf("%s: FAILED\n", path);
+            failed = 1;
+        }
+    }
+    return failed ? 1 : 0;
+}
+
 static int hash_file(const char *tool, void (*fn)(const uint8_t *, size_t, uint8_t *),
                      size_t out_len, int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage(tool, "[path|-]");
+        peak_usage(tool, "[-c] [path|-]");
         return 0;
     }
-    const char *path = argc >= 2 ? argv[1] : "-";
+    if (peak_has_flag(argc, argv, "-c"))
+        return hash_check(tool, fn, out_len, argc, argv);
+    const char *path = "-";
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] != '-')
+            path = argv[i];
+    }
     uint8_t data[HASH_MAX];
     size_t len = 0;
     if (read_input(path, data, sizeof(data), &len, tool) != 0)

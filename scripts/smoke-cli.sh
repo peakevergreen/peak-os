@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 105 diff patch sha"
+grep -q upatch_main kernel/user/utils_text2.c
+grep -q 'peak_has_flag(argc, argv, "-u")' kernel/user/utils_text2.c
+grep -q hash_check kernel/user/utils_crypto.c
+grep -q 'UBIN_CMD("patch"' kernel/user/ubin_cmds.def
+
 echo "==> Wave 5 Pass 104 pgrep dmesg"
 grep -q upgrep_main kernel/user/utils_monitor.c
 grep -q udmesg_main kernel/user/utils_monitor.c
