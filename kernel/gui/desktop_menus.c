@@ -688,6 +688,61 @@ void desktop_menus_open_ctx_target(int32_t mx, int32_t my, enum ctx_target targe
     ctx_open_at(mx, my, target, win_idx);
 }
 
+
+void desktop_menus_start_hover(int32_t mx, int32_t my) {
+    if (!menu_open)
+        return;
+    uint32_t mx0, my0, mw, mh, row_h;
+    int first_row, view_rows;
+    start_menu_layout(&mx0, &my0, &mw, &mh, &row_h, &first_row, &view_rows);
+    if (!desktop_point_in(mx, my, mx0, my0, mw, mh))
+        return;
+    uint32_t cy = my0 + desktop_u(6) + START_SEARCH_H + desktop_u(4);
+    if ((uint32_t)my < cy || view_rows <= 0 || start_visible_rows <= 0)
+        return;
+    int i = (int)(((uint32_t)my - cy) / row_h);
+    if (i < 0 || i >= view_rows)
+        return;
+    int vi = first_row + i;
+    if (vi < 0 || vi >= start_visible_rows || vi == start_sel)
+        return;
+    start_sel = vi;
+    menus_damage_start();
+    dirty_bits |= DIRTY_MOVE;
+}
+
+int desktop_menus_start_wheel(int32_t mx, int32_t my, int wheel) {
+    if (!menu_open || !wheel)
+        return 0;
+    uint32_t mx0, my0, mw, mh, row_h;
+    int first_row, view_rows;
+    start_menu_layout(&mx0, &my0, &mw, &mh, &row_h, &first_row, &view_rows);
+    if (!desktop_point_in(mx, my, mx0, my0, mw, mh))
+        return 0;
+    uint32_t chrome = START_SEARCH_H + desktop_u(8) + desktop_u(12);
+    int fit = 1;
+    if (mh > chrome)
+        fit = (int)((mh - chrome) / row_h);
+    if (fit < 1)
+        fit = 1;
+    if (start_visible_rows > 0 && fit > start_visible_rows)
+        fit = start_visible_rows;
+    if (start_visible_rows <= fit)
+        return 0;
+    int old = start_scroll;
+    if (wheel > 0) {
+        if (start_scroll > 0)
+            start_scroll--;
+    } else if (start_scroll < start_visible_rows - fit) {
+        start_scroll++;
+    }
+    if (start_scroll == old)
+        return 0;
+    menus_damage_start();
+    dirty_bits |= DIRTY_MOVE;
+    return 1;
+}
+
 void desktop_menus_ctx_hover(int32_t mx, int32_t my) {
     if (!ctx_menu)
         return;

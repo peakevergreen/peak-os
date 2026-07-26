@@ -324,6 +324,11 @@ grep -q 'dns_lookup_aaaa_dig' kernel/user/utils_net.c
 grep -q 'post_body' kernel/user/utils_net.c
 grep -q 'IPv4-only' kernel/user/utils_net.c
 
+
+echo "==> Wave 3 Pass 67 start menu pointer"
+grep -q 'desktop_menus_start_hover' kernel/gui/desktop_menus.c
+grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
+
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c kernel/net/tls_handshake.c

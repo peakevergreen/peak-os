@@ -22,6 +22,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 63:** `file` command — magic sniff for ELF/PPM/BMP/PEAKZIP1/PEAKGZ1/text vs binary
 - **Pass 64:** `date +%s` / `+%Y-%m-%d` (RTC); `printf` documents `\n` `\t` `\\` escapes
 - **Pass 65:** Shell pipe/redirect capture raised to 32 KiB; truncation warning on pipe overflow
+- **Pass 67:** Start menu mouse hover updates selection; wheel scrolls clamped app list
 - **Pass 66:** `wget`/`curl` `-X POST` + `-d` body; `host`/`nslookup` `-6` AAAA and `-x` PTR (honest IPv4-only routing note)
 - PeakDisk atomic publish (payload→header) + SDHCI CMD13 flush; DWC2 hub enum/split/hotplug; `/bin/disksave`
 - Quieter boot: status lines only (net IP folded into `e1000 (dhcp …)`; no chatter for JS/PeakVec/disk absence)
