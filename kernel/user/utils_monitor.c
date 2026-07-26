@@ -1,6 +1,7 @@
 #include "libpeak.h"
 #include "shell.h"
 #include "console.h"
+#include "console_scroll.h"
 #include "timer.h"
 #include "keyboard.h"
 #include "sched.h"
@@ -148,6 +149,94 @@ int ukill_main(int argc, char **argv) {
     if (!killed) {
         peak_perror("kill", "no matching task");
         return 1;
+    }
+    return 0;
+}
+
+static int name_matches(const char *task_name, const char *pat) {
+    if (!task_name || !pat)
+        return 0;
+    return strstr(task_name, pat) != NULL;
+}
+
+int upgrep_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("pgrep", "[-l] <name-substring>");
+        return argc < 2 ? 1 : 0;
+    }
+    int show_name = 0;
+    const char *pat = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-l")) {
+            show_name = 1;
+            continue;
+        }
+        if (argv[i][0] != '-')
+            pat = argv[i];
+    }
+    if (!pat) {
+        peak_usage("pgrep", "[-l] <name-substring>");
+        return 1;
+    }
+    struct task list[MAX_TASKS];
+    int n = sched_list_tasks(list, MAX_TASKS);
+    int found = 0;
+    for (int i = 0; i < n; i++) {
+        if (!name_matches(list[i].name, pat))
+            continue;
+        found++;
+        if (show_name)
+            console_printf("%d %s\n", list[i].pid, list[i].name);
+        else
+            console_printf("%d\n", list[i].pid);
+    }
+    return found ? 0 : 1;
+}
+
+int upidof_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv) || argc < 2) {
+        peak_usage("pidof", "<name>");
+        return argc < 2 ? 1 : 0;
+    }
+    const char *pat = argv[1];
+    struct task list[MAX_TASKS];
+    int n = sched_list_tasks(list, MAX_TASKS);
+    int found = 0;
+    for (int i = 0; i < n; i++) {
+        if (!name_matches(list[i].name, pat))
+            continue;
+        if (found)
+            console_putc(' ');
+        console_printf("%d", list[i].pid);
+        found++;
+    }
+    if (found)
+        console_putc('\n');
+    return found ? 0 : 1;
+}
+
+int udmesg_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("dmesg", "[-n N]");
+        return 0;
+    }
+    int tail_n = -1;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-n") && i + 1 < argc) {
+            tail_n = peak_atoi(argv[++i]);
+            continue;
+        }
+    }
+    int total = console_scrollback_line_count();
+    int start = 0;
+    if (tail_n >= 0 && tail_n < total)
+        start = total - tail_n;
+    for (int i = start; i < total; i++) {
+        const char *line = console_scrollback_line(i);
+        if (line) {
+            console_write(line);
+            console_write("\n");
+        }
     }
     return 0;
 }
