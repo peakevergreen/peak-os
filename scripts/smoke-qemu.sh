@@ -79,7 +79,7 @@ run_firmware_smoke() {
     fi
     echo "    → $serial_log (OVMF + Peak ESP dir)"
     "$QEMU_BIN" \
-      -machine q35 \
+      -machine pc \
       -drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
       -drive "if=pflash,format=raw,file=${OVMF_VARS}" \
       -drive "file=fat:rw:${ESPDIR},format=raw,if=virtio" \
@@ -95,7 +95,7 @@ run_firmware_smoke() {
   else
     echo "    → $serial_log (SeaBIOS + hybrid ISO)"
     "$QEMU_BIN" \
-      -machine q35 \
+      -machine pc \
       -cdrom "$ISO" \
       -drive "file=$DISK,format=qcow2,if=ide" \
       -m 512 \

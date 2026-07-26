@@ -15,7 +15,8 @@ Expected files (referenced from the root README):
 export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
 make iso
 # Graphical QEMU with a monitor socket:
-qemu-system-x86_64 -machine q35 -m 512 -cdrom build/peak-os.iso \
+qemu-system-x86_64 -machine pc -m 512 -cdrom build/peak-os.iso \
+  -drive file=build/peak-disk.img,format=raw,if=ide \
   -serial stdio -display cocoa \
   -monitor unix:/tmp/peak-qemu.mon,server,nowait
 # In another terminal, after the desktop is up:
