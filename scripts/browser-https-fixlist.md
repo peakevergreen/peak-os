@@ -23,7 +23,7 @@ Artifacts: `/tmp/peak-https-diag4/` (CLI matrix), `/tmp/peak-https-accept/` (Acc
 | B-HTTPS-03/04 | WebPKI path | cross-signed roots + ECDSA | SPKI anchor match + BIT STRING EC point parse | webpki.c | **Fixed** |
 | B-HTTPS-05 | Accept / Forget TOFU | Accept → trust; Forget → fail | `tlsinfo -A`/`-F` + error-page buttons | accept prove PASS | **Fixed** |
 | B-HTTPS-06 | Desktop matrix | tabs/Retry/lock/mixed/HSTS | CLI + code paths; GUI dumps optional | see notes | **Partial** |
-| B-HTTPS-H2 | HTTP/2 response body | non-empty HTML | Frame cap was 12 KiB (rejected valid 16 KiB DATA); no PING ACK / WINDOW_UPDATE; body cap now 64 KiB | BR-1 http2.c | **Fixed** |
+| B-HTTPS-H2 | HTTP/2 response body | non-empty HTML | Client accepts 16 KiB frames / 64 KiB store / PING+WINDOW_UPDATE; many CDNs still return HEADERS END_STREAM with 0 DATA to Peak’s lite H2 fingerprint | BR-1 + matrix | **Partial** |
 
 ## Root causes fixed
 
@@ -40,4 +40,5 @@ Artifacts: `/tmp/peak-https-diag4/` (CLI matrix), `/tmp/peak-https-accept/` (Acc
 ## BR-1 (HTTP/2 body path)
 
 - Accept frames up to `HTTP2_MAX_FRAME` (16384); store body up to `HTTP2_BODY_MAX` (65536) on the heap.
-- ACK PING; send WINDOW_UPDATE after DATA; SETTINGS INITIAL_WINDOW_SIZE; HEADERS+CONTINUATION until END_HEADERS.
+- ACK PING; WINDOW_UPDATE after DATA + connection preface window; HEADERS+CONTINUATION until END_HEADERS; User-Agent on requests.
+- **Still open:** some public hosts negotiate `h2` then finish with HEADERS END_STREAM and no DATA (0-byte body). Follow-up: fuller HPACK/Huffman + client fingerprint parity.

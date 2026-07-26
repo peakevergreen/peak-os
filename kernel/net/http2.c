@@ -295,15 +295,11 @@ int http2_request(const char *method, const char *host, const char *path,
     if (tls_send(preface, sizeof(preface) - 1) != 0)
         goto fail;
 
-    /* SETTINGS: INITIAL_WINDOW_SIZE=256KiB so servers can push large DATA promptly. */
-    {
-        uint8_t set[6];
-        set[0] = 0x00;
-        set[1] = 0x04; /* INITIAL_WINDOW_SIZE */
-        wr32(set + 2, 256u * 1024u);
-        if (send_frame(0x04, 0, 0, set, 6) != 0)
-            goto fail;
-    }
+    /* Empty SETTINGS + large connection window (many peers delay DATA until window). */
+    if (send_frame(0x04, 0, 0, NULL, 0) != 0)
+        goto fail;
+    if (send_window_update(0, 256u * 1024u) != 0)
+        goto fail;
 
     uint8_t hpack[256];
     size_t ho = 0;
@@ -318,6 +314,16 @@ int http2_request(const char *method, const char *host, const char *path,
         goto fail;
     if (hpack_add_lit(hpack, sizeof(hpack), &ho, 1, host) != 0)
         goto fail;
+    /* user-agent (literal name+value) — some CDNs send empty bodies to bare clients */
+    if (ho + 2 + 10 + 2 + 16 < sizeof(hpack)) {
+        hpack[ho++] = 0x00; /* literal without indexing, new name */
+        hpack[ho++] = 10;
+        memcpy(hpack + ho, "user-agent", 10);
+        ho += 10;
+        hpack[ho++] = 16;
+        memcpy(hpack + ho, "PeakOS-wget/0.2.0", 16);
+        ho += 16;
+    }
     if (body_len > 0) {
         char cl[16];
         snprintf(cl, sizeof(cl), "%zu", body_len);
@@ -429,6 +435,7 @@ int http2_request(const char *method, const char *host, const char *path,
                     status = 200;
                 headers_done = 1;
                 hdr_block_len = 0;
+                /* END_STREAM on HEADERS is definitive (no DATA). 204/304 often empty. */
                 if (saw_end_stream)
                     stream_done = 1;
             }
@@ -437,14 +444,18 @@ int http2_request(const char *method, const char *host, const char *path,
 
         if (type == 0x00) { /* DATA */
             size_t data_off = 0, data_len = plen;
+            int end = (flags & 0x01) ? 1 : 0;
             if (flags & 0x08) {
-                if (!plen)
-                    continue;
-                uint8_t pad = payload[0];
-                data_off = 1;
-                if (1 + pad > plen)
-                    continue;
-                data_len = plen - 1 - pad;
+                if (plen >= 1) {
+                    uint8_t pad = payload[0];
+                    data_off = 1;
+                    if (1 + pad <= plen)
+                        data_len = plen - 1 - pad;
+                    else
+                        data_len = 0;
+                } else {
+                    data_len = 0;
+                }
             }
             body_total += data_len;
             size_t copy = data_len;
@@ -459,7 +470,7 @@ int http2_request(const char *method, const char *host, const char *path,
                 goto fail;
             if (plen && send_window_update(1, plen) != 0)
                 goto fail;
-            if (flags & 0x01)
+            if (end)
                 stream_done = 1;
             continue;
         }

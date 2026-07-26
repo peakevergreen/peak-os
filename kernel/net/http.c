@@ -207,10 +207,6 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
             last_http_body_total = hm.body_total;
             last_http_body_truncated = hm.truncated;
             last_http_body_stored = hm.body_stored;
-            /* Stash message_len in body_total high bit unused — keep in stored meta via
-             * last_http_body_stored temporarily meaning body; message_len kept in total
-             * only when truncated==0 and message_len set. Re-read via http2_last_meta. */
-            (void)hm.message_len;
         }
         if (status_out)
             *status_out = st;
