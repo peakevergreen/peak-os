@@ -251,17 +251,47 @@ int ureadlink_main(int argc, char **argv) {
 }
 
 int ustat_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("stat", "<path>");
-        return argc < 2 ? 1 : 0;
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("stat", "[-c format] <path>");
+        return 0;
+    }
+    const char *format = NULL;
+    const char *path = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-c") && i + 1 < argc)
+            format = argv[++i];
+        else if (argv[i][0] != '-')
+            path = argv[i];
+    }
+    if (!path) {
+        peak_usage("stat", "[-c format] <path>");
+        return 1;
     }
     char abs[VFS_PATH_MAX];
-    if (shell_resolve_path(argv[1], abs, sizeof(abs)))
+    if (shell_resolve_path(path, abs, sizeof(abs)))
         return 1;
     struct vfs_stat st;
     if (vfs_stat(abs, &st) != 0) {
         console_printf("stat: cannot read '%s': no such file or directory\n", abs);
         return 1;
+    }
+    if (format) {
+        for (const char *p = format; *p; p++) {
+            if (*p == '%' && p[1]) {
+                p++;
+                if (*p == 's')
+                    console_printf("%lu", (uint64_t)st.size);
+                else if (*p == 'n')
+                    console_write(abs);
+                else {
+                    console_putc('%');
+                    console_putc(*p);
+                }
+            } else
+                console_putc(*p);
+        }
+        console_write("\n");
+        return 0;
     }
     console_printf("path: %s\n", abs);
     const char *type_str = st.type == VFS_DIR ? "directory" : "file";
@@ -403,12 +433,16 @@ int uchmod_main(int argc, char **argv) {
 
 int udu_main(int argc, char **argv) {
     int human = peak_has_flag(argc, argv, "-h");
+    int summary = peak_has_flag(argc, argv, "-s");
     const char *path = ".";
-    for (int i = 1; i < argc; i++)
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "-s"))
+            continue;
         if (argv[i][0] != '-') {
             path = argv[i];
             break;
         }
+    }
     char abs[VFS_PATH_MAX];
     if (shell_resolve_path(path, abs, sizeof(abs)))
         return 1;
@@ -420,9 +454,13 @@ int udu_main(int argc, char **argv) {
     if (human) {
         char sz[16];
         peak_hsize_fmt(bytes, sz, sizeof(sz));
-        console_printf("%s\t%s\n", sz, abs);
+        console_printf("%s", sz);
     } else
-        console_printf("%lu\t%s\n", bytes, abs);
+        console_printf("%lu", bytes);
+    if (!summary || human)
+        console_printf("\t%s\n", abs);
+    else
+        console_write("\n");
     return 0;
 }
 
@@ -437,7 +475,7 @@ int udf_main(int argc, char **argv) {
         char free_s[16], total_s[16];
         peak_hsize_fmt(free_p * PEAK_PAGE_BYTES, free_s, sizeof(free_s));
         peak_hsize_fmt(total_p * PEAK_PAGE_BYTES, total_s, sizeof(total_s));
-        console_printf("RAM:         %s free / %s total\n", free_s, total_s);
+        console_printf("RAM:         %s free / %s total (guest-visible, approximate)\n", free_s, total_s);
     } else
         console_printf("RAM pages:   %lu free / %lu total\n", free_p, total_p);
     if (peakdisk_available()) {
@@ -455,7 +493,7 @@ int udf_main(int argc, char **argv) {
             char used_s[16], total_s[16];
             peak_hsize_fmt(bs.bytes_used, used_s, sizeof(used_s));
             peak_hsize_fmt((uint64_t)bs.pages_total * PEAK_PAGE_BYTES, total_s, sizeof(total_s));
-            console_printf("Blobstore:   %u objects, %s / %s, cache %u / %u",
+            console_printf("Blobstore:   %u objects, %s / %s, cache %u / %u (capacity honest: guest pages only)",
                            (unsigned)bs.objects, used_s, total_s,
                            (unsigned)bs.cache_pages, (unsigned)BLOBSTORE_CACHE_PAGES);
         } else
@@ -468,6 +506,8 @@ int udf_main(int argc, char **argv) {
     }
     if (nodes >= VFS_MAX_NODES - 2)
         console_write("df: warning — VFS inode table nearly full\n");
+    if (human)
+        console_write("df: -h sizes are KiB/MiB approximations of guest counters, not host disk quotas\n");
     return 0;
 }
 

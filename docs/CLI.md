@@ -82,9 +82,9 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `ln [-s] <target> <link>` | hard link or symlink (`-s`) |
 | `readlink <path>` | print symlink target (no follow) |
 | `chmod <mode> <path>…` | octal (`755`) or symbolic (`u+x`, `g-w`, `a=rx`) |
-| `stat <path>` | metadata (mode; heap vs blob for files) |
-| `du [-h] [path]` | tree byte size (`-h` KiB/MiB) |
-| `df [-h]` | VFS inodes, RAM, PeakDisk/Blobstore status (`-h` KiB/MiB) |
+| `stat [-c '%s'/'%n'] <path>` | metadata or lite `-c` format (`%s` size, `%n` name) |
+| `du [-h] [-s] [path]` | tree byte size (`-h` KiB/MiB; `-s` summary bytes only) |
+| `df [-h]` | VFS inodes, RAM, PeakDisk/Blobstore status (`-h` KiB/MiB + capacity honesty note) |
 | `truncate <path> <n>` | resize (max 4096) |
 | `mktemp [TEMPLATE]` | create unique temp path under `/tmp` (lite) |
 | `install [-D] [-m mode] <src> <dst>` | copy with optional parent create (`-D`) and mode |
