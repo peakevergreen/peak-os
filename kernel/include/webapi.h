@@ -9,9 +9,10 @@
  *
  * webapi_install() exposes quarantined stubs only:
  *   fetch            GET/POST http(s), same-origin/CORS; string body with POST
- *                    (bounded); AbortSignal via AbortController().signal
- *   localStorage     in-memory per-tab map; get/set/removeItem; not disk
- *   sessionStorage   same as localStorage but cleared on tab teardown
+ *                    (bounded); AbortSignal via AbortController().signal;
+ *                    Response.json() parses bodyText as JSON
+ *   localStorage     VFS-backed under /var/peak/localStorage/<origin>; get/set/removeItem
+ *   sessionStorage   in-memory per-tab map; get/set/removeItem; cleared on tab teardown
  *   AbortController  factory AbortController() → {signal, abort}
  *
  * Unsupported options fail closed with clear errors (no silent no-ops).

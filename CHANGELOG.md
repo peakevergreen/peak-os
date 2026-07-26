@@ -101,6 +101,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 53 (HTTP/2 client depth):** HPACK response headers synthesized into HTTP/1.x; `http2_last_meta()` body totals/truncation; `wget`/`curl` show HTTP/2 status, Content-Type, `-i` headers, 8192-byte limit warnings
 - **Pass 30 (Browser + Peak JS UX):** back/forward toolbar + **b**/**f** keys; VFS bookmarks bar + context menu; JS console panel (`console.log` capture); TLS/net error pages use `tls_last_error()` + `net_last_error()`
 - **Pass 51 (Browser tab chrome):** tab strip title/URL labels with fetch indicator; per-tab **x** close affordance; last-closed restore lite (**Shift+T**, context menu)
+- **Pass 54 (Web API depth):** `Response.json()` on fetch responses; VFS-backed `localStorage` under `/var/peak/localStorage/`; fail-closed matrix in `webapi_stubs.c`; host `test_webapi` coverage
 
 ### Raspberry Pi
 

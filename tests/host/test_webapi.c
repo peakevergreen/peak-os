@@ -11,6 +11,7 @@
 void webapi_host_set_http(int rc, int status, const char *body, const char *headers);
 void webapi_host_set_tls_fail(const char *reject_name);
 void webapi_host_clear_tls(void);
+void webapi_host_vfs_reset(void);
 
 static int fails;
 
@@ -62,6 +63,7 @@ int main(void) {
 
     webapi_set_tab(0, 0);
     webapi_clear_tab(0);
+    webapi_host_vfs_reset();
     expect(webapi_install(rt, "https://example.com/page") == 0, "webapi_install");
 
     /* AbortController factory with live signal.aborted. */
@@ -96,6 +98,16 @@ int main(void) {
     eval_ok(rt, "var r=fetch('/rel'); r.ok", "true"); /* relative → same-origin https */
     eval_ok(rt, "var r=fetch('https://example.com/x',{method:'POST',body:'hi'}); r.ok", "true");
 
+    /* Response.json() parses bodyText; invalid JSON fails closed. */
+    webapi_host_set_http(0, 200, "{\"n\":42,\"s\":\"hi\"}", "");
+    eval_ok(rt, "var r=fetch('https://example.com/x'); r.json().n", "42");
+    eval_ok(rt, "var r=fetch('https://example.com/x'); r.json().s", "\"hi\"");
+    webapi_host_set_http(0, 200, "[1,2,3]", "");
+    eval_ok(rt, "var r=fetch('https://example.com/x'); r.json()[1]", "2");
+    webapi_host_set_http(0, 200, "not-json", "");
+    eval_fails(rt, "var r=fetch('https://example.com/x'); r.json()", "invalid JSON");
+    webapi_host_set_http(0, 200, "x", "");
+
     /* Network / CORS failure → ok:false (not a silent success). */
     webapi_host_set_http(-1, 0, "", "");
     eval_ok(rt, "var r=fetch('https://example.com/x'); r.ok", "false");
@@ -119,7 +131,7 @@ int main(void) {
     /* Active mixed content blocked on HTTPS pages. */
     eval_fails(rt, "fetch('http://evil.example/x')", "mixed-content");
 
-    /* Storage: in-memory get/set; quota / empty / oversized fail closed. */
+    /* Storage: localStorage VFS-backed; session in-memory; quota fail closed. */
     eval_ok(rt, "localStorage.setItem('a','1'); localStorage.getItem('a')", "\"1\"");
     eval_ok(rt, "localStorage.removeItem('a'); localStorage.getItem('a')", "null");
     eval_ok(rt, "sessionStorage.setItem('b','2'); sessionStorage.getItem('b')", "\"2\"");
@@ -161,7 +173,7 @@ int main(void) {
         eval_fails(rt, src, "quota exceeded");
     }
 
-    /* Tab clear isolates in-memory store; private tab never uses durable local. */
+    /* Tab clear isolates session; private tab never uses durable local. */
     webapi_clear_tab(0);
     eval_ok(rt, "localStorage.getItem('a')", "null");
     webapi_set_tab(0, 1);
@@ -169,8 +181,30 @@ int main(void) {
     eval_ok(rt, "localStorage.setItem('priv','1'); sessionStorage.getItem('priv')", "\"1\"");
     webapi_set_tab(0, 0);
     webapi_clear_tab(0);
+    webapi_host_vfs_reset();
     expect(webapi_install(rt, "https://example.com/page") == 0, "reinstall normal");
     eval_ok(rt, "localStorage.getItem('priv')", "null");
+
+    /* localStorage survives runtime reinstall when origin matches (VFS persist). */
+    webapi_host_vfs_reset();
+    webapi_clear_tab(0);
+    expect(webapi_install(rt, "https://example.com/page") == 0, "persist install");
+    eval_ok(rt, "localStorage.setItem('persist','yes')", "undefined");
+    js_rt_destroy(rt);
+    rt = js_rt_create();
+    expect(rt != NULL, "recreate runtime");
+    webapi_set_tab(0, 0);
+    webapi_clear_tab(0);
+    expect(webapi_install(rt, "https://example.com/page") == 0, "persist reload");
+    eval_ok(rt, "localStorage.getItem('persist')", "\"yes\"");
+    eval_ok(rt, "sessionStorage.setItem('ephem','1'); sessionStorage.getItem('ephem')", "\"1\"");
+    js_rt_destroy(rt);
+    rt = js_rt_create();
+    expect(rt != NULL, "recreate runtime 2");
+    webapi_set_tab(0, 0);
+    webapi_clear_tab(0);
+    expect(webapi_install(rt, "https://example.com/page") == 0, "session reload");
+    eval_ok(rt, "sessionStorage.getItem('ephem')", "null");
 
     js_rt_destroy(rt);
     if (fails) {
