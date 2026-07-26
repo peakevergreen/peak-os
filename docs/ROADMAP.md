@@ -29,6 +29,12 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 **Pass 118 (Wave 5 lock-in):** `smoke-cli.sh` gates for Passes 99–117 markers, ROADMAP/CHANGELOG sync, security-checklist CI note — Wave 5 release acceptance.
 
+## Enhancement wave 6 (Passes 119–138) — shipped
+
+**Shipped on `main` (Passes 119–137):** join/comm depth, awk/sed/jq depth, shell read/unset + pipe caps, fmt/column/expand/unexpand, stat/du/df depth, ln/chmod/install depth, ss netstat-lite, tlsinfo HSTS/resume, nc timeout/listen, zip/tar caps/listing, Start/taskbar UX, window snap HUD, clipboard picker, Files multi-select, Images viewer, Terminal scrollback search, Settings a11y/scale, idle-lock minutes, Privacy grant list.
+
+**Pass 138 (Wave 6 lock-in):** `smoke-cli.sh` gates for Passes 119–137 markers, ROADMAP/CHANGELOG sync, security-checklist CI note — Wave 6 release acceptance.
+
 ## Enhancement wave 2 (Passes 39–58)
 
 **Shipped on `main` (Passes 39–58):** `awk`/`sed`/`jq`/`zip` CLI depth; VFS `chmod`, symlinks, human-readable sizes; `uname` flags; `less` pager search; Images and Agent GUI UX; files clipboard path ops; browser tab chrome; HTTP/2 client, WebAPI stubs, TLS session resume, PeakVec query, and expanded agent tools catalog — plus S9 remainder smoke-cli lock-in.

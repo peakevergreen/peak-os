@@ -474,6 +474,13 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 138 lock-in"
+grep -q 'Wave 6 Pass 119' scripts/smoke-cli.sh
+grep -q 'Wave 6 Pass 125' scripts/smoke-cli.sh
+grep -q 'Wave 6 Pass 137' scripts/smoke-cli.sh
+grep -q 'Enhancement wave 6' docs/ROADMAP.md
+grep -q 'Wave 6 / Pass 138' scripts/security-checklist.md
+
 echo "==> Wave 6 Pass 137 privacy grant list"
 grep -q 'settings_draw_privacy_grants' kernel/gui/desktop_settings.c
 grep -q 'privacy_revoke_grant' kernel/privacy.c
