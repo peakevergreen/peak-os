@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **GA-109:** Toasts use top accent + "Opened App" copy (no chrome-like x); clears ghost titlebar look
+
 - **GA-101/102/103:** Freestanding `snprintf` supports `%llu`/`%lld` and `%*` width (Disks/Notepad/agent no longer show literal format strings)
 
 - **GA-004:** GUI audit harness waits for full shell prompt + `-machine pc`; fixlist in `scripts/gui-audit-fixlist.md`
