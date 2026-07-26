@@ -482,6 +482,11 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 113 help theme ux"
+grep -q help_substring_match kernel/gui/desktop_overlays.c
+grep -q 'click again to apply' kernel/gui/desktop_settings.c
+grep -q settings_theme_preview kernel/gui/desktop_settings.c
+
 echo "==> Wave 5 Pass 112 files dnd ghost"
 grep -q desktop_files_drag_paint kernel/gui/desktop_files.c
 grep -q desktop_files_drag_cancel kernel/gui/desktop_files.c

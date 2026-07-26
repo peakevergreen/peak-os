@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 113:** Help substring filter; Settings theme preview/apply labels
+
 - **Pass 112:** Files drag ghost chip, drop-target highlight, Esc cancel, mismatch toasts
 
 - **Pass 111:** blobstore delete reclaims pages (tip rewind + free-list reuse); host `test_blobstore` coverage
