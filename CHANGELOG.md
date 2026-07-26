@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 115:** Notepad find n/m + replace-all; Monitor timestamped export footer
+
 - **Pass 114:** Browser download path toast, bookmark +N overflow chip, isolation status line
 
 - **Pass 113:** Help substring filter; Settings theme preview/apply labels
