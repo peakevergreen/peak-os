@@ -11,6 +11,7 @@ static char files_cwd[VFS_PATH_MAX] = "/home/dev/workspace";
 static char files_clip_path[VFS_PATH_MAX];
 static int files_sel, files_sel_anchor, files_scroll, files_del_arm, files_ctx_empty;
 static int files_clip_cut;
+static uint32_t files_sel_bits;
 
 #define FILES_CRUMB_MAX 16
 static struct {
@@ -35,6 +36,7 @@ static void files_draw_focus_ring(uint32_t x, uint32_t y, uint32_t w, uint32_t h
 void desktop_files_init(void) {
     files_sel = files_sel_anchor = files_scroll = files_del_arm = files_ctx_empty = 0;
     files_clip_cut = 0;
+    files_sel_bits = 0;
     files_clip_path[0] = '\0';
 }
 
@@ -72,15 +74,52 @@ static int files_entry_count(void) {
 }
 
 static int files_in_sel_range(int idx) {
+    if (files_sel_bits)
+        return idx >= 0 && idx < FILES_ROWS && (files_sel_bits & (1u << idx)) != 0;
     int lo = files_sel_anchor < files_sel ? files_sel_anchor : files_sel;
     int hi = files_sel_anchor > files_sel ? files_sel_anchor : files_sel;
     return idx >= lo && idx <= hi;
 }
 
+static int files_sel_count(void) {
+    if (files_sel_bits) {
+        int c = 0;
+        for (int i = 0; i < FILES_ROWS; i++)
+            if (files_sel_bits & (1u << i))
+                c++;
+        return c;
+    }
+    int lo = files_sel_anchor < files_sel ? files_sel_anchor : files_sel;
+    int hi = files_sel_anchor > files_sel ? files_sel_anchor : files_sel;
+    return hi - lo + 1;
+}
+
+static void files_ctrl_toggle_sel(int idx) {
+    if (idx < 0 || idx >= FILES_ROWS)
+        return;
+    if (!files_sel_bits) {
+        int lo = files_sel_anchor < files_sel ? files_sel_anchor : files_sel;
+        int hi = files_sel_anchor > files_sel ? files_sel_anchor : files_sel;
+        for (int i = lo; i <= hi; i++)
+            files_sel_bits |= 1u << i;
+    }
+    files_sel_bits ^= 1u << idx;
+    if (!files_sel_bits)
+        files_sel_anchor = files_sel;
+    else
+        files_sel = idx;
+    files_disarm_del();
+    dirty_bits |= DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
+}
+
 static void files_move_sel(int delta, int extend) {
     int n = files_entry_count();
     if (n <= 0) return;
-    if (!extend) files_sel_anchor = files_sel;
+    if (!extend) {
+        files_sel_anchor = files_sel;
+        files_sel_bits = 0;
+    }
     files_sel += delta;
     if (files_sel < 0) files_sel = 0;
     if (files_sel >= n) files_sel = n - 1;
@@ -420,7 +459,11 @@ static void files_draw_status(struct win *w, uint32_t tx, uint32_t sy, uint32_t 
         }
         int lo = files_sel_anchor < files_sel ? files_sel_anchor : files_sel;
         int hi = files_sel_anchor > files_sel ? files_sel_anchor : files_sel;
-        if (lo != hi)
+        int cnt = files_sel_count();
+        if (cnt > 1)
+            snprintf(status, sizeof(status), "%d selected  ·  Ctrl+click toggle  d batch del",
+                     cnt);
+        else if (lo != hi)
             snprintf(status, sizeof(status), "%d selected  ·  Ctrl+C/X/V  n d r u",
                      hi - lo + 1);
         else
@@ -448,7 +491,7 @@ void desktop_files_draw(struct win *w) {
                            theme_get()->danger, desktop_color_bg());
     else
         fb_draw_string_fit(tx, ty + ch, inner,
-                           "[n]ew [d]el [r]ename [u]p · Ctrl+C/X/V · Shift+arrows select",
+                           "[n]ew [d]el [r]ename [u]p · Ctrl+click multi · Shift+range",
                            desktop_color_dim(), desktop_color_bg());
     fb_draw_string_fit(size_x, ty + ch * 2 + desktop_u(2), desktop_u(64), "size", desktop_color_dim(), desktop_color_bg());
     uint32_t status_h = files_status_h();
@@ -526,20 +569,65 @@ static void files_new_file(void) {
     }
 }
 
-static void files_delete_sel(void) {
+static void files_batch_delete(void) {
     struct vfs_dirent ents[FILES_ROWS];
     int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
-    if (n <= 0 || files_sel < 0 || files_sel >= n) return;
+    if (n <= 0) return;
+    int cnt = files_sel_count();
+    if (cnt <= 0 || files_sel < 0 || files_sel >= n) return;
+    if (cnt == 1 && !files_sel_bits) {
+        if (!files_del_arm) {
+            files_del_arm = 1;
+            notify_push("Press d again to confirm delete");
+            dirty_bits |= DIRTY_TOAST | DIRTY_WIN;
+            desktop_mark_focus_surf_dirty();
+            return;
+        }
+        files_del_arm = 0;
+        char path[VFS_PATH_MAX];
+        files_build_path(files_sel, path, sizeof(path));
+        if (ents[files_sel].type == VFS_DIR) vfs_rmdir(path);
+        else vfs_unlink(path);
+        if (files_sel > 0) files_sel--;
+        files_sel_anchor = files_sel;
+        notify_push("Deleted");
+        dirty_bits |= DIRTY_TOAST | DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+        return;
+    }
     if (!files_del_arm) {
-        files_del_arm = 1; notify_push("Press d again to confirm delete");
-        dirty_bits |= DIRTY_TOAST | DIRTY_WIN; desktop_mark_focus_surf_dirty(); return;
+        files_del_arm = 1;
+        char msg[56];
+        snprintf(msg, sizeof(msg), "Delete %d items: press d again", cnt);
+        notify_push(msg);
+        dirty_bits |= DIRTY_TOAST | DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+        return;
     }
     files_del_arm = 0;
-    char path[VFS_PATH_MAX]; files_build_path(files_sel, path, sizeof(path));
-    if (ents[files_sel].type == VFS_DIR) vfs_rmdir(path); else vfs_unlink(path);
-    if (files_sel > 0) files_sel--;
-    files_sel_anchor = files_sel;
-    notify_push("Deleted"); dirty_bits |= DIRTY_TOAST | DIRTY_WIN; desktop_mark_focus_surf_dirty();
+    int deleted = 0;
+    for (int i = n - 1; i >= 0; i--) {
+        if (!files_in_sel_range(i))
+            continue;
+        char path[VFS_PATH_MAX];
+        files_build_path(i, path, sizeof(path));
+        if (ents[i].type == VFS_DIR) {
+            if (vfs_rmdir(path) == 0)
+                deleted++;
+        } else if (vfs_unlink(path) == 0)
+            deleted++;
+    }
+    files_sel_bits = 0;
+    files_sel = files_sel_anchor = 0;
+    char msg[48];
+    snprintf(msg, sizeof(msg), "Deleted %d items", deleted);
+    notify_push(msg);
+    dirty_bits |= DIRTY_TOAST | DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
+}
+
+static void files_delete_sel(void) {
+    files_batch_delete();
 }
 
 static void files_rename_sel(void) {
@@ -856,8 +944,14 @@ int desktop_files_click(struct win *w, int32_t mx, int32_t my, int dbl) {
     if (!files_hit_row(w, my, &row)) return 0;
     struct vfs_dirent ents[FILES_ROWS]; int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
     if (n <= 0) return 0;
-    files_sel = files_scroll + row; if (files_sel >= n) files_sel = n - 1;
-    if (!keyboard_shift_down()) files_sel_anchor = files_sel;
+    files_sel = files_scroll + row;
+    if (files_sel >= n) files_sel = n - 1;
+    if (keyboard_ctrl_down())
+        files_ctrl_toggle_sel(files_sel);
+    else if (!keyboard_shift_down()) {
+        files_sel_anchor = files_sel;
+        files_sel_bits = 0;
+    }
     if (dbl) files_activate();
     else {
         desktop_files_drag_begin_sel();
