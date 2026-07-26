@@ -18,6 +18,19 @@ static struct {
     char path[VFS_PATH_MAX];
 } files_crumb_hits[FILES_CRUMB_MAX];
 static int files_crumb_hit_n;
+static int files_a11y_crumb;
+static int files_crumb_focus;
+
+static void files_draw_focus_ring(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    uint32_t c = desktop_color_accent();
+    uint32_t t = desktop_u(2);
+    if (t < 2)
+        t = 2;
+    fb_fill_rect(x, y, w, t, c);
+    fb_fill_rect(x, y + h - t, w, t, c);
+    fb_fill_rect(x, y, t, h, c);
+    fb_fill_rect(x + w - t, y, t, h, c);
+}
 
 void desktop_files_init(void) {
     files_sel = files_sel_anchor = files_scroll = files_del_arm = files_ctx_empty = 0;
@@ -183,6 +196,8 @@ static void files_draw_crumbs(uint32_t tx, uint32_t ty, uint32_t inner) {
     if (tmp[0] == '/' && !tmp[1]) {
         fb_draw_string(tx, ty, "/", desktop_color_accent(), desktop_color_bg());
         files_crumb_hit_add(tx, ty, cw, ch, "/");
+        if (files_a11y_crumb && files_crumb_focus == 0)
+            files_draw_focus_ring(tx, ty, cw, ch);
         return;
     }
 
@@ -211,6 +226,8 @@ static void files_draw_crumbs(uint32_t tx, uint32_t ty, uint32_t inner) {
             snprintf(ell_path, sizeof(ell_path), "%s", seg_paths[start - 1]);
         fb_draw_string(cx, ty, "...", desktop_color_dim(), desktop_color_bg());
         files_crumb_hit_add(cx, ty, cw * 3, ch, ell_path);
+        if (files_a11y_crumb && files_crumb_focus == files_crumb_hit_n - 1)
+            files_draw_focus_ring(cx, ty, cw * 3, ch);
         cx += cw * 3 + desktop_u(4);
     }
 
@@ -226,6 +243,8 @@ static void files_draw_crumbs(uint32_t tx, uint32_t ty, uint32_t inner) {
         uint32_t fg = (s == nseg - 1) ? desktop_color_accent() : desktop_color_dim();
         fb_draw_string(cx, ty, lab, fg, desktop_color_bg());
         files_crumb_hit_add(cx, ty, lw, ch, seg_paths[s]);
+        if (files_a11y_crumb && files_crumb_focus == files_crumb_hit_n - 1)
+            files_draw_focus_ring(cx, ty, lw, ch);
         cx += lw + desktop_u(4);
     }
 }
@@ -458,6 +477,8 @@ void desktop_files_draw(struct win *w) {
         int selected = files_in_sel_range(idx);
         uint32_t bg = selected ? desktop_color_title() : desktop_color_bg();
         if (selected) fb_fill_rect(tx, rowy, inner, ch, desktop_color_title());
+        if (selected && !files_a11y_crumb)
+            files_draw_focus_ring(tx, rowy, inner, ch);
         char label[VFS_NAME_MAX + 4];
         snprintf(label, sizeof(label), "%s%s", ents[idx].name, ents[idx].type == VFS_DIR ? "/" : "");
         fb_draw_string_fit(tx, rowy, name_w, label,
@@ -651,6 +672,32 @@ int desktop_files_ctx_action(int action_id) {
 
 int desktop_files_key(int key) {
     int extend = keyboard_shift_down();
+    if (key == KEY_TAB || key == '\t') {
+        files_a11y_crumb = !files_a11y_crumb;
+        if (files_a11y_crumb && files_crumb_hit_n > 0)
+            files_crumb_focus = files_crumb_hit_n - 1;
+        dirty_bits |= DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+        return 1;
+    }
+    if (files_a11y_crumb) {
+        if (key == KEY_LEFT && files_crumb_focus > 0) {
+            files_crumb_focus--;
+            dirty_bits |= DIRTY_WIN;
+            desktop_mark_focus_surf_dirty();
+            return 1;
+        }
+        if (key == KEY_RIGHT && files_crumb_focus + 1 < files_crumb_hit_n) {
+            files_crumb_focus++;
+            dirty_bits |= DIRTY_WIN;
+            desktop_mark_focus_surf_dirty();
+            return 1;
+        }
+        if (key == '\n' && files_crumb_focus >= 0 && files_crumb_focus < files_crumb_hit_n) {
+            files_chdir_to(files_crumb_hits[files_crumb_focus].path);
+            return 1;
+        }
+    }
     if (keyboard_ctrl_down()) {
         if (key == 'c' || key == 'C') { files_disarm_del(); files_copy_sel(); return 1; }
         if (key == 'x' || key == 'X') { files_disarm_del(); files_cut_sel(); return 1; }
