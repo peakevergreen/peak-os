@@ -489,14 +489,18 @@ void desktop_files_draw(struct win *w) {
     if (files_del_arm)
         fb_draw_string_fit(tx, ty + ch, inner, "Delete: press d again to confirm · Esc cancel",
                            theme_get()->danger, desktop_color_bg());
-    else
+    else {
         fb_draw_string_fit(tx, ty + ch, inner,
-                           "[n]ew [d]el [r]ename [u]p · Ctrl+click multi · Shift+range",
+                           "[n]ew [d]el [r]ename [u]p",
                            desktop_color_dim(), desktop_color_bg());
-    fb_draw_string_fit(size_x, ty + ch * 2 + desktop_u(2), desktop_u(64), "size", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string_fit(tx, ty + ch + fb_cell_h(), inner,
+                           "Ctrl+click multi · Shift+range",
+                           desktop_color_dim(), desktop_color_bg());
+    }
+    fb_draw_string_fit(size_x, ty + ch * 3 + desktop_u(2), desktop_u(64), "size", desktop_color_dim(), desktop_color_bg());
     uint32_t status_h = files_status_h();
-    uint32_t area_h = w->h > th + ch * 3 + desktop_u(24) + status_h
-                          ? w->h - th - ch * 3 - desktop_u(24) - status_h
+    uint32_t area_h = w->h > th + ch * 4 + desktop_u(24) + status_h
+                          ? w->h - th - ch * 4 - desktop_u(24) - status_h
                           : ch;
     int max_rows = (int)(area_h / ch);
     if (max_rows > FILES_ROWS) max_rows = FILES_ROWS;
@@ -505,9 +509,9 @@ void desktop_files_draw(struct win *w) {
     int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
     if (n < 0) n = 0;
     if (n == 0) {
-        fb_draw_string(tx, ty + ch * 3 + desktop_u(4), "This folder is empty", desktop_color_dim(), desktop_color_bg());
-        fb_draw_string(tx, ty + ch * 4 + desktop_u(4), "n new file · Ctrl+V paste · u go up", desktop_color_dim(), desktop_color_bg());
-        fb_draw_string(tx, ty + ch * 5 + desktop_u(4), "Copy or cut elsewhere, then paste here", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(tx, ty + ch * 4 + desktop_u(4), "This folder is empty", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(tx, ty + ch * 5 + desktop_u(4), "n new file · Ctrl+V paste · u go up", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(tx, ty + ch * 6 + desktop_u(4), "Copy or cut elsewhere, then paste here", desktop_color_dim(), desktop_color_bg());
         files_draw_status(w, tx, w->y + w->h - status_h - desktop_u(4), inner);
         return;
     }
@@ -516,7 +520,7 @@ void desktop_files_draw(struct win *w) {
     if (files_sel >= files_scroll + max_rows) files_scroll = files_sel - max_rows + 1;
     for (int i = 0; i < max_rows && files_scroll + i < n; i++) {
         int idx = files_scroll + i;
-        uint32_t rowy = ty + ch * 3 + desktop_u(4) + (uint32_t)i * ch;
+        uint32_t rowy = ty + ch * 4 + desktop_u(4) + (uint32_t)i * ch;
         int selected = files_in_sel_range(idx);
         uint32_t bg = selected ? desktop_color_title() : desktop_color_bg();
         if (selected) fb_fill_rect(tx, rowy, inner, ch, desktop_color_title());

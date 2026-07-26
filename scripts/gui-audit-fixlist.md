@@ -13,7 +13,7 @@ Historical (prior campaign): GA-001…004 Fixed (#288–#291).
 | GA-101 | P1 | snprintf / Disks | Open Disks | Capacity/tree/RAM as numbers | Literal `%llu` in UI | `059-b-app-net-control.png` (Disks foreground) | **Fixed** |
 | GA-102 | P1 | snprintf / Notepad | Open Notepad | Line numbers in gutter | Literal `%*d` / garbage | `007-a-start-launch-notepad.png`, `037-b-notepad.png` | **Fixed** |
 | GA-103 | P1 | snprintf / agent | `agent` tools status strings | Numeric ctx/irq counters | `%llu` unsupported (same snprintf) | code+Disks proof | **Fixed** |
-| GA-104 | P2 | Files toolbar | Open Files @ scale 3 | Full `Shift+range` hint | Clipped to `Shift+ra` | `016-a-files-open.png` | Open |
+| GA-104 | P2 | Files toolbar | Open Files @ scale 3 | Full `Shift+range` hint | Clipped to `Shift+ra` | `016-a-files-open.png` | **Fixed** |
 | GA-105 | P2 | Settings copy | Settings → Display | Full “live preview (click chip to apply)” | Leading clip `ick chip…` | `047-b-settings.png` | Open |
 | GA-106 | P2 | Monitor export | Open Monitor | “Export snapshot” fully visible | Clipped `Export snapsh` | `050-b-monitor.png` | Open |
 | GA-107 | P2 | Monitor footer | Open Monitor | Clear page/legend hints | Garbled `ï/2/3`, `R^reset^` | `050-b-monitor.png` | Open |
