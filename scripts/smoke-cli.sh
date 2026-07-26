@@ -384,6 +384,12 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+
+echo "==> Wave 4 Pass 80 head/tail/timeout"
+grep -q 'byte_mode' kernel/user/utils_text.c
+grep -q 'wall-clock limit exceeded' kernel/user/utils_sys2.c
+grep -q '\`-c N\`' docs/CLI.md || grep -q '-c N' docs/CLI.md
+
 echo "==> Wave 4 Pass 79 join/comm"
 grep -q ujoin_main kernel/user/utils_text2.c
 grep -q ucomm_main kernel/user/utils_text2.c
