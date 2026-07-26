@@ -86,6 +86,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `od` `split` `paste` | byte dump (`-tx1`/`-to1`), split by bytes (`-b`), merge two files |
 | `xargs` | build `/bin` argv from stdin tokens (pipe/`<`; max 12 tokens) |
 | `awk` | awk-lite: `-F fs`, `$0`/`$n`, `NR`/`NF`, `/pat/ { print … }` (8 KiB) |
+| `jq` | jq-lite: `.key`, `.[]`, `keys`, `length`, compact print (8 KiB) |
 | `basename` `dirname` `realpath` | path helpers |
 | `hexdump` `strings` | binary helpers |
 | `sha256sum` `md5sum` `base64` | digests and base64 encode/decode (`-d`; 64 KiB cap) |
