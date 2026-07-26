@@ -345,6 +345,28 @@ int main(void) {
         }
     }
 
+
+    /* --- mode bits + chmod --- */
+    {
+        reset_vfs();
+        expect(vfs_mkdir("/home") != NULL, "mode mkdir");
+        expect(vfs_write_file("/home/f", "x", 1) == 0, "mode seed file");
+        struct vfs_stat st;
+        expect(vfs_stat("/home/f", &st) == 0, "mode stat file");
+        expect(st.mode == VFS_MODE_FILE, "default file mode 0644");
+        expect(vfs_stat("/home", &st) == 0, "mode stat dir");
+        expect(st.mode == VFS_MODE_DIR, "default dir mode 0755");
+        char modebuf[12];
+        vfs_mode_string(VFS_DIR, st.mode, modebuf, sizeof(modebuf));
+        expect(strcmp(modebuf, "drwxr-xr-x") == 0, "mode string dir");
+        expect(vfs_chmod("/home/f", 0755) == 0, "chmod octal");
+        expect(vfs_stat("/home/f", &st) == 0 && st.mode == 0755, "chmod applied");
+        expect(vfs_chmod("/home/f", 0700) == 0, "chmod 0700");
+        expect(vfs_stat("/home/f", &st) == 0 && st.mode == 0700, "mode 0700");
+        expect(vfs_chmod("/nope", 0644) == PEAK_ENOENT, "chmod missing");
+        expect(vfs_chmod("/", 0755) == PEAK_EINVAL, "chmod root denied");
+    }
+
     if (fails) {
         fprintf(stderr, "%d test(s) failed\n", fails);
         return 1;
