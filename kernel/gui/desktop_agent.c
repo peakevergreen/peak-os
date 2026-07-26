@@ -75,6 +75,11 @@ void desktop_agent_draw(struct win *w) {
     agent_gui_draw(ax, ay, aw, trans_h);
     uint32_t cy = ay + trans_h + gap;
     if (agent_write_pending()) { agent_approval_draw(ax, cy, aw, appr_h); cy += appr_h + gap; }
+    else if (agent_pending_approvals() > 0) {
+        uint32_t qh = lh * 2 + desktop_u(8);
+        agent_approval_queue_draw(ax, cy, aw);
+        cy += qh + gap;
+    }
     fb_fill_rect(ax, cy, aw, input_h, desktop_color_surface());
     fb_fill_rect(ax, cy, aw, desktop_u(2), th->accent);
     agent_input_draw(ax + desktop_u(4), cy + desktop_u(4), aw - desktop_u(8), lh);
@@ -89,6 +94,16 @@ int desktop_agent_key(int key) {
     if (agent_transcript_filter_key(key)) { dirty_bits |= DIRTY_WIN; return 1; }
     if (agent_write_pending() && (key == 'y' || key == 'Y' || key == 'n' || key == 'N'))
         agent_approve_write(key == 'y' || key == 'Y');
+    else if ((key == 'e' || key == 'E') && keyboard_ctrl_down()) {
+        if (agent_export_transcript("/home/dev/agent-export.txt") >= 0) {
+            notify_push("Agent transcript exported");
+            dirty_bits |= DIRTY_TOAST;
+        } else {
+            notify_push("Export failed");
+            dirty_bits |= DIRTY_TOAST;
+        }
+        dirty_bits |= DIRTY_WIN;
+    }
     else if (key == KEY_UP) { if (agent_transcript_scroll(keyboard_ctrl_down() ? AGENT_SCROLL_PAGE : 1)) dirty_bits |= DIRTY_WIN; }
     else if (key == KEY_DOWN) { if (agent_transcript_scroll(keyboard_ctrl_down() ? -AGENT_SCROLL_PAGE : -1)) dirty_bits |= DIRTY_WIN; }
     else if (key == KEY_HOME) { agent_transcript_reset_scroll(); dirty_bits |= DIRTY_WIN; }

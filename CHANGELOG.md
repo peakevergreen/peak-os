@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 147:** Agent GUI approval queue line + Ctrl+E transcript/tool-result export to VFS
+
 - **Pass 146:** PeakVec multi-bucket ANN probe (±1 neighbors) + explain fields
 
 - **Pass 145:** PeakDisk autosave interval (120s default) + workspace dirty indicator in Disks app
