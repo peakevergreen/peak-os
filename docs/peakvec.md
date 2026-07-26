@@ -7,6 +7,7 @@ PeakVec is a Peak-authored, in-guest vector index for session/workspace context.
 - **Local-only by default.** Embeddings are hashed n-grams (`peakvec_embed_text`) — no model weights, no network.
 - **Slim kernel, large data on disk.** Index pages through the [blobstore](#blobstore) LRU cache (128 KiB). Total size scales with the block device.
 - **Cosine search** over int16 vectors (`PEAKVEC_DIM=64`). Norms are cached; the query is normalized once. When a namespace has ≥64 live entries, an IVF-lite coarse bucket (argmax dimension) probes first, then falls back to the remainder. Namespaces are honored on upsert/query/delete/count (RAM tags; default `agent`). Last query duration is published to sysmon (`peakvec_us`).
+- **Query explain:** `peakvec_query_ex(..., &explain)` reports coarse bucket id, probe/remainder counts, early-out skips, and elapsed µs. Stats expose `ann_active` and per-bucket histogram.
 - **Capability-gated:** `CAP_VEC` (shell default includes it); agent namespace also accepts `CAP_AGENT`.
 
 ## Blobstore
@@ -44,6 +45,7 @@ PeakVec prefers blobstore on fresh init (`peakvec_init`); a tiny VFS pointer fil
 peakvec_embed_text(text, vec)
 peakvec_upsert(ns, key, vec, meta)
 peakvec_query(ns, query, topk, hits)
+peakvec_query_ex(ns, query, topk, hits, explain)
 peakvec_delete(ns, key)
 peakvec_count(ns)
 peakvec_stats(ns, &out)
@@ -60,7 +62,9 @@ Syscall `SYS_peakvec`:
 
 ## CLI
 
-| `peakvec` | index stats (count/capacity/backing) |
+| `peakvec` | index stats (count/capacity/backing, ANN mode) |
+| `peakvec stats [ns]` | same as bare `peakvec` |
+| `peakvec query <text> [-k N] [--explain] [--timing]` | embed + top-k hits |
 | `memory` | PeakVec header + session tail |
 | `df` | blobstore pages + integrity |
 

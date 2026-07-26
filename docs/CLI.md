@@ -113,7 +113,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `history` | numbered command history |
 | `js -e 'code'` / `js file.js` | Peak JS CLI — [browser-js.md](browser-js.md) |
 | `help` `man <cmd>` | categorized help (`-h` / `--help` on most utils) |
-| `ask` `audit` `memory` `peakvec` `policy` `peak` `gui` | agent + desktop |
+| `ask` `audit` `memory` `peakvec` `policy` `peak` `gui` | agent + desktop (`peakvec query …` for top-k search) |
 | `privacy` | `persist` / `net-allow` / `kill-switch on --confirm` — [privacy.md](privacy.md) |
 
 `gui` enters the desktop; press **Ctrl+Alt+Esc** anytime to return to CLI.
