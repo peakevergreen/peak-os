@@ -402,6 +402,10 @@ echo "==> Wave 4 Pass 93 disks peakdisk ux"
 grep -q peakdisk_save_progress_pct kernel/peakdisk.c
 grep -q disks_format_capacity_line kernel/gui/desktop_disks.c
 
+echo "==> Wave 4 Pass 94 peakvec namespace"
+grep -q peakvec_namespace_list kernel/user/utils_agent.c
+grep -q agent_transcript_note_recall kernel/agent.c
+
 echo "==> Wave 4 Pass 89 theme preview"
 grep -q settings_draw_theme_chrome_preview kernel/gui/desktop_settings.c
 grep -q settings_theme_preview kernel/gui/desktop_settings.c
