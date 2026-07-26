@@ -6,6 +6,7 @@
 #include "util.h"
 #include "pmm.h"
 #include "peakdisk.h"
+#include "blockdev.h"
 #include "blobstore.h"
 
 #define PEAK_PAGE_BYTES 4096ull
@@ -484,4 +485,127 @@ int utruncate_main(int argc, char **argv) {
     static char zbuf[4096];
     memset(zbuf, 0, sizeof(zbuf));
     return vfs_write_file(abs, zbuf, (size_t)sz) == 0 ? 0 : 1;
+}
+
+#define DD_IO_MAX   8192
+#define DD_BS_DEF   512
+
+static int dd_parse_eq(const char *arg, const char *key, const char **val) {
+    size_t k = strlen(key);
+    if (strncmp(arg, key, k) != 0 || arg[k] != '=')
+        return 0;
+    *val = arg + k + 1;
+    return 1;
+}
+
+int udd_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("dd", "if=<path> of=<path> [bs=N] [count=N]");
+        console_write("  lite copy (default bs=512, max 8192 bytes total)\n");
+        return 0;
+    }
+    const char *if_path = NULL;
+    const char *of_path = NULL;
+    int bs = DD_BS_DEF;
+    int count = -1;
+    for (int i = 1; i < argc; i++) {
+        const char *v = NULL;
+        if (dd_parse_eq(argv[i], "if", &v))
+            if_path = v;
+        else if (dd_parse_eq(argv[i], "of", &v))
+            of_path = v;
+        else if (dd_parse_eq(argv[i], "bs", &v))
+            bs = peak_atoi(v);
+        else if (dd_parse_eq(argv[i], "count", &v))
+            count = peak_atoi(v);
+    }
+    if (!if_path || !of_path) {
+        peak_usage("dd", "if=<path> of=<path> [bs=N] [count=N]");
+        return 1;
+    }
+    if (bs <= 0 || bs > DD_IO_MAX) {
+        peak_perror("dd", "bs out of range (1..8192)");
+        return 1;
+    }
+    char if_abs[VFS_PATH_MAX];
+    char of_abs[VFS_PATH_MAX];
+    if (shell_resolve_path(if_path, if_abs, sizeof(if_abs)) != 0) {
+        peak_perror("dd", "bad if= path");
+        return 1;
+    }
+    if (shell_resolve_path(of_path, of_abs, sizeof(of_abs)) != 0) {
+        peak_perror("dd", "bad of= path");
+        return 1;
+    }
+    size_t max_total = DD_IO_MAX;
+    if (count >= 0) {
+        if (count == 0) {
+            console_printf("%u+0 records in\n0+0 records out\n", (unsigned)bs);
+            return 0;
+        }
+        uint64_t want = (uint64_t)bs * (uint64_t)count;
+        if (want > DD_IO_MAX)
+            want = DD_IO_MAX;
+        max_total = (size_t)want;
+    }
+    static char buf[DD_IO_MAX];
+    size_t in_n = 0;
+    if (vfs_read_file(if_abs, buf, sizeof(buf), &in_n) != 0) {
+        peak_perror("dd", "cannot read if=");
+        return 1;
+    }
+    if (in_n > max_total)
+        in_n = max_total;
+    size_t off = 0;
+    size_t rec_in = 0;
+    size_t rec_out = 0;
+    static char outbuf[DD_IO_MAX];
+    size_t out_n = 0;
+    while (off < in_n && out_n < max_total) {
+        size_t chunk = (size_t)bs;
+        if (chunk > in_n - off)
+            chunk = in_n - off;
+        if (chunk > max_total - out_n)
+            chunk = max_total - out_n;
+        memcpy(outbuf + out_n, buf + off, chunk);
+        off += chunk;
+        out_n += chunk;
+        rec_in++;
+        rec_out++;
+    }
+    if (vfs_write_file(of_abs, outbuf, out_n) != 0) {
+        peak_perror("dd", "cannot write of=");
+        return 1;
+    }
+    console_printf("%u+%u records in\n%u+%u records out\n",
+                   (unsigned)bs, (unsigned)rec_in, (unsigned)bs, (unsigned)rec_out);
+    console_printf("%lu bytes copied (dd lite cap %u)\n",
+                   (unsigned long)out_n, (unsigned)DD_IO_MAX);
+    return 0;
+}
+
+int usync_main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("sync", "");
+        console_write("  flush block device caches when ATA/SD present\n");
+        return 0;
+    }
+    int acted = 0;
+    if (blockdev_present()) {
+        if (blockdev_flush() != 0) {
+            peak_perror("sync", "blockdev flush failed");
+            return 1;
+        }
+        console_write("sync: block device flushed\n");
+        acted = 1;
+    }
+    if (peakdisk_available()) {
+        console_write("sync: peakdisk volume ready (use disksave to persist workspace)\n");
+        acted = 1;
+    }
+    if (!acted)
+        console_write("sync: no block device (nothing to flush)\n");
+    return 0;
 }

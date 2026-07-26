@@ -75,6 +75,8 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `du [-h] [path]` | tree byte size (`-h` KiB/MiB) |
 | `df [-h]` | VFS inodes, RAM, PeakDisk/Blobstore status (`-h` KiB/MiB) |
 | `truncate <path> <n>` | resize (max 4096) |
+| `dd if=<in> of=<out> [bs=N] [count=N]` | lite block copy (default bs=512; 8 KiB total cap) |
+| `sync` | flush block device when ATA/SD present |
 
 ## Text
 | Command | Notes |
