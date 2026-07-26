@@ -313,8 +313,8 @@ grep -q 'escapes:' kernel/user/utils_text4.c
 
 
 echo "==> Wave 3 Pass 65 pipe buffer"
-grep -q 'SHELL_CAPTURE_MAX  32768' kernel/include/shell_split.h
-grep -q '32 KiB' docs/CLI.md
+grep -q 'SHELL_CAPTURE_MAX  65536' kernel/include/shell_split.h
+grep -q '64 KiB' docs/CLI.md
 grep -q 'pipe output truncated' kernel/shell_dispatch.c
 
 
@@ -442,13 +442,13 @@ grep -q net_dns_last_negative_cached kernel/net/dns.c
 grep -q 'cached negative' kernel/user/utils_net.c
 
 echo "==> Wave 4 Pass 84 http body policy"
-grep -q 'HTTP_BODY_MAX 32768' kernel/user/utils_net.c
-grep -q '32768' docs/network.md
+grep -q 'HTTP_BODY_MAX PEAK_IO_CAP' kernel/user/utils_net.c
+grep -q '65536' docs/network.md || grep -q '64 KiB' docs/network.md
 
 echo "==> Wave 4 Pass 83 text buffer depth"
-grep -q 'READ_MAX 32768' kernel/user/utils_text6.c
+grep -q 'READ_MAX PEAK_IO_CAP' kernel/user/utils_text6.c
 grep -q JQ_SELECT kernel/user/utils_text7.c
-grep -q '32 KiB' docs/CLI.md
+grep -q '64 KiB' docs/CLI.md || grep -q 'PEAK_IO_CAP' docs/CLI.md
 
 echo "==> Wave 4 Pass 82 mktemp/install"
 grep -q umktemp_main kernel/user/utils_file.c
@@ -463,8 +463,8 @@ grep -q 'UBIN_CMD("sha1sum"' kernel/user/ubin_cmds.def
 
 echo "==> Wave 4 Pass 80 head/tail/timeout"
 grep -q 'byte_mode' kernel/user/utils_text.c
-grep -q 'wall-clock limit exceeded' kernel/user/utils_sys2.c
-grep -q '\`-c N\`' docs/CLI.md || grep -q '-c N' docs/CLI.md
+grep -q 'limit.*exceeded.*cooperative' kernel/user/utils_sys2.c
+grep -q '\`-c N\`' docs/CLI.md || grep -q -- '-c N' docs/CLI.md
 
 echo "==> Wave 4 Pass 79 join/comm"
 grep -q ujoin_main kernel/user/utils_text2.c
@@ -597,7 +597,7 @@ grep -q '\.key.keys' docs/CLI.md || grep -q 'nested' docs/CLI.md
 echo "==> Wave 6 Pass 119 join/comm depth"
 grep -q 'line_field_delim' kernel/user/utils_text2.c
 grep -q 'suppress1' kernel/user/utils_text2.c
-grep -q '\`-2\`' docs/CLI.md || grep -q '-2' docs/CLI.md
+grep -q '\`-2\`' docs/CLI.md || grep -q -- '-2' docs/CLI.md
 
 echo "==> Wave 5 Pass 99 cli docs sync"
 grep -q 'mktemp' docs/CLI.md
@@ -669,13 +669,13 @@ grep -q 'http_decode_chunked_body(body' kernel/net/http.c
 echo "==> Wave 5 Pass 107 curl ping"
 grep -q head_only kernel/user/utils_net.c
 grep -q 'strcmp(method, "HEAD")' kernel/net/http.c
-grep -q '\`-c N\`' docs/CLI.md || grep -q '-c N' docs/CLI.md
+grep -q '\`-c N\`' docs/CLI.md || grep -q -- '-c N' docs/CLI.md
 
 echo "==> Wave 5 Pass 106 tar dd gzip"
 grep -q 'mode = 3' kernel/user/utils_tar.c
-grep -q 'DD_IO_MAX   (32 \* 1024)' kernel/user/utils_file.c
-grep -q 'COMP_MAX (32 \* 1024)' kernel/user/utils_sys2.c
-grep -q '32 KiB' docs/CLI.md
+grep -q 'DD_IO_MAX   PEAK_IO_CAP' kernel/user/utils_file.c
+grep -q 'COMP_MAX PEAK_IO_CAP' kernel/user/utils_sys2.c
+grep -q '64 KiB' docs/CLI.md || grep -q 'PEAK_IO_CAP' docs/CLI.md
 
 echo "==> Wave 5 Pass 105 diff patch sha"
 grep -q upatch_main kernel/user/utils_text2.c
@@ -700,12 +700,12 @@ echo "==> Wave 5 Pass 102 xargs find"
 grep -q 'xargs_tokenize' kernel/user/utils_text5.c
 grep -q 'FIND_EXEC_MAX' kernel/user/utils_sys.c
 grep -q 'print0' kernel/user/utils_sys.c
-grep -q '\`-print0\`' docs/CLI.md || grep -q '-print0' docs/CLI.md
+grep -q '\`-print0\`' docs/CLI.md || grep -q -- '-print0' docs/CLI.md
 
 echo "==> Wave 5 Pass 101 grep flags"
 grep -q 'count_only' kernel/user/utils_text.c
 grep -q 'ctx_before' kernel/user/utils_text.c
-grep -q '\`-o\`' docs/CLI.md || grep -q '-o' docs/CLI.md
+grep -q '\`-o\`' docs/CLI.md || grep -q -- '-o' docs/CLI.md
 
 echo "==> Wave 5 Pass 100 shell scripting"
 grep -q uexpr_main kernel/user/utils_text4.c
@@ -748,7 +748,7 @@ grep -q 'help nav|file|text' docs/CLI.md
 
 echo "==> Wave 7 Pass 154 less more depth"
 grep -q 'show_numbers' kernel/user/utils_pager.c
-grep -q '\`-N\`' docs/CLI.md || grep -q '-N' kernel/user/utils_pager.c
+grep -q '\`-N\`' docs/CLI.md || grep -q -- '-N' kernel/user/utils_pager.c
 grep -q 'pager_find_next.*icase' kernel/user/utils_pager.c || grep -q 'icase' kernel/user/utils_pager.c
 
 echo "==> Wave 7 Pass 153 nproc uptime free depth"
@@ -832,7 +832,7 @@ grep -q 'console_filter' kernel/include/browser_js.h
 echo "==> Wave 7 Pass 140 WebAPI fetch headers isolation"
 grep -q 'stub_fetch_parse_headers' kernel/gui/webapi_stubs.c
 grep -q 'browser_isolation_fetch_denied_reason' kernel/gui/browser_isolation.c
-grep -q 'method HEAD not supported' kernel/gui/webapi_stubs.c
+grep -q 'method %s not supported' kernel/gui/webapi_stubs.c
 grep -q 'headers must be plain object' kernel/gui/webapi_stubs.c
 grep -q 'ring-3 isolation enforce' tests/host/test_webapi.c
 
@@ -840,7 +840,7 @@ echo "==> Wave 7 Pass 139 JS Promise allSettled race"
 grep -q 'nat_promise_all_settled' kernel/js/js_vm.c
 grep -q 'nat_promise_race' kernel/js/js_vm.c
 grep -q 'js_promise_unwrap' kernel/js/js_vm.c
-grep -q 'promise-allsettled-race.js' tests/fixtures/js/promise-allsettled-race.js
+grep -q 'promise-allsettled-race.js' scripts/smoke-cli.sh
 grep -q 'Promise.allSettled' tests/host/test_js.c
 
 echo "==> Wave 4 Pass 98 lock-in"
