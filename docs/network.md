@@ -114,7 +114,7 @@ and ECDSA P-256/P-384 (SHA-256/SHA-384).
 | AES-256-GCM | `0xC02C`/`0xC030` | `0x1302` |
 | ChaCha20-Poly1305 | `0xCCA8`/`0xCCA9` | `0x1303` |
 | ALPN `http/1.1` | yes | yes |
-| ALPN `h2` + HTTP/2 GET | yes (HPACK headers, body limits) | yes |
+| ALPN `h2` + HTTP/2 GET | yes (HPACK, 16 KiB frames, 64 KiB body store, WINDOW_UPDATE/PING) | yes |
 | SKE / CertVerify | ECDSA-P256, RSA-PSS/PKCS1 | ECDSA-P256, RSA-PSS-SHA256 |
 | Finished check | PRF verify_data | HMAC-finished |
 | GREASE ClientHello | yes | yes |

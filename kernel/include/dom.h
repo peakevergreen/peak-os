@@ -3,12 +3,12 @@
 
 #include "types.h"
 
-#define DOM_MAX_NODES   512
+#define DOM_MAX_NODES   768
 #define DOM_NAME_MAX    32
-#define DOM_ATTR_MAX    8
-#define DOM_ATTR_VAL_MAX 64
-#define DOM_TEXT_MAX    160
-#define DOM_SCRIPT_MAX  16
+#define DOM_ATTR_MAX    10
+#define DOM_ATTR_VAL_MAX 96
+#define DOM_TEXT_MAX    200
+#define DOM_SCRIPT_MAX  24
 
 enum dom_node_type {
     DOM_ELEMENT = 1,

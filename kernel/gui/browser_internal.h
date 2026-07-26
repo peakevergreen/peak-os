@@ -8,12 +8,26 @@
 #include "ui_widgets.h"
 
 #define BR_URL_MAX    160
-#define BR_BODY_MAX   (128 * 1024)
-#define BR_MAX_BLOCKS 192
-#define BR_TEXT_MAX   120
+#define BR_BODY_MAX   (256 * 1024)
+#define BR_MAX_BLOCKS 256
+#define BR_TEXT_MAX   160
 #define BR_TITLE_MAX  48
 #define BR_MAX_TABS   4
-#define BR_MAX_BOXES  128
+#define BR_MAX_BOXES  256
+#define BR_MAX_STYLESHEETS 8
+#define BR_STYLESHEET_MAX  (24 * 1024)
+#define BR_MAX_IMAGES 16
+#define BR_IMG_BYTES_MAX (48 * 1024)
+#define BR_HIST_MAX 16
+
+struct br_img {
+    int used;
+    int node_id;
+    int x, y, w, h;
+    uint32_t pw, ph; /* pixel size */
+    uint8_t *rgb;    /* RGB888 or NULL if placeholder */
+    char alt[48];
+};
 
 enum br_kind {
     BR_H1 = 1,
@@ -63,6 +77,20 @@ struct br_tab {
     char prev_url[BR_URL_MAX];
     char forward_url[BR_URL_MAX];
     int show_console;
+    int body_truncated;
+    size_t body_total;
+    int http2;
+    char layout_mode[16]; /* "css" | "reader" | "error" */
+    char reader_reason[80];
+    struct br_img images[BR_MAX_IMAGES];
+    int nimages;
+    char hist_back[BR_HIST_MAX][BR_URL_MAX];
+    int nhist_back;
+    char hist_fwd[BR_HIST_MAX][BR_URL_MAX];
+    int nhist_fwd;
+    int focus_node;
+    char focus_value[96];
+    int focus_kind; /* 0 none, 1 input, 2 textarea, 3 button */
 };
 
 /* Shared session state (defined in browser.c). */
@@ -128,3 +156,5 @@ int browser_bookmark_remove(int idx);
 int browser_download_save(const char *url, const char *body, size_t len, char *msg, size_t msg_cap);
 
 const char *browser_page_body(size_t *len_out);
+int browser_form_submit(struct br_tab *t, int form_node);
+extern int browser_hist_navigating;

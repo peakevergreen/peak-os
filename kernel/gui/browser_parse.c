@@ -260,10 +260,24 @@ void browser_extract_title(struct br_tab *t, const char *html, int tab_index) {
 
 void browser_reader_fallback(struct br_tab *t, const char *html, int tab_index) {
     browser_clear_blocks(t);
-    browser_extract_title(t, html, tab_index);
-    browser_init_page_colors(t, html);
+    browser_extract_title(t, html ? html : "", tab_index);
+    browser_init_page_colors(t, html ? html : "");
     browser_add_block(t, BR_H2, t->title[0] ? t->title : "Page");
-    browser_add_block(t, BR_P, "(reader mode — scripts skipped/over budget; extracted text)");
+    {
+        char reason[120];
+        if (t->reader_reason[0])
+            snprintf(reason, sizeof(reason), "(reader — %s)", t->reader_reason);
+        else
+            snprintf(reason, sizeof(reason),
+                     "(reader mode — scripts skipped/over budget; extracted text)");
+        browser_add_block(t, BR_P, reason);
+    }
+    if (!html || !html[0]) {
+        browser_add_block(t, BR_P, "No page content received (empty HTTP body).");
+        browser_add_block(t, BR_P, "Try reload, or check HTTP/2 / network status.");
+        snprintf(t->layout_mode, sizeof(t->layout_mode), "reader");
+        return;
+    }
     browser_add_block(t, BR_HR, "");
 
     const char *p = html;

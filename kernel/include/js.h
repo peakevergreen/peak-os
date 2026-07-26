@@ -6,8 +6,8 @@
 /* Peak-authored stackless bytecode JavaScript runtime (no JIT). */
 
 #define JS_ERR_MAX 192
-#define JS_INS_BUDGET_DEFAULT 250000
-#define JS_HEAP_OBJS_DEFAULT  4096
+#define JS_INS_BUDGET_DEFAULT 400000
+#define JS_HEAP_OBJS_DEFAULT  6144
 
 struct js_runtime;
 struct js_value;

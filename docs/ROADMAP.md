@@ -70,6 +70,7 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 - Full **ring-3** script isolation (validated DOM/net handles)
 - [x] ES modules / `async`/`await` depth + more public-site fixtures
+- [x] **Interactive render bar (BR-1…14):** non-empty H2 bodies, external CSS, layout depth, images, forms/events, history — [browser-js.md](browser-js.md), [scripts/browser-render-checklist.md](../scripts/browser-render-checklist.md)
 
 ### Userspace & networking
 

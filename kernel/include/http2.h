@@ -13,6 +13,7 @@ struct http2_meta {
     size_t body_stored;
     size_t body_total;
     int truncated;
+    size_t message_len; /* full HTTP/1.0 message bytes written to out */
 };
 
 int http2_get(const char *host, const char *path, const char *extra_headers,

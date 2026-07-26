@@ -518,6 +518,8 @@ int http2_request(const char *method, const char *host, const char *path,
     if (body_stored)
         memcpy(out + so, body_acc, body_stored);
     out[so + body_stored] = '\0';
+    last_meta.body_stored = body_stored;
+    last_meta.message_len = so + body_stored;
 
     (void)headers_done;
     kfree(payload);

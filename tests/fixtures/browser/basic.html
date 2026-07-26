@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <title>Peak Render Fixture</title>
+  <style>
+    h1 { color: #3DA36A; }
+    .box { background: #1a2a22; padding: 8px; }
+    a { color: #9AC4AE; }
+    input { color: #E8F0EC; }
+  </style>
+</head>
+<body>
+  <h1 id="title">Render Fixture</h1>
+  <p class="box">Styled paragraph with <a href="https://example.com/">a link</a>.</p>
+  <form action="https://example.com/search" method="get">
+    <input id="q" name="q" type="text" placeholder="query" value="peak"/>
+    <input type="submit" value="Search"/>
+  </form>
+  <button id="btn">Click</button>
+  <p id="out">ready</p>
+  <script>
+    var n=0;
+    var btn=document.getElementById('btn');
+    var out=document.getElementById('out');
+    on(btn,'click',function(){ n=n+1; textContent(out,'clicks '+n); });
+  </script>
+</body>
+</html>
