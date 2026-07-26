@@ -647,9 +647,14 @@ int uscale_main(int argc, char **argv) {
 }
 
 int uhelp_main(int argc, char **argv) {
-    if (argc >= 2)
-        shell_help_cmd(argv[1]);
-    else
+    if (argc >= 2) {
+        if (!strcmp(argv[1], "nav") || !strcmp(argv[1], "file") ||
+            !strcmp(argv[1], "text") || !strcmp(argv[1], "sys") ||
+            !strcmp(argv[1], "meta") || !strcmp(argv[1], "net"))
+            shell_help_category(argv[1]);
+        else
+            shell_help_cmd(argv[1]);
+    } else
         shell_help_topics();
     return 0;
 }

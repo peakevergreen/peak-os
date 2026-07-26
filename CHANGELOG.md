@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 155:** `man`/`help` entries for Wave 5–6 tools (`join`, `ss`, `pgrep`, …); `help <category>` filter
+
 - **Pass 154:** `less -N`/`-i` line numbers + case search; `more` `/` pattern search
 
 - **Pass 153:** `nproc`; `uptime -p`/`-s` lite; `free -h` human memory line

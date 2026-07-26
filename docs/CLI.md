@@ -133,7 +133,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `true` `false` `test` `[` `sh` | exit status helpers; `test -f/-d/-e/-z/-n`, `= != -eq …`; nested `ush>` loop |
 | `history` | numbered command history |
 | `js -e 'code'` / `js file.js` | Peak JS CLI — [browser-js.md](browser-js.md) |
-| `help` `man <cmd>` | categorized help (`-h` / `--help` on most utils) |
+| `help` `man <cmd>` | categorized help — `help nav|file|text|sys|meta|net` lists category; `man join` etc. (`-h` / `--help` on most utils) |
 | `ask` `audit` `memory` `peakvec` `policy` `peak` `gui` | agent + desktop (`peakvec query …` for top-k search) |
 | `privacy` | `persist` / `net-allow` / `kill-switch on --confirm` — [privacy.md](privacy.md) |
 | `reboot` | request platform reboot (QEMU/ACPI path when available) |

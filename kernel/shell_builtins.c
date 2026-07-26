@@ -288,7 +288,28 @@ static const struct help_entry help_table[] = {
     { "ifconfig", "net", "show e1000 IPv4 config" },
     { "ping", "net", "DNS + TCP reachability probe" },
     { "wget", "net", "HTTP GET (-i headers, -O path); TLS detail on fail" },
-    { "curl", "net", "alias for wget (-i, -o path)" },
+    { "join", "text", "join two sorted files (-1/-2 field -t delim)" },
+    { "comm", "text", "compare sorted files (-1/-2/-3 suppress)" },
+    { "fmt", "text", "reflow paragraphs (-w width)" },
+    { "column", "text", "align columns (-t tab input)" },
+    { "expand", "text", "spaces to tabs (-t tabstop)" },
+    { "unexpand", "text", "tabs to spaces (-t tabstop)" },
+    { "shuf", "text", "shuffle lines (bounded)" },
+    { "cksum", "text", "CRC32 + byte count" },
+    { "xxd", "text", "hex dump (8 KiB cap)" },
+    { "sha1sum", "text", "SHA-1 digest (64 KiB cap)" },
+    { "basenc", "text", "base32 encode/decode (-d)" },
+    { "patch", "text", "apply unified diff hunks" },
+    { "mktemp", "file", "unique temp path under /tmp" },
+    { "install", "file", "copy with -D parent dirs and -m mode" },
+    { "pgrep", "sys", "find tasks by name substring" },
+    { "pidof", "sys", "print PIDs for process name" },
+    { "dmesg", "sys", "console scrollback ring (-n N lines)" },
+    { "nproc", "sys", "print processor count (lite: 1)" },
+    { "ss", "net", "lite netstat (-t tcp-only)" },
+    { "dnsflush", "net", "clear DNS cache" },
+    { "peakvec", "meta", "vector search query (--explain)" },
+    { "curl", "net", "alias for wget (-i -o path)" },
     { "nslookup", "net", "DNS A lookup (dig-style)" },
     { "host", "net", "DNS A lookup (compact dig)" },
     { "traceroute", "net", "staged TCP reachability probe" },
@@ -302,19 +323,36 @@ static const struct help_entry help_table[] = {
 };
 
 void shell_help_topics(void) {
-    console_write("Peak CLI — categories:\n");
+    console_write("Peak CLI — categories (help <cat> or man <cmd>):\n");
     console_write("  nav   pwd cd ls tree find\n");
-    console_write("  file  mkdir touch rm cp mv ln readlink chmod stat du df truncate dd sync file basename dirname realpath\n");
-    console_write("  text  cat head tail wc grep diff sort uniq cut tr sed cmp hexdump strings echo printf tee yes\n");
-    console_write("        fold rev od split paste nl tac xargs awk sha256sum md5sum base64 less more edit\n");
-    console_write("  sys   date free top sysmon ps kill env which seq sleep theme wallpaper scale\n");
-    console_write("        hostname uptime whoami id cal gzip gunzip timeout watch\n");
-    console_write("        uname true false test [ yes time history sh reboot help man js\n");
-    console_write("  meta  peak ask audit memory policy privacy disksave gui\n");
-    console_write("  net   ctr ctrd ifconfig ping wget curl nslookup host traceroute nc tlsinfo\n");
-    console_write("  file  … tar zip unzip basename dirname realpath\n");
+    console_write("  file  mkdir touch rm cp mv ln readlink chmod stat du df truncate dd sync file\n");
+    console_write("        mktemp install basename dirname realpath tar zip unzip\n");
+    console_write("  text  cat head tail wc grep diff patch sort uniq join comm cut tr sed cmp\n");
+    console_write("        fold rev od split paste nl tac xargs awk jq fmt column expand unexpand\n");
+    console_write("        hexdump strings xxd shuf cksum sha256sum md5sum sha1sum base64 basenc\n");
+    console_write("        less more echo printf expr tee yes edit\n");
+    console_write("  sys   date free nproc top sysmon ps pgrep pidof dmesg kill env which seq sleep\n");
+    console_write("        hostname uptime whoami id cal gzip gunzip timeout watch theme wallpaper scale\n");
+    console_write("        uname true false test [ yes time history alias sh reboot help man js\n");
+    console_write("  meta  peak ask audit memory peakvec policy privacy disksave gui\n");
+    console_write("  net   ctr ctrd ifconfig ping wget curl nslookup host dnsflush traceroute nc ss tlsinfo\n");
     console_write("Shell: quotes, globs (* ?), pipes |, redirects > >> < 2> 2>>, lists && ||\n");
-    console_write("Try: man <cmd>   ls *.c   echo hi | wc   tar -c a.tar f   gui\n");
+    console_write("Try: help text   man join   ls *.c   echo hi | wc   gui\n");
+}
+
+void shell_help_category(const char *cat) {
+    int any = 0;
+    for (int i = 0; help_table[i].cmd; i++) {
+        if (!strcmp(help_table[i].cat, cat)) {
+            if (!any) {
+                console_printf("%s:\n", cat);
+                any = 1;
+            }
+            console_printf("  %-12s %s\n", help_table[i].cmd, help_table[i].blurb);
+        }
+    }
+    if (!any)
+        console_write("unknown category — try help (nav file text sys meta net)\n");
 }
 
 void shell_help_cmd(const char *cmd) {

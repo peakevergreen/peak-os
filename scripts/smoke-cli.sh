@@ -723,6 +723,11 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 155 man help categories"
+grep -q 'shell_help_category' kernel/shell_builtins.c
+grep -q '"join"' kernel/shell_builtins.c
+grep -q 'help nav|file|text' docs/CLI.md
+
 echo "==> Wave 7 Pass 154 less more depth"
 grep -q 'show_numbers' kernel/user/utils_pager.c
 grep -q '\`-N\`' docs/CLI.md || grep -q '-N' kernel/user/utils_pager.c
