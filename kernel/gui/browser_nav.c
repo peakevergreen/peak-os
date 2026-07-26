@@ -7,7 +7,14 @@
 #include "util.h"
 #include "clipboard.h"
 #include "notify.h"
+#include "keyboard.h"
 #include "desktop_internal.h"
+
+static struct {
+    int valid;
+    char url[BR_URL_MAX];
+    char title[BR_TITLE_MAX];
+} last_closed;
 
 static int url_len_of(struct br_tab *t) {
     return (int)strlen(t->url);
@@ -84,6 +91,12 @@ int browser_new_tab(const char *url) {
 void browser_close_tab(int i) {
     if (ntabs <= 1 || i < 0 || i >= ntabs)
         return;
+    last_closed.valid = 1;
+    snprintf(last_closed.url, sizeof(last_closed.url), "%s", tabs[i].url);
+    if (tabs[i].title[0])
+        snprintf(last_closed.title, sizeof(last_closed.title), "%s", tabs[i].title);
+    else
+        snprintf(last_closed.title, sizeof(last_closed.title), "Tab");
     browser_tab_teardown_js(&tabs[i]);
     for (int j = i; j < ntabs - 1; j++)
         tabs[j] = tabs[j + 1];
@@ -91,7 +104,42 @@ void browser_close_tab(int i) {
     memset(&tabs[ntabs], 0, sizeof(tabs[ntabs]));
     if (active >= ntabs)
         active = ntabs - 1;
+    editing = 0;
     needs_redraw = 1;
+}
+
+int browser_has_closed_tab(void) {
+    return last_closed.valid != 0;
+}
+
+void browser_closed_clear(void) {
+    last_closed.valid = 0;
+    last_closed.url[0] = '\0';
+    last_closed.title[0] = '\0';
+}
+
+void browser_restore_closed_tab(void) {
+    struct br_tab *t = browser_cur();
+    if (!last_closed.valid) {
+        snprintf(t->status, sizeof(t->status), "No closed tab to restore");
+        needs_redraw = 1;
+        return;
+    }
+    if (ntabs >= BR_MAX_TABS) {
+        snprintf(t->status, sizeof(t->status), "Max %d tabs", BR_MAX_TABS);
+        needs_redraw = 1;
+        return;
+    }
+    char url[BR_URL_MAX];
+    char title[BR_TITLE_MAX];
+    snprintf(url, sizeof(url), "%s", last_closed.url);
+    snprintf(title, sizeof(title), "%s", last_closed.title);
+    last_closed.valid = 0;
+    if (browser_new_tab(url) < 0)
+        return;
+    snprintf(tabs[active].title, sizeof(tabs[active].title), "%s", title);
+    editing = 0;
+    browser_go(url);
 }
 
 void browser_input(char c) {
@@ -128,6 +176,10 @@ void browser_input(char c) {
             return;
         }
         if (c == 't' || c == 'T') {
+            if (keyboard_shift_down()) {
+                browser_restore_closed_tab();
+                return;
+            }
             if (browser_new_tab("https://www.fark.com/") >= 0)
                 return;
             snprintf(t->status, sizeof(t->status), "Max %d tabs", BR_MAX_TABS);
@@ -199,9 +251,18 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
         return;
 
     if ((uint32_t)ly >= hit_tab_y && (uint32_t)ly < hit_tab_y + hit_tab_h) {
-        if ((uint32_t)lx >= hit_plus_x && (uint32_t)lx < hit_plus_x + hit_tab_w) {
+        if (ntabs < BR_MAX_TABS &&
+            (uint32_t)lx >= hit_plus_x && (uint32_t)lx < hit_plus_x + hit_tab_w) {
             browser_new_tab("peak://demo");
             return;
+        }
+        for (int i = 0; i < ntabs; i++) {
+            if (hit_tab_close_w[i] > 0 &&
+                (uint32_t)lx >= hit_tab_close_x[i] &&
+                (uint32_t)lx < hit_tab_close_x[i] + hit_tab_close_w[i]) {
+                browser_close_tab(i);
+                return;
+            }
         }
         int idx = (int)((uint32_t)lx / (hit_tab_w ? hit_tab_w : 1));
         if (idx >= 0 && idx < ntabs)
@@ -333,7 +394,11 @@ int browser_ctx_menu(struct ctx_menu_item *items, int max_items) {
     items[5].enabled = ntabs < BR_MAX_TABS;
     items[5].separator = 0;
     items[5].action_id = CTX_ACT_BROWSER_NEW_TAB;
-    int n = 6;
+    items[6].label = "Reopen closed tab";
+    items[6].enabled = browser_has_closed_tab() && ntabs < BR_MAX_TABS;
+    items[6].separator = 0;
+    items[6].action_id = CTX_ACT_BROWSER_RESTORE;
+    int n = 7;
     int bm = browser_bookmark_count();
     if (bm > 0 && n + 1 < max_items) {
         items[n].label = NULL;
@@ -397,6 +462,9 @@ int browser_ctx_action(int action_id) {
             return 1;
         snprintf(t->status, sizeof(t->status), "Max %d tabs", BR_MAX_TABS);
         needs_redraw = 1;
+        return 1;
+    case CTX_ACT_BROWSER_RESTORE:
+        browser_restore_closed_tab();
         return 1;
     default:
         if (action_id >= CTX_ACT_BROWSER_BM_BASE &&

@@ -84,8 +84,16 @@ static void draw_wrapped(struct br_tab *t, uint32_t x, uint32_t *cy, uint32_t ma
 static void tab_label(struct br_tab *t, char *out, size_t cap) {
     const char *src = t->title[0] ? t->title : t->url;
     size_t i = 0;
-    for (; src[i] && i + 1 < cap && i < 12; i++)
-        out[i] = src[i];
+    if (t->fetching && cap > 2) {
+        out[i++] = '~';
+        out[i++] = ' ';
+    }
+    for (size_t si = 0; src[si] && i + 1 < cap; si++) {
+        char c = src[si];
+        if (c == '\n' || c == '\r')
+            continue;
+        out[i++] = c;
+    }
     out[i] = '\0';
 }
 
@@ -115,26 +123,38 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         hit_tab_w = 48;
     fb_fill_rect(x, y, w, hit_tab_h, th->border);
 
+    uint32_t cw = fb_cell_w();
+    uint32_t close_w = (ntabs > 1) ? cw + 4 : 0;
+    memset(hit_tab_close_x, 0, sizeof(hit_tab_close_x));
+    memset(hit_tab_close_w, 0, sizeof(hit_tab_close_w));
+
     for (int i = 0; i < ntabs; i++) {
         uint32_t tx = x + (uint32_t)i * hit_tab_w;
         uint32_t bg = (i == active) ? th->surface : th->border;
         fb_fill_rect(tx + 1, y + 1, hit_tab_w - 2, hit_tab_h - 2, bg);
         if (i == active)
             fb_fill_rect(tx + 1, y + hit_tab_h - 3, hit_tab_w - 2, 2, th->accent);
-        char lab[16];
+        char lab[BR_TITLE_MAX];
         tab_label(&tabs[i], lab, sizeof(lab));
-        fb_draw_string(tx + 4, y + 3, lab, (i == active) ? th->fg : th->dim, bg);
+        uint32_t label_max = hit_tab_w - 8 - close_w;
+        fb_draw_string_fit(tx + 4, y + 3, label_max, lab,
+                           (i == active) ? th->fg : th->dim, bg);
+        if (close_w > 0) {
+            uint32_t cx = tx + hit_tab_w - close_w - 2;
+            hit_tab_close_x[i] = cx - x;
+            hit_tab_close_w[i] = close_w;
+            fb_draw_string(cx, y + 3, "x", th->dim, bg);
+        }
     }
-    hit_plus_x = x + (uint32_t)ntabs * hit_tab_w;
+    hit_plus_x = (uint32_t)ntabs * hit_tab_w;
     if (ntabs < BR_MAX_TABS) {
-        fb_fill_rect(hit_plus_x + 2, y + 2, hit_tab_h - 2, hit_tab_h - 4, th->surface);
-        fb_draw_string(hit_plus_x + 6, y + 3, "+", th->accent, th->surface);
+        fb_fill_rect(x + hit_plus_x + 2, y + 2, hit_tab_h - 2, hit_tab_h - 4, th->surface);
+        fb_draw_string(x + hit_plus_x + 6, y + 3, "+", th->accent, th->surface);
     }
 
     uint32_t bar_y = y + hit_tab_h + 4;
     hit_bar_y = hit_tab_h + 4;
     hit_bar_h = ch + 4;
-    uint32_t cw = fb_cell_w();
     uint32_t nav_btn_w = cw * 2 + 8;
 
     hit_back_x = pad;
