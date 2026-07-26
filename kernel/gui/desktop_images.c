@@ -25,6 +25,7 @@ static int img_total;
 static int img_dragging;
 static int32_t img_drag_last_x;
 static int32_t img_drag_last_y;
+static char img_format[8];
 
 static void img_mark_dirty(void) {
     dirty_bits |= DIRTY_WIN;
@@ -40,6 +41,7 @@ static void img_clear(void) {
     img_mode = IMG_MODE_FIT;
     img_index = img_total = 0;
     img_dragging = 0;
+    img_format[0] = '\0';
 }
 
 void desktop_images_init(void) {
@@ -78,6 +80,30 @@ static int img_name_eq_ci(const char *a, const char *b) {
         if (!img_char_eq_ci(*a, *b))
             return 0;
     return *a == *b;
+}
+
+static const char *img_format_label(void) {
+    if (img_format[0])
+        return img_format;
+    if (!img_path[0])
+        return "";
+    size_t n = strlen(img_path);
+    if (n >= 4 && img_name_eq_ci(img_path + n - 4, ".ppm"))
+        return "PPM P6";
+    if (n >= 4 && img_name_eq_ci(img_path + n - 4, ".bmp"))
+        return "BMP 24";
+    return "unknown";
+}
+
+static void img_set_format_from_path(const char *path) {
+    img_format[0] = '\0';
+    if (!path)
+        return;
+    size_t n = strlen(path);
+    if (n >= 4 && img_name_eq_ci(path + n - 4, ".ppm"))
+        snprintf(img_format, sizeof(img_format), "PPM P6");
+    else if (n >= 4 && img_name_eq_ci(path + n - 4, ".bmp"))
+        snprintf(img_format, sizeof(img_format), "BMP 24");
 }
 
 static int img_is_image_name(const char *name) {
@@ -145,6 +171,7 @@ static int img_load(const char *path) {
     for (; path[i] && i + 1 < sizeof(img_path); i++)
         img_path[i] = path[i];
     img_path[i] = '\0';
+    img_set_format_from_path(img_path);
     img_split_dir(img_path);
     img_pan_x = img_pan_y = 0;
     img_zoom = 100;
@@ -323,14 +350,15 @@ void desktop_images_draw(struct win *w) {
     if (img_loaded) {
         const char *mode = img_mode == IMG_MODE_FIT ? "fit"
                          : img_mode == IMG_MODE_ACTUAL ? "1:1" : "zoom";
+        const char *fmt = img_format_label();
         if (img_total > 1)
-            snprintf(status, sizeof(status), "%d/%d  %s %d%%  [/] nav  +/- zoom  0 fit  1 actual",
-                     img_index, img_total, mode, img_zoom);
+            snprintf(status, sizeof(status), "%d/%d  %s  %s %d%%  [/] nav  0 fit  1 actual",
+                     img_index, img_total, fmt, mode, img_zoom);
         else
-            snprintf(status, sizeof(status), "%s %d%%  +/- zoom  0 fit  1 actual  drag to pan",
-                     mode, img_zoom);
+            snprintf(status, sizeof(status), "%s  %s %d%%  +/- zoom  0 fit  1 actual",
+                     fmt, mode, img_zoom);
     } else {
-        snprintf(status, sizeof(status), "Open .ppm/.bmp from Files  wheel or [/] to browse folder");
+        snprintf(status, sizeof(status), "PPM P6 / BMP 24 · open from Files · [/] browse folder");
     }
     fb_draw_string_fit(tx + desktop_u(4), sy + desktop_u(2), cw - desktop_u(8), status,
                        desktop_color_dim(), desktop_color_surface());
