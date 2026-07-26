@@ -152,8 +152,8 @@ CLI scrollback search: **Ctrl+F**, type a needle, **Enter** for next match (128 
 | `traceroute` | Staged reachability: local → gateway → DNS → dest (TCP :80) |
 | `nc [-w sec]` | TCP connect or `-l` listen (800ms listen default, 4s connect; `-w` max 30s) |
 | `ss [-t]` | lite netstat over kernel TCP conn table (`-t` tcp-only, default) |
-| `tar -c` / `-x` / `-t [-v]` | ustar create/extract/list (64 KiB archive cap; `-v` verbose) |
-| `zip` `unzip` | PEAKZIP1 multi-file archive — store or RLE per entry (64 KiB / 32 files / 8 KiB each) |
+| `tar -c` / `-x` / `-t [-v]` | ustar create/extract/list (64 KiB archive cap; 48 files; `-v` verbose; honest cap footer) |
+| `zip [-l]` `unzip` | PEAKZIP1 multi-file archive — store or RLE per entry (64 KiB / 48 files / 8 KiB each; `zip -l` lists) |
 | `ctr` `ctrd` | Dockerfile staging / static HTTP (not OCI) — [containers.md](containers.md) |
 
 Prompt shows cwd: `peak:/home/dev/workspace> ` (append `[N]` after a non-zero exit).
