@@ -140,6 +140,16 @@ grep -q 'parse_addr' kernel/user/utils_text3.c
 grep -q 'subst_global' kernel/user/utils_text3.c
 grep -q 'translit_line' kernel/user/utils_text3.c
 
+echo "==> Pass 43 human sizes"
+grep -q 'peak_hsize_fmt' kernel/user/utils_file.c
+grep -q 'KiB/MiB' docs/CLI.md
+
+echo "==> Pass 42 symlinks"
+grep -q 'VFS_SYMLINK' kernel/include/vfs.h
+grep -q 'vfs_resolve' kernel/vfs.c
+grep -q 'readlink' kernel/user/ubin_cmds.def
+grep -q 'PEAK_ELOOP' kernel/include/peak_errno.h
+
 echo "==> Pass 45 pager depth"
 grep -q 'pager_find_next' kernel/user/utils_pager.c
 grep -q 'less_main' kernel/user/utils_pager.c
