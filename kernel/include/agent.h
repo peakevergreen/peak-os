@@ -14,6 +14,10 @@ int agent_pending_approvals(void);
 int agent_write_pending(void);
 const char *agent_pending_write_path(void);
 void agent_approve_write(int yes);
+const char *agent_tools_catalog(void);
+void agent_policy_reload_cli(void);
+int agent_policy_tool_allowed_cli(const char *tool);
+int agent_policy_deny_reason_cli(const char *tool, const char *path, char *out, size_t out_len);
 
 /* Transcript scroll: positive = older lines, 0 = follow latest. */
 void agent_transcript_clear(void);

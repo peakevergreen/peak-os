@@ -236,6 +236,18 @@ const char *agent_last_summary(void) {
     return last_summary;
 }
 
+void agent_policy_reload_cli(void) {
+    agent_policy_reload();
+}
+
+int agent_policy_tool_allowed_cli(const char *tool) {
+    return agent_policy_tool_allowed(tool);
+}
+
+int agent_policy_deny_reason_cli(const char *tool, const char *path, char *out, size_t out_len) {
+    return agent_policy_deny_reason(tool, path, out, out_len);
+}
+
 int agent_pending_approvals(void) {
     return pending;
 }

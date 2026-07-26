@@ -25,6 +25,8 @@ int agent_policy_path_allowed(const char *path);
 int agent_policy_normalize_path(const char *in, char *out, size_t out_len);
 int agent_policy_tool_allowed(const char *tool);
 int agent_policy_write_requires_approval(void);
+/* Fill human-readable deny reason (tool/path/audit). Returns 0 if written. */
+int agent_policy_deny_reason(const char *tool, const char *path, char *out, size_t out_len);
 
 /* Returns 0 ok, 1 pending approval, -1 denied/failed. */
 int agent_queue_write_approval(const char *path, const char *content);

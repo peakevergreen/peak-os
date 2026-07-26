@@ -38,13 +38,18 @@ int agent_tool_console_print(const char *msg) {
 
 int agent_tool_fs_read(const char *path, char *out, size_t out_len, size_t *out_n) {
     char norm[VFS_PATH_MAX];
+    char why[96];
     if (!agent_policy_tool_allowed("fs.read")) {
         agent_audit_event("fs.read", path, "deny-tool");
+        if (agent_policy_deny_reason("fs.read", path, why, sizeof(why)) == 0)
+            agent_transcript_note_tool(why);
         return -1;
     }
     if (agent_policy_normalize_path(path, norm, sizeof(norm)) != 0 ||
         !agent_policy_path_allowed(norm)) {
         agent_audit_event("fs.read", path, "deny-path");
+        if (agent_policy_deny_reason("fs.read", path, why, sizeof(why)) == 0)
+            agent_transcript_note_tool(why);
         return -1;
     }
     size_t n = 0;
