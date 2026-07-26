@@ -93,6 +93,8 @@ void desktop_run(void) {
     int32_t last_click_x = -1, last_click_y = -1;
     int term_select_drag = 0;
     int term_select_win = -1;
+    int img_pan_drag = 0;
+    int img_pan_win = -1;
     struct framebuffer *fb = fb_get();
 
     for (;;) {
@@ -420,6 +422,11 @@ void desktop_run(void) {
                             desktop_settings_click(w, m.x, m.y);
                         } else if (w->kind == APP_FILES) {
                             desktop_files_click(w, m.x, m.y, dbl);
+                        } else if (w->kind == APP_IMAGES) {
+                            if (desktop_images_click(w, m.x, m.y)) {
+                                img_pan_drag = 1;
+                                img_pan_win = i;
+                            }
                         } else if (w->kind == APP_NOTEPAD) {
                             desktop_notepad_click(w, m.x, m.y);
                         } else if (w->kind == APP_NETCTL) {
@@ -448,6 +455,11 @@ void desktop_run(void) {
                 desktop_terminal_select_end();
             term_select_drag = 0;
             term_select_win = -1;
+            if (img_pan_drag) {
+                desktop_images_release();
+                img_pan_drag = 0;
+                img_pan_win = -1;
+            }
             if (dragging) {
                 int hint = desktop_snap_hint(m.x, m.y);
                 if (hint)
@@ -484,6 +496,10 @@ void desktop_run(void) {
         if (term_select_drag && term_select_win >= 0 && (m.buttons & 1) &&
             wins[term_select_win].open && wins[term_select_win].kind == APP_TERM) {
             desktop_terminal_click(&wins[term_select_win], m.x, m.y, 1);
+        }
+        if (img_pan_drag && img_pan_win >= 0 && (m.buttons & 1) &&
+            wins[img_pan_win].open && wins[img_pan_win].kind == APP_IMAGES) {
+            desktop_images_drag(m.x, m.y);
         }
         if (dragging && focus >= 0 && (m.buttons & 1)) {
             int32_t nx = m.x - drag_off_x;

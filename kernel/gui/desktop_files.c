@@ -16,6 +16,31 @@ void desktop_files_init(void) {
 
 static void files_disarm_del(void) { files_del_arm = 0; }
 
+void desktop_files_goto(const char *dir, const char *select_name) {
+    if (!dir || !dir[0])
+        return;
+    desktop_open_app(APP_FILES);
+    size_t i = 0;
+    for (; dir[i] && i + 1 < sizeof(files_cwd); i++)
+        files_cwd[i] = dir[i];
+    files_cwd[i] = '\0';
+    files_sel = files_sel_anchor = 0;
+    files_scroll = 0;
+    files_disarm_del();
+    if (select_name && select_name[0]) {
+        struct vfs_dirent ents[FILES_ROWS];
+        int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
+        for (int j = 0; j < n; j++) {
+            if (ents[j].type == VFS_FILE && !strcmp(ents[j].name, select_name)) {
+                files_sel = files_sel_anchor = j;
+                break;
+            }
+        }
+    }
+    dirty_bits |= DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
+}
+
 static int files_entry_count(void) {
     struct vfs_dirent ents[FILES_ROWS];
     int n = vfs_readdir(files_cwd, ents, FILES_ROWS);

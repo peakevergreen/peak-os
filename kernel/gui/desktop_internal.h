@@ -260,6 +260,7 @@ void desktop_terminal_find_close(void);
 void desktop_terminal_select_end(void);
 
 void desktop_files_init(void);
+void desktop_files_goto(const char *dir, const char *select_name);
 void desktop_files_draw(struct win *w);
 int desktop_files_key(int key);
 void desktop_files_wheel(int wheel);
@@ -281,6 +282,8 @@ void desktop_images_draw(struct win *w);
 int desktop_images_key(int key);
 void desktop_images_wheel(int wheel);
 int desktop_images_click(struct win *w, int32_t mx, int32_t my);
+void desktop_images_drag(int32_t mx, int32_t my);
+void desktop_images_release(void);
 int desktop_images_ctx_menu(struct ctx_menu_item *items, int max_items);
 int desktop_images_ctx_action(int action_id);
 

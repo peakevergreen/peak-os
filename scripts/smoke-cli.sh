@@ -96,6 +96,11 @@ grep -q 'term_find_next' kernel/gui/desktop_terminal.c
 echo "==> Pass 29 files/notepad UX"
 grep -q 'files_del_arm' kernel/gui/desktop_files.c
 
+echo "==> Pass 48 images UX"
+grep -q 'desktop_files_goto' kernel/gui/desktop_files.c
+grep -q 'img_refresh_index' kernel/gui/desktop_images.c
+grep -q 'desktop_images_drag' kernel/gui/desktop_images.c
+
 echo "==> Pass 30 browser JS UX"
 grep -q 'browser_bookmarks_init' kernel/gui/browser_bookmarks.c
 
