@@ -518,6 +518,13 @@ grep -q 'desktop_win_keyboard_nudge' kernel/gui/desktop_windows.c
 grep -q 'desktop_draw_snap_hud' kernel/gui/desktop_compose.c
 grep -q 'snap_hud_mode' kernel/gui/desktop.c
 
+echo "==> Wave 6 Pass 123 stat du df"
+grep -q "'-c format'" kernel/user/utils_file.c
+grep -q "peak_has_flag(argc, argv, \"-s\")" kernel/user/utils_file.c
+grep -q 'guest-visible, approximate' kernel/user/utils_file.c
+grep -q 'capacity honest' kernel/user/utils_file.c
+grep -q '\`-s\`' docs/CLI.md || grep -q '-s' docs/CLI.md
+
 echo "==> Wave 6 Pass 122 fmt column expand"
 grep -q 'UBIN_CMD("fmt"' kernel/user/ubin_cmds.def
 grep -q ufmt_main kernel/user/utils_text9.c
