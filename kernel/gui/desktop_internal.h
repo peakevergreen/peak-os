@@ -212,6 +212,8 @@ int desktop_app_ctx_action(enum app_kind kind, int action_id);
 void desktop_menus_open_ctx_target(int32_t mx, int32_t my, enum ctx_target target, int win_idx);
 int desktop_menus_ctx_hit_test(int32_t mx, int32_t my, enum ctx_target *target, int *win_idx);
 void desktop_menus_ctx_hover(int32_t mx, int32_t my);
+void desktop_menus_start_hover(int32_t mx, int32_t my);
+int desktop_menus_start_wheel(int32_t mx, int32_t my, int wheel);
 int desktop_taskbar_hit_button(int32_t mx, int32_t my, int *win_idx, int *overflow_btn);
 int desktop_taskbar_raise_overflow(void);
 int desktop_taskbar_map_win(int slot, int *win_idx);

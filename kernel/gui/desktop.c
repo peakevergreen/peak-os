@@ -274,7 +274,9 @@ void desktop_run(void) {
             dirty_bits |= DIRTY_TOAST;
 
         if (m.wheel) {
-            if (term_focus)
+            if (menu_open && desktop_menus_start_wheel(m.x, m.y, m.wheel)) {
+                /* scrolled start menu */
+            } else if (term_focus)
                 desktop_terminal_wheel(m.wheel);
             else if (files_focus)
                 desktop_files_wheel(m.wheel);
@@ -301,6 +303,9 @@ void desktop_run(void) {
 
         if (ctx_menu)
             desktop_menus_ctx_hover(m.x, m.y);
+
+        if (menu_open)
+            desktop_menus_start_hover(m.x, m.y);
 
         if (m.left_pressed) {
             uint64_t now = timer_ticks();
