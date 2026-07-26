@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Browser render maturity (Interactive bar, BR-1…14):** HTTP/2 64 KiB bodies + flow control/PING ACK; larger DOM/CSS budgets; external stylesheets; cascade/inline layout; PNG/JPEG `<img>` paint; form controls + GET/POST submit; DOM events depth; `Response.text` / `querySelectorAll` / classList / location; multi-entry history; reader honesty; fixtures + `scripts/browser-render-matrix.py`
+
 - **Browser HTTPS WebPKI:** SPKI trust-anchor match for cross-signed roots; ECDSA BIT STRING parse; TLS 1.2 fail-closed on cert; error-page Accept/Forget + `tlsinfo -A`/`-F`; snprintf `%.Ns`; QEMU URL matrix in `scripts/browser-https-fixlist.md`
 
 - **Audit v2 harness:** mouse/PPM helpers + dense scenario runner; deep fixlist GA-101…125 closed Fixed/Deferred

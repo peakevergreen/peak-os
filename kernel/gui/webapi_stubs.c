@@ -14,7 +14,7 @@
  * | fetch init.signal    | AbortController().signal               | non-object signal                   |
  * | fetch init.*         | method, body, signal                   | headers, credentials, mode, cache…  |
  * | Response.json()      | JSON object/array/primitives           | missing body, invalid JSON          |
- * | Response.text()      | —                                      | use bodyText property (no .text())  |
+ * | Response.text()      | returns bodyText string                | missing body                        |
  * | localStorage         | get/set/removeItem; VFS /var/peak/     | clear, key(), length                |
  * | sessionStorage       | in-memory per-tab get/set/removeItem   | clear, key(), length; no disk       |
  * | AbortController()    | factory {signal, abort()}              | `new AbortController()` (no OP_NEW) |
@@ -277,6 +277,19 @@ static int webapi_json_parse(struct js_runtime *rt, const char *text, struct js_
     return 0;
 }
 
+static int stub_response_text(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    (void)argc;
+    (void)argv;
+    struct js_value resp;
+    resp.type = JT_OBJ;
+    resp.u.o = ud;
+    struct js_value body;
+    if (js_val_get_prop(rt, &resp, "bodyText", &body) != 0 || !js_val_is_string(&body))
+        return stub_fail(rt, ret, "Response.text: no body");
+    *(struct js_value *)ret = body;
+    return 0;
+}
+
 static int stub_response_json(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
     (void)argc; (void)argv;
     struct js_value resp; resp.type = JT_OBJ; resp.u.o = ud;
@@ -533,6 +546,7 @@ static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, vo
     js_val_set_string(rt, &txt, body);
     js_val_set_prop(rt, &o, "bodyText", &txt);
     webapi_install_fn(rt, &o, "json", stub_response_json, o.u.o);
+    webapi_install_fn(rt, &o, "text", stub_response_text, o.u.o);
     *(struct js_value *)ret = o;
     kfree(body);
     kfree(hdrs);

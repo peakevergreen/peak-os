@@ -165,10 +165,12 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     hit_go_x = hit_fwd_x + hit_fwd_w + 4;
     hit_go_w = cw * 4;
 
-    uint32_t back_bg = t->prev_url[0] ? th->surface : th->border;
-    uint32_t fwd_bg = t->forward_url[0] ? th->surface : th->border;
-    uint32_t back_fg = t->prev_url[0] ? th->fg : th->dim;
-    uint32_t fwd_fg = t->forward_url[0] ? th->fg : th->dim;
+    int can_back = t->nhist_back > 0 || t->prev_url[0];
+    int can_fwd = t->nhist_fwd > 0 || t->forward_url[0];
+    uint32_t back_bg = can_back ? th->surface : th->border;
+    uint32_t fwd_bg = can_fwd ? th->surface : th->border;
+    uint32_t back_fg = can_back ? th->fg : th->dim;
+    uint32_t fwd_fg = can_fwd ? th->fg : th->dim;
 
     fb_fill_rect(x + hit_back_x, bar_y, hit_back_w, ch + 4, back_bg);
     fb_draw_string(x + hit_back_x + 6, bar_y + 2, "<", back_fg, back_bg);
@@ -287,18 +289,60 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
             int by = b->y - scroll;
             if (by + b->h < 0)
                 continue;
-            uint32_t draw_y = cy + (uint32_t)(by < 0 ? 0 : by);
+            uint32_t draw_y = page_y + pad + (uint32_t)(by < 0 ? 0 : by);
             if (draw_y >= max_y)
                 break;
             uint32_t fg = css_to_rgb(&b->style.color, t->page_fg);
+            uint32_t bx = cx + (uint32_t)b->x;
+            uint32_t bw = (uint32_t)(b->w > 0 ? b->w : (int)content_w);
+            uint32_t bh = (uint32_t)(b->h > 0 ? b->h : (int)ch);
+            if (b->kind == 1) {
+                /* Image: blit RGB if decoded, else placeholder. */
+                int painted = 0;
+                for (int im = 0; im < t->nimages; im++) {
+                    if (t->images[im].node_id != b->node_id || !t->images[im].rgb)
+                        continue;
+                    uint32_t iw = t->images[im].pw;
+                    uint32_t ih = t->images[im].ph;
+                    if (iw > bw)
+                        iw = bw;
+                    if (ih > bh)
+                        ih = bh;
+                    if (draw_y + ih > max_y)
+                        ih = max_y > draw_y ? max_y - draw_y : 0;
+                    for (uint32_t py = 0; py < ih; py++) {
+                        for (uint32_t px = 0; px < iw; px++) {
+                            const uint8_t *p =
+                                t->images[im].rgb + ((size_t)py * t->images[im].pw + px) * 3;
+                            fb_put_pixel(bx + px, draw_y + py, fb_rgb(p[0], p[1], p[2]));
+                        }
+                    }
+                    painted = 1;
+                    break;
+                }
+                if (!painted) {
+                    fb_fill_rect(bx, draw_y, bw, bh, t->page_surface);
+                    fb_draw_string(bx + 2, draw_y + 2, b->text, t->page_muted, t->page_surface);
+                }
+                continue;
+            }
+            if (b->kind == 2 || b->kind == 3) {
+                uint32_t bgc = (b->node_id == t->focus_node) ? t->page_accent : t->page_surface;
+                fb_fill_rect(bx, draw_y, bw, bh, bgc);
+                const char *label = b->text;
+                if (b->node_id == t->focus_node && t->focus_value[0])
+                    label = t->focus_value;
+                fb_draw_string(bx + 4, draw_y + 4, label, t->page_fg, bgc);
+                continue;
+            }
             if (b->style.background.set) {
                 uint32_t bgc = css_to_rgb(&b->style.background, t->page_surface);
-                fb_fill_rect(cx + (uint32_t)b->x, page_y + pad + (uint32_t)(by < 0 ? 0 : by),
-                             (uint32_t)(b->w > 0 ? b->w : (int)content_w), (uint32_t)b->h, bgc);
+                fb_fill_rect(bx, draw_y, bw, bh, bgc);
             }
-            fb_draw_string(cx + (uint32_t)b->x, page_y + pad + (uint32_t)(by < 0 ? 0 : by),
-                           b->text, fg, t->page_bg);
-            (void)draw_y;
+            if (b->style.border)
+                fb_fill_rect(bx, draw_y + bh - 1, bw, 1, t->page_muted);
+            fb_draw_string(bx, draw_y, b->text, fg, t->page_bg);
+            (void)cy;
         }
         cy = max_y;
     } else {

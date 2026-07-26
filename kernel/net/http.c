@@ -14,15 +14,18 @@ static int last_tls_secure;
 static int last_tls_verified;
 static int last_http_h2;
 static size_t last_http_body_total;
+static size_t last_http_body_stored;
 static int last_http_body_truncated;
 
 int net_http_last_h2(void) { return last_http_h2; }
 size_t net_http_last_body_total(void) { return last_http_body_total; }
+size_t net_http_last_body_stored(void) { return last_http_body_stored; }
 int net_http_last_body_truncated(void) { return last_http_body_truncated; }
 
 static void http_clear_transfer_meta(void) {
     last_http_h2 = 0;
     last_http_body_total = 0;
+    last_http_body_stored = 0;
     last_http_body_truncated = 0;
 }
 
@@ -203,6 +206,7 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
             http2_last_meta(&hm);
             last_http_body_total = hm.body_total;
             last_http_body_truncated = hm.truncated;
+            last_http_body_stored = hm.body_stored;
         }
         if (status_out)
             *status_out = st;
@@ -402,7 +406,28 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
                 hsts_process_header(host, hdrtmp);
             }
             http_decode_chunked_body(body, body_cap);
-            http_strip_headers(body);
+            if (last_http_h2) {
+                struct http2_meta hm;
+                http2_last_meta(&hm);
+                size_t mlen = hm.message_len ? hm.message_len : strlen(body);
+                if (mlen > body_cap)
+                    mlen = body_cap;
+                size_t hlen = http_headers_len(body, mlen);
+                if (hlen && hlen < mlen) {
+                    size_t blen = mlen - hlen;
+                    memmove(body, body + hlen, blen);
+                    body[blen] = '\0';
+                    last_http_body_stored = blen;
+                } else {
+                    http_strip_headers(body);
+                    last_http_body_stored = strlen(body);
+                }
+            } else {
+                http_strip_headers(body);
+                last_http_body_stored = strlen(body);
+                if (last_http_body_total < last_http_body_stored)
+                    last_http_body_total = last_http_body_stored;
+            }
             http_needs_tls_flag = 0;
             return 0;
         }

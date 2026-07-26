@@ -176,6 +176,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/gui/desktop_files.c \
 	kernel/gui/desktop_notepad.c \
 	kernel/gui/img_decode.c \
+	kernel/gui/inflate_lite.c \
 	kernel/gui/desktop_images.c \
 	kernel/gui/desktop_disks.c \
 	kernel/gui/desktop_netexp.c \
@@ -473,7 +474,7 @@ $(eval $(call HOST_TEST_RULE,cli_zip,tests/host/test_cli_zip.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,cli_jq,tests/host/test_cli_jq.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,cli_sed,tests/host/test_cli_sed.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,img_decode,tests/host/test_img_decode.c kernel/gui/img_decode.c \
-	tests/host/img_decode_host_stubs.c,\
+	kernel/gui/inflate_lite.c tests/host/img_decode_host_stubs.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel/gui))
 $(eval $(call HOST_TEST_RULE,vfs,tests/host/test_vfs.c tests/host/vfs_host_stubs.c \
 	kernel/vfs.c kernel/vfs_peakfs.c kernel/vfs_path_util.c kernel/peak_errno.c kernel/blobstore.c kernel/blockdev.c,\

@@ -13,14 +13,15 @@ struct browser_js_host {
     char console_log[8][96];
     int console_n;
     char console_filter[32]; /* substring filter; empty = show all */
-    /* Simple event listeners: element id hash → function (one click listener). */
+    /* Event listeners (click/input/change/submit/keydown). */
     struct {
         int used;
         int node_id;
         char type[16];
         uint8_t fn[JS_VALUE_BYTES];
-    } listeners[32];
+    } listeners[64];
     int nlisteners;
+    int prevent_default;
 };
 
 void browser_js_host_init(struct browser_js_host *h, struct js_runtime *rt,
@@ -31,6 +32,8 @@ int browser_js_install_dom(struct browser_js_host *h);
 int browser_js_run_scripts(struct browser_js_host *h);
 int browser_js_dispatch_click(struct browser_js_host *h, int node_id);
 int browser_js_dispatch_input(struct browser_js_host *h, int node_id, const char *value);
+int browser_js_dispatch_event(struct browser_js_host *h, int node_id, const char *type);
+int browser_js_dispatch_keydown(struct browser_js_host *h, int node_id, int key);
 void browser_console_clear(struct browser_js_host *h);
 void browser_console_set_filter(struct browser_js_host *h, const char *substr);
 int browser_console_line_visible(const struct browser_js_host *h, const char *line);

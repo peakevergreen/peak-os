@@ -11,6 +11,7 @@
 #include "keyboard.h"
 #include "desktop_internal.h"
 #include "tls.h"
+#include "http_util.h"
 
 static struct {
     int valid;
@@ -146,6 +147,48 @@ void browser_restore_closed_tab(void) {
 
 void browser_input(char c) {
     struct br_tab *t = browser_cur();
+
+    /* Focused form control typing (when not editing URL bar). */
+    if (!editing && t->focus_node >= 0 && t->focus_kind > 0) {
+        if (c == '\n' || c == '\r') {
+            if (t->focus_kind == 1 || t->focus_kind == 2) {
+                dom_set_attr(&t->doc, t->focus_node, "value", t->focus_value);
+                browser_js_dispatch_input(&t->jsh, t->focus_node, t->focus_value);
+                int form = t->focus_node;
+                for (int p = t->doc.nodes[t->focus_node].parent; p >= 0;
+                     p = t->doc.nodes[p].parent) {
+                    if (!strcmp(t->doc.nodes[p].tag, "form")) {
+                        form = p;
+                        break;
+                    }
+                }
+                browser_js_dispatch_event(&t->jsh, form, "submit");
+                if (!t->jsh.prevent_default)
+                    browser_form_submit(t, form);
+            }
+            return;
+        }
+        if (c == '\b') {
+            size_t n = strlen(t->focus_value);
+            if (n)
+                t->focus_value[n - 1] = '\0';
+            dom_set_attr(&t->doc, t->focus_node, "value", t->focus_value);
+            browser_js_dispatch_input(&t->jsh, t->focus_node, t->focus_value);
+            browser_js_dispatch_keydown(&t->jsh, t->focus_node, '\b');
+            needs_redraw = 1;
+            return;
+        }
+        if (c >= 32 && c < 127 && strlen(t->focus_value) + 1 < sizeof(t->focus_value)) {
+            size_t n = strlen(t->focus_value);
+            t->focus_value[n] = c;
+            t->focus_value[n + 1] = '\0';
+            dom_set_attr(&t->doc, t->focus_node, "value", t->focus_value);
+            browser_js_dispatch_input(&t->jsh, t->focus_node, t->focus_value);
+            browser_js_dispatch_keydown(&t->jsh, t->focus_node, (int)c);
+            needs_redraw = 1;
+            return;
+        }
+    }
 
     if (c == '\n' || c == '\r') {
         browser_go(t->url);
@@ -332,7 +375,7 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
         needs_redraw = 1;
         return;
     }
-    if (t->use_layout && t->js_ok) {
+    if (t->use_layout) {
         uint32_t ch = fb_cell_h();
         uint32_t pad = 6;
         uint32_t chrome_h = hit_tab_h + ch + pad * 2 + 8;
@@ -344,11 +387,61 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
             struct css_box *b = &t->boxes[i];
             if (px >= b->x && px < b->x + b->w && py >= b->y && py < b->y + b->h) {
                 struct dom_node *n = dom_node(&t->doc, b->node_id);
-                if (n && n->type == DOM_ELEMENT) {
+                if (!n || n->type != DOM_ELEMENT)
+                    break;
+                if (!strcmp(n->tag, "a")) {
+                    const char *href = dom_get_attr(&t->doc, b->node_id, "href");
+                    if (href && href[0]) {
+                        char abs[BR_URL_MAX];
+                        if (http_resolve_url(t->url, href, abs, sizeof(abs)) != 0)
+                            snprintf(abs, sizeof(abs), "%s", href);
+                        browser_go(abs);
+                        return;
+                    }
+                }
+                if (!strcmp(n->tag, "input") || !strcmp(n->tag, "textarea")) {
+                    const char *type = dom_get_attr(&t->doc, b->node_id, "type");
+                    if (type && (!strcmp(type, "submit") || !strcmp(type, "button"))) {
+                        int form = b->node_id;
+                        for (int p = n->parent; p >= 0; p = t->doc.nodes[p].parent) {
+                            if (!strcmp(t->doc.nodes[p].tag, "form")) {
+                                form = p;
+                                break;
+                            }
+                        }
+                        t->jsh.prevent_default = 0;
+                        browser_js_dispatch_event(&t->jsh, form, "submit");
+                        if (!t->jsh.prevent_default)
+                            browser_form_submit(t, form);
+                        return;
+                    }
+                    t->focus_node = b->node_id;
+                    t->focus_kind = !strcmp(n->tag, "textarea") ? 2 : 1;
+                    const char *val = dom_get_attr(&t->doc, b->node_id, "value");
+                    snprintf(t->focus_value, sizeof(t->focus_value), "%s", val ? val : "");
+                    editing = 0;
+                    needs_redraw = 1;
+                    return;
+                }
+                if (!strcmp(n->tag, "button")) {
+                    int form = -1;
+                    for (int p = n->parent; p >= 0; p = t->doc.nodes[p].parent) {
+                        if (!strcmp(t->doc.nodes[p].tag, "form")) {
+                            form = p;
+                            break;
+                        }
+                    }
                     browser_js_dispatch_click(&t->jsh, b->node_id);
+                    if (form >= 0 && !t->jsh.prevent_default)
+                        browser_form_submit(t, form);
                     browser_rebuild_layout(t, (int)(w > 40 ? w - 24 : 640));
                     needs_redraw = 1;
+                    return;
                 }
+                if (t->js)
+                    browser_js_dispatch_click(&t->jsh, b->node_id);
+                browser_rebuild_layout(t, (int)(w > 40 ? w - 24 : 640));
+                needs_redraw = 1;
                 break;
             }
         }
@@ -358,12 +451,26 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
 
 void browser_back(void) {
     struct br_tab *t = browser_cur();
-    if (t->prev_url[0]) {
+    if (t->nhist_back > 0) {
+        char back[BR_URL_MAX];
+        snprintf(back, sizeof(back), "%s", t->hist_back[--t->nhist_back]);
+        if (t->nhist_fwd < BR_HIST_MAX)
+            snprintf(t->hist_fwd[t->nhist_fwd++], BR_URL_MAX, "%s", t->url);
+        snprintf(t->prev_url, sizeof(t->prev_url), "%s",
+                 t->nhist_back ? t->hist_back[t->nhist_back - 1] : "");
+        snprintf(t->forward_url, sizeof(t->forward_url), "%s",
+                 t->nhist_fwd ? t->hist_fwd[t->nhist_fwd - 1] : "");
+        browser_hist_navigating = 1;
+        browser_go(back);
+        browser_hist_navigating = 0;
+    } else if (t->prev_url[0]) {
         char back[BR_URL_MAX];
         snprintf(back, sizeof(back), "%s", t->prev_url);
         snprintf(t->forward_url, sizeof(t->forward_url), "%s", t->url);
         t->prev_url[0] = '\0';
+        browser_hist_navigating = 1;
         browser_go(back);
+        browser_hist_navigating = 0;
     } else {
         snprintf(t->status, sizeof(t->status), "No previous page");
         needs_redraw = 1;
@@ -372,12 +479,26 @@ void browser_back(void) {
 
 void browser_forward(void) {
     struct br_tab *t = browser_cur();
-    if (t->forward_url[0]) {
+    if (t->nhist_fwd > 0) {
+        char fwd[BR_URL_MAX];
+        snprintf(fwd, sizeof(fwd), "%s", t->hist_fwd[--t->nhist_fwd]);
+        if (t->nhist_back < BR_HIST_MAX)
+            snprintf(t->hist_back[t->nhist_back++], BR_URL_MAX, "%s", t->url);
+        snprintf(t->prev_url, sizeof(t->prev_url), "%s",
+                 t->nhist_back ? t->hist_back[t->nhist_back - 1] : "");
+        snprintf(t->forward_url, sizeof(t->forward_url), "%s",
+                 t->nhist_fwd ? t->hist_fwd[t->nhist_fwd - 1] : "");
+        browser_hist_navigating = 1;
+        browser_go(fwd);
+        browser_hist_navigating = 0;
+    } else if (t->forward_url[0]) {
         char fwd[BR_URL_MAX];
         snprintf(fwd, sizeof(fwd), "%s", t->forward_url);
         snprintf(t->prev_url, sizeof(t->prev_url), "%s", t->url);
         t->forward_url[0] = '\0';
+        browser_hist_navigating = 1;
         browser_go(fwd);
+        browser_hist_navigating = 0;
     } else {
         snprintf(t->status, sizeof(t->status), "No forward page");
         needs_redraw = 1;
@@ -396,11 +517,11 @@ int browser_ctx_menu(struct ctx_menu_item *items, int max_items) {
         return 0;
     struct br_tab *t = browser_cur();
     items[0].label = "Back";
-    items[0].enabled = t->prev_url[0] != '\0';
+    items[0].enabled = t->nhist_back > 0 || t->prev_url[0] != '\0';
     items[0].separator = 0;
     items[0].action_id = CTX_ACT_BROWSER_BACK;
     items[1].label = "Forward";
-    items[1].enabled = t->forward_url[0] != '\0';
+    items[1].enabled = t->nhist_fwd > 0 || t->forward_url[0] != '\0';
     items[1].separator = 0;
     items[1].action_id = CTX_ACT_BROWSER_FORWARD;
     items[2].label = "Reload";

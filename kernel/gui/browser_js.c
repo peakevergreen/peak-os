@@ -8,6 +8,7 @@
  * installed separately by webapi_install() — see webapi.h and webapi_stubs.c.
  */
 #include "browser_js.h"
+#include "browser.h"
 #include "browser_isolation.h"
 #include "../js/js_internal.h"
 #include "util.h"
@@ -255,7 +256,7 @@ static int nat_add_event_listener(struct js_runtime *rt, int argc, void *argv, v
                                   void *ud) {
     struct browser_js_host *h = ud;
     js_val_set_undefined(ret);
-    if (!h || argc < 3 || h->nlisteners >= 32)
+    if (!h || argc < 3 || h->nlisteners >= 64)
         return 0;
     int nid = node_from_val(h, &((struct js_value *)argv)[0]);
     char type[16];
@@ -322,6 +323,15 @@ static void install_fn(struct js_runtime *rt, struct js_value *obj, const char *
     js_val_set_prop(rt, obj, name, &v);
 }
 
+static int nat_query_selector_all(struct js_runtime *rt, int argc, void *argv, void *ret,
+                                  void *ud);
+static int nat_class_add(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud);
+static int nat_class_remove(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud);
+static int nat_class_toggle(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud);
+static int nat_prevent_default(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud);
+static int nat_location_assign(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud);
+static int nat_location_reload(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud);
+
 int browser_js_install_dom(struct browser_js_host *h) {
     if (!h || !h->rt || !h->doc)
         return -1;
@@ -338,6 +348,7 @@ int browser_js_install_dom(struct browser_js_host *h) {
     js_val_new_object(rt, &document);
     install_fn(rt, &document, "getElementById", nat_get_el_by_id, h);
     install_fn(rt, &document, "querySelector", nat_query_selector, h);
+    install_fn(rt, &document, "querySelectorAll", nat_query_selector_all, h);
     install_fn(rt, &document, "createElement", nat_create_element, h);
     js_obj_set(rt, rt->global, "document", document);
 
@@ -349,6 +360,10 @@ int browser_js_install_dom(struct browser_js_host *h) {
     js_rt_set_global_fn(rt, "__dom_getAttr", nat_get_attr, h);
     js_rt_set_global_fn(rt, "__dom_setInnerHTML", nat_set_inner_html, h);
     js_rt_set_global_fn(rt, "__dom_on", nat_add_event_listener, h);
+    js_rt_set_global_fn(rt, "__dom_classAdd", nat_class_add, h);
+    js_rt_set_global_fn(rt, "__dom_classRemove", nat_class_remove, h);
+    js_rt_set_global_fn(rt, "__dom_classToggle", nat_class_toggle, h);
+    js_rt_set_global_fn(rt, "preventDefault", nat_prevent_default, h);
 
     /* location */
     struct js_value loc;
@@ -356,6 +371,8 @@ int browser_js_install_dom(struct browser_js_host *h) {
     struct js_value href;
     js_val_set_string(rt, &href, h->doc->url);
     js_val_set_prop(rt, &loc, "href", &href);
+    install_fn(rt, &loc, "assign", nat_location_assign, h);
+    install_fn(rt, &loc, "reload", nat_location_reload, h);
     js_obj_set(rt, rt->global, "location", loc);
 
     /* window = global */
@@ -371,7 +388,10 @@ int browser_js_install_dom(struct browser_js_host *h) {
         "__dom_setText(el,t);}"
         "function appendChild(p,c){__dom_appendChild(p,c);}"
         "function setAttr(el,n,v){__dom_setAttr(el,n,v);}"
-        "function on(el,ty,fn){__dom_on(el,ty,fn);}";
+        "function on(el,ty,fn){__dom_on(el,ty,fn);}"
+        "function classListAdd(el,c){__dom_classAdd(el,c);}"
+        "function classListRemove(el,c){__dom_classRemove(el,c);}"
+        "function classListToggle(el,c){__dom_classToggle(el,c);}";
     char dump[32];
     js_eval(rt, boot, "<dom-bridge>", dump, sizeof(dump));
     return 0;
@@ -394,13 +414,14 @@ int browser_js_run_scripts(struct browser_js_host *h) {
     return failed ? -1 : 0;
 }
 
-int browser_js_dispatch_click(struct browser_js_host *h, int node_id) {
-    if (!h || !h->rt)
+int browser_js_dispatch_event(struct browser_js_host *h, int node_id, const char *type) {
+    if (!h || !h->rt || !type)
         return -1;
+    h->prevent_default = 0;
     for (int i = 0; i < h->nlisteners; i++) {
         if (!h->listeners[i].used || h->listeners[i].node_id != node_id)
             continue;
-        if (strcmp(h->listeners[i].type, "click") != 0)
+        if (strcmp(h->listeners[i].type, type) != 0)
             continue;
         struct js_value ret;
         js_val_call(h->rt, h->listeners[i].fn, NULL, 0, NULL, &ret);
@@ -409,20 +430,146 @@ int browser_js_dispatch_click(struct browser_js_host *h, int node_id) {
     return 0;
 }
 
+int browser_js_dispatch_click(struct browser_js_host *h, int node_id) {
+    return browser_js_dispatch_event(h, node_id, "click");
+}
+
 int browser_js_dispatch_input(struct browser_js_host *h, int node_id, const char *value) {
     if (!h || !h->rt)
         return -1;
     if (value)
         dom_set_attr(h->doc, node_id, "value", value);
-    for (int i = 0; i < h->nlisteners; i++) {
-        if (!h->listeners[i].used || h->listeners[i].node_id != node_id)
-            continue;
-        if (strcmp(h->listeners[i].type, "input") != 0 &&
-            strcmp(h->listeners[i].type, "change") != 0)
-            continue;
-        struct js_value ret;
-        js_val_call(h->rt, h->listeners[i].fn, NULL, 0, NULL, &ret);
-        mark_dirty(h);
+    browser_js_dispatch_event(h, node_id, "input");
+    browser_js_dispatch_event(h, node_id, "change");
+    return 0;
+}
+
+int browser_js_dispatch_keydown(struct browser_js_host *h, int node_id, int key) {
+    (void)key;
+    return browser_js_dispatch_event(h, node_id, "keydown");
+}
+
+static int nat_prevent_default(struct js_runtime *rt, int argc, void *argv, void *ret,
+                               void *ud) {
+    (void)rt;
+    (void)argc;
+    (void)argv;
+    struct browser_js_host *h = ud;
+    if (h)
+        h->prevent_default = 1;
+    js_val_set_undefined(ret);
+    return 0;
+}
+
+static int nat_query_selector_all(struct js_runtime *rt, int argc, void *argv, void *ret,
+                                  void *ud) {
+    struct browser_js_host *h = ud;
+    js_val_set_undefined(ret);
+    if (!h || argc < 1)
+        return 0;
+    char sel[64];
+    js_val_to_cstring(rt, &((struct js_value *)argv)[0], sel, sizeof(sel));
+    struct js_value arr;
+    js_val_new_array(rt, &arr);
+    int found = 0;
+    for (int id = 0; id < h->doc->nnodes && found < 32; id++) {
+        int hit = dom_query_selector(h->doc, id, sel);
+        /* dom_query_selector searches from root — use per-node match via getElement path */
+        (void)hit;
     }
+    /* Lite: return first match as single-element array when querySelector hits. */
+    int nid = dom_query_selector(h->doc, h->doc->root >= 0 ? h->doc->root : 0, sel);
+    if (nid >= 0) {
+        struct js_value el;
+        make_dom_val(h, rt, nid, &el);
+        js_val_set_prop(rt, &arr, "0", &el);
+        struct js_value len;
+        js_val_set_number(&len, 1);
+        js_val_set_prop(rt, &arr, "length", &len);
+    }
+    *(struct js_value *)ret = arr;
+    return 0;
+}
+
+static int nat_class_list_op(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud,
+                             int op) {
+    struct browser_js_host *h = ud;
+    js_val_set_undefined(ret);
+    if (!h || argc < 2)
+        return 0;
+    int nid = node_from_val(h, &((struct js_value *)argv)[0]);
+    char cls[32];
+    js_val_to_cstring(rt, &((struct js_value *)argv)[1], cls, sizeof(cls));
+    if (nid < 0 || !cls[0])
+        return 0;
+    const char *cur = dom_get_attr(h->doc, nid, "class");
+    char buf[96];
+    buf[0] = '\0';
+    if (op == 0) { /* add */
+        if (cur && cur[0])
+            snprintf(buf, sizeof(buf), "%s %s", cur, cls);
+        else
+            snprintf(buf, sizeof(buf), "%s", cls);
+    } else if (op == 1) { /* remove */
+        if (cur) {
+            /* drop exact token */
+            const char *p = cur;
+            size_t o = 0;
+            while (*p && o + 1 < sizeof(buf)) {
+                while (*p == ' ')
+                    p++;
+                const char *s = p;
+                while (*p && *p != ' ')
+                    p++;
+                size_t n = (size_t)(p - s);
+                if (n == strlen(cls) && !strncmp(s, cls, n))
+                    continue;
+                if (o)
+                    buf[o++] = ' ';
+                memcpy(buf + o, s, n);
+                o += n;
+                buf[o] = '\0';
+            }
+        }
+    } else { /* toggle */
+        int has = cur && strstr(cur, cls) != NULL;
+        return nat_class_list_op(rt, argc, argv, ret, ud, has ? 1 : 0);
+    }
+    dom_set_attr(h->doc, nid, "class", buf);
+    mark_dirty(h);
+    return 0;
+}
+
+static int nat_class_add(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    return nat_class_list_op(rt, argc, argv, ret, ud, 0);
+}
+static int nat_class_remove(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    return nat_class_list_op(rt, argc, argv, ret, ud, 1);
+}
+static int nat_class_toggle(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    return nat_class_list_op(rt, argc, argv, ret, ud, 2);
+}
+
+static int nat_location_assign(struct js_runtime *rt, int argc, void *argv, void *ret,
+                               void *ud) {
+    (void)ud;
+    js_val_set_undefined(ret);
+    if (argc < 1)
+        return 0;
+    char url[160];
+    js_val_to_cstring(rt, &((struct js_value *)argv)[0], url, sizeof(url));
+    if (url[0])
+        browser_go(url);
+    return 0;
+}
+
+static int nat_location_reload(struct js_runtime *rt, int argc, void *argv, void *ret,
+                               void *ud) {
+    (void)rt;
+    (void)argc;
+    (void)argv;
+    (void)ud;
+    js_val_set_undefined(ret);
+    browser_reload();
     return 0;
 }
