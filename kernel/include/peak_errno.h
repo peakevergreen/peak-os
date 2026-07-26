@@ -23,6 +23,7 @@
 #define PEAK_EBUSY       -15  /* slots or listeners exhausted */
 #define PEAK_EDHCP       -16  /* DHCP-only mode failure */
 #define PEAK_EAGAIN      -17  /* try again (non-blocking empty) */
+#define PEAK_ELOOP       -18  /* symlink loop */
 
 const char *peak_errno_str(int err);
 

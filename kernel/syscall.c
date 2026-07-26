@@ -48,40 +48,21 @@ static int64_t sys_write(int fd, const void *user_buf, size_t len) {
 }
 
 static int64_t sys_open(const char *user_path) {
-    if (!cap_check(CAP_FS_READ))
-        return PEAK_EACCES;
-    char path[VFS_PATH_MAX];
-    if (copyinstr_from_user(path, user_path, VFS_PATH_MAX) != 0)
-        return PEAK_EINVAL;
-    if (!vfs_lookup(path))
-        return PEAK_ENOENT;
-    int is_proc = 0;
-    struct proc_fd *fds = fd_table(&is_proc);
+    if (!cap_check(CAP_FS_READ)) return PEAK_EACCES;
+    char path[VFS_PATH_MAX]; if (copyinstr_from_user(path, user_path, VFS_PATH_MAX) != 0) return PEAK_EINVAL;
+    char resolved[VFS_PATH_MAX]; int rc = vfs_resolve(path, resolved, sizeof(resolved)); if (rc != 0) return rc;
+    if (!vfs_lookup(resolved)) return PEAK_ENOENT;
+    int is_proc = 0; struct proc_fd *fds = fd_table(&is_proc);
     if (is_proc && fds) {
-        for (int i = 0; i < PROC_FD_MAX; i++) {
-            if (!fds[i].used) {
-                fds[i].used = 1;
-                size_t n = strlen(path);
-                if (n >= sizeof(fds[i].path))
-                    n = sizeof(fds[i].path) - 1;
-                memcpy(fds[i].path, path, n);
-                fds[i].path[n] = '\0';
-                fds[i].rights = CAP_FS_READ;
-                fds[i].offset = 0;
-                return i;
-            }
+        for (int i = 0; i < PROC_FD_MAX; i++) if (!fds[i].used) {
+            fds[i].used = 1; size_t n = strlen(resolved); if (n >= sizeof(fds[i].path)) n = sizeof(fds[i].path)-1;
+            memcpy(fds[i].path, resolved, n); fds[i].path[n] = '\0'; fds[i].rights = CAP_FS_READ; fds[i].offset = 0; return i;
         }
         return PEAK_EBUSY;
     }
-    for (int i = 0; i < 8; i++) {
-        if (!open_used[i]) {
-            open_used[i] = 1;
-            size_t n = strlen(path);
-            if (n >= VFS_PATH_MAX)
-                n = VFS_PATH_MAX - 1;
-            memcpy(open_paths[i], path, n + 1);
-            return i;
-        }
+    for (int i = 0; i < 8; i++) if (!open_used[i]) {
+        open_used[i] = 1; size_t n = strlen(resolved); if (n >= VFS_PATH_MAX) n = VFS_PATH_MAX-1;
+        memcpy(open_paths[i], resolved, n + 1); return i;
     }
     return PEAK_EBUSY;
 }

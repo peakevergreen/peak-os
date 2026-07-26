@@ -201,6 +201,7 @@ const char *peak_strerror(int code) {
     case PEAK_EBUSY:        return "busy";
     case PEAK_EDHCP:        return "DHCP failed";
     case PEAK_EAGAIN:       return "try again";
+    case PEAK_ELOOP:        return "too many symlink levels";
     default:                return "unknown error";
     }
 }

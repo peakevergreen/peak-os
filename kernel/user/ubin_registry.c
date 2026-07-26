@@ -16,6 +16,7 @@ extern int ucp_main(int argc, char **argv);
 extern int umv_main(int argc, char **argv);
 extern int uln_main(int argc, char **argv);
 extern int uchmod_main(int argc, char **argv);
+extern int ureadlink_main(int argc, char **argv);
 extern int ustat_main(int argc, char **argv);
 extern int udu_main(int argc, char **argv);
 extern int udf_main(int argc, char **argv);
