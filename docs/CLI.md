@@ -80,7 +80,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | Command | Notes |
 |---------|-------|
 | `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N`) |
-| `grep <pat> <file>` | substring match |
+| `grep [-i] [-n] [-v] [-r] <pat> [path...]` | substring match; `-i` case-fold, `-n` line numbers, `-v` invert, `-r` recurse dirs; multi-file prints `path:` |
 | `diff` `sort` `uniq` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok) |
 | `sed` | sed-lite: `[N\|[N,M]] s/old/new/[g]`, `y/from/to/`, `d`, `p`, `-n` (8 KiB) |
 | `fold` `rev` `nl` `tac` | wrap lines (`-w`), reverse chars/lines, number lines |

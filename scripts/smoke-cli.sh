@@ -270,6 +270,12 @@ else
   echo "==> skip host tests (PEAK_SKIP_HOST_TESTS=1)"
 fi
 
+echo "==> Wave 3 Pass 59 grep depth"
+grep -q 'grep_line_match' kernel/user/utils_text.c
+grep -q 'grep_walk_cb' kernel/user/utils_text.c
+grep -q 'test_cli_grep' Makefile
+grep -q '\[-i\] \[-n\] \[-v\] \[-r\]' docs/CLI.md
+
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c kernel/net/tls_handshake.c

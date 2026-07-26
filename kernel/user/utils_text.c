@@ -164,45 +164,161 @@ int uwc_main(int argc, char **argv) {
     return 0;
 }
 
-int ugrep_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("grep", "<pattern> [path|-]");
-        return argc < 2 ? 1 : 0;
-    }
-    const char *pat = argv[1];
-    const char *path = argc >= 3 ? argv[2] : "-";
-    char abs[VFS_PATH_MAX];
-    if (resolve_in_path(path, abs, sizeof(abs)))
+static char grep_fold(char c) {
+    if (c >= 'A' && c <= 'Z')
+        return (char)(c + 32);
+    return c;
+}
+
+static int grep_line_match(const char *line, size_t llen, const char *pat, size_t plen,
+                           int icase) {
+    if (plen == 0)
         return 1;
+    if (llen < plen)
+        return 0;
+    for (size_t j = 0; j + plen <= llen; j++) {
+        size_t k = 0;
+        for (; k < plen; k++) {
+            char a = line[j + k], b = pat[k];
+            if (icase) {
+                a = grep_fold(a);
+                b = grep_fold(b);
+            }
+            if (a != b)
+                break;
+        }
+        if (k == plen)
+            return 1;
+    }
+    return 0;
+}
+
+struct grep_opts {
+    const char *pat;
+    size_t plen;
+    int icase;
+    int show_n;
+    int invert;
+    int show_path;
+    int matches;
+};
+
+static void grep_emit_line(const struct grep_opts *o, const char *path, int lineno,
+                           const char *line, size_t llen) {
+    if (o->show_path && path && path[0]) {
+        console_write(path);
+        console_putc(':');
+    }
+    if (o->show_n)
+        console_printf("%d:", lineno);
+    for (size_t j = 0; j < llen; j++)
+        console_putc(line[j]);
+    console_putc('\n');
+}
+
+static int grep_file(struct grep_opts *o, const char *abs) {
     char data[READ_MAX];
     size_t len = 0;
     if (read_abs(abs, data, sizeof(data), &len) != 0)
-        return 1;
+        return -1;
     size_t start = 0;
-    size_t plen = strlen(pat);
+    int lineno = 1;
     for (size_t i = 0; i <= len; i++) {
         if (i == len || data[i] == '\n') {
             size_t l = i - start;
-            int match = 0;
-            if (plen == 0)
-                match = 1;
-            else if (l >= plen) {
-                for (size_t j = 0; j + plen <= l; j++) {
-                    if (!memcmp(data + start + j, pat, plen)) {
-                        match = 1;
-                        break;
-                    }
-                }
-            }
+            int match = grep_line_match(data + start, l, o->pat, o->plen, o->icase);
+            if (o->invert)
+                match = !match;
             if (match) {
-                for (size_t j = 0; j < l; j++)
-                    console_putc(data[start + j]);
-                console_putc('\n');
+                grep_emit_line(o, abs, lineno, data + start, l);
+                o->matches++;
             }
+            lineno++;
             start = i + 1;
         }
     }
     return 0;
+}
+
+struct grep_walk_ctx {
+    struct grep_opts *opts;
+};
+
+static int grep_walk_cb(const char *path, struct vfs_node *node, void *ud) {
+    struct grep_walk_ctx *gc = ud;
+    if (!node || node->type != VFS_FILE)
+        return 0;
+    grep_file(gc->opts, path);
+    return 0;
+}
+
+int ugrep_main(int argc, char **argv) {
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("grep", "[-i] [-n] [-v] [-r] <pattern> [path...]");
+        return 0;
+    }
+    int icase = 0, show_n = 0, invert = 0, recur = 0;
+    int argi = 1;
+    while (argi < argc && argv[argi][0] == '-' && argv[argi][1]) {
+        if (!strcmp(argv[argi], "-"))
+            break;
+        const char *f = argv[argi] + 1;
+        int known = 1;
+        for (; *f; f++) {
+            if (*f == 'i')
+                icase = 1;
+            else if (*f == 'n')
+                show_n = 1;
+            else if (*f == 'v')
+                invert = 1;
+            else if (*f == 'r' || *f == 'R')
+                recur = 1;
+            else {
+                known = 0;
+                break;
+            }
+        }
+        if (!known)
+            break;
+        argi++;
+    }
+    if (argi >= argc) {
+        peak_usage("grep", "[-i] [-n] [-v] [-r] <pattern> [path...]");
+        return 1;
+    }
+    const char *pat = argv[argi++];
+    struct grep_opts opts = {
+        .pat = pat,
+        .plen = strlen(pat),
+        .icase = icase,
+        .show_n = show_n,
+        .invert = invert,
+        .show_path = 0,
+        .matches = 0,
+    };
+    int npaths = argc - argi;
+    if (npaths <= 0) {
+        char abs[VFS_PATH_MAX];
+        if (resolve_in_path("-", abs, sizeof(abs)))
+            return 1;
+        if (grep_file(&opts, abs) != 0)
+            return 1;
+        return opts.matches ? 0 : 1;
+    }
+    if (npaths > 1 || recur)
+        opts.show_path = 1;
+    for (int i = argi; i < argc; i++) {
+        char abs[VFS_PATH_MAX];
+        if (resolve_in_path(argv[i], abs, sizeof(abs)))
+            return 1;
+        if (recur && vfs_is_dir(abs)) {
+            struct grep_walk_ctx gc = { .opts = &opts };
+            vfs_walk(abs, grep_walk_cb, &gc);
+        } else if (grep_file(&opts, abs) != 0) {
+            return 1;
+        }
+    }
+    return opts.matches ? 0 : 1;
 }
 
 int uhexdump_main(int argc, char **argv) {
