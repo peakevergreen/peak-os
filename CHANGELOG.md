@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 86:** Browser ring-3 isolation scaffold + enforce fail-closed DOM/net
+
 - **Pass 85:** DNS NXDOMAIN fresh vs cached-negative UX in host/nslookup
 
 - **Pass 84:** wget/curl HTTP body 32 KiB + structured truncation meta

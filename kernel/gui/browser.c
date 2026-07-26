@@ -1,4 +1,5 @@
 #include "browser.h"
+#include "browser_isolation.h"
 #include "browser_internal.h"
 #include "privacy.h"
 #include "browser_js.h"
