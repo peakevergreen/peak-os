@@ -97,6 +97,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 24 (TLS/WebPKI polish):** `tls_err_name()` + RFC alert names; `[tag]` prefixes on structured TLS errors; `tlsinfo` CLI; `webpki_root_sha256()` root listing; ECH full HPKE remains NYI (scaffold fail-closed only)
 - **Pass 30 (Browser + Peak JS UX):** back/forward toolbar + **b**/**f** keys; VFS bookmarks bar + context menu; JS console panel (`console.log` capture); TLS/net error pages use `tls_last_error()` + `net_last_error()`
 - **Pass 51 (Browser tab chrome):** tab strip title/URL labels with fetch indicator; per-tab **x** close affordance; last-closed restore lite (**Shift+T**, context menu)
+- **Pass 54 (Web API depth):** `Response.json()` on fetch responses; VFS-backed `localStorage` under `/var/peak/localStorage/`; fail-closed matrix in `webapi_stubs.c`; host `test_webapi` coverage
 
 ### Raspberry Pi
 

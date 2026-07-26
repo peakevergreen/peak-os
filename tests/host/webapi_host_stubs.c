@@ -1,11 +1,66 @@
 /*
  * Host stubs for linking kernel/gui/webapi*.c under PEAK_HOST_TEST.
  * Canned HTTP responses let fetch stub paths run without a real network.
+ * Minimal VFS stubs back localStorage persistence tests.
  */
 #include "net.h"
+#include "vfs.h"
 
 #include <stdio.h>
 #include <string.h>
+
+#define VFS_STUB_MAX 8
+#define VFS_STUB_DATA 8192
+
+static struct {
+    char path[VFS_PATH_MAX];
+    char data[VFS_STUB_DATA];
+    size_t len;
+} vfs_stub_files[VFS_STUB_MAX];
+
+void webapi_host_vfs_reset(void) {
+    memset(vfs_stub_files, 0, sizeof(vfs_stub_files));
+}
+
+struct vfs_node *vfs_mkdir(const char *path) {
+    (void)path;
+    return (struct vfs_node *)(uintptr_t)1;
+}
+
+int vfs_write_file(const char *path, const void *data, size_t len) {
+    if (!path) return -1;
+    if (len > VFS_STUB_DATA) len = VFS_STUB_DATA;
+    for (int i = 0; i < VFS_STUB_MAX; i++) {
+        if (vfs_stub_files[i].path[0] && !strcmp(vfs_stub_files[i].path, path)) {
+            vfs_stub_files[i].len = 0;
+            if (data && len) { memcpy(vfs_stub_files[i].data, data, len); vfs_stub_files[i].len = len; }
+            return 0;
+        }
+    }
+    for (int i = 0; i < VFS_STUB_MAX; i++) {
+        if (!vfs_stub_files[i].path[0]) {
+            snprintf(vfs_stub_files[i].path, sizeof(vfs_stub_files[i].path), "%s", path);
+            if (data && len) { memcpy(vfs_stub_files[i].data, data, len); vfs_stub_files[i].len = len; }
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int vfs_read_file(const char *path, void *buf, size_t buf_len, size_t *out_len) {
+    if (!path || !buf || !out_len) return -1;
+    for (int i = 0; i < VFS_STUB_MAX; i++) {
+        if (vfs_stub_files[i].path[0] && !strcmp(vfs_stub_files[i].path, path)) {
+            size_t n = vfs_stub_files[i].len;
+            if (n > buf_len) n = buf_len;
+            if (n) memcpy(buf, vfs_stub_files[i].data, n);
+            *out_len = n;
+            return 0;
+        }
+    }
+    *out_len = 0;
+    return -1;
+}
 
 static int g_http_rc = -1;
 static int g_http_status = 0;

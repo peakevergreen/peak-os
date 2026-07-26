@@ -10,7 +10,7 @@ Peak-authored, interpreter-only JavaScript for in-guest Browser tabs. No QuickJS
 | DOM / HTML parser | `kernel/gui/dom_core.c`, `dom_parse.c` |
 | CSS tokenize + layout | `kernel/gui/css_parse.c`, `css_layout.c` |
 | DOM ↔ JS bridge | `kernel/gui/browser_js.c` |
-| Web API stubs (`fetch`, storage; no AbortController) | `kernel/gui/webapi_stubs.c` |
+| Web API stubs (`fetch`, storage, AbortController) | `kernel/gui/webapi_stubs.c` |
 | Tab storage + classic `<script src>` | `kernel/gui/webapi.c` |
 | CLI | `/bin/js` (`js -e`, script file) |
 
@@ -40,7 +40,7 @@ Progressively pass representative site fixtures. Full Chromium-level standards c
 
 - **Now:** VM instruction/object/timer budgets; `browser_tick()` only from the desktop loop (never IRQ/network locks); destroy runtime on navigate/tab close.
 - **DOM handles:** each DOM object carries a generation (`handle_gen`); `browser_js_invalidate_handles` on navigate makes stale node refs fail closed (no use-after-navigate).
-- **Web API stubs** (`webapi_stubs.c`): `fetch` supports GET and POST (string body, bounded) with same-origin/CORS gating. `AbortController()` factory exposes `signal.aborted` + `abort()`; pre-aborted signals fail `fetch` closed. `localStorage`/`sessionStorage` are in-memory per-tab maps with `getItem`/`setItem`/`removeItem` (not disk). Other init options and non-http(s) schemes still fail closed.
+- **Web API stubs** (`webapi_stubs.c`): fail-closed matrix documents supported vs rejected surfaces. `fetch` supports GET/POST (string body, bounded) with same-origin/CORS gating and `Response.json()` on `bodyText`. `AbortController()` factory exposes `signal.aborted` + `abort()`; pre-aborted signals fail `fetch` closed. `localStorage` persists to VFS under `/var/peak/localStorage/<origin>`; `sessionStorage` is in-memory per-tab. Unsupported init options and non-http(s) schemes fail closed.
 - **JS language:** `async`/`await` unwraps settled `Promise.resolve` values (and non-thenables as identity). `async function` / `async ()=>` return promises. `for await` remains fail-closed. ES modules: `js_eval_module` + `export var`/`export function` + `import {name} from "id"` (max 8 registered modules).
 - **Monitor:** overview shows `js tabs / objs / timers / gc`.
 - **Next:** full ring-3 process isolation once aarch64/x86 ELF userspace process support is sufficient; DOM/net syscalls behind validated handles.

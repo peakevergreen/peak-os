@@ -1,6 +1,6 @@
 /* Peak Browser Web API fail-closed fixture (documented expectations).
- * AbortController absent; fetch rejects non-GET / signal / body / extra init,
- * empty or non-http(s) URLs; storage is in-memory getItem/setItem only
- * (no removeItem/clear; empty/oversized keys fail closed).
+ * fetch rejects non-GET/POST / signal / body / extra init, empty or non-http(s) URLs;
+ * Response.text() absent (use bodyText); localStorage has no clear/key/length.
  */
-typeof AbortController; /* expect "undefined" */
+typeof AbortController; /* expect "function" */
+typeof Response; /* expect "undefined" — use fetch() return value */

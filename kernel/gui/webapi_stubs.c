@@ -3,6 +3,20 @@
  *
  * Intentionally partial — unsupported surfaces fail closed with clear errors
  * rather than silent no-ops that imply spec support.
+ *
+ * Fail-closed matrix (Pass 54):
+ * | Surface              | Supported                              | Rejected (error)                    |
+ * |----------------------|----------------------------------------|-------------------------------------|
+ * | fetch(url)           | GET/POST http(s), same-origin/CORS     | empty URL, non-string, non-http(s)  |
+ * | fetch init.method    | GET, POST (case-insensitive)           | HEAD, PUT, DELETE, …                |
+ * | fetch init.body      | string with POST only                  | body on GET, objects/streams        |
+ * | fetch init.signal    | AbortController().signal               | non-object signal                   |
+ * | fetch init.*         | method, body, signal                   | headers, credentials, mode, cache…  |
+ * | Response.json()      | JSON object/array/primitives           | missing body, invalid JSON          |
+ * | Response.text()      | —                                      | use bodyText property (no .text())  |
+ * | localStorage         | get/set/removeItem; VFS /var/peak/     | clear, key(), length                |
+ * | sessionStorage       | in-memory per-tab get/set/removeItem   | clear, key(), length; no disk       |
+ * | AbortController()    | factory {signal, abort()}              | `new AbortController()` (no OP_NEW) |
  */
 #include "webapi_internal.h"
 #include "webapi.h"
@@ -10,6 +24,50 @@
 #include "net.h"
 #include "heap.h"
 #include "util.h"
+
+static double json_atof(const char *s, const char **end) {
+    double sign = 1.0;
+    if (*s == '-') {
+        sign = -1.0;
+        s++;
+    }
+    double val = 0.0;
+    while (*s >= '0' && *s <= '9') {
+        val = val * 10.0 + (double)(*s - '0');
+        s++;
+    }
+    if (*s == '.') {
+        s++;
+        double frac = 0.1;
+        while (*s >= '0' && *s <= '9') {
+            val += (double)(*s - '0') * frac;
+            frac *= 0.1;
+            s++;
+        }
+    }
+    if (*s == 'e' || *s == 'E') {
+        s++;
+        double esign = 1.0;
+        if (*s == '-') {
+            esign = -1.0;
+            s++;
+        } else if (*s == '+') {
+            s++;
+        }
+        int exp = 0;
+        while (*s >= '0' && *s <= '9') {
+            exp = exp * 10 + (*s - '0');
+            s++;
+        }
+        double mul = 1.0;
+        for (int i = 0; i < exp; i++)
+            mul *= esign > 0 ? 10.0 : 0.1;
+        val *= mul;
+    }
+    if (end)
+        *end = s;
+    return sign * val;
+}
 
 static int stub_fail(struct js_runtime *rt, void *ret, const char *msg) {
     if (ret)
@@ -49,7 +107,175 @@ static const char *const k_fetch_unsupported_init[] = {
     "referrerPolicy", "integrity", "keepalive", "duplex", NULL,
 };
 
-/* --- fetch (STUB: GET-only, same-origin/CORS, no .json()/streams/abort) --- */
+/* --- fetch (GET/POST http(s), same-origin/CORS; Response.json on bodyText) --- */
+
+typedef struct {
+    const char *p;
+    struct js_runtime *rt;
+} json_ctx;
+
+static void json_skip_ws(json_ctx *c) {
+    while (*c->p == ' ' || *c->p == '\t' || *c->p == '\r' || *c->p == '\n')
+        c->p++;
+}
+
+static int json_parse_value(json_ctx *c, struct js_value *out);
+
+static int json_parse_string(json_ctx *c, struct js_value *out) {
+    if (*c->p != '"')
+        return -1;
+    c->p++;
+    char buf[4096];
+    size_t n = 0;
+    while (*c->p && *c->p != '"') {
+        char ch = *c->p++;
+        if (ch == '\\') {
+            if (!*c->p)
+                return -1;
+            char esc = *c->p++;
+            if (esc == '"') ch = '"';
+            elif esc == '\\': ch = '\\';
+            elif esc == '/': ch = '/';
+            elif esc == 'n': ch = '\n';
+            elif esc == 'r': ch = '\r';
+            elif esc == 't': ch = '\t';
+            elif esc == 'u') {
+                unsigned code = 0;
+                for (int i = 0; i < 4; i++) {
+                    char h = c->p[i];
+                    if (h >= '0' && h <= '9') code = code * 16u + (unsigned)(h - '0');
+                    elif h >= 'a' && h <= 'f': code = code * 16u + (unsigned)(h - 'a' + 10);
+                    elif h >= 'A' && h <= 'F': code = code * 16u + (unsigned)(h - 'A' + 10);
+                    else: return -1;
+                }
+                c->p += 4;
+                if (code > 127) return -1;
+                ch = (char)code;
+            } else return -1;
+        }
+        if (n + 1 >= sizeof(buf)) return -1;
+        buf[n++] = ch;
+    }
+    if (*c->p != '"') return -1;
+    c->p++;
+    buf[n] = '\0';
+    return js_val_set_string(c->rt, out, buf);
+}
+
+static int json_parse_number(json_ctx *c, struct js_value *out) {
+    const char *start = c->p;
+    if (*c->p == '-') c->p++;
+    if (*c->p < '0' || *c->p > '9') return -1;
+    if (*c->p == '0') c->p++;
+    else while (*c->p >= '0' && *c->p <= '9') c->p++;
+    if (*c->p == '.') {
+        c->p++;
+        if (*c->p < '0' || *c->p > '9') return -1;
+        while (*c->p >= '0' && *c->p <= '9') c->p++;
+    }
+    if (*c->p == 'e' || *c->p == 'E') {
+        c->p++;
+        if (*c->p == '+' || *c->p == '-') c->p++;
+        if (*c->p < '0' || *c->p > '9') return -1;
+        while (*c->p >= '0' && *c->p <= '9') c->p++;
+    }
+    char tmp[64];
+    size_t len = (size_t)(c->p - start);
+    if (len + 1 >= sizeof(tmp)) return -1;
+    memcpy(tmp, start, len);
+    tmp[len] = '\0';
+    const char *end = NULL;
+    double num = json_atof(tmp, &end);
+    if (!end || end != tmp + len) return -1;
+    js_val_set_number(out, num);
+    return 0;
+}
+
+static int json_parse_array(json_ctx *c, struct js_value *out) {
+    if (*c->p != '[') return -1;
+    c->p++;
+    if (js_val_new_array(c->rt, out) != 0) return -1;
+    json_skip_ws(c);
+    if (*c->p == ']') { c->p++; return 0; }
+    uint32_t idx = 0;
+    for (;;) {
+        struct js_value item;
+        if (json_parse_value(c, &item) != 0) return -1;
+        char key[12];
+        snprintf(key, sizeof(key), "%u", idx++);
+        js_val_set_prop(c->rt, out, key, &item);
+        json_skip_ws(c);
+        if (*c->p == ']') { c->p++; return 0; }
+        if (*c->p != ',') return -1;
+        c->p++;
+        json_skip_ws(c);
+    }
+}
+
+static int json_parse_object(json_ctx *c, struct js_value *out) {
+    if (*c->p != '{') return -1;
+    c->p++;
+    if (js_val_new_object(c->rt, out) != 0) return -1;
+    json_skip_ws(c);
+    if (*c->p == '}') { c->p++; return 0; }
+    for (;;) {
+        struct js_value keyv, val;
+        if (json_parse_string(c, &keyv) != 0 || !js_val_is_string(&keyv)) return -1;
+        char key[128];
+        js_val_to_cstring(c->rt, &keyv, key, sizeof(key));
+        json_skip_ws(c);
+        if (*c->p != ':') return -1;
+        c->p++;
+        json_skip_ws(c);
+        if (json_parse_value(c, &val) != 0) return -1;
+        js_val_set_prop(c->rt, out, key, &val);
+        json_skip_ws(c);
+        if (*c->p == '}') { c->p++; return 0; }
+        if (*c->p != ',') return -1;
+        c->p++;
+        json_skip_ws(c);
+    }
+}
+
+static int json_parse_value(json_ctx *c, struct js_value *out) {
+    json_skip_ws(c);
+    if (*c->p == '"') return json_parse_string(c, out);
+    if (*c->p == '{') return json_parse_object(c, out);
+    if (*c->p == '[') return json_parse_array(c, out);
+    if (!strncmp(c->p, "true", 4)) { c->p += 4; js_val_set_bool(out, 1); return 0; }
+    if (!strncmp(c->p, "false", 5)) { c->p += 5; js_val_set_bool(out, 0); return 0; }
+    if (!strncmp(c->p, "null", 4)) { c->p += 4; js_val_set_null(out); return 0; }
+    if (*c->p == '-' || (*c->p >= '0' && *c->p <= '9')) return json_parse_number(c, out);
+    return -1;
+}
+
+static int webapi_json_parse(struct js_runtime *rt, const char *text, struct js_value *out) {
+    if (!rt || !text || !out) return -1;
+    json_ctx c = { .p = text, .rt = rt };
+    if (json_parse_value(&c, out) != 0) return -1;
+    json_skip_ws(&c);
+    if (*c.p) return -1;
+    return 0;
+}
+
+static int stub_response_json(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    (void)argc; (void)argv;
+    struct js_value resp; resp.type = JT_OBJ; resp.u.o = ud;
+    struct js_value body;
+    if (js_val_get_prop(rt, &resp, "bodyText", &body) != 0 ||
+        js_val_is_undefined(&body) || js_val_is_null(&body))
+        return stub_fail(rt, ret, "Response.json: no body");
+    const char *text = NULL;
+    if (js_val_is_string(&body) && body.u.s) text = body.u.s->data;
+    if (!text || !text[0]) return stub_fail(rt, ret, "Response.json: no body");
+    struct js_value parsed;
+    if (webapi_json_parse(rt, text, &parsed) != 0)
+        return stub_fail(rt, ret, "Response.json: invalid JSON");
+    *(struct js_value *)ret = parsed;
+    return 0;
+}
+
+
 
 static int cors_ok(const char *page_url, const char *req_url, const char *hdrs) {
     if (http_same_origin(page_url, req_url))
@@ -245,6 +471,7 @@ static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, vo
     struct js_value txt;
     js_val_set_string(rt, &txt, body);
     js_val_set_prop(rt, &o, "bodyText", &txt);
+    webapi_install_fn(rt, &o, "json", stub_response_json, o.u.o);
     *(struct js_value *)ret = o;
     kfree(body);
     kfree(hdrs);
@@ -255,7 +482,7 @@ void webapi_install_fetch_stub(struct js_runtime *rt) {
     js_rt_set_global_fn(rt, "fetch", stub_fetch, NULL);
 }
 
-/* --- storage (STUB: in-memory per-tab; not persistent localStorage) --- */
+/* --- storage: localStorage VFS-backed under /var/peak/; session in-memory --- */
 
 /* Scratch larger than store slots so oversized keys/values are detected, not truncated. */
 #define WEB_STORE_KEY_SCRATCH (WEB_STORE_KEY + 8)
