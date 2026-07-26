@@ -25,7 +25,7 @@ echo hello world | grep hello
 seq 1 5 | wc
 ```
 
-Limits: up to 4 pipeline stages; captured pipe/redirect buffers are capped at 8 KiB.
+Limits: up to 4 pipeline stages; captured pipe/redirect buffers are capped at 32 KiB.
 `cat` / `head` / `tail` / `wc` / `grep` accept `-` (or omit the path) to read shell stdin from `<` or a pipe.
 
 ## Globs

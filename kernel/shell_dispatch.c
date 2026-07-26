@@ -388,6 +388,9 @@ void shell_execute(char *cmd) {
         final_rc = rc;
 
         if (capture_for_pipe) {
+            if (n >= sizeof(pipe_data) - 2)
+                console_printf("shell: pipe output truncated at %u bytes\n",
+                               (unsigned)sizeof(pipe_data));
             if (n >= sizeof(pipe_data))
                 n = sizeof(pipe_data) - 1;
             memcpy(pipe_data, cap, n);

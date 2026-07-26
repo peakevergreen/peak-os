@@ -19,7 +19,7 @@ int shell_split_args(char *cmd, char **argv, int max);
 /* Pipeline / redirect parse limits (host + guest). */
 #define SHELL_PIPE_MAX     4
 #define SHELL_ARGV_MAX     16
-#define SHELL_CAPTURE_MAX  8192
+#define SHELL_CAPTURE_MAX  32768
 
 enum shell_redir_kind {
     SHELL_REDIR_NONE = 0,
