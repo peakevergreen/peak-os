@@ -43,6 +43,7 @@ Progressively pass representative site fixtures. Full Chromium-level standards c
 - **Web API stubs** (`webapi_stubs.c`): fail-closed matrix documents supported vs rejected surfaces. `fetch` supports GET/POST (string body, bounded) with same-origin/CORS gating and `Response.json()` on `bodyText`. `AbortController()` factory exposes `signal.aborted` + `abort()`; pre-aborted signals fail `fetch` closed. `localStorage` persists to VFS under `/var/peak/localStorage/<origin>`; `sessionStorage` is in-memory per-tab. Unsupported init options and non-http(s) schemes fail closed.
 - **JS language:** `async`/`await` unwraps settled `Promise.resolve` values (and non-thenables as identity). `async function` / `async ()=>` return promises. `for await` remains fail-closed. ES modules: `js_eval_module` + `export var`/`export function` + `import {name} from "id"` (max 8 registered modules).
 - **Monitor:** overview shows `js tabs / objs / timers / gc`.
+- **Ring-3 scaffold (Pass 86):** `browser_isolation.c` tracks availability; optional enforce mode fail-closes DOM (`browser_js`) and `fetch` when ring-3 is unavailable.
 - **Next:** full ring-3 process isolation once aarch64/x86 ELF userspace process support is sufficient; DOM/net syscalls behind validated handles.
 
 ## Public sites

@@ -20,6 +20,7 @@
  */
 #include "webapi_internal.h"
 #include "webapi.h"
+#include "browser_isolation.h"
 #include "http_util.h"
 #include "net.h"
 #include "heap.h"
@@ -384,6 +385,11 @@ static int signal_is_aborted(struct js_runtime *rt, const struct js_value *sig) 
 }
 
 static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    if (!browser_isolation_net_allowed()) {
+        js_val_set_undefined((struct js_value *)ret);
+        snprintf(rt->err, sizeof(rt->err), "fetch blocked: ring-3 isolation unavailable");
+        return -1;
+    }
     (void)ud;
     js_val_set_undefined(ret);
     if (!rt || argc < 1)

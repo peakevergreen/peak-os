@@ -385,6 +385,11 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 86 browser ring3"
+grep -q browser_isolation_dom_allowed kernel/gui/browser_isolation.c
+grep -q 'ring-3 isolation unavailable' kernel/gui/browser_js.c
+grep -q browser_isolation kernel/gui/browser_isolation.c
+
 echo "==> Wave 4 Pass 85 dns negcache ux"
 grep -q net_dns_last_negative_cached kernel/net/dns.c
 grep -q 'cached negative' kernel/user/utils_net.c

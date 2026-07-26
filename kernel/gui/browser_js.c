@@ -8,6 +8,7 @@
  * installed separately by webapi_install() — see webapi.h and webapi_stubs.c.
  */
 #include "browser_js.h"
+#include "browser_isolation.h"
 #include "../js/js_internal.h"
 #include "util.h"
 #include "heap.h"
@@ -74,8 +75,19 @@ static int node_from_val(struct browser_js_host *h, const struct js_value *v) {
     return -1;
 }
 
+
+static int isolation_dom_gate(struct js_runtime *rt) {
+    if (!browser_isolation_dom_allowed()) {
+        snprintf(rt->err, sizeof(rt->err), "DOM blocked: ring-3 isolation unavailable");
+        return -1;
+    }
+    return 0;
+}
+
 static int nat_get_el_by_id(struct js_runtime *rt, int argc, void *argv, void *ret,
                             void *ud) {
+    if (isolation_dom_gate(rt))
+        return -1;
     struct browser_js_host *h = ud;
     js_val_set_null(ret);
     if (!h || argc < 1)
@@ -90,6 +102,8 @@ static int nat_get_el_by_id(struct js_runtime *rt, int argc, void *argv, void *r
 
 static int nat_query_selector(struct js_runtime *rt, int argc, void *argv, void *ret,
                               void *ud) {
+    if (isolation_dom_gate(rt))
+        return -1;
     struct browser_js_host *h = ud;
     js_val_set_null(ret);
     if (!h || argc < 1)
