@@ -1,11 +1,12 @@
 /* /bin awk-lite: field split, $0/$n, print, pattern { }, NR/NF */
 #include "libpeak.h"
+#include "peak_io.h"
 #include "vfs.h"
 #include "shell.h"
 #include "console.h"
 #include "util.h"
 
-#define READ_MAX 32768
+#define READ_MAX PEAK_IO_CAP
 #define LINE_MAX 256
 #define MAX_LINES 256
 #define MAX_FIELDS 32

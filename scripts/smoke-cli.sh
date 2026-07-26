@@ -723,6 +723,12 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 151 buffer 64 KiB wave"
+grep -q 'PEAK_IO_CAP' kernel/include/peak_io.h
+grep -q '65536' kernel/include/shell_split.h
+grep -q 'KiB cap' kernel/shell_dispatch.c
+grep -q 'PEAK_IO_CAP' kernel/user/utils_net.c
+
 echo "==> Wave 7 Pass 150 VFS errno path naming"
 grep -q 'vfs_last_error_path' kernel/vfs.c
 grep -q 'peak_perror_path' kernel/user/libpeak.c

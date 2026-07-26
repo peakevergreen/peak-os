@@ -1,5 +1,6 @@
 /* /bin sys pack: hostname, uptime, whoami, id, cal, gzip/gunzip, timeout, watch */
 #include "libpeak.h"
+#include "peak_io.h"
 #include "vfs.h"
 #include "shell.h"
 #include "console.h"
@@ -8,7 +9,7 @@
 #include "rtc.h"
 #include "ubin.h"
 
-#define COMP_MAX (32 * 1024)
+#define COMP_MAX PEAK_IO_CAP
 #define WATCH_MAX_ITERS 32
 
 int uhostname_main(int argc, char **argv) {
