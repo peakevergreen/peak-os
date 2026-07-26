@@ -59,6 +59,7 @@ void desktop_init(void) {
     resize_edge = 0;
     band_live = 0;
     snap_live = 0;
+    snap_hud_mode = 0;
     settings_page = 0;
     desktop_compose_reset_cursor_cache();
     desktop_files_init();
@@ -159,7 +160,21 @@ void desktop_run(void) {
 
 
         if (key && keyboard_ctrl_down() && keyboard_alt_down() && focus >= 0 && wins[focus].open) {
-            if (key == KEY_LEFT) {
+            if (keyboard_shift_down()) {
+                if (key == KEY_LEFT) {
+                    desktop_win_keyboard_nudge(focus, -1, 0);
+                    key = 0;
+                } else if (key == KEY_RIGHT) {
+                    desktop_win_keyboard_nudge(focus, 1, 0);
+                    key = 0;
+                } else if (key == KEY_UP) {
+                    desktop_win_keyboard_nudge(focus, 0, -1);
+                    key = 0;
+                } else if (key == KEY_DOWN) {
+                    desktop_win_keyboard_nudge(focus, 0, 1);
+                    key = 0;
+                }
+            } else if (key == KEY_LEFT) {
                 desktop_snap_apply(focus, 1);
                 key = 0;
             } else if (key == KEY_RIGHT) {
@@ -541,6 +556,7 @@ void desktop_run(void) {
             resize_edge = 0;
             band_live = 0;
             snap_live = 0;
+            snap_hud_mode = 0;
             move_prev_valid = 0;
             mouse_clear_clicks();
         }
@@ -564,9 +580,11 @@ void desktop_run(void) {
             int hint = desktop_snap_hint(m.x, m.y);
             if (hint) {
                 snap_live = 1;
+                snap_hud_mode = hint;
                 desktop_snap_zone_rect(hint, &band_x, &band_y, &band_w, &band_h);
             } else {
                 snap_live = 0;
+                snap_hud_mode = 0;
             }
             uint64_t now = timer_ticks();
             if (now - last_drag_tick >= 1) {

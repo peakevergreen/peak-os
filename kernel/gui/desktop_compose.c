@@ -442,6 +442,24 @@ static void draw_rubber_band(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     fb_fill_rect(x + w - t, y, t, h, c);
 }
 
+static void desktop_draw_snap_hud(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    if (!snap_live || snap_hud_mode <= 0)
+        return;
+    const char *label = snap_hud_mode == 1 ? "Snap left"
+                      : snap_hud_mode == 2 ? "Snap right"
+                      : snap_hud_mode == 3 ? "Maximize" : "";
+    if (!label[0])
+        return;
+    uint32_t lw = (uint32_t)strlen(label) * fb_cell_w() + desktop_u(16);
+    uint32_t lh = fb_cell_h() + desktop_u(8);
+    uint32_t lx = x + (w > lw ? (w - lw) / 2 : 0);
+    uint32_t ly = y + (h > lh ? (h - lh) / 2 : 0);
+    fb_fill_rect(lx, ly, lw, lh, desktop_color_surface());
+    fb_fill_rect(lx, ly, lw, desktop_u(2), desktop_color_accent());
+    fb_draw_string(lx + desktop_u(8), ly + desktop_u(4), label, desktop_color_fg(),
+                   desktop_color_surface());
+}
+
 static void compose_damage(void) {
     /* Many disjoint rects: collapse to one bbox so compose stays cheap.
      * Overflow no longer forces a full desktop redraw — list stays honest. */
@@ -618,6 +636,7 @@ void desktop_draw(void) {
         compose_damage();
         fb_begin_frame();
         draw_rubber_band(band_x, band_y, band_w, band_h);
+        desktop_draw_snap_hud(band_x, band_y, band_w, band_h);
         fb_cancel_frame();
         present_scene(0);
         move_prev_x = band_x;
@@ -637,6 +656,7 @@ void desktop_draw(void) {
         compose_damage();
         fb_begin_frame();
         draw_rubber_band(band_x, band_y, band_w, band_h);
+        desktop_draw_snap_hud(band_x, band_y, band_w, band_h);
         fb_cancel_frame();
         present_scene(0);
         move_prev_x = band_x;
@@ -661,8 +681,10 @@ void desktop_draw(void) {
         compose_damage();
         if (band_live && resizing)
             draw_rubber_band(band_x, band_y, band_w, band_h);
-        if (snap_live && dragging)
+        if (snap_live && dragging) {
             draw_rubber_band(band_x, band_y, band_w, band_h);
+            desktop_draw_snap_hud(band_x, band_y, band_w, band_h);
+        }
         scene_ready = 1;
         present_scene(0);
         if ((dragging || resizing) && focus >= 0 && wins[focus].open) {

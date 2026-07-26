@@ -43,6 +43,7 @@ int move_live;
 uint32_t band_x, band_y, band_w, band_h;
 int band_live;
 int snap_live;
+int snap_hud_mode;
 
 static uint32_t resize_grip(void) {
     uint32_t g = desktop_u(14);
@@ -386,6 +387,28 @@ void desktop_snap_apply(int idx, int mode) {
     damage_add(w->x, w->y, w->w, w->h);
     surface_ensure(&w->surf, w->w, w->h);
     surface_mark_dirty(&w->surf);
+    dirty_bits |= DIRTY_MOVE;
+}
+
+void desktop_win_keyboard_nudge(int idx, int dx, int dy) {
+    if (idx < 0 || idx >= MAX_WINS || !wins[idx].open || wins[idx].maximized)
+        return;
+    struct win *w = &wins[idx];
+    uint32_t step = desktop_u(8);
+    if (step < 4)
+        step = 4;
+    uint32_t ox = w->x, oy = w->y, ow = w->w, oh = w->h;
+    int32_t nx = (int32_t)w->x + dx * (int32_t)step;
+    int32_t ny = (int32_t)w->y + dy * (int32_t)step;
+    if (nx < 0)
+        nx = 0;
+    if (ny < 0)
+        ny = 0;
+    w->x = (uint32_t)nx;
+    w->y = (uint32_t)ny;
+    desktop_clamp_win_geom(w);
+    damage_add(ox, oy, ow, oh);
+    damage_add(w->x, w->y, w->w, w->h);
     dirty_bits |= DIRTY_MOVE;
 }
 

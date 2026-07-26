@@ -235,6 +235,7 @@ void desktop_draw_help(void) {
         { "Esc", "Close menus & overlays" },
         { "Peak menu", "Type to filter apps; Enter to launch" },
         { "Ctrl+Alt+←/→/↑", "Snap window left/right/maximize" },
+        { "Ctrl+Alt+Shift+arrows", "Nudge window 8px" },
         { "Drag title", "Snap left/right/top edges" },
         { "Title _ [] x", "Minimize / maximize / close" },
         { "Ctrl+Shift+H", "Notification history panel" },
@@ -245,7 +246,7 @@ void desktop_draw_help(void) {
     };
     uint32_t key_w = desktop_u(100);
     int shown = 0;
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < 16; i++) {
         if (!help_line_matches(lines[i].key, lines[i].desc)) continue;
         shown++;
         uint32_t kbg = desktop_color_bg();
