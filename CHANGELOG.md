@@ -53,6 +53,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - New builtins: `printf`, `tee`, `test`/`[`, `yes` (bounded)
 - **Pass 19:** `fold`, `rev`, `od`, `split`, `paste`, `nl`, `tac`, `xargs`
 - **Pass 39:** `awk` lite — field split (`-F`), `$n`/`NR`/`NF`, `/pat/ { print }`
+- **Pass 43:** `ls -lh`, `du -h`, `df -h` — human-readable KiB/MiB sizes in file utils
 - **Pass 20:** `hostname`, `uptime`, `whoami`, `id`, `cal`, `gzip`/`gunzip` (PEAKGZ1), `timeout`, `watch`
 - **Pass 21:** `!n` history, aliases (`/var/peak/aliases`), `cd -`, Tab path/`/bin` completion, clearer redirect/pipe errors
 - **Pass 24:** `tlsinfo` (WebPKI root count, pins/TOFU, last TLS error); `tls_err_name()` / alert desc mapping; `webpki_root_sha256()` for root digest listing

@@ -12,6 +12,7 @@
 #define PAGE_LINES 20
 #define LINE_MAX 512
 #define MAX_LINES 512
+#define PAT_MAX 64
 
 static int resolve_in_path(const char *path, char *abs, size_t abs_len) {
     if (!path || !strcmp(path, "-")) {
@@ -55,10 +56,14 @@ static int split_lines(char *data, size_t len, char **lines, int max) {
     return n;
 }
 
-static void pager_show(const char *title, char **lines, int total, int start) {
+static void pager_show(const char *title, char **lines, int total, int start,
+                       int full) {
     console_clear();
     console_write(title);
-    console_write(" — space next, q quit\n\n");
+    if (full)
+        console_write(" — space next, b prev, g/G top/bottom, / search, q quit\n\n");
+    else
+        console_write(" — space next, q quit\n\n");
     int end = start + PAGE_LINES;
     if (end > total)
         end = total;
@@ -73,26 +78,96 @@ static void pager_show(const char *title, char **lines, int total, int start) {
     }
 }
 
-static int pager_main(const char *tool, int argc, char **argv) {
+static int line_contains(const char *line, const char *pat, size_t plen) {
+    if (plen == 0)
+        return 1;
+    size_t l = strlen(line);
+    if (l < plen)
+        return 0;
+    for (size_t j = 0; j + plen <= l; j++) {
+        if (!memcmp(line + j, pat, plen))
+            return 1;
+    }
+    return 0;
+}
+
+static int pager_find_next(char **lines, int total, int from, const char *pat) {
+    size_t plen = strlen(pat);
+    for (int i = from; i < total; i++) {
+        if (line_contains(lines[i], pat, plen))
+            return i;
+    }
+    return -1;
+}
+
+static int pager_align_page(int line, int total) {
+    int pos = line;
+    if (pos + PAGE_LINES > total)
+        pos = total - PAGE_LINES;
+    if (pos < 0)
+        pos = 0;
+    return pos;
+}
+
+static int read_search_pat(char *buf, size_t cap) {
+    size_t i = 0;
+    console_write("/");
+    for (;;) {
+        char c = keyboard_getchar();
+        if (c == '\n' || c == '\r') {
+            console_putc('\n');
+            buf[i] = '\0';
+            return (int)i;
+        }
+        if (c == 27) {
+            buf[0] = '\0';
+            return -1;
+        }
+        if (c == '\b' || c == 127) {
+            if (i > 0) {
+                i--;
+                console_write("\b \b");
+            }
+            continue;
+        }
+        if (i + 1 < cap) {
+            buf[i++] = c;
+            console_putc(c);
+        }
+    }
+}
+
+static int pager_load(const char *tool, int argc, char **argv,
+                      char *data, size_t data_cap,
+                      char **lines, int *total) {
     if (peak_wants_help(argc, argv)) {
         peak_usage(tool, "[path|-]");
-        return 0;
+        return -1;
     }
     const char *path = argc >= 2 ? argv[1] : "-";
-    char data[PAGE_MAX];
     size_t len = 0;
-    if (read_input(path, data, sizeof(data), &len) != 0) {
+    if (read_input(path, data, data_cap, &len) != 0) {
         peak_perror(tool, "cannot read");
         return 1;
     }
-    char *lines[MAX_LINES];
-    int total = split_lines(data, len, lines, MAX_LINES);
-    if (total == 0) {
+    *total = split_lines(data, len, lines, MAX_LINES);
+    if (*total == 0) {
         console_write("(empty)\n");
-        return 0;
+        return -1;
     }
+    return 0;
+}
+
+static int more_main(int argc, char **argv) {
+    char data[PAGE_MAX];
+    char *lines[MAX_LINES];
+    int total = 0;
+    int rc = pager_load("more", argc, argv, data, sizeof(data), lines, &total);
+    if (rc < 0)
+        return rc > 0 ? rc : 0;
+
     int pos = 0;
-    pager_show(tool, lines, total, pos);
+    pager_show("more", lines, total, pos, 0);
     for (;;) {
         char c = keyboard_try_getchar();
         if (c == 'q' || c == 'Q' || c == 27)
@@ -100,7 +175,7 @@ static int pager_main(const char *tool, int argc, char **argv) {
         if (c == ' ' || c == '\n' || c == '\r') {
             if (pos + PAGE_LINES < total) {
                 pos += PAGE_LINES;
-                pager_show(tool, lines, total, pos);
+                pager_show("more", lines, total, pos, 0);
             } else {
                 break;
             }
@@ -111,12 +186,72 @@ static int pager_main(const char *tool, int argc, char **argv) {
     return 0;
 }
 
+static int less_main(int argc, char **argv) {
+    char data[PAGE_MAX];
+    char *lines[MAX_LINES];
+    int total = 0;
+    int rc = pager_load("less", argc, argv, data, sizeof(data), lines, &total);
+    if (rc < 0)
+        return rc > 0 ? rc : 0;
+
+    int pos = 0;
+    int search_from = 0;
+    char pat[PAT_MAX];
+    pager_show("less", lines, total, pos, 1);
+    for (;;) {
+        char c = keyboard_try_getchar();
+        if (c == 'q' || c == 'Q' || c == 27)
+            break;
+        if (c == ' ' || c == '\n' || c == '\r') {
+            if (pos + PAGE_LINES < total) {
+                pos += PAGE_LINES;
+                search_from = pos;
+                pager_show("less", lines, total, pos, 1);
+            } else {
+                break;
+            }
+        } else if (c == 'b' || c == 'B') {
+            if (pos > 0) {
+                pos -= PAGE_LINES;
+                if (pos < 0)
+                    pos = 0;
+                search_from = pos;
+                pager_show("less", lines, total, pos, 1);
+            }
+        } else if (c == 'g') {
+            pos = 0;
+            search_from = 0;
+            pager_show("less", lines, total, pos, 1);
+        } else if (c == 'G') {
+            pos = pager_align_page(total - 1, total);
+            search_from = pos;
+            pager_show("less", lines, total, pos, 1);
+        } else if (c == '/') {
+            if (read_search_pat(pat, sizeof(pat)) > 0) {
+                int hit = pager_find_next(lines, total, search_from, pat);
+                if (hit < 0 && search_from > 0)
+                    hit = pager_find_next(lines, total, 0, pat);
+                if (hit >= 0) {
+                    pos = pager_align_page(hit, total);
+                    search_from = hit + 1;
+                    pager_show("less", lines, total, pos, 1);
+                } else {
+                    console_write("Pattern not found\n");
+                }
+            }
+        }
+        hlt();
+    }
+    console_write("\n");
+    return 0;
+}
+
 int uless_main(int argc, char **argv) {
-    return pager_main("less", argc, argv);
+    return less_main(argc, argv);
 }
 
 int umore_main(int argc, char **argv) {
-    return pager_main("more", argc, argv);
+    return more_main(argc, argv);
 }
 
 int utime_main(int argc, char **argv) {

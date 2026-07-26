@@ -217,7 +217,7 @@ static const struct help_entry help_table[] = {
     { "sha256sum", "text", "SHA-256 digest (64 KiB cap)" },
     { "md5sum", "text", "MD5 digest (64 KiB cap)" },
     { "base64", "text", "base64 encode/decode (-d)" },
-    { "less", "text", "page file (space/q)" },
+    { "less", "text", "page file (space/b/g/G//q)" },
     { "more", "text", "page file (space/q)" },
     { "time", "sys", "time a built-in command" },
     { "edit", "text", "buffer editor (:w/:q/:p /search)" },
