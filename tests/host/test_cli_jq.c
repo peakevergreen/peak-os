@@ -141,14 +141,22 @@ static int parse_array(jdoc *d, const char **pp) {
 
 static int parse_value(jdoc *d, const char **pp) {
     const char *p = skip_ws(*pp);
-    if (*p == '{')
-        return parse_object(d, &p);
-    if (*p == '[')
-        return parse_array(d, &p);
+    if (*p == '{') {
+        int r = parse_object(d, &p);
+        if (r >= 0)
+            *pp = p;
+        return r;
+    }
+    if (*p == '[') {
+        int r = parse_array(d, &p);
+        if (r >= 0)
+            *pp = p;
+        return r;
+    }
     if (*p == '"') {
         int id = new_node(d, JT_STR);
-        p++;
         d->nodes[id].start = p;
+        p++;
         while (*p && *p != '"')
             p++;
         if (*p != '"')
