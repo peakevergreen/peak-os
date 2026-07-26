@@ -11,6 +11,7 @@
 
 void peak_puts(const char *s);
 void peak_perror(const char *tool, const char *msg);
+void peak_perror_path(const char *tool, const char *path, const char *msg);
 void peak_usage(const char *tool, const char *usage);
 int  peak_atoi(const char *s);
 int  peak_has_flag(int argc, char **argv, const char *flag);

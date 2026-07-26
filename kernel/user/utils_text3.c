@@ -375,7 +375,14 @@ int urealpath_main(int argc, char **argv) {
         return 1;
     }
     char resolved[VFS_PATH_MAX];
-    if (vfs_resolve(abs, resolved, sizeof(resolved)) != 0) { peak_perror("realpath", "bad path"); return 1; }
+    if (vfs_resolve(abs, resolved, sizeof(resolved)) != 0) {
+        const char *ep = vfs_last_error_path();
+        if (ep && ep[0])
+            peak_perror_path("realpath", ep, vfs_last_error());
+        else
+            peak_perror("realpath", vfs_last_error()[0] ? vfs_last_error() : "bad path");
+        return 1;
+    }
     console_write(resolved);
     console_write("\n");
     return 0;

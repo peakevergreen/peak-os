@@ -14,6 +14,17 @@ void peak_perror(const char *tool, const char *msg) {
     fputs("\n", stdout);
 }
 
+void peak_perror_path(const char *tool, const char *path, const char *msg) {
+    fputs(tool, stdout);
+    fputs(": ", stdout);
+    if (path && path[0]) {
+        fputs(path, stdout);
+        fputs(": ", stdout);
+    }
+    fputs(msg, stdout);
+    fputs("\n", stdout);
+}
+
 void peak_usage(const char *tool, const char *usage) {
     fputs("usage: ", stdout);
     fputs(tool, stdout);
@@ -33,6 +44,17 @@ void peak_puts(const char *s) {
 void peak_perror(const char *tool, const char *msg) {
     console_write(tool);
     console_write(": ");
+    console_write(msg);
+    console_write("\n");
+}
+
+void peak_perror_path(const char *tool, const char *path, const char *msg) {
+    console_write(tool);
+    console_write(": ");
+    if (path && path[0]) {
+        console_write(path);
+        console_write(": ");
+    }
     console_write(msg);
     console_write("\n");
 }

@@ -9,9 +9,14 @@ static struct vfs_node nodes[VFS_MAX_NODES];
 static int node_count;
 static struct vfs_node *root;
 static char vfs_errbuf[80];
+static char vfs_err_path[VFS_PATH_MAX];
 
 const char *vfs_last_error(void) {
     return vfs_errbuf;
+}
+
+const char *vfs_last_error_path(void) {
+    return vfs_err_path;
 }
 
 static void vfs_set_error(const char *msg) {
@@ -21,6 +26,16 @@ static void vfs_set_error(const char *msg) {
     for (; msg[i] && i + 1 < sizeof(vfs_errbuf); i++)
         vfs_errbuf[i] = msg[i];
     vfs_errbuf[i] = '\0';
+}
+
+static void vfs_set_error_path(const char *path, const char *msg) {
+    vfs_set_error(msg);
+    if (!path)
+        path = "";
+    size_t i = 0;
+    for (; path[i] && i + 1 < sizeof(vfs_err_path); i++)
+        vfs_err_path[i] = path[i];
+    vfs_err_path[i] = '\0';
 }
 
 static void vfs_note_workspace_dirty(void) {
@@ -167,7 +182,13 @@ resolve_restart: {
         rc = path_join1(link_path, part, link_path, sizeof(link_path)); if (rc != 0) return rc;
         cur = find_child(cur, part); if (!cur) { vfs_set_error("not found"); return PEAK_ENOENT; }
         if (cur->type == VFS_SYMLINK) {
-            if (++depth > VFS_SYMLINK_LOOP_MAX) { vfs_set_error("too many symlink levels"); return PEAK_ELOOP; }
+            if (++depth > VFS_SYMLINK_LOOP_MAX) {
+                char emsg[96];
+                snprintf(emsg, sizeof(emsg), "symlink loop at %s (max %d)",
+                         link_path, VFS_SYMLINK_LOOP_MAX);
+                vfs_set_error_path(link_path, emsg);
+                return PEAK_ELOOP;
+            }
             const char *rest = work[i] ? work + i : "";
             rc = expand_symlink_at(link_path, cur, rest, work, sizeof(work)); if (rc != 0) return rc;
             goto resolve_restart;
