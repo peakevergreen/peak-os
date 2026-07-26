@@ -7,6 +7,7 @@
 
 /* Session state — shared across tls_*.c via tls_internal.h. */
 int tls_up;
+static int tls_last_resume;
 int tls13;
 int cipher_kind;
 int use_ems;

@@ -6,6 +6,8 @@
 #include "timer.h"
 #include "util.h"
 
+static void tcp_conn_push(uint16_t port, const char *state);
+
 int net_tcp_find_slot(uint32_t src, uint16_t sport, uint16_t dport) {
     for (int i = 0; i < NET_TCP_MAX; i++) {
         if (tcps[i].state == TCP_CLOSED || tcps[i].state == TCP_LISTEN)
@@ -30,7 +32,6 @@ int net_tcp_alloc_slot(void) {
         if (tcps[i].state == TCP_CLOSED)
             return i;
     }
-    tcp_conn_note("?", port, "fail");
     return -1;
 }
 
@@ -195,8 +196,10 @@ int net_tcp_connect(uint32_t ip, uint16_t port, uint32_t timeout_ticks) {
     uint64_t last_syn = start;
     while (!net_timed_out(start, timeout_ticks)) {
         net_poll();
-        if (tcp_state == TCP_ESTABLISHED)
+        if (tcp_state == TCP_ESTABLISHED) {
+            tcp_conn_push(port, "open");
             return 0;
+        }
         if (tcp_state == TCP_CLOSED) {
             net_set_last_error(PEAK_ENOTCONN, "connection refused or reset");
             return PEAK_ENOTCONN;
@@ -425,24 +428,24 @@ void net_tcp_close(void) {
 }
 
 #define TCP_CONN_ROWS 4
-static char tcp_conn_host[TCP_CONN_ROWS][48];
+static char tcp_conn_host[TCP_CONN_ROWS][32];
 static uint16_t tcp_conn_port[TCP_CONN_ROWS];
-static char tcp_conn_state[TCP_CONN_ROWS][16];
+static char tcp_conn_state[TCP_CONN_ROWS][12];
 static int tcp_conn_n;
 
-static void tcp_conn_note(const char *host, uint16_t port, const char *state) {
-    if (!host || !state) return;
-    int slot = tcp_conn_n < TCP_CONN_ROWS ? tcp_conn_n++ : TCP_CONN_ROWS - 1;
-    snprintf(tcp_conn_host[slot], sizeof(tcp_conn_host[slot]), "%s", host);
-    tcp_conn_port[slot] = port;
-    snprintf(tcp_conn_state[slot], sizeof(tcp_conn_state[slot]), "%s", state);
+static void tcp_conn_push(uint16_t port, const char *state) {
+    int s = tcp_conn_n < TCP_CONN_ROWS ? tcp_conn_n++ : TCP_CONN_ROWS - 1;
+    snprintf(tcp_conn_host[s], sizeof(tcp_conn_host[s]), "peer");
+    tcp_conn_port[s] = port;
+    snprintf(tcp_conn_state[s], sizeof(tcp_conn_state[s]), "%s", state ? state : "?");
 }
 
 int net_tcp_conn_row_count(void) { return tcp_conn_n; }
-int net_tcp_conn_row(int idx, char *host, size_t host_cap, uint16_t *port, char *state, size_t state_cap) {
+
+int net_tcp_conn_row(int idx, char *host, size_t hc, uint16_t *port, char *state, size_t sc) {
     if (idx < 0 || idx >= tcp_conn_n) return -1;
-    if (host && host_cap) snprintf(host, host_cap, "%s", tcp_conn_host[idx]);
+    if (host && hc) snprintf(host, hc, "%s", tcp_conn_host[idx]);
     if (port) *port = tcp_conn_port[idx];
-    if (state && state_cap) snprintf(state, state_cap, "%s", tcp_conn_state[idx]);
+    if (state && sc) snprintf(state, sc, "%s", tcp_conn_state[idx]);
     return 0;
 }

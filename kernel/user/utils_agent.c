@@ -200,8 +200,7 @@ int umemory_main(int argc, char **argv) {
 }
 
 static int peakvec_namespace_list(void) {
-    console_write("PeakVec namespaces: agent (default), session
-");
+    console_write("PeakVec namespaces: agent (default), session\n");
     print_peakvec_index_line("agent");
     print_peakvec_index_line("session");
     return 0;

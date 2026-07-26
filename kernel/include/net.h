@@ -126,4 +126,3 @@ int net_last_error_code(void);
 const char *net_last_error(void);
 
 #endif
-int net_tcp_accept(unsigned timeout_ms);
