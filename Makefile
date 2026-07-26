@@ -143,6 +143,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/user/utils_text4.c \
 	kernel/user/utils_text5.c \
 	kernel/user/utils_text6.c \
+	kernel/user/utils_text7.c \
 	kernel/user/utils_crypto.c \
 	kernel/user/utils_pager.c \
 	kernel/user/utils_sys.c \
@@ -455,6 +456,7 @@ $(eval $(call HOST_TEST_RULE,cli_crypto,tests/host/test_cli_crypto.c kernel/net/
 $(eval $(call HOST_TEST_RULE,cli_text5,tests/host/test_cli_text5.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,cli_sys2,tests/host/test_cli_sys2.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,cli_awk,tests/host/test_cli_awk.c,$(HOST_CFLAGS)))
+$(eval $(call HOST_TEST_RULE,cli_jq,tests/host/test_cli_jq.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,cli_sed,tests/host/test_cli_sed.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,img_decode,tests/host/test_img_decode.c kernel/gui/img_decode.c \
 	tests/host/img_decode_host_stubs.c,\

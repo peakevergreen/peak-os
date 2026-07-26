@@ -131,6 +131,11 @@ grep -q 'peakvec' kernel/user/ubin_cmds.def
 grep -q 'peakvec_stats' kernel/peakvec.c
 grep -q 'blobstore_check' kernel/blobstore.c
 
+echo "==> Pass 46 jq-lite"
+grep -q 'jq' kernel/user/ubin_cmds.def
+grep -q 'ujq_main' kernel/user/utils_text7.c
+grep -q 'test_cli_jq' Makefile
+
 echo "==> Pass 37 input/console"
 grep -q 'keyboard_set_repeat' kernel/keyboard.c
 grep -q 'console_scroll_find_next' kernel/console_scroll.c

@@ -214,6 +214,7 @@ static const struct help_entry help_table[] = {
     { "tac", "text", "print lines in reverse order" },
     { "xargs", "text", "build argv from stdin tokens" },
     { "awk", "text", "awk-lite: fields $n, print, /pat/ { }" },
+    { "jq", "text", "jq-lite: .key, .[], keys, length (8 KiB)" },
     { "sha256sum", "text", "SHA-256 digest (64 KiB cap)" },
     { "md5sum", "text", "MD5 digest (64 KiB cap)" },
     { "base64", "text", "base64 encode/decode (-d)" },
