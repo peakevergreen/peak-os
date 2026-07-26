@@ -79,9 +79,9 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `rm [-rf] <path>` | remove file or tree |
 | `cp [-r] [--promote-blob] <src> <dst>` | copy (blob-aware via ranged I/O; `--promote-blob` stores dest in blobstore when available) |
 | `mv <src> <dst>` | rename/move |
-| `ln [-s] <target> <link>` | hard link or symlink (`-s`) |
+| `ln [-sf] [-s] <target> <link>` | hard link or symlink (`-s`; `-f` force replace) |
 | `readlink <path>` | print symlink target (no follow) |
-| `chmod <mode> <path>…` | octal (`755`) or symbolic (`u+x`, `g-w`, `a=rx`) |
+| `chmod <mode> <path>...` | octal or symbolic (`u+x`, `go-w`, `a=rx`, …) |
 | `stat [-c '%s'/'%n'] <path>` | metadata or lite `-c` format (`%s` size, `%n` name) |
 | `du [-h] [-s] [path]` | tree byte size (`-h` KiB/MiB; `-s` summary bytes only) |
 | `df [-h]` | VFS inodes, RAM, PeakDisk/Blobstore status (`-h` KiB/MiB + capacity honesty note) |

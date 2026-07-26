@@ -231,14 +231,39 @@ int umv_main(int argc, char **argv) {
 }
 
 int uln_main(int argc, char **argv) {
-    if (peak_wants_help(argc, argv)) { peak_usage("ln", "[-s] <target> <linkname>"); return 0; }
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("ln", "[-sf] [-s] <target> <linkname>");
+        return 0;
+    }
     int sym = peak_has_flag(argc, argv, "-s");
+    int force = peak_has_flag(argc, argv, "-f");
     const char *target = NULL, *linkname = NULL;
-    for (int i = 1; i < argc; i++) { if (argv[i][0] == '-') continue; if (!target) target = argv[i]; else if (!linkname) linkname = argv[i]; }
-    if (!target || !linkname) { peak_usage("ln", "[-s] <target> <linkname>"); return 1; }
-    char ad[VFS_PATH_MAX]; if (shell_resolve_path(linkname, ad, sizeof(ad))) return 1;
-    if (sym) return vfs_symlink(target, ad) == 0 ? 0 : 1;
-    char as[VFS_PATH_MAX]; if (shell_resolve_path(target, as, sizeof(as))) return 1;
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-' && argv[i][1]) {
+            for (const char *f = argv[i] + 1; *f; f++)
+                if (*f != 's' && *f != 'f')
+                    ;
+            continue;
+        }
+        if (!target)
+            target = argv[i];
+        else if (!linkname)
+            linkname = argv[i];
+    }
+    if (!target || !linkname) {
+        peak_usage("ln", "[-sf] [-s] <target> <linkname>");
+        return 1;
+    }
+    char ad[VFS_PATH_MAX];
+    if (shell_resolve_path(linkname, ad, sizeof(ad)))
+        return 1;
+    if (force && vfs_exists(ad))
+        (void)vfs_unlink(ad);
+    if (sym)
+        return vfs_symlink(target, ad) == 0 ? 0 : 1;
+    char as[VFS_PATH_MAX];
+    if (shell_resolve_path(target, as, sizeof(as)))
+        return 1;
     return vfs_link(as, ad) == 0 ? 0 : 1;
 }
 
@@ -403,7 +428,7 @@ static int parse_mode_arg(const char *s, uint16_t *out) {
 
 int uchmod_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage("chmod", "<mode> <path>...");
+        peak_usage("chmod", "<mode> <path>...  (mode: octal or ugo[+-=]rwx)");
         return 0;
     }
     if (argc < 3) {
@@ -819,21 +844,31 @@ int umktemp_main(int argc, char **argv) {
 
 int uinstall_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 3) {
-        peak_usage("install", "[-D] <src> <dest>");
+        peak_usage("install", "[-D] [-m mode] <src> <dest>");
         return argc < 3 ? 1 : 0;
     }
     int mkparents = peak_has_flag(argc, argv, "-D");
+    uint16_t mode = 0;
+    int have_mode = 0;
     const char *src = NULL, *dest = NULL;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-D"))
             continue;
+        if (!strcmp(argv[i], "-m") && i + 1 < argc) {
+            if (parse_mode_arg(argv[++i], &mode) != 0) {
+                peak_perror("install", "invalid mode");
+                return 1;
+            }
+            have_mode = 1;
+            continue;
+        }
         if (!src)
             src = argv[i];
         else
             dest = argv[i];
     }
     if (!src || !dest) {
-        peak_usage("install", "[-D] <src> <dest>");
+        peak_usage("install", "[-D] [-m mode] <src> <dest>");
         return 1;
     }
     char src_abs[VFS_PATH_MAX], dst_abs[VFS_PATH_MAX];
@@ -852,6 +887,10 @@ int uinstall_main(int argc, char **argv) {
     }
     if (vfs_write_file(dst_abs, buf, n) != 0) {
         peak_perror("install", "cannot write dest");
+        return 1;
+    }
+    if (have_mode && vfs_chmod(dst_abs, mode) != 0) {
+        peak_perror("install", "chmod failed");
         return 1;
     }
     return 0;

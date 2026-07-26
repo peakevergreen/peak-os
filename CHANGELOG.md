@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 124:** `ln -sf` force symlink; `chmod` symbolic usage; `install -m` mode
+
 - **Pass 123:** `stat -c` lite format; `du -s` summary; `df -h` capacity honesty strings
 
 - **Pass 122:** `fmt`/`column`/`expand`/`unexpand` lite text layout tools
