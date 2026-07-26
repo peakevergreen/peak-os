@@ -14,6 +14,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - CI honesty: hard-fail fuzz/manifest/doctor; require BOOTX64 + kernel.elf PHDR; tighten aarch64 smoke markers; clear `net_up` on DHCP fail
 - CI gates: UEFI smoke, smoke-cli static gate (Pass 19–37 markers), host `-Werror`, real ELF fuzz, PeakFS QEMU roundtrip (`smoke_persist`)
 - **Pass 38 (S9-lite):** smoke-cli enhancement-wave gates (incl. Passes 35–37), ROADMAP/CHANGELOG sync, security-checklist automation notes
+- **Pass 58 (S9 remainder):** smoke-cli Wave 2 gates (Passes 39–49 + subsystem markers), ROADMAP Wave 2 shipped, security-checklist sync, TLS fuzz in `fuzz-elf-smoke.sh`
 - PeakDisk atomic publish (payload→header) + SDHCI CMD13 flush; DWC2 hub enum/split/hotplug; `/bin/disksave`
 - Quieter boot: status lines only (net IP folded into `e1000 (dhcp …)`; no chatter for JS/PeakVec/disk absence)
 - **S8 loader verify:** kernel SHA-256 vs `peak.conf` / embedded `SHA256SUMS`; optional `verify_sig=1` HMAC-SHA256 of manifest (dev key stub); host `sign-release.py` / `verify-release.py` remain the ceremony gate

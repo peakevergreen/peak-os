@@ -6,6 +6,8 @@ Manual + automated gates for Phase S.
 
 - [x] `make test-host` (includes `test_random`, `test_agent_policy`) — CI `host-tests` job
 - [x] `./scripts/purity-check.sh` — CI `host-tests` + `smoke-cli.sh`
+- [x] `./scripts/smoke-cli.sh` — CI `host-tests` (Pass 19–49 + Wave 2 subsystem markers)
+- [x] `./scripts/fuzz-elf-smoke.sh` (ELF loader + TLS ClientHello fuzz) — CI `host-tests`
 - [x] Docs present: `docs/security-model.md`, `privacy.md`, `csprng.md`, `verified-boot.md` — CI `host-tests`
 - [x] `python3 scripts/mkmanifest.py` after `make iso` — CI `host-tests`
 - [x] No `RWE` LOAD PHDRs: `llvm-readelf -lW build/x86_64/kernel.elf` — CI `host-tests`
