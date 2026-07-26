@@ -161,6 +161,35 @@ int agent_policy_path_allowed(const char *path) {
     return 0;
 }
 
+int agent_policy_deny_reason(const char *tool, const char *path, char *out, size_t out_len) {
+    if (!out || out_len < 8)
+        return -1;
+    if (tool && !agent_policy_tool_allowed(tool)) {
+        if (tool_listed(deny_tools, deny_tool_count, tool))
+            snprintf(out, out_len, "deny-tool: %s listed in deny_tools", tool);
+        else
+            snprintf(out, out_len, "deny-tool: %s not in allow_tools", tool ? tool : "?");
+        return 0;
+    }
+    if (path && path[0]) {
+        char norm[VFS_PATH_MAX];
+        if (agent_policy_normalize_path(path, norm, sizeof(norm)) != 0) {
+            snprintf(out, out_len, "deny-path: invalid path %s", path);
+            return 0;
+        }
+        if (!strcmp(norm, AGENT_AUDIT_PATH)) {
+            snprintf(out, out_len, "deny-audit: %s is append-only", norm);
+            return 0;
+        }
+        if (!agent_policy_path_allowed(norm)) {
+            snprintf(out, out_len, "deny-path: %s not under allow_paths", norm);
+            return 0;
+        }
+    }
+    out[0] = '\0';
+    return -1;
+}
+
 void agent_audit_append(const char *line) {
     char existing[2048];
     size_t n = 0;

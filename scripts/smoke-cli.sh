@@ -723,6 +723,12 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 148 policy catalog filter"
+grep -q 'agent_policy_deny_reason' kernel/agent_policy.c
+grep -q 'policy_print_catalog' kernel/user/utils_agent.c
+grep -q 'deny-tool:' kernel/agent_policy.c
+grep -q 'policy catalog' docs/agent-protocol.md || grep -q 'catalog' docs/CLI.md
+
 echo "==> Wave 7 Pass 147 Agent GUI approval export"
 grep -q 'agent_export_transcript' kernel/agent.c
 grep -q 'agent_approval_queue_draw' kernel/agent.c

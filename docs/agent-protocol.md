@@ -58,7 +58,7 @@ Session memory is structured (`turn|goal=…|t=…|p=…`) under `/var/peak/sess
 
 Defaults allow `/home/dev/workspace` and `/var/peak/sessions`. Seeded policy includes `fs.exec`, `fs.grep`, `fs.diff`, `net.ping`, `net.fetch`, `mem.recall`, and `audit.tail`.
 
-Shell `policy` prints the active policy with labeled sections (paths, tools, approval).
+Shell `policy` prints the active policy with labeled sections (paths, tools, approval). `policy catalog [filter]` lists all agent tools with allow/deny and deny-reason strings; `policy --filter <needle>` filters path/tool rows.
 
 ## Audit / memory / vectors
 

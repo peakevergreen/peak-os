@@ -63,6 +63,16 @@ static void test_path_policy(void) {
     expect(!strcmp(norm, "/home/etc/passwd"), "resolved sibling under /home");
     expect(!agent_policy_path_allowed("/home/dev/../etc/passwd"), "path policy denies escaped path");
     expect(agent_policy_normalize_path("relative", norm, sizeof(norm)) != 0, "reject relative");
+
+    char why[96];
+    expect(agent_policy_deny_reason("fs.read", "/etc/passwd", why, sizeof(why)) == 0,
+           "deny reason for bad path");
+    expect(strstr(why, "deny-path:") != NULL, "deny-path prefix");
+    seed_policy("deny_tools=fs.read\n");
+    agent_policy_reload();
+    expect(agent_policy_deny_reason("fs.read", NULL, why, sizeof(why)) == 0,
+           "deny reason for denied tool");
+    expect(strstr(why, "deny-tool:") != NULL, "deny-tool prefix");
 }
 
 static void test_tool_policy_reload(void) {

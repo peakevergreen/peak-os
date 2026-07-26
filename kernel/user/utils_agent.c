@@ -232,28 +232,100 @@ int upeakvec_main(int argc, char **argv) {
     return 0;
 }
 
-static void policy_print_csv(const char *label, const char *csv) {
+static int policy_token_matches(const char *token, const char *filter) {
+    if (!filter || !filter[0])
+        return 1;
+    for (const char *p = token; *p; p++) {
+        const char *f = filter;
+        const char *s = p;
+        while (*f && *s && *f == *s) {
+            f++;
+            s++;
+        }
+        if (!*f)
+            return 1;
+    }
+    return 0;
+}
+
+static void policy_print_csv_filter(const char *label, const char *csv, const char *filter) {
     console_printf("%s:\n", label);
     if (!csv || !csv[0]) {
         console_write("  (none)\n");
         return;
     }
+    int shown = 0;
     const char *p = csv;
     while (*p) {
         while (*p == ',')
             p++;
         if (!*p)
             break;
+        char tok[64];
+        size_t i = 0;
+        while (*p && *p != ',' && i + 1 < sizeof(tok))
+            tok[i++] = *p++;
+        tok[i] = '\0';
+        if (!policy_token_matches(tok, filter))
+            continue;
         console_write("  ");
-        while (*p && *p != ',')
-            console_putc(*p++);
+        console_write(tok);
         console_putc('\n');
+        shown++;
     }
+    if (!shown)
+        console_write("  (no matches)\n");
+}
+
+static void policy_print_catalog(const char *filter) {
+    const char *cat = agent_tools_catalog();
+    console_write("catalog:\n");
+    int shown = 0;
+    char tok[64];
+    size_t i = 0;
+    for (const char *p = cat; ; p++) {
+        if (*p && *p != ',') {
+            if (i + 1 < sizeof(tok))
+                tok[i++] = *p;
+            continue;
+        }
+        tok[i] = '\0';
+        i = 0;
+        if (tok[0] && policy_token_matches(tok, filter)) {
+            char why[96];
+            int ok = agent_policy_tool_allowed_cli(tok);
+            console_printf("  %s  %s\n", tok, ok ? "allow" : "deny");
+            if (!ok && agent_policy_deny_reason_cli(tok, NULL, why, sizeof(why)) == 0)
+                console_printf("    -> %s\n", why);
+            shown++;
+        }
+        if (!*p)
+            break;
+    }
+    if (!shown)
+        console_write("  (no matches)\n");
 }
 
 int upolicy_main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    const char *filter = NULL;
+    int catalog = 0;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "catalog")) {
+            catalog = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "--filter") && i + 1 < argc) {
+            filter = argv[++i];
+            continue;
+        }
+        if (argv[i][0] != '-' && !filter && !catalog)
+            filter = argv[i];
+    }
+    agent_policy_reload_cli();
+    if (catalog) {
+        policy_print_catalog(filter);
+        return 0;
+    }
     char buf[2048];
     size_t len = 0;
     console_write("policy: /etc/peak/agent.policy\n\n");
@@ -306,11 +378,11 @@ int upolicy_main(int argc, char **argv) {
             p++;
     }
 
-    policy_print_csv("allow_paths", paths);
+    policy_print_csv_filter("allow_paths", paths, filter);
     console_putc('\n');
-    policy_print_csv("allow_tools", allow);
+    policy_print_csv_filter("allow_tools", allow, filter);
     console_putc('\n');
-    policy_print_csv("deny_tools", deny);
+    policy_print_csv_filter("deny_tools", deny, filter);
     console_printf("\nrequire_approval: %s\n", approval[0] ? approval : "(none)");
     return 0;
 }
