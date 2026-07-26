@@ -72,7 +72,7 @@ Quarantined (logged, never pulls):
 
 Parsed: `FROM` (quarantine log), `COPY` (file or directory tree), `EXPOSE`, `ENV`, `WORKDIR` (stored in image meta).
 
-Ignored (logged): `CMD`, `RUN`, `ENTRYPOINT`.
+Parsed (logged + stored in image meta): `CMD`, `HEALTHCHECK` (lite — stored, not executed). Ignored (logged): `RUN`, `ENTRYPOINT`. ctrd serves `index.html` candidates first; falls back to auto directory listing HTML.
 
 ## Limits
 

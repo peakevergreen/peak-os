@@ -176,6 +176,8 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
     size_t env_len = 0;
     char expose_port[16] = "8080";
     char workdir[CTR_PATH_MAX] = "/";
+    char image_cmd[256] = "";
+    char healthcheck_cmd[128] = "";
     int line_no = 0;
     const char *p = df;
     while (*p) {
@@ -272,8 +274,29 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
             }
             continue;
         }
-        if (!strncmp(lp, "CMD", 3) || !strncmp(lp, "RUN", 3) ||
-            !strncmp(lp, "ENTRYPOINT", 10)) {
+        if (!strncmp(lp, "CMD", 3) && (lp[3] == ' ' || lp[3] == '\t')) {
+            lp += 3;
+            skip_ws(&lp);
+            size_t ci = 0;
+            while (*lp && *lp != '\n' && *lp != '\r' && ci + 1 < sizeof(image_cmd))
+                image_cmd[ci++] = *lp++;
+            image_cmd[ci] = '\0';
+            snprintf(msg, sizeof(msg), "CMD %s", image_cmd);
+            ctr_log_line(log, log_cap, line_no, msg);
+            continue;
+        }
+        if (!strncmp(lp, "HEALTHCHECK", 11)) {
+            lp += 11;
+            skip_ws(&lp);
+            size_t hi = 0;
+            while (*lp && *lp != '\n' && *lp != '\r' && hi + 1 < sizeof(healthcheck_cmd))
+                healthcheck_cmd[hi++] = *lp++;
+            healthcheck_cmd[hi] = '\0';
+            snprintf(msg, sizeof(msg), "HEALTHCHECK-lite %s", healthcheck_cmd);
+            ctr_log_line(log, log_cap, line_no, msg);
+            continue;
+        }
+        if (!strncmp(lp, "RUN", 3) || !strncmp(lp, "ENTRYPOINT", 10)) {
             snprintf(msg, sizeof(msg), "skip: %s", line);
             ctr_log_line(log, log_cap, line_no, msg);
             continue;
@@ -293,6 +316,14 @@ int ctr_build(const char *context_dir, const char *tag, char *log, size_t log_ca
     ctr_image_meta_path(tag, meta, sizeof(meta));
     char metabuf[640];
     snprintf(metabuf, sizeof(metabuf), "%s\nexpose=%s\nworkdir=%s\n", tag, expose_port, workdir);
+    if (image_cmd[0]) {
+        size_t ml = strlen(metabuf);
+        snprintf(metabuf + ml, sizeof(metabuf) - ml, "cmd=%s\n", image_cmd);
+    }
+    if (healthcheck_cmd[0]) {
+        size_t ml = strlen(metabuf);
+        snprintf(metabuf + ml, sizeof(metabuf) - ml, "healthcheck=%s\n", healthcheck_cmd);
+    }
     if (env_len) { size_t ml = strlen(metabuf); if (ml + env_len < sizeof(metabuf)) { memcpy(metabuf + ml, env_buf, env_len); metabuf[ml + env_len] = 0; } }
     vfs_write_file(meta, metabuf, strlen(metabuf));
 

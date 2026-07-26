@@ -52,4 +52,8 @@ int ctr_path_under_rootfs(const char *rootfs, const char *path);
 int ctr_resolve_rootfs_candidates(const char *rootfs, const char *path,
                                   char out[][CTR_PATH_MAX], int max_out);
 
+/* Build HTML directory index when no index.html exists (ctrd lite). */
+int ctr_dir_index_listing(const char *rootfs, const char *url_path,
+                          char *body, size_t body_cap, size_t *n_out);
+
 #endif

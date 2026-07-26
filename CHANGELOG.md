@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 149:** ctr CMD/HEALTHCHECK-lite meta + ctrd directory index.html listing
+
 - **Pass 148:** `policy catalog [filter]` + structured deny-reason strings (`deny-tool:`/`deny-path:`)
 
 - **Pass 147:** Agent GUI approval queue line + Ctrl+E transcript/tool-result export to VFS

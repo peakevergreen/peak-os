@@ -137,6 +137,8 @@ static void serve_http_conn(struct ctr_container *c, int fd) {
     char found[CTR_PATH_MAX];
     int ok = resolve_rootfs_file(c->rootfs, path, found, sizeof(found), body,
                                  sizeof(body), &blen);
+    if (ok != 0)
+        ok = ctr_dir_index_listing(c->rootfs, path, body, sizeof(body), &blen);
 
     char hdr[384];
     if (ok != 0) {
