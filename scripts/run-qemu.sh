@@ -155,8 +155,10 @@ if [[ ! -f "$DISK" ]]; then
     dd if=/dev/zero of="$DISK" bs=1048576 count=32
 fi
 
+# Use i440fx (`pc`): Peak ATA probes legacy IDE at 0x1F0. Q35/ICH9 leaves that
+# bus empty, so PeakDisk reports "Disk (none)" despite an attached -drive.
 ARGS=("$QEMU" \
-  -machine q35 \
+  -machine pc \
   -m 256M \
   -smp 1 \
   -cdrom "$ISO" \
