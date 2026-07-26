@@ -457,8 +457,10 @@ int browser_ctx_action(int action_id) {
         size_t bl = 0;
         const char *body = browser_page_body(&bl);
         if (body && bl) {
-            if (browser_download_save(t->url, body, bl, t->status, sizeof(t->status)) == 0)
-                notify_push_clipboard("Saved to Downloads");
+            if (browser_download_save(t->url, body, bl, t->status, sizeof(t->status)) == 0) {
+                notify_push(t->status);
+                dirty_bits |= DIRTY_TOAST;
+            }
         } else
             snprintf(t->status, sizeof(t->status), "Nothing to save");
         needs_redraw = 1;

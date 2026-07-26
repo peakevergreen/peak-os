@@ -1,5 +1,6 @@
 #include "browser.h"
 #include "browser_internal.h"
+#include "browser_isolation.h"
 #include "fb.h"
 #include "theme.h"
 #include "util.h"
@@ -238,7 +239,7 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
                 lab[li] = title[li];
             lab[li] = '\0';
             uint32_t chip_w = (uint32_t)strlen(lab) * cw + 12;
-            if (bx + chip_w > x + w - pad)
+            if (bx + chip_w > x + w - pad - cw * 3)
                 break;
             hit_bm_x[shown] = bx - x;
             hit_bm_w[shown] = chip_w;
@@ -246,6 +247,15 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
             fb_draw_string(bx + 4, bm_y + 1, lab, th->accent, th->surface);
             bx += chip_w + 4;
             shown++;
+        }
+        if (nbm > shown) {
+            char ov[8];
+            snprintf(ov, sizeof(ov), "+%d", nbm - shown);
+            uint32_t ow = (uint32_t)strlen(ov) * cw + 10;
+            if (bx + ow <= x + w - pad) {
+                fb_fill_rect(bx, bm_y + 1, ow, ch, th->border);
+                fb_draw_string(bx + 4, bm_y + 1, ov, th->dim, th->border);
+            }
         }
     }
 
@@ -381,7 +391,10 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     }
 
     uint32_t st_y = y + h - ch - 4 - console_extra;
-    fb_fill_rect(x, st_y - 2, w, ch + 6, th->surface);
+    fb_fill_rect(x, st_y - ch - 4, w, ch * 2 + 8, th->surface);
+    char iso[80];
+    browser_isolation_status_line(iso, sizeof(iso));
+    fb_draw_string(x + pad, st_y - ch - 2, iso, th->dim, th->surface);
     fb_draw_string(x + pad, st_y, t->status, th->dim, th->surface);
 
     needs_redraw = 0;

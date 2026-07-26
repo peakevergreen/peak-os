@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 114 browser polish"
+grep -q browser_isolation_status_line kernel/gui/browser_isolation.c
+grep -q 'Isolation: enforce' kernel/gui/browser_isolation.c
+grep -q '+%d' kernel/gui/browser_draw.c
+grep -q notify_push kernel/gui/browser_nav.c
+
 echo "==> Wave 5 Pass 113 help theme ux"
 grep -q help_substring_match kernel/gui/desktop_overlays.c
 grep -q 'click again to apply' kernel/gui/desktop_settings.c

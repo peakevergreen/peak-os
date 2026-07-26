@@ -1,4 +1,5 @@
 #include "browser_isolation.h"
+#include "util.h"
 
 static int enforce_ring3;
 
@@ -28,4 +29,15 @@ int browser_isolation_net_allowed(void) {
     if (!enforce_ring3)
         return 1;
     return browser_ring3_available();
+}
+
+void browser_isolation_status_line(char *out, size_t cap) {
+    if (!out || cap == 0)
+        return;
+    if (browser_isolation_enforced() && !browser_ring3_available())
+        snprintf(out, cap, "Isolation: enforce · ring-3 pending (DOM/net gated)");
+    else if (browser_isolation_enforced())
+        snprintf(out, cap, "Isolation: enforce · ring-3 active");
+    else
+        snprintf(out, cap, "Isolation: off (in-process)");
 }
