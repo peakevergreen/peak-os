@@ -7,6 +7,19 @@
 #include "notify.h"
 #include "util.h"
 
+static int np_a11y_btn;
+
+static void np_draw_focus_ring(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    uint32_t c = desktop_color_accent();
+    uint32_t t = desktop_u(2);
+    if (t < 2)
+        t = 2;
+    fb_fill_rect(x, y, w, t, c);
+    fb_fill_rect(x, y + h - t, w, t, c);
+    fb_fill_rect(x, y, t, h, c);
+    fb_fill_rect(x + w - t, y, t, h, c);
+}
+
 #define NOTEPAD_MAX 16384
 #define NOTEPAD_VIS   20
 #define NP_FIND_MAX   48
@@ -179,6 +192,20 @@ void desktop_notepad_draw(struct win *w) {
     char hdr[96]; snprintf(hdr, sizeof(hdr), "%s%s", show, np_dirty ? " *" : "");
     fb_draw_string_fit(tx, ty, inner, hdr, desktop_color_accent(), desktop_color_bg());
     ty += ch + desktop_u(4);
+    {
+        uint32_t bw = desktop_u(56);
+        uint32_t by = ty;
+        fb_draw_string(tx, by, "Save", np_a11y_btn == 1 ? desktop_color_bg() : desktop_color_fg(),
+                       np_a11y_btn == 1 ? desktop_color_accent() : desktop_color_surface());
+        if (np_a11y_btn == 1)
+            np_draw_focus_ring(tx, by, bw, ch);
+        uint32_t fx = tx + bw + desktop_u(8);
+        fb_draw_string(fx, by, "Find", np_a11y_btn == 2 ? desktop_color_bg() : desktop_color_fg(),
+                       np_a11y_btn == 2 ? desktop_color_accent() : desktop_color_surface());
+        if (np_a11y_btn == 2)
+            np_draw_focus_ring(fx, by, bw, ch);
+        ty += ch + desktop_u(4);
+    }
     uint32_t find_h = np_find_open ? ch + desktop_u(6) : 0;
     uint32_t area_h = w->h > th + ch * 2 + desktop_u(20) + find_h ? w->h - th - ch * 2 - desktop_u(20) - find_h : ch;
     int vis = (int)(area_h / ch); if (vis > NOTEPAD_VIS) vis = NOTEPAD_VIS; if (vis < 1) vis = 1;
@@ -221,6 +248,29 @@ void desktop_notepad_draw(struct win *w) {
 }
 
 int desktop_notepad_key(int key) {
+    if (key == KEY_TAB || key == '\t') {
+        np_a11y_btn = (np_a11y_btn + 1) % 3;
+        np_mark_dirty();
+        return 1;
+    }
+    if (np_a11y_btn != 0) {
+        if (key == KEY_LEFT || key == 'h' || key == 'H') {
+            if (np_a11y_btn > 0) np_a11y_btn--;
+            np_mark_dirty();
+            return 1;
+        }
+        if (key == KEY_RIGHT || key == 'l' || key == 'L') {
+            if (np_a11y_btn < 2) np_a11y_btn++;
+            np_mark_dirty();
+            return 1;
+        }
+        if (key == '\n') {
+            if (np_a11y_btn == 1) { np_save(); np_mark_dirty(); return 1; }
+            if (np_a11y_btn == 2) { np_find_open = 1; np_find_repl = 0; np_find_pos = -1; np_mark_dirty(); return 1; }
+        }
+        if (key != KEY_UP && key != KEY_DOWN)
+            return 1;
+    }
     if (np_find_open && np_find_key(key)) return 1;
     np_clamp_caret();
     if (keyboard_ctrl_down()) {

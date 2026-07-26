@@ -325,6 +325,10 @@ grep -q 'post_body' kernel/user/utils_net.c
 grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
+echo "==> Wave 3 Pass 72 files/notepad a11y"
+grep -q files_draw_focus_ring kernel/gui/desktop_files.c
+grep -q np_draw_focus_ring kernel/gui/desktop_notepad.c
+
 echo "==> Wave 3 Pass 71 terminal tabs"
 grep -q TERM_MAX_TABS kernel/gui/desktop_terminal.c
 grep -q term_draw_tab_strip kernel/gui/desktop_terminal.c
