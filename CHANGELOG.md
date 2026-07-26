@@ -54,6 +54,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - New builtins: `printf`, `tee`, `test`/`[`, `yes` (bounded)
 - **Pass 19:** `fold`, `rev`, `od`, `split`, `paste`, `nl`, `tac`, `xargs`
 - **Pass 39:** `awk` lite — field split (`-F`), `$n`/`NR`/`NF`, `/pat/ { print }`
+- **Pass 47:** `zip`/`unzip` — PEAKZIP1 multi-file archive (store/RLE per entry; 64 KiB cap)
 - **Pass 44:** `uname -a/-s/-n/-m/-r` from BootInfo platform/ABI + `$HOSTNAME`
 - **Pass 46:** `jq` lite — `.key`, `.[]`, `keys`, `length`, compact JSON print (8 KiB)
 - **Pass 40:** `sed` depth — line addresses (`N`, `N,M`), `s///g` global replace, `y///` transliterate

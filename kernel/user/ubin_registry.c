@@ -106,6 +106,8 @@ extern int utraceroute_main(int argc, char **argv);
 extern int unc_main(int argc, char **argv);
 extern int utlsinfo_main(int argc, char **argv);
 extern int utar_main(int argc, char **argv);
+extern int uzip_main(int argc, char **argv);
+extern int uunzip_main(int argc, char **argv);
 extern int utop_main(int argc, char **argv);
 extern int usysmon_main(int argc, char **argv);
 extern int ups_main(int argc, char **argv);
