@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 152:** `timeout`/`watch` cooperative yield honesty; `watch -c` clear; max-iter messaging
+
 - **Pass 151:** Coordinated 32→64 KiB text/pipe/HTTP caps (`PEAK_IO_CAP`) + truncation meta
 
 - **Pass 150:** VFS errno path naming + symlink loop honesty (`vfs_last_error_path`, `peak_perror_path`)

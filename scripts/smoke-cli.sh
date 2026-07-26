@@ -723,6 +723,11 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 152 timeout watch semantics"
+grep -q 'cooperative — checked after command' kernel/user/utils_sys2.c
+grep -q 'watch iter %d/%d' kernel/user/utils_sys2.c
+grep -q '\`-c\`' docs/CLI.md || grep -q 'watch.*-c' docs/CLI.md
+
 echo "==> Wave 7 Pass 151 buffer 64 KiB wave"
 grep -q 'PEAK_IO_CAP' kernel/include/peak_io.h
 grep -q '65536' kernel/include/shell_split.h

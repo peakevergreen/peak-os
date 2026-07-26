@@ -124,8 +124,8 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `hostname` `uptime` `whoami` `id` `cal` | identity + calendar |
 | `uname [-asnmr]` | kernel identity (`-s` sysname, `-n` `$HOSTNAME`, `-r` release, `-m` machine, `-a` all + BootInfo platform) |
 | `gzip` `gunzip` | Peak RLE compress/decompress (PEAKGZ1 `.gz`, 32 KiB cap) |
-| `timeout` | `<sec> <cmd>` wall limit (exit 124 if exceeded; no preemption) |
-| `watch` | run once with deadline note; repeat (`-n`, max 32 iters) |
+| `timeout` | `<sec> <cmd>` cooperative wall limit (exit 124 if exceeded after command) |
+| `watch` | repeat command (`-n` interval, `-c` clear screen; max 32 iters) |
 | `top` `sysmon` | live system monitor (sparklines, legend; `q` quit, `r` reset, `e` export, `-n` once) |
 | `ps` | task list (state, CPU ticks, age, wake, share %) sorted by CPU ticks |
 | `pgrep` `pidof` `dmesg` | find tasks by name substring; print PIDs; console scrollback ring (`dmesg -n N`) |
