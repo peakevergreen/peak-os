@@ -32,6 +32,7 @@ static int active_term;
 static int term_copy_on_select;
 
 static void term_clamp_scroll(struct term_state *t, uint32_t vis);
+static void term_paste_buf(const char *buf, size_t n);
 
 static void term_sync_ui_scale(void) {
     if (fb_ui_scale() != settings_gui_scale())
@@ -360,13 +361,7 @@ static void term_paste_clipboard(void) {
     size_t n = clipboard_get(buf, sizeof(buf));
     if (!n)
         return;
-    for (size_t i = 0; i < n; i++) {
-        char c = buf[i];
-        if (c == '\r')
-            c = '\n';
-        if (c >= 32 || c == '\n' || c == '\t' || c == '\b')
-            shell_feed_key((unsigned char)c);
-    }
+    term_paste_buf(buf, n);
 }
 
 void desktop_terminal_clear(void) {
@@ -392,6 +387,34 @@ void desktop_terminal_copy(void) {
         return;
     term_copy_selection(t);
     notify_push_clipboard("selection");
+    dirty_bits |= DIRTY_TOAST;
+}
+
+static void term_paste_buf(const char *buf, size_t n) {
+    if (!buf || !n)
+        return;
+    for (size_t i = 0; i < n; i++) {
+        char c = buf[i];
+        if (c == '\r')
+            c = '\n';
+        if (c >= 32 || c == '\n' || c == '\t' || c == '\b')
+            shell_feed_key((unsigned char)c);
+    }
+}
+
+void desktop_terminal_paste_previous(void) {
+    char buf[CLIPBOARD_MAX];
+    size_t n = clipboard_get_previous(buf, sizeof(buf));
+    if (!n) {
+        notify_push("No previous clipboard");
+        dirty_bits |= DIRTY_TOAST;
+        return;
+    }
+    term_paste_buf(buf, n);
+    term_active()->full_redraw = 1;
+    dirty_bits |= DIRTY_TERM;
+    term_mark_active_surf_dirty();
+    notify_push("Pasted previous clipboard");
     dirty_bits |= DIRTY_TOAST;
 }
 

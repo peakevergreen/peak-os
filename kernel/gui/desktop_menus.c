@@ -220,7 +220,7 @@ void desktop_draw_taskbar(void) {
 }
 
 #define START_APPS 12
-#define START_SYS  7
+#define START_SYS  8
 #define START_SEARCH_H (fb_cell_h() + desktop_u(10))
 
 static int str_icontains(const char *hay, const char *needle) {
@@ -252,7 +252,7 @@ static const char *start_app_labels[START_APPS] = {
 };
 
 static const char *start_sys_labels[START_SYS] = {
-    "Theme", "Help", "Save disk", "Lock", "Exit desktop", "Reboot", "Power off"
+    "Theme", "Help", "Alerts", "Save disk", "Lock", "Exit desktop", "Reboot", "Power off"
 };
 
 static int start_visible_rows;
@@ -857,6 +857,9 @@ static int start_row_action(int row) {
         help_open = 1;
         dirty_bits |= DIRTY_FULL;
     } else if (row == 2) {
+        notify_hist_open = 1;
+        dirty_bits |= DIRTY_FULL;
+    } else if (row == 3) {
         if (privacy_persist_profile() <= 0) {
             notify_push("Enable Privacy → workspace persist first");
         } else if (peakdisk_save_async() == 0) {
@@ -872,15 +875,15 @@ static int start_row_action(int row) {
             }
         }
         dirty_bits |= DIRTY_TOAST;
-    } else if (row == 3) {
+    } else if (row == 4) {
         session_lock = 1;
         dirty_bits |= DIRTY_FULL;
-    } else if (row == 4) {
-        desktop_should_exit = 1;
     } else if (row == 5) {
+        desktop_should_exit = 1;
+    } else if (row == 6) {
         power_confirm = 2;
         dirty_bits |= DIRTY_FULL;
-    } else if (row == 6) {
+    } else if (row == 7) {
         power_confirm = 1;
         dirty_bits |= DIRTY_FULL;
     }

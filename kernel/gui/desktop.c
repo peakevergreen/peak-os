@@ -65,6 +65,7 @@ void desktop_init(void) {
     desktop_settings_init();
     alttab_open = 0;
     help_open = 0;
+    notify_hist_open = 0;
     desktop_should_exit = 0;
     session_lock = 0;
     power_confirm = 0;
@@ -321,6 +322,11 @@ void desktop_run(void) {
             uint32_t ty = (uint32_t)fb->height - th;
 
             if (desktop_ctx_menu_click(m.x, m.y)) {
+                mouse_clear_clicks();
+                continue;
+            }
+
+            if (desktop_notify_hist_click_dismiss()) {
                 mouse_clear_clicks();
                 continue;
             }

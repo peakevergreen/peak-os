@@ -127,6 +127,21 @@ static void np_copy(void) {
     clipboard_set(np_buf + np_sel_a, (size_t)(np_sel_b - np_sel_a + 1));
     notify_push("Copied"); dirty_bits |= DIRTY_TOAST;
 }
+void desktop_notepad_paste_previous(void) {
+    char clip[CLIPBOARD_MAX];
+    size_t n = clipboard_get_previous(clip, sizeof(clip));
+    if (!n) {
+        notify_push("No previous clipboard");
+        dirty_bits |= DIRTY_TOAST;
+        return;
+    }
+    if (np_has_sel()) { np_delete_range(np_sel_a, np_sel_b + 1); np_caret = np_sel_a; np_clear_sel(); }
+    np_insert(clip, (int)n);
+    np_mark_dirty();
+    notify_push("Pasted previous clipboard");
+    dirty_bits |= DIRTY_TOAST;
+}
+
 static void np_paste(void) {
     char clip[CLIPBOARD_MAX]; size_t n = clipboard_get(clip, sizeof(clip));
     if (!n) return;
