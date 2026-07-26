@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 102 xargs find"
+grep -q 'xargs_tokenize' kernel/user/utils_text5.c
+grep -q 'FIND_EXEC_MAX' kernel/user/utils_sys.c
+grep -q 'print0' kernel/user/utils_sys.c
+grep -q '\`-print0\`' docs/CLI.md || grep -q '-print0' docs/CLI.md
+
 echo "==> Wave 5 Pass 101 grep flags"
 grep -q 'count_only' kernel/user/utils_text.c
 grep -q 'ctx_before' kernel/user/utils_text.c

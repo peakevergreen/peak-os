@@ -17,6 +17,7 @@
 #include "privacy.h"
 #include "peakdisk.h"
 #include "bootinfo.h"
+#include "ubin.h"
 
 int upwd_main(int argc, char **argv) {
     (void)argc;
@@ -85,7 +86,8 @@ int utree_main(int argc, char **argv) {
     return 0;
 }
 
-#define FIND_USAGE "<dir> [-name <name>] [-iname <pat>] [-type f|d] [-maxdepth N]"
+#define FIND_USAGE "<dir> [-name pat] [-iname pat] [-type f|d] [-maxdepth N] [-print0] [-exec cmd {} ;]"
+#define FIND_EXEC_MAX 8
 
 struct find_ctx {
     const char *name;
@@ -93,6 +95,10 @@ struct find_ctx {
     int has_type;
     enum vfs_type type_want;
     int maxdepth;
+    int print0;
+    char exec_tpl[128];
+    int exec_max;
+    int exec_count;
     int found;
 };
 
@@ -118,6 +124,50 @@ static int find_icase_eq(const char *a, const char *b) {
     return *a == 0 && *b == 0;
 }
 
+static int find_exec_run(struct find_ctx *ctx, const char *path) {
+    if (!ctx->exec_tpl[0] || ctx->exec_count >= ctx->exec_max)
+        return 0;
+    char tokbuf[8][64];
+    char *av[12];
+    int ac = 0;
+    const char *p = ctx->exec_tpl;
+    int ti = 0;
+    while (*p && ac < 11) {
+        while (*p == ' ')
+            p++;
+        if (!*p)
+            break;
+        if (*p == '{' && p[1] == '}') {
+            av[ac++] = (char *)path;
+            p += 2;
+            continue;
+        }
+        if (ti >= 8)
+            break;
+        size_t o = 0;
+        while (*p && *p != ' ' && o + 1 < sizeof(tokbuf[ti]))
+            tokbuf[ti][o++] = *p++;
+        tokbuf[ti][o] = '\0';
+        av[ac++] = tokbuf[ti++];
+    }
+    if (ac == 0)
+        return 0;
+    av[ac] = NULL;
+    char bpath[64];
+    size_t pi = 0;
+    bpath[pi++] = '/';
+    bpath[pi++] = 'b';
+    bpath[pi++] = 'i';
+    bpath[pi++] = 'n';
+    bpath[pi++] = '/';
+    for (const char *s = av[0]; *s && pi + 1 < sizeof(bpath); s++)
+        bpath[pi++] = *s;
+    bpath[pi] = '\0';
+    (void)ubin_run(bpath, ac, av);
+    ctx->exec_count++;
+    return 0;
+}
+
 static int find_matches(struct find_ctx *ctx, const char *path, struct vfs_node *node) {
     if (ctx->has_type && node->type != ctx->type_want)
         return 0;
@@ -129,15 +179,25 @@ static int find_matches(struct find_ctx *ctx, const char *path, struct vfs_node 
     return 1;
 }
 
+static void find_emit_match(struct find_ctx *ctx, const char *path) {
+    ctx->found++;
+    if (ctx->exec_tpl[0]) {
+        find_exec_run(ctx, path);
+        return;
+    }
+    console_write(path);
+    if (ctx->print0)
+        console_putc('\0');
+    else
+        console_write("\n");
+}
+
 static int find_walk_rec(struct vfs_node *n, char *path, size_t path_len, int depth,
                          struct find_ctx *ctx) {
     if (ctx->maxdepth >= 0 && depth > ctx->maxdepth)
         return 0;
-    if (find_matches(ctx, path, n)) {
-        console_write(path);
-        console_write("\n");
-        ctx->found++;
-    }
+    if (find_matches(ctx, path, n))
+        find_emit_match(ctx, path);
     if (n->type != VFS_DIR)
         return 0;
     if (ctx->maxdepth >= 0 && depth >= ctx->maxdepth)
@@ -186,7 +246,30 @@ int ufind_main(int argc, char **argv) {
     int has_type = 0;
     enum vfs_type type_want = 0;
     int maxdepth = -1;
+    int print0 = 0;
+    char exec_tpl[128];
+    exec_tpl[0] = '\0';
     for (int i = 2; i < argc; i++) {
+        if (!strcmp(argv[i], "-print0")) {
+            print0 = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "-exec")) {
+            size_t o = 0;
+            for (i++; i < argc && strcmp(argv[i], ";") != 0; i++) {
+                if (o && o + 1 < sizeof(exec_tpl))
+                    exec_tpl[o++] = ' ';
+                const char *a = argv[i];
+                for (; *a && o + 1 < sizeof(exec_tpl); a++)
+                    exec_tpl[o++] = *a;
+            }
+            exec_tpl[o] = '\0';
+            if (i >= argc || strcmp(argv[i], ";") != 0) {
+                peak_usage("find", FIND_USAGE);
+                return 1;
+            }
+            continue;
+        }
         if (!strcmp(argv[i], "-name")) {
             if (i + 1 >= argc) {
                 peak_usage("find", FIND_USAGE);
@@ -240,8 +323,17 @@ int ufind_main(int argc, char **argv) {
         .has_type = has_type,
         .type_want = type_want,
         .maxdepth = maxdepth,
+        .print0 = print0,
+        .exec_max = FIND_EXEC_MAX,
+        .exec_count = 0,
         .found = 0,
     };
+    if (exec_tpl[0]) {
+        size_t o = 0;
+        for (; exec_tpl[o] && o + 1 < sizeof(ctx.exec_tpl); o++)
+            ctx.exec_tpl[o] = exec_tpl[o];
+        ctx.exec_tpl[o] = '\0';
+    }
     if (find_walk(abs, &ctx) != 0)
         return 1;
     return 0;
