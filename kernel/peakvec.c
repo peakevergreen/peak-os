@@ -75,6 +75,20 @@ static uint8_t vec_bucket(const int16_t *v) {
     return (uint8_t)((unsigned)best % PEAKVEC_ANN_BUCKETS);
 }
 
+/* IVF-lite: probe query bucket and ±1 neighbors (wrap). */
+static int peakvec_bucket_in_probe(uint8_t b, uint8_t qb) {
+    if (b == qb)
+        return 1;
+    uint8_t prev = (uint8_t)((qb + PEAKVEC_ANN_BUCKETS - 1) % PEAKVEC_ANN_BUCKETS);
+    uint8_t next = (uint8_t)((qb + 1) % PEAKVEC_ANN_BUCKETS);
+    return b == prev || b == next;
+}
+
+static uint8_t peakvec_probe_bucket_count(uint8_t qb) {
+    (void)qb;
+    return 3; /* qb and ±1 neighbors */
+}
+
 static void embed_add(int32_t acc[PEAKVEC_DIM], uint32_t h, int weight) {
     uint32_t idx = h % PEAKVEC_DIM;
     acc[idx] += weight;
@@ -603,6 +617,7 @@ int peakvec_query_ex(const char *ns, const int16_t query[PEAKVEC_DIM],
     uint32_t bucket_probed = 0;
     uint32_t remainder = 0;
     int ann_shortcut = 0;
+    uint8_t probe_buckets = use_ann ? peakvec_probe_bucket_count(qb) : 0;
 
     for (int pass = 0; pass < (use_ann ? 2 : 1); pass++) {
         for (uint32_t i = 0; i < count; i++) {
@@ -610,9 +625,10 @@ int peakvec_query_ex(const char *ns, const int16_t query[PEAKVEC_DIM],
                 continue;
             if (use_ann) {
                 uint8_t b = entry_bucket[i];
-                if (pass == 0 && b != qb)
+                int in_probe = peakvec_bucket_in_probe(b, qb);
+                if (pass == 0 && !in_probe)
                     continue;
-                if (pass == 1 && b == qb)
+                if (pass == 1 && in_probe)
                     continue;
             }
             uint64_t vroot = entry_nroot ? entry_nroot[i] : 0;
@@ -660,6 +676,8 @@ int peakvec_query_ex(const char *ns, const int16_t query[PEAKVEC_DIM],
         explain->use_ann = (uint8_t)(use_ann ? 1 : 0);
         explain->query_bucket = qb;
         explain->ann_shortcut = (uint8_t)(ann_shortcut ? 1 : 0);
+        explain->multi_bucket_probe = (uint8_t)(use_ann ? 1 : 0);
+        explain->probe_buckets = probe_buckets;
         explain->ns_live = ns_live;
         explain->bucket_probed = bucket_probed;
         explain->remainder = remainder;

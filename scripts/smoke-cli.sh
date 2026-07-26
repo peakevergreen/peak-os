@@ -723,6 +723,12 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 146 PeakVec multi-bucket ANN"
+grep -q 'peakvec_bucket_in_probe' kernel/peakvec.c
+grep -q 'multi_bucket_probe' kernel/include/peakvec.h
+grep -q 'multi_bucket=' kernel/user/utils_agent.c
+grep -q 'multi-bucket' docs/peakvec.md || grep -q 'multi-bucket probe' docs/peakvec.md
+
 echo "==> Wave 7 Pass 145 PeakDisk autosave dirty"
 grep -q 'peakdisk_mark_dirty' kernel/peakdisk.c
 grep -q 'peakdisk_autosave_tick' kernel/peakdisk.c
