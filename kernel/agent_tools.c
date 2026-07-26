@@ -12,7 +12,8 @@
 
 static const char tools_catalog[] =
     "fs.read,fs.write,fs.list,fs.exec,fs.stat,fs.mkdir,fs.rm,fs.search,fs.grep,fs.diff,"
-    "sys.info,sys.ps,net.ping,net.fetch,mem.recall,audit.tail,console.print,fs.tree";
+    "sys.info,sys.ps,net.ping,net.fetch,mem.recall,mem.store,peakvec.query,audit.tail,"
+    "console.print,fs.tree";
 
 const char *agent_tools_catalog(void) {
     return tools_catalog;
@@ -110,6 +111,7 @@ static int exec_cmd_allowed(const char *cmd) {
     static const char *allow[] = {
         "ls", "cat", "wc", "stat", "du", "df", "which", "basename", "dirname",
         "realpath", "head", "tail", "grep", "sort", "uniq", "find", "sha256sum",
+        "diff", "patch", "join", "comm", "xargs", "pgrep", "dmesg", "ping",
         NULL
     };
     for (int i = 0; allow[i]; i++) {
@@ -764,6 +766,96 @@ int agent_tool_mem_recall(const char *goal, char *out, size_t out_len) {
     out[o] = '\0';
     agent_audit_event("mem.recall", goal ? goal : "-", o ? "ok" : "empty");
     return o ? 0 : -1;
+}
+
+int agent_tool_mem_store(const char *text) {
+    if (!agent_policy_tool_allowed("mem.store")) {
+        agent_audit_event("mem.store", "-", "deny-tool");
+        return -1;
+    }
+    if (!text || !text[0]) {
+        agent_audit_event("mem.store", "-", "empty");
+        return -1;
+    }
+    char existing[AGENT_MEMORY_TAIL_MAX];
+    size_t n = 0;
+    if (vfs_read_file(AGENT_MEM_PATH, existing, sizeof(existing) - 1, &n) != 0)
+        n = 0;
+    existing[n] = '\0';
+    size_t add = strlen(text);
+    if (n + add + 2 >= sizeof(existing)) {
+        size_t keep = sizeof(existing) / 2;
+        if (n > keep) {
+            memmove(existing, existing + (n - keep), keep);
+            n = keep;
+            existing[n] = '\0';
+        }
+    }
+    if (n + add + 2 < sizeof(existing)) {
+        if (n)
+            existing[n++] = '\n';
+        memcpy(existing + n, text, add);
+        n += add;
+        existing[n] = '\0';
+        if (vfs_write_file(AGENT_MEM_PATH, existing, n) != 0) {
+            agent_audit_event("mem.store", "-", "fail");
+            return -1;
+        }
+    }
+    int16_t q[PEAKVEC_DIM];
+    peakvec_embed_text(text, q);
+    (void)peakvec_upsert("agent", "session", q, text);
+    agent_audit_event("mem.store", "-", "ok");
+    return 0;
+}
+
+int agent_tool_peakvec_query(const char *ns, const char *query, char *out, size_t out_len) {
+    if (!agent_policy_tool_allowed("peakvec.query")) {
+        agent_audit_event("peakvec.query", query ? query : "-", "deny-tool");
+        return -1;
+    }
+    if (!out || out_len < 8)
+        return -1;
+    out[0] = '\0';
+    int16_t q[PEAKVEC_DIM];
+    peakvec_embed_text(query ? query : "", q);
+    struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
+    int n = peakvec_query(ns && ns[0] ? ns : "agent", q, 5, hits);
+    if (n <= 0) {
+        agent_audit_event("peakvec.query", query ? query : "-", "empty");
+        return -1;
+    }
+    size_t o = 0;
+    char hdr[48];
+    snprintf(hdr, sizeof(hdr), "[peakvec.query] %d hit%s\n", n, n == 1 ? "" : "s");
+    for (const char *p = hdr; *p && o + 1 < out_len; p++)
+        out[o++] = *p;
+    for (int i = 0; i < n; i++) {
+        if (!hits[i].key[0])
+            continue;
+        char line[160];
+        snprintf(line, sizeof(line), "  %d.%03d  %s: ",
+                 hits[i].score_milli / 1000, hits[i].score_milli % 1000, hits[i].key);
+        for (const char *p = line; *p && o + 1 < out_len; p++)
+            out[o++] = *p;
+        size_t shown = 0;
+        for (const char *p = hits[i].meta; *p && o + 1 < out_len; p++, shown++) {
+            if (shown >= 72) {
+                if (o + 4 < out_len) {
+                    out[o++] = '.';
+                    out[o++] = '.';
+                    out[o++] = '.';
+                }
+                break;
+            }
+            out[o++] = *p;
+        }
+        if (o + 1 < out_len)
+            out[o++] = '\n';
+    }
+    out[o] = '\0';
+    agent_audit_event("peakvec.query", query ? query : "-", "ok");
+    return 0;
 }
 
 
