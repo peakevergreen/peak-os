@@ -26,12 +26,14 @@ int main(void) {
     const char *cat = agent_tools_catalog();
     expect(cat != NULL, "catalog non-null");
     expect(agent_tools_catalog_len() == strlen(cat), "catalog len");
-    expect(count_csv_fields(cat) == 18, "eighteen agent tools");
+    expect(count_csv_fields(cat) == 20, "twenty agent tools");
     expect(strstr(cat, "fs.read") != NULL, "fs.read listed");
     expect(strstr(cat, "fs.grep") != NULL, "fs.grep listed");
     expect(strstr(cat, "fs.diff") != NULL, "fs.diff listed");
     expect(strstr(cat, "fs.tree") != NULL, "fs.tree listed");
     expect(strstr(cat, "sys.ps") != NULL, "sys.ps listed");
+    expect(strstr(cat, "mem.store") != NULL, "mem.store listed");
+    expect(strstr(cat, "peakvec.query") != NULL, "peakvec.query listed");
     expect(strstr(cat, "net.ping") != NULL, "net.ping listed");
     expect(strstr(cat, "net.fetch") != NULL, "net.fetch listed");
     expect(strstr(cat, "mem.recall") != NULL, "mem.recall listed");
