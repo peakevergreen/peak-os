@@ -121,7 +121,7 @@ grep -q 'hit_tab_close_x' kernel/gui/browser_draw.c
 grep -q 'CTX_ACT_BROWSER_RESTORE' kernel/gui/desktop_internal.h
 
 echo "==> Pass 31 settings/theme"
-grep -q 'settings_draw_scale_preview' kernel/gui/desktop_settings.c
+grep -q 'settings_scale_live_preview' kernel/gui/desktop_settings.c
 grep -q 'test_wallpaper_cache' Makefile
 
 echo "==> Pass 32 notify/clipboard"
@@ -517,6 +517,15 @@ echo "==> Wave 6 Pass 130 snap hud keyboard nudge"
 grep -q 'desktop_win_keyboard_nudge' kernel/gui/desktop_windows.c
 grep -q 'desktop_draw_snap_hud' kernel/gui/desktop_compose.c
 grep -q 'snap_hud_mode' kernel/gui/desktop.c
+
+echo "==> Wave 6 Pass 122 fmt column expand"
+grep -q 'UBIN_CMD("fmt"' kernel/user/ubin_cmds.def
+grep -q ufmt_main kernel/user/utils_text9.c
+grep -q ucolumn_main kernel/user/utils_text9.c
+grep -q uexpand_main kernel/user/utils_text9.c
+grep -q uunexpand_main kernel/user/utils_text9.c
+grep -q utils_text9 Makefile
+grep -q '`fmt`' docs/CLI.md || grep -q 'fmt' docs/CLI.md
 
 echo "==> Wave 6 Pass 129 start filter taskbar preview"
 grep -q 'desktop_draw_taskbar_preview' kernel/gui/desktop_menus.c

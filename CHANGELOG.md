@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 122:** `fmt`/`column`/`expand`/`unexpand` lite text layout tools
+
 - **Pass 137:** Privacy grant list UI with revoke-one; session clear; docs update
 
 - **Pass 136:** Idle lock minutes setting; honest "Enter unlocks (not a password)" copy

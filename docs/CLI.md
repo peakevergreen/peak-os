@@ -101,6 +101,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `sort` `uniq` `join` `comm` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok; `sort` `-r`/`-n`/`-u`, `uniq` `-c`; `join` `-1`/`-2`/`-t`; `comm` `-1`/`-2`/`-3` suppress) |
 | `sed` | sed-lite: `[N\|[N,M]] s/old/new/[g]`, `y/from/to/`, `d`, `p`, `q`, `=`, `-n` (32 KiB) |
 | `fold` `rev` `nl` `tac` | wrap lines (`-w`), reverse chars/lines, number lines |
+| `fmt` `column` `expand` `unexpand` | paragraph reflow (`fmt -w`); column align (`-t` tab input); tab↔space (`-t tabstop`, default 8) |
 | `od` `split` `paste` | byte dump (`-tx1`/`-to1`), split by bytes (`-b`), merge two files |
 | `xargs` | build `/bin` argv from stdin (`-0` null-delimited, `-n N` batch, `-I repl` replace; max 12 tokens) |
 | `awk` | awk-lite: `-F fs`, `$0`/`$n`, `NR`/`NF`, `BEGIN`/`END`, vars `a-z`, `/pat/ { print … }` (32 KiB) |
