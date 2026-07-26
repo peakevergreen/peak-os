@@ -129,6 +129,8 @@ enum agent_intent {
     INTENT_PING,
     INTENT_FETCH,
     INTENT_DIFF,
+    INTENT_TREE,
+    INTENT_PS,
     INTENT_HELP,
 };
 
@@ -146,6 +148,10 @@ static enum agent_intent classify_intent(const char *goal) {
     if (contains_ci(goal, "sysinfo") || contains_ci(goal, "system info") ||
         contains_ci(goal, "uptime"))
         return INTENT_SYSINFO;
+    if (contains_ci(goal, "tree ") || contains_ci(goal, "file tree"))
+        return INTENT_TREE;
+    if (contains_ci(goal, " ps") || (goal[0] == 'p' && goal[1] == 's' && (goal[2] == ' ' || goal[2] == '\0')))
+        return INTENT_PS;
     if (contains_ci(goal, "ping "))
         return INTENT_PING;
     if (contains_ci(goal, "search ") || contains_ci(goal, "find ") ||
@@ -206,10 +212,38 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         } \
     } while (0)
 
+    if (intent == INTENT_TREE) {
+        char buf[2048];
+        const char *root = "/home/dev/workspace";
+        if (agent_tool_fs_tree(root, buf, sizeof(buf)) == 0) {
+            agent_tool_console_print(buf);
+            TOOL_NOTE("fs.tree");
+            set_summary(summary, summary_cap, "workspace tree");
+        } else {
+            agent_tool_console_print("[agent] fs.tree failed");
+            set_summary(summary, summary_cap, "tree failed");
+        }
+        memory_append_turn(goal, tools_used, path_used[0] ? path_used : NULL);
+        return;
+    }
+    if (intent == INTENT_PS) {
+        char buf[1024];
+        if (agent_tool_sys_ps(buf, sizeof(buf)) == 0) {
+            agent_tool_console_print(buf);
+            TOOL_NOTE("sys.ps");
+            set_summary(summary, summary_cap, "process list");
+        } else {
+            agent_tool_console_print("[agent] sys.ps failed");
+            set_summary(summary, summary_cap, "ps failed");
+        }
+        memory_append_turn(goal, tools_used, NULL);
+        return;
+    }
+
     if (intent == INTENT_HELP) {
         agent_tool_console_print(
             "Peak Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm "
-            "fs.search fs.grep fs.diff sys.info net.ping net.fetch mem.recall audit.tail console.print");
+            "fs.search fs.grep fs.diff fs.tree sys.info sys.ps net.ping net.fetch mem.recall audit.tail console.print");
         agent_tool_console_print(
             "Try: ask \"summarize workspace\" | \"grep needle\" | \"diff a b\" | "
             "\"fetch http://example.com\" | \"ping example.com\" | audit | memory");

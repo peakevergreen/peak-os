@@ -8,10 +8,11 @@
 #include "privacy.h"
 #include "net.h"
 #include "timer.h"
+#include "sched.h"
 
 static const char tools_catalog[] =
     "fs.read,fs.write,fs.list,fs.exec,fs.stat,fs.mkdir,fs.rm,fs.search,fs.grep,fs.diff,"
-    "sys.info,net.ping,net.fetch,mem.recall,audit.tail,console.print";
+    "sys.info,sys.ps,net.ping,net.fetch,mem.recall,audit.tail,console.print,fs.tree";
 
 const char *agent_tools_catalog(void) {
     return tools_catalog;
@@ -764,6 +765,114 @@ int agent_tool_mem_recall(const char *goal, char *out, size_t out_len) {
     agent_audit_event("mem.recall", goal ? goal : "-", o ? "ok" : "empty");
     return o ? 0 : -1;
 }
+
+
+static int tree_depth(const char *root, const char *path) {
+    size_t rl = strlen(root);
+    if (strncmp(path, root, rl) != 0)
+        return 99;
+    const char *p = path + rl;
+    if (*p == '/')
+        p++;
+    int d = 0;
+    for (; *p; p++)
+        if (*p == '/')
+            d++;
+    return d;
+}
+
+struct tree_ctx {
+    char *out;
+    size_t cap;
+    size_t o;
+    char root[VFS_PATH_MAX];
+    int maxdepth;
+    int err;
+};
+
+static int tree_walk_cb(const char *path, struct vfs_node *node, void *v) {
+    struct tree_ctx *c = v;
+    if (!path || !node || c->err)
+        return 0;
+    int d = tree_depth(c->root, path);
+    if (d > c->maxdepth)
+        return 0;
+    size_t indent = (size_t)d * 2;
+    size_t plen = strlen(path);
+    if (c->o + indent + plen + 4 >= c->cap) {
+        c->err = 1;
+        return 1;
+    }
+    for (size_t i = 0; i < indent; i++)
+        c->out[c->o++] = ' ';
+    memcpy(c->out + c->o, path, plen);
+    c->o += plen;
+    if (node->type == VFS_DIR)
+        c->out[c->o++] = '/';
+    c->out[c->o++] = '\n';
+    return 0;
+}
+
+int agent_tool_fs_tree(const char *path, char *out, size_t out_len) {
+    if (!agent_policy_tool_allowed("fs.tree")) {
+        agent_audit_event("fs.tree", path ? path : "-", "deny-tool");
+        return -1;
+    }
+    if (!out || out_len < 16)
+        return -1;
+    char norm[VFS_PATH_MAX];
+    if (!path || !path[0])
+        path = "/home/dev/workspace";
+    if (vfs_normalize(path, norm, sizeof(norm)) != 0 ||
+        !agent_policy_path_allowed(norm)) {
+        agent_audit_event("fs.tree", path, "deny-path");
+        return -1;
+    }
+    struct tree_ctx c;
+    memset(&c, 0, sizeof(c));
+    c.out = out;
+    c.cap = out_len;
+    snprintf(c.root, sizeof(c.root), "%s", norm);
+    c.maxdepth = 4;
+    out[0] = '\0';
+    vfs_walk(norm, tree_walk_cb, &c);
+    if (c.o < out_len)
+        out[c.o] = '\0';
+    else
+        out[out_len - 1] = '\0';
+    agent_audit_event("fs.tree", norm, c.err ? "truncated" : "ok");
+    return 0;
+}
+
+int agent_tool_sys_ps(char *out, size_t out_len) {
+    if (!agent_policy_tool_allowed("sys.ps")) {
+        agent_audit_event("sys.ps", "-", "deny-tool");
+        return -1;
+    }
+    if (!out || out_len < 32)
+        return -1;
+    struct task list[MAX_TASKS];
+    int n = sched_list_tasks(list, MAX_TASKS);
+    sched_sort_tasks(list, n);
+    size_t o = 0;
+    const char *hdr = "PID STATE TICKS NAME\n";
+    for (const char *p = hdr; *p && o + 1 < out_len; p++)
+        out[o++] = *p;
+    for (int i = 0; i < n && o + 40 < out_len; i++) {
+        const char *st = list[i].state == TASK_RUNNING ? "run" :
+                         list[i].state == TASK_READY ? "ready" :
+                         list[i].state == TASK_BLOCKED ? "block" : "zombie";
+        char line[96];
+        snprintf(line, sizeof(line), "%d %s %lu %s\n", list[i].pid, st,
+                 (unsigned long)list[i].cpu_ticks, list[i].name);
+        for (const char *p = line; *p && o + 1 < out_len; p++)
+            out[o++] = *p;
+    }
+    out[o] = '\0';
+    agent_audit_event("sys.ps", "-", "ok");
+    return 0;
+}
+
 
 int agent_tool_audit_tail(char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("audit.tail")) {
