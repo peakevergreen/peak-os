@@ -32,6 +32,30 @@ void browser_js_invalidate_handles(struct browser_js_host *h) {
     memset(h->listeners, 0, sizeof(h->listeners));
 }
 
+void browser_console_clear(struct browser_js_host *h) {
+    if (!h)
+        return;
+    h->console_n = 0;
+    for (int i = 0; i < 8; i++)
+        h->console_log[i][0] = '\0';
+}
+
+void browser_console_set_filter(struct browser_js_host *h, const char *substr) {
+    if (!h)
+        return;
+    if (!substr)
+        substr = "";
+    snprintf(h->console_filter, sizeof(h->console_filter), "%s", substr);
+}
+
+int browser_console_line_visible(const struct browser_js_host *h, const char *line) {
+    if (!h || !h->console_filter[0])
+        return 1;
+    if (!line)
+        return 0;
+    return strstr(line, h->console_filter) != NULL;
+}
+
 static void mark_dirty(struct browser_js_host *h) {
     if (h && h->dirty)
         *h->dirty = 1;
@@ -248,6 +272,14 @@ static int nat_add_event_listener(struct js_runtime *rt, int argc, void *argv, v
     return 0;
 }
 
+static int nat_console_clear(struct js_runtime *rt, int argc, void *argv, void *ret,
+                             void *ud) {
+    (void)rt; (void)argc; (void)argv;
+    browser_console_clear(ud);
+    js_val_set_undefined(ret);
+    return 0;
+}
+
 static int nat_console_log(struct js_runtime *rt, int argc, void *argv, void *ret,
                            void *ud) {
     struct browser_js_host *h = ud;
@@ -299,6 +331,7 @@ int browser_js_install_dom(struct browser_js_host *h) {
     struct js_value console;
     js_val_new_object(rt, &console);
     install_fn(rt, &console, "log", nat_console_log, h);
+    install_fn(rt, &console, "clear", nat_console_clear, h);
     js_obj_set(rt, rt->global, "console", console);
 
     struct js_value document;

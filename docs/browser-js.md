@@ -18,7 +18,7 @@ Per-tab budgets: instruction count, object heap, timers. Scripts never run from 
 
 ## Local demo
 
-Open Browser → `peak://demo` (seeded on reset). Click **Count** to exercise DOM mutation, click listeners, and `setTimeout`. The **Console** panel at the bottom shows `console.log` output; press **c** to toggle it.
+Open Browser → `peak://demo` (seeded on reset). Click **Count** to exercise DOM mutation, click listeners, and `setTimeout`. The **Console** panel at the bottom shows `console.log` output; press **c** to toggle it. `console.clear()` clears captured lines; optional substring filter via `browser_console_set_filter` (GUI applies when set).
 
 ## Navigation chrome
 
