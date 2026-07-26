@@ -387,7 +387,6 @@ static void term_find_update_meta(struct term_state *t) {
     t->find_match_idx = 0;
     if (t->find_len <= 0)
         return;
-    int seen = 0;
     for (int row = 0; row < (int)TERM_ROWS; row++) {
         const char *line = t->lines[row];
         for (int col = 0; col < TERM_COLS; col++) {
