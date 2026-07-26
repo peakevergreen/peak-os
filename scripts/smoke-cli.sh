@@ -481,6 +481,14 @@ grep -q 'basenc' docs/CLI.md
 grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
+
+echo "==> Wave 5 Pass 100 shell scripting"
+grep -q uexpr_main kernel/user/utils_text4.c
+grep -q 'UBIN_CMD("expr"' kernel/user/ubin_cmds.def
+grep -q SHELL_REDIR_ERR kernel/include/shell_split.h
+grep -q '&&' docs/CLI.md
+grep -q '2>' docs/CLI.md
+
 echo "==> Wave 4 Pass 98 lock-in"
 grep -q 'Wave 4 Pass 79' scripts/smoke-cli.sh
 grep -q 'Wave 4 Pass 89' scripts/smoke-cli.sh
