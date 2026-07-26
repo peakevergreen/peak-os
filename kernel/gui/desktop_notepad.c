@@ -98,6 +98,26 @@ static int np_find_next(int from) {
     for (int i = 0; i + np_find_qlen <= np_len && i < from; i++) if (np_match_at(i, np_find_q, np_find_qlen)) return i;
     return -1;
 }
+static int np_find_count(void) {
+    if (np_find_qlen <= 0) return 0;
+    int n = 0;
+    for (int i = 0; i + np_find_qlen <= np_len; i++)
+        if (np_match_at(i, np_find_q, np_find_qlen))
+            n++;
+    return n;
+}
+static int np_find_match_no(void) {
+    if (np_find_pos < 0 || np_find_qlen <= 0) return 0;
+    int n = 0;
+    for (int i = 0; i + np_find_qlen <= np_len; i++) {
+        if (np_match_at(i, np_find_q, np_find_qlen)) {
+            n++;
+            if (i == np_find_pos)
+                return n;
+        }
+    }
+    return 0;
+}
 static void np_find_do(void) {
     int hit = np_find_next(np_find_pos < 0 ? np_caret : np_find_pos + 1);
     if (hit < 0) { notify_push("Not found"); dirty_bits |= DIRTY_TOAST; return; }
@@ -108,6 +128,30 @@ static void np_replace_one(void) {
     np_delete_range(np_sel_a, np_sel_b + 1); np_caret = np_sel_a; np_clear_sel();
     if (np_find_rlen > 0) np_insert(np_find_r, np_find_rlen);
     np_find_pos = np_caret - 1; np_dirty = 1; np_find_do();
+}
+static void np_replace_all(void) {
+    if (np_find_qlen <= 0) return;
+    int n = 0;
+    for (int i = 0; i + np_find_qlen <= np_len; ) {
+        if (np_match_at(i, np_find_q, np_find_qlen)) {
+            np_delete_range(i, i + np_find_qlen);
+            if (np_find_rlen > 0)
+                np_insert(np_find_r, np_find_rlen);
+            n++;
+            if (np_find_rlen > 0)
+                i += np_find_rlen;
+        } else {
+            i++;
+        }
+    }
+    np_find_pos = -1;
+    np_clear_sel();
+    np_dirty = 1;
+    char msg[48];
+    snprintf(msg, sizeof(msg), "Replaced %d", n);
+    notify_push(msg);
+    dirty_bits |= DIRTY_TOAST;
+    np_mark_dirty();
 }
 static void np_save_as(const char *path) {
     if (!path || !path[0]) return;
@@ -164,6 +208,7 @@ static void np_paste(void) {
 static int np_find_key(int key) {
     if (key == 27) { np_find_open = np_find_repl = 0; np_mark_dirty(); return 1; }
     if (key == '\n') { if (np_find_repl) np_replace_one(); else np_find_do(); return 1; }
+    if ((key == 'a' || key == 'A') && np_find_repl) { np_replace_all(); return 1; }
     if (key == '\b') {
         if (np_find_repl && np_find_rlen > 0) np_find_r[--np_find_rlen] = '\0';
         else if (np_find_qlen > 0) { np_find_q[--np_find_qlen] = '\0'; np_find_pos = -1; }
@@ -241,8 +286,16 @@ void desktop_notepad_draw(struct win *w) {
         uint32_t fy = ty + (uint32_t)vis * ch + desktop_u(4);
         fb_fill_rect(tx, fy, inner, ch + desktop_u(4), desktop_color_surface());
         char fbar[128];
-        if (np_find_repl) snprintf(fbar, sizeof(fbar), "Find: %s  Replace: %s  Enter=replace+next Tab=find Esc", np_find_q, np_find_r);
-        else snprintf(fbar, sizeof(fbar), "Find: %s  Enter=next  Tab=replace  Esc=close", np_find_q);
+        int ftotal = np_find_count();
+        int fcur = np_find_match_no();
+        if (np_find_repl)
+            snprintf(fbar, sizeof(fbar),
+                     "Find: %s  Replace: %s  %d/%d  Enter=one A=all Esc",
+                     np_find_q, np_find_r, fcur, ftotal);
+        else
+            snprintf(fbar, sizeof(fbar),
+                     "Find: %s  %d/%d  Enter=next  Tab=replace  Esc=close",
+                     np_find_q, fcur, ftotal);
         fb_draw_string_fit(tx + desktop_u(4), fy + desktop_u(2), inner - desktop_u(8), fbar, desktop_color_fg(), desktop_color_surface());
     }
 }

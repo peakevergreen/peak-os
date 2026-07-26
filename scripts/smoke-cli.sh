@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 115 notepad monitor"
+grep -q np_find_count kernel/gui/desktop_notepad.c
+grep -q np_replace_all kernel/gui/desktop_notepad.c
+grep -q monitor_build_export_path kernel/gui/monitor.c
+grep -q mon_last_export kernel/gui/monitor.c
+
 echo "==> Wave 5 Pass 114 browser polish"
 grep -q browser_isolation_status_line kernel/gui/browser_isolation.c
 grep -q 'Isolation: enforce' kernel/gui/browser_isolation.c

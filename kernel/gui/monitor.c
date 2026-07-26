@@ -9,6 +9,8 @@
 #include "theme.h"
 #include "notify.h"
 #include "util.h"
+#include "rtc.h"
+#include "vfs.h"
 
 /*
  * System Monitor desktop pane — overview, task list, and network tabs.
@@ -26,6 +28,26 @@ static int needs_redraw = 1;
 static int page; /* MON_PAGE_* */
 static int paused;
 static uint32_t mon_export_x, mon_export_y, mon_export_w, mon_export_h;
+static char mon_last_export[VFS_PATH_MAX];
+
+static void monitor_build_export_path(char *path, size_t cap) {
+    struct rtc_time rt;
+    if (rtc_read(&rt) == 0)
+        snprintf(path, cap, "/tmp/sysmon-%04u%02u%02u-%02u%02u%02u.txt",
+                 (unsigned)rt.year, (unsigned)rt.month, (unsigned)rt.day,
+                 (unsigned)rt.hour, (unsigned)rt.min, (unsigned)rt.sec);
+    else
+        snprintf(path, cap, "/tmp/sysmon-%lu.txt", (unsigned long)timer_uptime_secs());
+}
+
+static int monitor_do_export(void) {
+    char path[VFS_PATH_MAX];
+    monitor_build_export_path(path, sizeof(path));
+    if (sysmon_export(path) != 0)
+        return -1;
+    snprintf(mon_last_export, sizeof(mon_last_export), "%s", path);
+    return 0;
+}
 
 /* History / task scratch — keep off the 8KB kernel stack. */
 static struct sysmon_sample g_hist[SYSMON_HISTORY];
@@ -82,9 +104,11 @@ void monitor_input(char c) {
             page++;
         needs_redraw = 1;
     } else if (c == 'e' || c == 'E') {
-        if (sysmon_export(SYSMON_EXPORT_PATH) == 0)
-            notify_push("Saved /tmp/sysmon.txt");
-        else
+        if (monitor_do_export() == 0) {
+            char msg[96];
+            snprintf(msg, sizeof(msg), "Saved %s", mon_last_export);
+            notify_push(msg);
+        } else
             notify_push("Export failed");
         needs_redraw = 1;
     }
@@ -426,6 +450,8 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
                        paused ? "PAUSED  P resume  1/2/3  R reset  E export"
                               : "1/2/3  P pause  R reset  E export  [/]",
                        dim, bg);
+    if (mon_last_export[0])
+        fb_draw_string_fit(text_x, foot + ch + U(2), inner_w, mon_last_export, dim, bg);
     needs_redraw = 0;
 }
 
@@ -433,6 +459,11 @@ int monitor_export_click_at(int32_t mx, int32_t my) {
     if (!mon_export_w) return 0;
     if ((uint32_t)mx < mon_export_x || (uint32_t)my < mon_export_y) return 0;
     if ((uint32_t)mx >= mon_export_x + mon_export_w || (uint32_t)my >= mon_export_y + mon_export_h) return 0;
-    if (sysmon_export(SYSMON_EXPORT_PATH) == 0) { notify_push("Saved /tmp/sysmon.txt"); return 1; }
+    if (monitor_do_export() == 0) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "Saved %s", mon_last_export);
+        notify_push(msg);
+        return 1;
+    }
     notify_push("Export failed"); return 1;
 }
