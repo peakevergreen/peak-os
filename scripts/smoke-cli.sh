@@ -398,6 +398,10 @@ echo "==> Wave 4 Pass 92 netexp netctl depth"
 grep -q netexp_draw_conn_table kernel/gui/desktop_netexp.c
 grep -q tls_session_used_count kernel/gui/desktop_netctl.c
 
+echo "==> Wave 4 Pass 93 disks peakdisk ux"
+grep -q peakdisk_save_progress_pct kernel/peakdisk.c
+grep -q disks_format_capacity_line kernel/gui/desktop_disks.c
+
 echo "==> Wave 4 Pass 89 theme preview"
 grep -q settings_draw_theme_chrome_preview kernel/gui/desktop_settings.c
 grep -q settings_theme_preview kernel/gui/desktop_settings.c
