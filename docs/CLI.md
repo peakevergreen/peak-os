@@ -141,7 +141,7 @@ CLI scrollback search: **Ctrl+F**, type a needle, **Enter** for next match (128 
 ## Network / containers
 | Command | Notes |
 |---------|-------|
-| `ifconfig` `ping` `wget` `curl` | IPv4 + HTTP (`wget`/`curl` `-X` `-d` for POST body) — [network.md](network.md) |
+| `ifconfig` `ping [-c N]` `wget` `curl` | IPv4 + HTTP (`wget`/`curl` `-H` header, `-I` HEAD-only; `-X`/`-d` POST; `ping -c` max 10) — [network.md](network.md) |
 | `tlsinfo` | TLS trust summary, session cache, `-s` cache list, `-r` root digests, `-m` hostname test |
 | `nslookup` `host` | DNS A (`-6` AAAA diagnostic, `-x` PTR reverse); IPv4 routing only |
 | `traceroute` | Staged reachability: local → gateway → DNS → dest (TCP :80) |

@@ -482,6 +482,11 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 107 curl ping"
+grep -q head_only kernel/user/utils_net.c
+grep -q 'strcmp(method, "HEAD")' kernel/net/http.c
+grep -q '\`-c N\`' docs/CLI.md || grep -q '-c N' docs/CLI.md
+
 echo "==> Wave 5 Pass 106 tar dd gzip"
 grep -q 'mode = 3' kernel/user/utils_tar.c
 grep -q 'DD_IO_MAX   (32 \* 1024)' kernel/user/utils_file.c
