@@ -75,6 +75,8 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `du [-h] [path]` | tree byte size (`-h` KiB/MiB) |
 | `df [-h]` | VFS inodes, RAM, PeakDisk/Blobstore status (`-h` KiB/MiB) |
 | `truncate <path> <n>` | resize (max 4096) |
+| `mktemp [TEMPLATE]` | create unique temp path under `/tmp` (lite) |
+| `install [-D] [-m mode] <src> <dst>` | copy with optional parent create (`-D`) and mode |
 | `dd if=<in> of=<out> [bs=N] [count=N]` | lite block copy (default bs=512; 8 KiB total cap) |
 | `sync` | flush block device when ATA/SD present |
 | `file <path>…` | magic sniff (ELF, PPM P6, BMP, PEAKZIP1, PEAKGZ1, text vs data) |
@@ -93,7 +95,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `jq` | jq-lite: `.key`, `.[]`, `keys`, `length`, compact print (32 KiB) |
 | `basename` `dirname` `realpath` | path helpers |
 | `hexdump` `strings` | binary helpers |
-| `sha256sum` `md5sum` `base64` | digests and base64 encode/decode (`-d`; 64 KiB cap) |
+| `sha256sum` `md5sum` `sha1sum` `base64` `basenc` | digests and base64/base32 encode/decode (`basenc --base32`; `-d`; 64 KiB cap) |
 | `less` | pager with page-up (`b`), go top/bottom (`g`/`G`), forward search (`/pat`) |
 | `more` | simple pager (space next page, q quit) |
 | `echo` `printf` `tee` `yes` `clear` `edit` | misc (`printf` `%s %d %u %x` + `\\n` `\\t` `\\\\`; `tee` stdin→stdout+files `-a`; `test`/`[` predicates; `yes` bounded) |
@@ -119,6 +121,8 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `help` `man <cmd>` | categorized help (`-h` / `--help` on most utils) |
 | `ask` `audit` `memory` `peakvec` `policy` `peak` `gui` | agent + desktop (`peakvec query …` for top-k search) |
 | `privacy` | `persist` / `net-allow` / `kill-switch on --confirm` — [privacy.md](privacy.md) |
+| `reboot` | request platform reboot (QEMU/ACPI path when available) |
+| `disksave` | PeakDisk save/export helper (VFS → PeakDisk image) |
 
 `gui` enters the desktop; press **Ctrl+Alt+Esc** anytime to return to CLI.
 

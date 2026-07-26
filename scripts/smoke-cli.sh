@@ -473,6 +473,14 @@ grep -q 'UBIN_CMD("join"' kernel/user/ubin_cmds.def
 grep -q 'join' docs/CLI.md
 
 
+
+echo "==> Wave 5 Pass 99 cli docs sync"
+grep -q 'mktemp' docs/CLI.md
+grep -q 'sha1sum' docs/CLI.md
+grep -q 'basenc' docs/CLI.md
+grep -q 'disksave' docs/CLI.md
+grep -q 'reboot' docs/CLI.md
+
 echo "==> Wave 4 Pass 98 lock-in"
 grep -q 'Wave 4 Pass 79' scripts/smoke-cli.sh
 grep -q 'Wave 4 Pass 89' scripts/smoke-cli.sh
