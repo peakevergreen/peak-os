@@ -12,6 +12,7 @@
 #include "privacy.h"
 #include "net.h"
 #include "timer.h"
+#include "sched.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -432,4 +433,16 @@ int ubin_run(const char *path, int argc, char **argv) {
     (void)argc;
     (void)argv;
     return 0;
+}
+
+/* Pass 76 sys.ps — empty task table is enough for host policy/tool tests. */
+int sched_list_tasks(struct task *out, int max) {
+    (void)out;
+    (void)max;
+    return 0;
+}
+
+void sched_sort_tasks(struct task *list, int n) {
+    (void)list;
+    (void)n;
 }
