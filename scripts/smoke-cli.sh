@@ -474,6 +474,12 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 129 start filter taskbar preview"
+grep -q 'desktop_draw_taskbar_preview' kernel/gui/desktop_menus.c
+grep -q 'desktop_taskbar_preview_update' kernel/gui/desktop_menus.c
+grep -q 'start_visible_rows' kernel/gui/desktop_menus.c
+grep -q 'Type to search apps' kernel/gui/desktop_menus.c
+
 echo "==> Wave 6 Pass 121 shell read/unset"
 grep -q 'shell_env_unset' kernel/shell_builtins.c
 grep -q 'unset NAME' kernel/shell_dispatch.c

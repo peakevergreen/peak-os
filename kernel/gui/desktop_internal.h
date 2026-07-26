@@ -230,6 +230,8 @@ void desktop_clock_rect(uint32_t *x, uint32_t *y, uint32_t *w, uint32_t *h);
 void desktop_draw_clock_area(void);
 
 uint32_t desktop_taskbar_btn_w(void);
+void desktop_taskbar_preview_update(int32_t mx, int32_t my);
+void desktop_draw_taskbar_preview(void);
 void desktop_login(void);
 void desktop_menu_click(int32_t mx, int32_t my);
 int desktop_ctx_menu_click(int32_t mx, int32_t my);
