@@ -20,3 +20,5 @@ ITERS="${PEAK_FUZZ_ITERS:-200}"
 echo "ok: fuzz-elf-smoke ($ITERS mutations)"
 chmod +x scripts/fuzz-tls-smoke.sh
 ./scripts/fuzz-tls-smoke.sh
+chmod +x scripts/fuzz-parser-smoke.sh
+./scripts/fuzz-parser-smoke.sh
