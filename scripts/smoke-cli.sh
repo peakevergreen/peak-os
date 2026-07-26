@@ -723,6 +723,14 @@ grep -q 'Wave 5 / Pass 118' scripts/security-checklist.md
 
 grep -q 'Wave 4 Pass 98 lock-in' scripts/smoke-cli.sh
 
+echo "==> Wave 7 Pass 158 lock-in"
+grep -q 'Wave 7 Pass 139' scripts/smoke-cli.sh
+grep -q 'Wave 7 Pass 145' scripts/smoke-cli.sh
+grep -q 'Wave 7 Pass 152' scripts/smoke-cli.sh
+grep -q 'Wave 7 Pass 157' scripts/smoke-cli.sh
+grep -q 'Enhancement wave 7' docs/ROADMAP.md
+grep -q 'Wave 7 / Pass 158' scripts/security-checklist.md
+
 echo "==> Wave 7 Pass 157 fuzz parser corpus"
 grep -q 'parser_corpus' Makefile
 test -f tests/fuzz/corpus/dns-hosts.txt
