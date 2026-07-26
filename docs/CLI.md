@@ -101,7 +101,8 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `awk` | awk-lite: `-F fs`, `$0`/`$n`, `NR`/`NF`, `/pat/ { print … }` (32 KiB) |
 | `jq` | jq-lite: `.key`, `.[]`, `keys`, `length`, compact print (32 KiB) |
 | `basename` `dirname` `realpath` | path helpers |
-| `hexdump` `strings` | binary helpers |
+| `hexdump` `strings` `xxd` | binary helpers (`xxd` 8 KiB cap) |
+| `shuf` `cksum` | shuffle lines (8 KiB); CRC32 + byte count |
 | `sha256sum` `md5sum` `sha1sum` `base64` `basenc` | digests and base64/base32 encode/decode (`basenc --base32`; `-d`; 64 KiB cap) |
 | `less` | pager with page-up (`b`), go top/bottom (`g`/`G`), forward search (`/pat`) |
 | `more` | simple pager (space next page, q quit) |
