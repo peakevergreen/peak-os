@@ -58,7 +58,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `cd [path]` | change directory (default workspace) |
 | `ls [-l] [-h] [path]` | list directory (`-lh` human KiB/MiB; symlinks: l / @; `-l` shows `-> target`) |
 | `tree [path]` | directory tree |
-| `find <dir> -name <name>` | basename search |
+| `find <dir> [-name <name>] [-iname <pat>] [-type f|d] [-maxdepth N]` | basename / icase / type / depth |
 
 ## Files
 | Command | Notes |
