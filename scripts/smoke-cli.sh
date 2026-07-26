@@ -130,6 +130,11 @@ echo "==> Pass 37 input/console"
 grep -q 'keyboard_set_repeat' kernel/keyboard.c
 grep -q 'console_scroll_find_next' kernel/console_scroll.c
 
+echo "==> Pass 40 sed depth"
+grep -q 'parse_addr' kernel/user/utils_text3.c
+grep -q 'subst_global' kernel/user/utils_text3.c
+grep -q 'translit_line' kernel/user/utils_text3.c
+
 echo "==> Pass 45 pager depth"
 grep -q 'pager_find_next' kernel/user/utils_pager.c
 grep -q 'less_main' kernel/user/utils_pager.c

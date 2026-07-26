@@ -80,6 +80,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N`) |
 | `grep <pat> <file>` | substring match |
 | `diff` `sort` `uniq` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok) |
+| `sed` | sed-lite: `[N\|[N,M]] s/old/new/[g]`, `y/from/to/`, `d`, `p`, `-n` (8 KiB) |
 | `fold` `rev` `nl` `tac` | wrap lines (`-w`), reverse chars/lines, number lines |
 | `od` `split` `paste` | byte dump (`-tx1`/`-to1`), split by bytes (`-b`), merge two files |
 | `xargs` | build `/bin` argv from stdin tokens (pipe/`<`; max 12 tokens) |
