@@ -482,6 +482,13 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 103 shuf cksum xxd"
+grep -q 'UBIN_CMD("shuf"' kernel/user/ubin_cmds.def
+grep -q ushuf_main kernel/user/utils_text8.c
+grep -q crc32_update kernel/user/utils_text8.c
+grep -q uxxd_main kernel/user/utils_text8.c
+grep -q utils_text8 Makefile
+
 echo "==> Wave 5 Pass 102 xargs find"
 grep -q 'xargs_tokenize' kernel/user/utils_text5.c
 grep -q 'FIND_EXEC_MAX' kernel/user/utils_sys.c
