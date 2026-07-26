@@ -325,6 +325,10 @@ grep -q 'post_body' kernel/user/utils_net.c
 grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
+echo "==> Wave 3 Pass 71 terminal tabs"
+grep -q TERM_MAX_TABS kernel/gui/desktop_terminal.c
+grep -q term_draw_tab_strip kernel/gui/desktop_terminal.c
+
 echo "==> Wave 3 Pass 70 keyboard snap"
 grep -q 'desktop_snap_apply(focus, 1)' kernel/gui/desktop.c
 grep -q 'KEY_LEFT' kernel/gui/desktop.c

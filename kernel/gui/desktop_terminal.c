@@ -27,11 +27,136 @@ struct term_state {
     uint32_t prev_caret_col;
 };
 
-static struct term_state terms[MAX_WINS];
+
+#define TERM_MAX_TABS 4
+
+struct term_win_tabs {
+    struct term_state tabs[TERM_MAX_TABS];
+    char labels[TERM_MAX_TABS][10];
+    int ntabs;
+    int cur;
+};
+
+static struct term_win_tabs term_wins[MAX_WINS];
+
+static uint32_t term_tab_bar_h(void) {
+    return fb_cell_h() + desktop_u(6);
+}
+
+static struct term_state *term_slot(int slot) {
+    if (slot < 0 || slot >= MAX_WINS)
+        slot = 0;
+    struct term_win_tabs *tw = &term_wins[slot];
+    if (tw->ntabs < 1) {
+        tw->ntabs = 1;
+        tw->cur = 0;
+        tw->labels[0][0] = '1';
+        tw->labels[0][1] = '\0';
+    }
+    if (tw->cur < 0 || tw->cur >= tw->ntabs)
+        tw->cur = 0;
+    return &tw->tabs[tw->cur];
+}
+
+static void term_reset_state(struct term_state *t) {
+    memset(t, 0, sizeof(*t));
+    t->sel_row = t->sel_a = t->sel_b = -1;
+    t->find_hit_row = t->find_hit_col = -1;
+    t->inited = 1;
+    t->full_redraw = 1;
+}
+
+static void term_mark_surf_dirty(int slot, struct term_state *t);
+static void term_draw_tab_strip(struct win *w, int slot);
+static void term_new_tab(int slot);
+static int term_tab_click(struct win *w, int slot, int32_t mx, int32_t my);
+static void term_switch_tab(int slot, int idx);
+
+static void term_switch_tab(int slot, int idx) {
+    struct term_win_tabs *tw = &term_wins[slot];
+    if (idx < 0 || idx >= tw->ntabs || idx == tw->cur)
+        return;
+    tw->cur = idx;
+    tw->tabs[tw->cur].full_redraw = 1;
+    dirty_bits |= DIRTY_TERM;
+    term_mark_surf_dirty(slot, term_slot(slot));
+}
+
+static void term_new_tab(int slot) {
+    struct term_win_tabs *tw = &term_wins[slot];
+    if (tw->ntabs >= TERM_MAX_TABS) {
+        notify_push("Max terminal tabs");
+        dirty_bits |= DIRTY_TOAST;
+        return;
+    }
+    tw->ntabs++;
+    tw->cur = tw->ntabs - 1;
+    term_reset_state(&tw->tabs[tw->cur]);
+    snprintf(tw->labels[tw->cur], sizeof(tw->labels[0]), "%d", tw->ntabs);
+    dirty_bits |= DIRTY_TERM;
+    term_mark_surf_dirty(slot, term_slot(slot));
+}
+
+static void term_draw_tab_strip(struct win *w, int slot) {
+    struct term_win_tabs *tw = &term_wins[slot];
+    uint32_t th = desktop_title_h();
+    uint32_t y = w->y + th;
+    uint32_t x = w->x + desktop_u(8);
+    uint32_t inner = w->w > desktop_u(16) ? w->w - desktop_u(16) : w->w;
+    uint32_t tab_w = inner / TERM_MAX_TABS;
+    if (tab_w < desktop_u(36))
+        tab_w = desktop_u(36);
+    uint32_t bar_h = term_tab_bar_h();
+    fb_fill_rect(x, y, inner, bar_h, desktop_color_surface());
+    for (int i = 0; i < tw->ntabs; i++) {
+        uint32_t tx = x + (uint32_t)i * tab_w;
+        uint32_t bg = (i == tw->cur) ? desktop_color_bg() : desktop_color_surface();
+        fb_fill_rect(tx + 1, y + 1, tab_w - 2, bar_h - 2, bg);
+        if (i == tw->cur)
+            fb_fill_rect(tx + 1, y + bar_h - 3, tab_w - 2, 2, desktop_color_accent());
+        fb_draw_string_fit(tx + desktop_u(4), y + desktop_u(3), tab_w - desktop_u(8), tw->labels[i],
+                           desktop_color_fg(), bg);
+    }
+    if (tw->ntabs < TERM_MAX_TABS) {
+        uint32_t px = x + (uint32_t)tw->ntabs * tab_w + desktop_u(4);
+        fb_draw_string(px, y + desktop_u(3), "+", desktop_color_accent(), desktop_color_surface());
+    }
+}
+
+static int term_tab_click(struct win *w, int slot, int32_t mx, int32_t my) {
+    struct term_win_tabs *tw = &term_wins[slot];
+    uint32_t th = desktop_title_h();
+    uint32_t y = w->y + th;
+    uint32_t bar_h = term_tab_bar_h();
+    uint32_t x = w->x + desktop_u(8);
+    uint32_t inner = w->w > desktop_u(16) ? w->w - desktop_u(16) : w->w;
+    uint32_t tab_w = inner / TERM_MAX_TABS;
+    if (tab_w < desktop_u(36))
+        tab_w = desktop_u(36);
+    if ((uint32_t)my < y || (uint32_t)my >= y + bar_h)
+        return 0;
+    if ((uint32_t)mx < x || (uint32_t)mx >= x + inner)
+        return 0;
+    int idx = (int)(((uint32_t)mx - x) / tab_w);
+    if (idx >= 0 && idx < tw->ntabs) {
+        term_switch_tab(slot, idx);
+        return 1;
+    }
+    if (tw->ntabs < TERM_MAX_TABS) {
+        uint32_t px = x + (uint32_t)tw->ntabs * tab_w;
+        if ((uint32_t)mx >= px && (uint32_t)mx < px + tab_w) {
+            term_new_tab(slot);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int active_term;
 static int term_copy_on_select;
 
 static void term_clamp_scroll(struct term_state *t, uint32_t vis);
+static void term_mark_surf_dirty(int slot, struct term_state *t);
 static void term_paste_buf(const char *buf, size_t n);
 
 static void term_sync_ui_scale(void) {
@@ -47,8 +172,9 @@ static void term_mark_cell_surf_dirty(int slot, struct term_state *t) {
     uint32_t ch = fb_cell_h();
     uint32_t th = desktop_title_h();
     uint32_t tx = desktop_u(12);
-    uint32_t ty = th + desktop_u(8);
-    uint32_t area_h = w->h > th + desktop_u(16) ? w->h - th - desktop_u(16) : ch;
+    uint32_t ty = th + term_tab_bar_h() + desktop_u(8);
+    uint32_t tab_h = term_tab_bar_h();
+    uint32_t area_h = w->h > th + tab_h + desktop_u(16) ? w->h - th - tab_h - desktop_u(16) : ch;
     uint32_t vis = area_h / ch;
     if (vis > TERM_VIEW)
         vis = TERM_VIEW;
@@ -102,7 +228,7 @@ static void term_mark_active_surf_dirty(void) {
         }
     }
     if (slot >= 0 && slot < MAX_WINS)
-        term_mark_surf_dirty(slot, &terms[slot]);
+        term_mark_surf_dirty(slot, term_slot(slot));
     else
         desktop_mark_focus_surf_dirty();
 }
@@ -110,25 +236,28 @@ static void term_mark_active_surf_dirty(void) {
 static struct term_state *term_active(void) {
     if (active_term >= 0 && active_term < MAX_WINS &&
         wins[active_term].open && wins[active_term].kind == APP_TERM)
-        return &terms[active_term];
+        return term_slot(active_term);
     for (int i = 0; i < MAX_WINS; i++) {
         if (wins[i].open && wins[i].kind == APP_TERM) {
             active_term = i;
-            return &terms[i];
+            return term_slot(i);
         }
     }
     active_term = 0;
-    return &terms[0];
+    return term_slot(0);
 }
 
 void desktop_term_reset_slot(int slot) {
     if (slot < 0 || slot >= MAX_WINS)
         return;
-    memset(&terms[slot], 0, sizeof(terms[slot]));
-    terms[slot].sel_row = terms[slot].sel_a = terms[slot].sel_b = -1;
-    terms[slot].find_hit_row = terms[slot].find_hit_col = -1;
-    terms[slot].inited = 1;
-    terms[slot].full_redraw = 1;
+    struct term_win_tabs *tw = &term_wins[slot];
+    if (tw->ntabs < 1) {
+        tw->ntabs = 1;
+        tw->cur = 0;
+        tw->labels[0][0] = '1';
+        tw->labels[0][1] = '\0';
+    }
+    term_reset_state(&tw->tabs[tw->cur]);
 }
 
 void desktop_term_activate(int slot) {
@@ -137,7 +266,7 @@ void desktop_term_activate(int slot) {
     if (!wins[slot].open || wins[slot].kind != APP_TERM)
         return;
     active_term = slot;
-    if (!terms[slot].inited)
+    if (!term_slot(slot)->inited)
         desktop_term_reset_slot(slot);
 }
 
@@ -295,7 +424,8 @@ static void term_find_next(struct term_state *t) {
 static void term_visible_rows(struct win *w, uint32_t *vis_out) {
     uint32_t ch = fb_cell_h();
     uint32_t th = desktop_title_h();
-    uint32_t area_h = w->h > th + desktop_u(16) ? w->h - th - desktop_u(16) : ch;
+    uint32_t tab_h = term_tab_bar_h();
+    uint32_t area_h = w->h > th + tab_h + desktop_u(16) ? w->h - th - tab_h - desktop_u(16) : ch;
     uint32_t vis = area_h / ch;
     if (vis > TERM_VIEW)
         vis = TERM_VIEW;
@@ -336,7 +466,7 @@ static int term_mouse_cell(struct win *w, struct term_state *t, int32_t mx, int3
     uint32_t ch = fb_cell_h();
     uint32_t th = desktop_title_h();
     uint32_t tx = w->x + desktop_u(12);
-    uint32_t ty = w->y + th + desktop_u(8);
+    uint32_t ty = w->y + th + term_tab_bar_h() + desktop_u(8);
     uint32_t vis = 0;
     term_visible_rows(w, &vis);
     term_clamp_scroll(t, vis);
@@ -579,7 +709,7 @@ void gui_term_putc(char c) {
 
 void desktop_terminal_init(void) {
     active_term = -1;
-    memset(terms, 0, sizeof(terms));
+    memset(term_wins, 0, sizeof(term_wins));
 }
 
 void desktop_terminal_draw(struct win *w) {
@@ -587,16 +717,18 @@ void desktop_terminal_draw(struct win *w) {
     int slot = (int)(w - wins);
     if (slot < 0 || slot >= MAX_WINS)
         return;
-    struct term_state *t = &terms[slot];
+    struct term_state *t = term_slot(slot);
     if (!t->inited)
         desktop_term_reset_slot(slot);
     uint32_t cw = fb_cell_w();
     uint32_t ch = fb_cell_h();
     uint32_t th = desktop_title_h();
+    term_draw_tab_strip(w, slot);
     uint32_t tx = w->x + desktop_u(12);
-    uint32_t ty = w->y + th + desktop_u(8);
+    uint32_t ty = w->y + th + term_tab_bar_h() + desktop_u(8);
     uint32_t bg = desktop_color_bg();
-    uint32_t area_h = w->h > th + desktop_u(16) ? w->h - th - desktop_u(16) : ch;
+    uint32_t tab_h = term_tab_bar_h();
+    uint32_t area_h = w->h > th + tab_h + desktop_u(16) ? w->h - th - tab_h - desktop_u(16) : ch;
     uint32_t vis = area_h / ch;
     if (vis > TERM_VIEW)
         vis = TERM_VIEW;
@@ -687,6 +819,11 @@ void desktop_terminal_draw(struct win *w) {
 }
 
 int desktop_terminal_key(int key) {
+    if (keyboard_ctrl_down() && keyboard_shift_down() && (key == 't' || key == 'T')) {
+        if (active_term >= 0)
+            term_new_tab(active_term);
+        return 1;
+    }
     struct term_state *tt = term_active();
     uint32_t vis = 0;
     if (active_term >= 0 && active_term < MAX_WINS && wins[active_term].open)
@@ -787,7 +924,9 @@ int desktop_terminal_click(struct win *w, int32_t mx, int32_t my, int drag) {
     int slot = (int)(w - wins);
     if (slot < 0 || slot >= MAX_WINS)
         return 0;
-    struct term_state *t = &terms[slot];
+    if (term_tab_click(w, slot, mx, my))
+        return 1;
+    struct term_state *t = term_slot(slot);
     if (!t->inited)
         desktop_term_reset_slot(slot);
     desktop_term_activate(slot);

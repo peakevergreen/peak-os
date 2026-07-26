@@ -22,6 +22,7 @@ Baseline comparison: git tag `v0.1.0-mvp`.
 - **Pass 63:** `file` command — magic sniff for ELF/PPM/BMP/PEAKZIP1/PEAKGZ1/text vs binary
 - **Pass 64:** `date +%s` / `+%Y-%m-%d` (RTC); `printf` documents `\n` `\t` `\\` escapes
 - **Pass 65:** Shell pipe/redirect capture raised to 32 KiB; truncation warning on pipe overflow
+- **Pass 71:** Terminal in-window tab strip (up to 4 tabs); click/+ or Ctrl+Shift+T
 - **Pass 70:** Ctrl+Alt+arrow keyboard window snap (left/right/maximize)
 - **Pass 69:** Notification history panel (Ctrl+Shift+H, Start → Alerts); Ctrl+Shift+V pastes previous clipboard in Terminal/Notepad
 - **Pass 68:** Files breadcrumb segments clickable to change directory
