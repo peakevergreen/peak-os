@@ -25,6 +25,7 @@ enum monitor_page {
 static int needs_redraw = 1;
 static int page; /* MON_PAGE_* */
 static int paused;
+static uint32_t mon_export_x, mon_export_y, mon_export_w, mon_export_h;
 
 /* History / task scratch — keep off the 8KB kernel stack. */
 static struct sysmon_sample g_hist[SYSMON_HISTORY];
@@ -110,9 +111,18 @@ static void draw_bar(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
         fb_fill_rect(x, y, fw, h, fill);
 }
 
+
+static void monitor_export_btn(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t fg, uint32_t bg, uint32_t acc) {
+    mon_export_x = x; mon_export_y = y; mon_export_w = w; mon_export_h = h;
+    fb_fill_rect(x, y, w, h, bg);
+    fb_fill_rect(x, y, w, desktop_u(2), acc);
+    fb_draw_string_fit(x + desktop_u(4), y + desktop_u(2), w - desktop_u(8), "Export snapshot", fg, bg);
+}
 static void draw_spark(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                        const uint32_t *vals, int n, uint32_t color, uint32_t bg) {
     fb_fill_rect(x, y, w, h, bg);
+    for (uint32_t gy = y + h / 4; gy < y + h; gy += h / 4)
+        fb_fill_rect(x, gy, w, desktop_u(1), color);
     if (!vals || n <= 0 || w < 2 || h < 4)
         return;
     uint32_t mx = 1;
@@ -408,9 +418,21 @@ void monitor_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     }
 
     uint32_t foot = y + h - ch - pad;
-    fb_draw_string_fit(text_x, foot, inner_w,
+    uint32_t bw = desktop_u(118), bh = ch + desktop_u(4);
+    uint32_t bx = text_x + (inner_w > bw ? inner_w - bw : 0);
+    uint32_t by = foot > bh + desktop_u(6) ? foot - bh - desktop_u(6) : foot;
+    monitor_export_btn(bx, by, bw, bh, fg, surface, accent);
+    fb_draw_string_fit(text_x, foot, inner_w > bw ? inner_w - bw - desktop_u(4) : inner_w,
                        paused ? "PAUSED  P resume  1/2/3  R reset  E export"
                               : "1/2/3  P pause  R reset  E export  [/]",
                        dim, bg);
     needs_redraw = 0;
+}
+
+int monitor_export_click_at(int32_t mx, int32_t my) {
+    if (!mon_export_w) return 0;
+    if ((uint32_t)mx < mon_export_x || (uint32_t)my < mon_export_y) return 0;
+    if ((uint32_t)mx >= mon_export_x + mon_export_w || (uint32_t)my >= mon_export_y + mon_export_h) return 0;
+    if (sysmon_export(SYSMON_EXPORT_PATH) == 0) { notify_push("Saved /tmp/sysmon.txt"); return 1; }
+    notify_push("Export failed"); return 1;
 }
