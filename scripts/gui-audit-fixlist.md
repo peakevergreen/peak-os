@@ -1,25 +1,48 @@
-# GUI audit fix list (QEMU visual)
+# GUI audit fix list (deep harvest v2)
 
 **Date:** 2026-07-26  
-**Profile:** BIOS, user-net, 1920×1080 @ UI scale 3, `-display none` + monitor `screendump` / `sendkey`  
-**Harness:** [`scripts/peak-qemu-audit-run.py`](peak-qemu-audit-run.py) (+ [`peak-qemu-audit-drive.py`](peak-qemu-audit-drive.py))  
-**Note:** Wait for full `peak:/home/dev/workspace>` before typing; `peak:/` alone matches too early. QEMU `screendump` writes PPM even with a `.png` name — convert before inspecting.
+**Profile:** BIOS, user-net, `-machine pc`, 1920×1080, UI scale 3  
+**Harness:** [`scripts/peak_qemu_audit_lib.py`](peak_qemu_audit_lib.py), [`scripts/peak-qemu-audit-run.py`](peak-qemu-audit-run.py)  
+**Dumps:** `/tmp/peak-audit-v2/` (60 PNG steps)  
+**Gate:** ≥20 Open proven defects before fix PRs — **25 Open** below.
 
-| ID | Severity | Area | Repro | Expected | Actual | Dump | Status |
-|----|----------|------|-------|----------|--------|------|--------|
-| GA-001 | P1 | Desktop hotkeys | Enter `gui`, dismiss login, press `1` then `2` | `1`–`7` always launch apps (Help overlay) | Digits typed into focused Terminal | `/tmp/peak-audit3/app-files.png` (typed `2`) | **Fixed** (#288) |
-| GA-002 | P1 | PeakDisk / ATA | Boot with PeakDisk on `q35` + `if=ide` | `Disk (empty)` or restore | Serial: `Disk (none)` | serial banner | **Fixed** (#289) — `run-qemu.sh` / smoke use `-machine pc` |
-| GA-003 | P2 | Terminal chrome | Open Terminal at scale 3 | Title has padding inside border | Focus ring overpainted title glyphs | `/tmp/peak-audit-ga003/term-title.png` | **Fixed** (#290) |
-| GA-004 | P2 | Audit harness | Send `gui` after seeing `peak:/` | Shell accepts `gui` | Prompt matched mid-banner; `gui` ignored until sendkey | early `/tmp/peak-audit/` | **Fixed** (this PR) |
+Historical (prior campaign): GA-001…004 Fixed (#288–#291).
 
-## Deferred / not bugs
+| ID | Sev | Area | Repro | Expected | Actual | Dump | Status |
+|----|-----|------|-------|----------|--------|------|--------|
+| GA-101 | P1 | snprintf / Disks | Open Disks | Capacity/tree/RAM as numbers | Literal `%llu` in UI | `059-b-app-net-control.png` (Disks foreground) | **Fixed** |
+| GA-102 | P1 | snprintf / Notepad | Open Notepad | Line numbers in gutter | Literal `%*d` / garbage | `007-a-start-launch-notepad.png`, `037-b-notepad.png` | **Fixed** |
+| GA-103 | P1 | snprintf / agent | `agent` tools status strings | Numeric ctx/irq counters | `%llu` unsupported (same snprintf) | code+Disks proof | **Fixed** |
+| GA-104 | P2 | Files toolbar | Open Files @ scale 3 | Full `Shift+range` hint | Clipped to `Shift+ra` | `016-a-files-open.png` | Open |
+| GA-105 | P2 | Settings copy | Settings → Display | Full “live preview (click chip to apply)” | Leading clip `ick chip…` | `047-b-settings.png` | Open |
+| GA-106 | P2 | Monitor export | Open Monitor | “Export snapshot” fully visible | Clipped `Export snapsh` | `050-b-monitor.png` | Open |
+| GA-107 | P2 | Monitor footer | Open Monitor | Clear page/legend hints | Garbled `ï/2/3`, `R^reset^` | `050-b-monitor.png` | Open |
+| GA-108 | P2 | Brand chip | Empty desktop | “PeakOS” fully inside scrim | Ascenders clipped at scrim top | `003-02-desktop-empty.png` | Open |
+| GA-109 | P2 | Toast vs chrome | Launch app (toast) | Toast distinct from window chrome | Toast reads as second title+`x` | `007`, `016`, `041`, `044`, `050`, `055` | Open |
+| GA-110 | P2 | Snap compose | Terminal → Ctrl+Alt+Left | Single clean snapped frame | Dual Terminal chrome / two chrome button sets | `012-a-term-snap-left.png` | Open |
+| GA-111 | P2 | Files border | Open Files | Clean corner join | Stray/double border bottom-right | `016-a-files-open.png` | Open |
+| GA-112 | P2 | Browser tabs | Open Browser | Tab label clear of close | `Peak Evergreenx` runs into close | `044-b-browser-demo.png` | Open |
+| GA-113 | P2 | Settings chip | Settings Display | Clean scale chips | Stray `,` before highlighted `3x` | `047-b-settings.png` | Open |
+| GA-114 | P2 | Toast stack | Open 4 apps quickly | Stacked toasts + clean desktop | Detached Settings/Agent chrome + vertical border ghosts | `025-a-toast-stack.png` | Open |
+| GA-115 | P2 | Export path toast | Monitor export / sysmon | Toast above taskbar, readable | Path bleeds over taskbar | `053-b-agent.png`, `055-b-game.png` | Open |
+| GA-116 | P2 | Browser demo | peak://demo Count | Clear button + working click | Gap/missing button chrome; count stayed 0 after click | `044`, `045-b-browser-count-click.png` | Open |
+| GA-117 | P2 | Images chrome | Open Images | Single title bar | Ghost Images+`x` in body | `041-b-images.png` | Open |
+| GA-118 | P2 | Notepad chrome | Open Notepad | Single title bar | Ghost Notepad+`x` top-right | `007-a-start-launch-notepad.png` | Open |
+| GA-119 | P2 | Files chrome | Open Files | Single title bar | Ghost Files+`x` top-right | `016-a-files-open.png` | Open |
+| GA-120 | P2 | Browser chrome | Open Browser | Single title bar | Ghost Browser title fragment | `044-b-browser-demo.png` | Open |
+| GA-121 | P2 | Monitor chrome | Open Monitor | Single title bar | Ghost Monitor chrome on right | `050-b-monitor.png` | Open |
+| GA-122 | P2 | Game chrome | Open Peak Runner | Single title bar | Detached Peak Runner title top-right | `055-b-game.png` | Open |
+| GA-123 | P2 | Window nudge | Maximized Terminal + Ctrl+Alt+Shift+Left | Visible nudge or no-op honesty | Bit-identical dumps (no feedback) | `014`==`015` | Open |
+| GA-124 | P2 | Images nav | Images `f`/`n` | Visible fit/next change | Bit-identical `042`==`043` | `042-b-images-fit.png` | Open |
+| GA-125 | P2 | Compose ghosts | Multi-window + toasts | Damage clears old chrome | Stray vertical green border strips | `025-a-toast-stack.png` | Open |
 
-- Brand `"Pe"` under windows: PeakOS corner label occluded by large windows — expected stacking.
-- Opaque-drag / cursor-trail stress: needs live cocoa mouse — deferred.
-- Bridged LAN / Pi HID: out of scope this pass.
+## Deferred / needs-human
 
-## Close-out
+- Opaque drag swim/cursor trails: mouse crawl unreliable under `-display none` (accel); needs cocoa or absolute tablet driver.
+- Start-menu launch of Disks/Net sometimes landed on wrong app in first pass — mouse estimate drift; retest after GA-101.
+- Brand `"Pe"` under maximized windows: expected occlusion (not a bug).
 
-- [x] GA-001 / GA-002 / GA-003 retested with screendumps or serial after merge
-- [x] Harness waits for `workspace>` and uses `-machine pc`
-- [x] Fixlist rows Fixed or Deferred
+## Close-out checklist
+
+- [ ] All Open → Fixed or Deferred after per-ID PRs
+- [ ] Retest dumps for P1s GA-101/102
