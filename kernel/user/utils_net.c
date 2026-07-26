@@ -9,6 +9,7 @@
 #include "tls.h"
 #include "tls_util.h"
 #include "tls_session.h"
+#include "tls_hsts.h"
 #include "webpki.h"
 #include "settings.h"
 #include "random.h"
@@ -798,8 +799,11 @@ int utlsinfo_main(int argc, char **argv) {
     console_printf("trust: webpki_roots=%d pins=%d tofu=%s\n",
                    webpki_root_count, tls_trust_pin_count(),
                    settings_tls_tofu() ? "on" : "off");
+    console_printf("hsts: hosts=%d store=%s\n", hsts_host_count(), HSTS_PATH);
     console_printf("session: connected=%d cert_verified=%d hostname_matched=%d\n",
                    tls_ready(), tls_cert_verified(), tls_hostname_matched());
+    console_printf("resume: last_handshake=%s depth=ticket+psk-lite\n",
+                   tls_last_handshake_resumed() ? "yes" : "no");
     console_printf("session_cache: used=%d/%d\n",
                    tls_session_used_count(), tls_session_max_slots());
     if (show_sessions) {
@@ -810,10 +814,13 @@ int utlsinfo_main(int argc, char **argv) {
             size_t tlen = 0;
             if (tls_session_entry_info(i, sni, sizeof(sni), &meta, &tlen) != 0)
                 continue;
-            console_printf("  [%d] sni=%s tls=%s cipher=0x%04x ticket_len=%u res_master=%s binder=hkdf\n",
+            const char *psk = meta.res_master_len ? "available" : "unavailable (ticket-only)";
+            console_printf("  [%d] sni=%s tls=%s cipher=0x%04x ticket_len=%u res_master=%s psk=%s binder=hkdf\n",
                            i, sni, meta.tls13 ? "1.3" : "1.2", meta.cipher,
-                           (unsigned)tlen, meta.res_master_len ? "yes" : "no");
+                           (unsigned)tlen, meta.res_master_len ? "yes" : "no", psk);
         }
+    } else if (tls_session_used_count() > 0) {
+        console_write("hint: tlsinfo -s lists session tickets (PSK unavailable when res_master absent)\n");
     }
     {
         const char *fail = tls_cert_fail_reason();

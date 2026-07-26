@@ -518,6 +518,13 @@ grep -q 'desktop_win_keyboard_nudge' kernel/gui/desktop_windows.c
 grep -q 'desktop_draw_snap_hud' kernel/gui/desktop_compose.c
 grep -q 'snap_hud_mode' kernel/gui/desktop.c
 
+echo "==> Wave 6 Pass 126 tlsinfo depth"
+grep -q hsts_host_count kernel/net/tls_hsts.c
+grep -q 'hsts: hosts=' kernel/user/utils_net.c
+grep -q 'resume: last_handshake=' kernel/user/utils_net.c
+grep -q 'psk=unavailable' kernel/user/utils_net.c || grep -q 'ticket-only' kernel/user/utils_net.c
+grep -q HSTS docs/CLI.md
+
 echo "==> Wave 6 Pass 125 ss netstat"
 grep -q 'UBIN_CMD("ss"' kernel/user/ubin_cmds.def
 grep -q uss_main kernel/user/utils_net.c
