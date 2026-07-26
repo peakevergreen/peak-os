@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **GA-004:** GUI audit harness waits for full shell prompt + `-machine pc`; fixlist in `scripts/gui-audit-fixlist.md`
+
 - **GA-003:** Window title padding + redraw after focus ring so titles are not clipped under the accent inset
 
 - **GA-002:** QEMU `run-qemu.sh` / smoke use `-machine pc` so legacy ATA PeakDisk is visible (q35 left IDE empty)
