@@ -256,6 +256,7 @@ int desktop_open_app(enum app_kind k) {
         wins[slot].w = desktop_u(480);
         wins[slot].h = desktop_title_h() + desktop_u(380);
         settings_page = 0;
+        desktop_settings_init();
     }
     if (k == APP_AGENT) {
         wins[slot].w = desktop_u(420);

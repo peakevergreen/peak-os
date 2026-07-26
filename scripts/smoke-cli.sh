@@ -162,6 +162,15 @@ grep -q 'vfs_resolve' kernel/vfs.c
 grep -q 'readlink' kernel/user/ubin_cmds.def
 grep -q 'PEAK_ELOOP' kernel/include/peak_errno.h
 
+echo "==> Pass 53 HTTP/2 client depth"
+grep -q 'HTTP2_BODY_MAX' kernel/include/http2.h
+grep -q 'hpack_decode_block' kernel/net/http2.c
+grep -q 'http2_last_meta' kernel/net/http2.c
+grep -q 'net_http_last_h2' kernel/include/net.h
+grep -q 'net_http_last_body_truncated' kernel/net/http.c
+grep -q 'show_headers' kernel/user/utils_net.c
+grep -q 'HTTP/2' docs/network.md
+
 echo "==> Pass 45 pager depth"
 grep -q 'pager_find_next' kernel/user/utils_pager.c
 grep -q 'less_main' kernel/user/utils_pager.c
@@ -171,6 +180,11 @@ grep -q 'AGENT_INPUT_MAX 256' kernel/gui/desktop_agent.c
 grep -q 'agent_transcript_note_audit' kernel/agent.c
 grep -q 'AGENT_TLINES 48' kernel/agent.c
 grep -q 'agent_approval_draw' kernel/gui/desktop_agent.c
+
+echo "==> Pass 52 settings keyboard a11y"
+grep -q 'desktop_settings_key' kernel/gui/desktop_settings.c
+grep -q 'settings_draw_focus_ring' kernel/gui/desktop_settings.c
+grep -q 'settings_kfocus' kernel/gui/desktop_settings.c
 
 echo "==> Pass 44 uname flags"
 grep -q 'bootinfo_init' kernel/boot.c

@@ -309,8 +309,10 @@ void desktop_netctl_ctx_prepare(struct win *w, int32_t mx, int32_t my);
 int desktop_netctl_ctx_menu(struct ctx_menu_item *items, int max_items);
 int desktop_netctl_ctx_action(int action_id);
 
+void desktop_settings_init(void);
 void desktop_settings_draw(struct win *w);
 int desktop_settings_click(struct win *w, int32_t mx, int32_t my);
+int desktop_settings_key(int key);
 
 void desktop_agent_init(void);
 void desktop_app_opened(enum app_kind k);

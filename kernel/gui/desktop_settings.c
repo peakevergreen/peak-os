@@ -1,5 +1,6 @@
 #include "desktop_internal.h"
 #include "fb.h"
+#include "keyboard.h"
 #include "settings.h"
 #include "theme.h"
 #include "wallpaper.h"
@@ -37,6 +38,189 @@ struct settings_hit {
 #define SETTINGS_HIT_MAX 40
 static struct settings_hit settings_hits[SETTINGS_HIT_MAX];
 static int settings_hit_n;
+static int settings_kfocus;
+
+void desktop_settings_init(void) {
+    settings_kfocus = settings_page;
+}
+
+static void settings_kf_dirty(void) {
+    dirty_bits |= DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
+}
+
+static int settings_hit_is_tab(int i) {
+    return i >= 0 && i < settings_hit_n && settings_hits[i].act == SHIT_TAB;
+}
+
+static int settings_tab_hit(int tab) {
+    for (int i = 0; i < settings_hit_n; i++) {
+        if (settings_hits[i].act == SHIT_TAB && settings_hits[i].param == tab)
+            return i;
+    }
+    return tab >= 0 && tab < SETTINGS_PAGES ? tab : 0;
+}
+
+static int settings_first_content(void) {
+    for (int i = 0; i < settings_hit_n; i++) {
+        if (settings_hits[i].act != SHIT_TAB)
+            return i;
+    }
+    return -1;
+}
+
+static int settings_last_content(void) {
+    for (int i = settings_hit_n - 1; i >= 0; i--) {
+        if (settings_hits[i].act != SHIT_TAB)
+            return i;
+    }
+    return -1;
+}
+
+static int settings_content_at(int n) {
+    int c = -1;
+    for (int i = 0; i < settings_hit_n; i++) {
+        if (settings_hits[i].act == SHIT_TAB)
+            continue;
+        c++;
+        if (c == n)
+            return i;
+    }
+    return -1;
+}
+
+static int settings_content_index(int idx) {
+    if (idx < 0 || settings_hit_is_tab(idx))
+        return -1;
+    int n = 0;
+    for (int i = 0; i < idx; i++) {
+        if (settings_hits[i].act != SHIT_TAB)
+            n++;
+    }
+    return n;
+}
+
+static void settings_kf_clamp(void) {
+    if (settings_hit_n <= 0) {
+        settings_kfocus = 0;
+        return;
+    }
+    if (settings_kfocus < 0)
+        settings_kfocus = settings_tab_hit(settings_page);
+    if (settings_kfocus >= settings_hit_n)
+        settings_kfocus = settings_hit_n - 1;
+    if (settings_hit_is_tab(settings_kfocus) &&
+        settings_hits[settings_kfocus].param != settings_page)
+        settings_kfocus = settings_tab_hit(settings_page);
+}
+
+static void settings_kf_goto_tab(int tab) {
+    if (tab < 0)
+        tab = 0;
+    if (tab >= SETTINGS_PAGES)
+        tab = SETTINGS_PAGES - 1;
+    settings_page = tab;
+    settings_kfocus = settings_tab_hit(tab);
+}
+
+static int settings_kf_hmove(int dir) {
+    if (settings_kfocus < 0 || settings_kfocus >= settings_hit_n)
+        return 0;
+    struct settings_hit *h = &settings_hits[settings_kfocus];
+    if (h->act == SHIT_TAB) {
+        settings_kf_goto_tab(settings_page + dir);
+        return 1;
+    }
+    if (h->act != SHIT_SCALE && h->act != SHIT_THEME && h->act != SHIT_WALLPAPER)
+        return 0;
+    int best = -1;
+    int best_d = 0x7fffffff;
+    for (int i = 0; i < settings_hit_n; i++) {
+        if (settings_hits[i].act != h->act)
+            continue;
+        int d = settings_hits[i].param - h->param;
+        if (dir < 0 && d >= 0)
+            continue;
+        if (dir > 0 && d <= 0)
+            continue;
+        if (dir < 0)
+            d = -d;
+        if (d < best_d) {
+            best_d = d;
+            best = i;
+        }
+    }
+    if (best >= 0) {
+        settings_kfocus = best;
+        return 1;
+    }
+    return 0;
+}
+
+static int settings_kf_vmove(int dir) {
+    if (settings_hit_is_tab(settings_kfocus)) {
+        if (dir > 0) {
+            int c = settings_first_content();
+            if (c >= 0) {
+                settings_kfocus = c;
+                return 1;
+            }
+        }
+        return 0;
+    }
+    int ci = settings_content_index(settings_kfocus);
+    if (ci < 0)
+        return 0;
+    if (dir < 0 && ci == 0) {
+        settings_kfocus = settings_tab_hit(settings_page);
+        return 1;
+    }
+    int next = settings_content_at(ci + dir);
+    if (next >= 0) {
+        settings_kfocus = next;
+        return 1;
+    }
+    return 0;
+}
+
+static void settings_kf_cycle(int dir) {
+    int order[SETTINGS_HIT_MAX];
+    int n = 0;
+    for (int t = 0; t < SETTINGS_PAGES && n < SETTINGS_HIT_MAX; t++)
+        order[n++] = settings_tab_hit(t);
+    for (int i = 0; i < settings_hit_n && n < SETTINGS_HIT_MAX; i++) {
+        if (settings_hits[i].act != SHIT_TAB)
+            order[n++] = i;
+    }
+    if (n <= 0)
+        return;
+    int pos = 0;
+    for (int i = 0; i < n; i++) {
+        if (order[i] == settings_kfocus) {
+            pos = i;
+            break;
+        }
+    }
+    pos += dir;
+    while (pos < 0)
+        pos += n;
+    while (pos >= n)
+        pos -= n;
+    settings_kfocus = order[pos];
+    if (settings_hit_is_tab(settings_kfocus))
+        settings_page = settings_hits[settings_kfocus].param;
+}
+
+static void settings_draw_focus_ring(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    uint32_t c = desktop_color_accent();
+    uint32_t t = desktop_u(2);
+    if (t < 2)
+        t = 2;
+    fb_fill_rect(x, y, w, t, c);
+    fb_fill_rect(x, y + h - t, w, t, c);
+    fb_fill_rect(x, y, t, h, c);
+    fb_fill_rect(x + w - t, y, t, h, c);
+}
 
 static void settings_hits_reset(void) {
     settings_hit_n = 0;
@@ -338,6 +522,12 @@ void desktop_settings_draw(struct win *w) {
         fb_draw_string(tx, cy, "Privacy, kill switch, DHCP renew, RNG status.", desktop_color_dim(),
                        desktop_color_bg());
     }
+
+    settings_kf_clamp();
+    if (settings_kfocus >= 0 && settings_kfocus < settings_hit_n) {
+        struct settings_hit *fh = &settings_hits[settings_kfocus];
+        settings_draw_focus_ring(fh->x, fh->y, fh->w, fh->h);
+    }
 }
 
 static void settings_hit_dispatch(enum settings_hit_act act, int param) {
@@ -424,6 +614,7 @@ int desktop_settings_click(struct win *w, int32_t mx, int32_t my) {
         struct settings_hit *h = &settings_hits[i];
         if (!desktop_point_in(mx, my, h->x, h->y, h->w, h->h))
             continue;
+        settings_kfocus = i;
         if (h->act == SHIT_TAB) {
             if (h->param >= 0 && h->param < SETTINGS_PAGES)
                 settings_page = h->param;
@@ -435,4 +626,46 @@ int desktop_settings_click(struct win *w, int32_t mx, int32_t my) {
     }
     (void)w;
     return 0;
+}
+
+int desktop_settings_key(int key) {
+    if (settings_hit_n <= 0)
+        return 0;
+    settings_kf_clamp();
+    int handled = 0;
+    if (key == KEY_LEFT || key == 'h' || key == 'H')
+        handled = settings_kf_hmove(-1);
+    else if (key == KEY_RIGHT || key == 'l' || key == 'L')
+        handled = settings_kf_hmove(1);
+    else if (key == KEY_UP || key == 'k' || key == 'K')
+        handled = settings_kf_vmove(-1);
+    else if (key == KEY_DOWN || key == 'j' || key == 'J')
+        handled = settings_kf_vmove(1);
+    else if (key == KEY_HOME) {
+        int first = settings_first_content();
+        settings_kfocus = first >= 0 ? first : settings_tab_hit(settings_page);
+        handled = 1;
+    } else if (key == KEY_END) {
+        int last = settings_last_content();
+        settings_kfocus = last >= 0 ? last : settings_tab_hit(settings_page);
+        handled = 1;
+    } else if (key == KEY_TAB || key == '\t') {
+        settings_kf_cycle(keyboard_shift_down() ? -1 : 1);
+        handled = 1;
+    } else if (key == '\n' || key == ' ') {
+        if (settings_kfocus >= 0 && settings_kfocus < settings_hit_n) {
+            struct settings_hit *h = &settings_hits[settings_kfocus];
+            if (h->act == SHIT_TAB)
+                settings_page = h->param;
+            else
+                settings_hit_dispatch(h->act, h->param);
+            handled = 1;
+        }
+    } else if (key >= '1' && key <= '5') {
+        settings_kf_goto_tab(key - '1');
+        handled = 1;
+    }
+    if (handled)
+        settings_kf_dirty();
+    return handled;
 }
