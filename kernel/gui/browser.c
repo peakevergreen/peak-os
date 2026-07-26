@@ -428,3 +428,15 @@ void browser_js_metrics(uint32_t *tabs_with_js, uint32_t *objs, uint32_t *timers
     if (gc_runs)
         *gc_runs = g;
 }
+
+const char *browser_page_body(size_t *len_out) {
+    struct br_tab *t = browser_cur();
+    if (!body_cache || !t || !t->last_body_len) {
+        if (len_out)
+            *len_out = 0;
+        return NULL;
+    }
+    if (len_out)
+        *len_out = t->last_body_len;
+    return body_cache;
+}

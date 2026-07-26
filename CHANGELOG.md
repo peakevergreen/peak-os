@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 75:** Browser Save to Downloads (VFS `/home/dev/Downloads`) + bookmark remove in context menu
+
 - **Pass 74:** VFS streaming PeakFS export (`vfs_export_ramdisk_stream`), chunked blob reads, 32 MiB cap + `vfs_export_last_error`
 
 - **Pass 73:** TLS 1.3 PSK HKDF/HMAC binder; session cache resumption master + ticket nonce; `tlsinfo -s` resume fields

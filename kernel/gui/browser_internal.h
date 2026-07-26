@@ -56,6 +56,7 @@ struct br_tab {
     int use_layout;
     int dom_dirty;
     int fetching;
+    size_t last_body_len;
     uint64_t fetch_start;
     int show_retry;
     char prev_url[BR_URL_MAX];
@@ -119,3 +120,8 @@ void browser_error_page(struct br_tab *t, enum br_err_kind kind,
                         const char *detail, int http_st);
 
 #endif
+
+int browser_bookmark_remove(int idx);
+int browser_download_save(const char *url, const char *body, size_t len, char *msg, size_t msg_cap);
+
+const char *browser_page_body(size_t *len_out);
