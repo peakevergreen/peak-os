@@ -126,9 +126,9 @@ CLI scrollback search: **Ctrl+F**, type a needle, **Enter** for next match (128 
 ## Network / containers
 | Command | Notes |
 |---------|-------|
-| `ifconfig` `ping` `wget` `curl` | IPv4 + HTTP — [network.md](network.md) |
+| `ifconfig` `ping` `wget` `curl` | IPv4 + HTTP (`wget`/`curl` `-X` `-d` for POST body) — [network.md](network.md) |
 | `tlsinfo` | TLS trust summary, session cache, `-s` cache list, `-r` root digests, `-m` hostname test |
-| `nslookup` `host` | DNS A lookup (dig-style QUESTION/ANSWER) |
+| `nslookup` `host` | DNS A (`-6` AAAA diagnostic, `-x` PTR reverse); IPv4 routing only |
 | `traceroute` | Staged reachability: local → gateway → DNS → dest (TCP :80) |
 | `nc` | TCP connect (`host port` or `host:port`; optional send + recv) |
 | `tar -c` / `tar -x` | ustar archive create/extract (64 KiB cap) |

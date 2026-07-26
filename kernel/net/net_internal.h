@@ -115,6 +115,11 @@ extern uint16_t ephem_port;
 extern uint16_t dns_txid;
 extern uint32_t dns_answer_ip;
 extern int dns_done;
+extern uint16_t dns_want_qtype;
+extern uint8_t dns_answer_aaaa[16];
+extern char dns_answer_ptr[256];
+extern int dns_answer_got_aaaa;
+extern int dns_answer_got_ptr;
 extern uint16_t dns_sport;
 
 extern int http_needs_tls_flag;

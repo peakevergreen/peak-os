@@ -205,3 +205,8 @@ tight spin loops; the stack remains synchronous (no async rewrite).
 | Smoke tests | Keep `PEAK_NET_MODE=user` (default) |
 
 See also [docs/containers.md](containers.md).
+
+### CLI DNS/HTTP depth (Pass 66)
+
+- `wget` / `curl` accept `-X METHOD` and `-d body` (implicit POST when `-d` is set). Body uses `application/x-www-form-urlencoded`.
+- `host` / `nslookup` accept `-6` (AAAA query) and `-x` (PTR reverse for dotted IPv4). Peak still routes **IPv4 only**; AAAA answers are diagnostic and may be shown even though the stack does not open IPv6 sockets.

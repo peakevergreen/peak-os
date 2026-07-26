@@ -317,6 +317,13 @@ grep -q 'SHELL_CAPTURE_MAX  32768' kernel/include/shell_split.h
 grep -q '32 KiB' docs/CLI.md
 grep -q 'pipe output truncated' kernel/shell_dispatch.c
 
+
+echo "==> Wave 3 Pass 66 net CLI"
+grep -q 'net_dns_resolve_aaaa' kernel/net/dns.c
+grep -q 'dns_lookup_aaaa_dig' kernel/user/utils_net.c
+grep -q 'post_body' kernel/user/utils_net.c
+grep -q 'IPv4-only' kernel/user/utils_net.c
+
 echo "==> security / purity markers"
 grep -q 'copy_from_user' kernel/syscall.c
 grep -qi 'tls certificate unverified' kernel/net/tls.c kernel/net/tls_handshake.c

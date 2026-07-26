@@ -67,6 +67,95 @@ static void wget_print_failure(int st, const char *body) {
     }
 }
 
+static int dns_lookup_aaaa_dig(const char *tool, const char *hostname, int verbose) {
+    struct net_info ni;
+    net_get_info(&ni);
+    char dns[32];
+    net_format_ip(ni.dns, dns, sizeof(dns));
+    uint64_t t0 = timer_ticks();
+    uint8_t addr[16];
+    int rc = net_dns_resolve_aaaa(hostname, 400, addr);
+    unsigned long qms = (unsigned long)((timer_ticks() - t0) * 10);
+    if (rc != 0) {
+        if (verbose) {
+            console_printf(";; <<>> Peak %s %s <<>>\n", tool, hostname);
+            console_printf(";; SERVER: %s#53\n", dns);
+            console_printf(";; QUESTION SECTION:\n");
+            console_printf(";%s.\t\tIN\tAAAA\n\n", hostname);
+            console_printf(";; status: NOAAAA (Peak is IPv4-only for routing)\n");
+        }
+        net_print_failure(tool, "AAAA lookup failed");
+        return 1;
+    }
+    char v6[64];
+    net_format_ipv6(addr, v6, sizeof(v6));
+    if (verbose) {
+        console_printf(";; <<>> Peak %s %s <<>>\n", tool, hostname);
+        console_printf(";; SERVER: %s#53\n", dns);
+        console_printf(";; Query time: %lu msec\n\n", qms);
+        console_printf(";; QUESTION SECTION:\n");
+        console_printf(";%s.\t\tIN\tAAAA\n\n", hostname);
+        console_printf(";; ANSWER SECTION:\n");
+        console_printf("%s.\t\t30\tIN\tAAAA\t%s\n", hostname, v6);
+        console_write(";; NOTE: AAAA shown for diagnostics; stack routes IPv4 only\n");
+    } else {
+        console_printf("%s has AAAA address %s\n", hostname, v6);
+    }
+    return 0;
+}
+
+static int dns_lookup_ptr_dig(const char *tool, const char *ipstr, int verbose) {
+    uint32_t ip = net_dns_resolve(ipstr, 100);
+    if (!ip) {
+        /* parse dotted quad without DNS forward lookup */
+        int dots = 0, ok = 1;
+        uint32_t parts[4] = {0};
+        int pi = 0;
+        for (const char *p = ipstr; *p; p++) {
+            if (*p == '.') {
+                dots++;
+                pi++;
+            } else if (*p >= '0' && *p <= '9')
+                parts[pi] = parts[pi] * 10 + (uint32_t)(*p - '0');
+            else
+                ok = 0;
+        }
+        if (ok && dots == 3)
+            ip = (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3];
+    }
+    if (!ip) {
+        peak_perror(tool, "need dotted IPv4 for -x");
+        return 1;
+    }
+    struct net_info ni;
+    net_get_info(&ni);
+    char dns[32], rev[32];
+    net_format_ip(ni.dns, dns, sizeof(dns));
+    net_format_ip(ip, rev, sizeof(rev));
+    char name[256];
+    uint64_t t0 = timer_ticks();
+    if (net_dns_reverse_ptr(ip, 400, name, sizeof(name)) != 0) {
+        if (verbose)
+            console_printf(";; reverse lookup %s failed\n", rev);
+        net_print_failure(tool, "PTR lookup failed");
+        return 1;
+    }
+    unsigned long qms = (unsigned long)((timer_ticks() - t0) * 10);
+    if (verbose) {
+        console_printf(";; <<>> Peak %s -x %s <<>>\n", tool, rev);
+        console_printf(";; SERVER: %s#53\n", dns);
+        console_printf(";; Query time: %lu msec\n\n", qms);
+        console_printf(";; QUESTION SECTION:\n");
+        console_printf(";%u.%u.%u.%u.in-addr.arpa.\tIN\tPTR\n\n",
+                         (unsigned)(ip & 0xFF), (unsigned)((ip >> 8) & 0xFF),
+                         (unsigned)((ip >> 16) & 0xFF), (unsigned)((ip >> 24) & 0xFF));
+        console_printf(";; ANSWER SECTION:\n");
+        console_printf("%s.\t30\tIN\tPTR\t%s.\n", rev, name);
+    } else
+        console_printf("%s domain name pointer %s.\n", rev, name);
+    return 0;
+}
+
 static int dns_lookup_dig(const char *tool, const char *hostname, int verbose) {
     struct net_info ni;
     net_get_info(&ni);
@@ -179,7 +268,7 @@ int uping_main(int argc, char **argv) {
 int uwget_main(int argc, char **argv) {
     privacy_grant_net_client(0);
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("wget", "[-i] [-O path] <url>");
+        peak_usage("wget", "[-X METHOD] [-d data] [-i] [-O path] <url>");
         return argc < 2 ? 1 : 0;
     }
     if (!net_ready()) {
@@ -188,10 +277,22 @@ int uwget_main(int argc, char **argv) {
     }
     const char *url = 0;
     const char *out_path = 0;
+    const char *method = "GET";
+    const char *post_body = 0;
+    char hdr_extra[128];
+    hdr_extra[0] = '\0';
     int show_headers = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-O") && i + 1 < argc) {
             out_path = argv[++i];
+            continue;
+        }
+        if (!strcmp(argv[i], "-X") && i + 1 < argc) {
+            method = argv[++i];
+            continue;
+        }
+        if (!strcmp(argv[i], "-d") && i + 1 < argc) {
+            post_body = argv[++i];
             continue;
         }
         if (!strcmp(argv[i], "-i")) {
@@ -202,7 +303,7 @@ int uwget_main(int argc, char **argv) {
             url = argv[i];
     }
     if (!url) {
-        peak_usage("wget", "[-i] [-O path] <url>");
+        peak_usage("wget", "[-X METHOD] [-d data] [-i] [-O path] <url>");
         return 1;
     }
     char body[8192];
@@ -210,9 +311,17 @@ int uwget_main(int argc, char **argv) {
     int st = 0;
     struct net_http_request req;
     memset(&req, 0, sizeof(req));
-    snprintf(req.method, sizeof(req.method), "GET");
+    if (post_body && (!method[0] || !strcmp(method, "GET")))
+        method = "POST";
+    snprintf(req.method, sizeof(req.method), "%.7s", method ? method : "GET");
     req.url = url;
-    console_printf("GET %s\n", url);
+    req.body = post_body;
+    req.body_len = post_body ? strlen(post_body) : 0;
+    if (post_body)
+        snprintf(hdr_extra, sizeof(hdr_extra),
+                 "Content-Type: application/x-www-form-urlencoded");
+    req.headers = hdr_extra[0] ? hdr_extra : NULL;
+    console_printf("%s %s\n", req.method, url);
     console_write("fetching...\n");
     if (net_http_request(&req, body, sizeof(body), &st, hdrs, sizeof(hdrs)) != 0) {
         wget_print_failure(st, body);
@@ -263,7 +372,7 @@ int uwget_main(int argc, char **argv) {
 
 int ucurl_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("curl", "[-i] [-o path] <url>");
+        peak_usage("curl", "[-X METHOD] [-d data] [-i] [-o path] <url>");
         return argc < 2 ? 1 : 0;
     }
     char *av[16];
@@ -272,6 +381,16 @@ int ucurl_main(int argc, char **argv) {
     for (int i = 1; i < argc && ac < 15; i++) {
         if (!strcmp(argv[i], "-o") && i + 1 < argc) {
             av[ac++] = (char *)"-O";
+            av[ac++] = argv[++i];
+            continue;
+        }
+        if (!strcmp(argv[i], "-X") && i + 1 < argc) {
+            av[ac++] = (char *)"-X";
+            av[ac++] = argv[++i];
+            continue;
+        }
+        if (!strcmp(argv[i], "-d") && i + 1 < argc) {
+            av[ac++] = (char *)"-d";
             av[ac++] = argv[++i];
             continue;
         }
@@ -287,26 +406,72 @@ int ucurl_main(int argc, char **argv) {
 
 int unslookup_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("nslookup", "<hostname>");
+        peak_usage("nslookup", "[-6|-x] <host|ip>");
         return argc < 2 ? 1 : 0;
     }
     if (!net_ready()) {
         peak_perror("nslookup", "network down");
         return 1;
     }
-    return dns_lookup_dig("nslookup", argv[1], 1);
+    int want_aaaa = 0;
+    int want_ptr = 0;
+    const char *target = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-6")) {
+            want_aaaa = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "-x")) {
+            want_ptr = 1;
+            continue;
+        }
+        if (argv[i][0] != '-')
+            target = argv[i];
+    }
+    if (!target) {
+        peak_usage("nslookup", "[-6|-x] <host|ip>");
+        return 1;
+    }
+    if (want_ptr)
+        return dns_lookup_ptr_dig("nslookup", target, 1);
+    if (want_aaaa)
+        return dns_lookup_aaaa_dig("nslookup", target, 1);
+    return dns_lookup_dig("nslookup", target, 1);
 }
 
 int uhost_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv) || argc < 2) {
-        peak_usage("host", "<hostname>");
+        peak_usage("host", "[-6|-x] <host|ip>");
         return argc < 2 ? 1 : 0;
     }
     if (!net_ready()) {
         peak_perror("host", "network down");
         return 1;
     }
-    return dns_lookup_dig("host", argv[1], 0);
+    int want_aaaa = 0;
+    int want_ptr = 0;
+    const char *target = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-6")) {
+            want_aaaa = 1;
+            continue;
+        }
+        if (!strcmp(argv[i], "-x")) {
+            want_ptr = 1;
+            continue;
+        }
+        if (argv[i][0] != '-')
+            target = argv[i];
+    }
+    if (!target) {
+        peak_usage("host", "[-6|-x] <host|ip>");
+        return 1;
+    }
+    if (want_ptr)
+        return dns_lookup_ptr_dig("host", target, 0);
+    if (want_aaaa)
+        return dns_lookup_aaaa_dig("host", target, 0);
+    return dns_lookup_dig("host", target, 0);
 }
 
 int utraceroute_main(int argc, char **argv) {
