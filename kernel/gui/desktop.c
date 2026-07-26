@@ -487,6 +487,8 @@ void desktop_run(void) {
             mouse_clear_clicks();
         }
         if (m.left_released) {
+            if (desktop_files_drag_active())
+                desktop_files_drop_at(m.x, m.y);
             if (term_select_drag)
                 desktop_terminal_select_end();
             term_select_drag = 0;

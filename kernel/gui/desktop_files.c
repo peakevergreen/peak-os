@@ -728,6 +728,50 @@ int desktop_files_key(int key) {
     return 1;
 }
 
+
+static int files_drag_active;
+static char files_drag_path[VFS_PATH_MAX];
+static char files_drag_name[64];
+
+void desktop_files_drag_begin_sel(void) {
+    struct vfs_dirent ents[FILES_ROWS];
+    int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
+    if (n <= 0 || files_sel < 0 || files_sel >= n)
+        return;
+    if (ents[files_sel].type == VFS_DIR)
+        return;
+    files_build_path(files_sel, files_drag_path, sizeof(files_drag_path));
+    snprintf(files_drag_name, sizeof(files_drag_name), "%s", ents[files_sel].name);
+    files_drag_active = 1;
+}
+
+int desktop_files_drag_active(void) {
+    return files_drag_active;
+}
+
+void desktop_files_drop_at(int32_t mx, int32_t my) {
+    if (!files_drag_active)
+        return;
+    files_drag_active = 0;
+    for (int i = 0; i < MAX_WINS; i++) {
+        struct win *w = &wins[i];
+        if (!w->open || w->minimized)
+            continue;
+        if (w->kind != APP_NOTEPAD && w->kind != APP_IMAGES)
+            continue;
+        if (!desktop_point_in(mx, my, w->x, w->y, w->w, w->h))
+            continue;
+        if (w->kind == APP_NOTEPAD)
+            files_open_text(files_drag_path, files_drag_name);
+        else
+            files_open_image(files_drag_path, files_drag_name);
+        notify_push("Drag-open");
+        dirty_bits |= DIRTY_TOAST | DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+        return;
+    }
+}
+
 void desktop_files_wheel(int wheel) { files_move_sel(wheel > 0 ? -1 : 1, 0); }
 
 int desktop_files_click(struct win *w, int32_t mx, int32_t my, int dbl) {
@@ -739,6 +783,10 @@ int desktop_files_click(struct win *w, int32_t mx, int32_t my, int dbl) {
     if (n <= 0) return 0;
     files_sel = files_scroll + row; if (files_sel >= n) files_sel = n - 1;
     if (!keyboard_shift_down()) files_sel_anchor = files_sel;
-    if (dbl) files_activate(); else dirty_bits |= DIRTY_WIN;
+    if (dbl) files_activate();
+    else {
+        desktop_files_drag_begin_sel();
+        dirty_bits |= DIRTY_WIN;
+    }
     return 1;
 }
