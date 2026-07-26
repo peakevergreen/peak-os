@@ -468,11 +468,16 @@ void desktop_settings_draw(struct win *w) {
         uint32_t preview_w = desktop_u(72);
         uint32_t preview_h = desktop_u(36);
         settings_scale_live_preview(tx, cy, preview_scale);
-        fb_draw_string(tx + preview_w + desktop_u(4), cy + desktop_u(4),
-                       "live preview (click chip to apply)", desktop_color_dim(), desktop_color_bg());
-        uint32_t chip_x = tx + preview_w + desktop_u(12);
+        {
+            uint32_t hx = tx + preview_w + desktop_u(8);
+            uint32_t hw = content_w > preview_w + desktop_u(8) ? content_w - preview_w - desktop_u(8) : desktop_u(80);
+            fb_draw_string_fit(hx, cy + desktop_u(4), hw,
+                               "live preview (click chip to apply)", desktop_color_dim(), desktop_color_bg());
+        }
+        uint32_t chip_x = tx;
         uint32_t chip_w = desktop_u(28);
         uint32_t chip_h = ch + desktop_u(4);
+        cy += preview_h + desktop_u(4);
         for (uint32_t s = 1; s <= 4; s++) {
             uint32_t cx = chip_x + (s - 1) * (chip_w + desktop_u(4));
             int sel = (s == settings_gui_scale());
@@ -484,7 +489,7 @@ void desktop_settings_draw(struct win *w) {
                                sel ? desktop_color_accent() : desktop_color_surface());
             settings_hit_add(cx, cy, chip_w, chip_h, SHIT_SCALE, (int)s);
         }
-        cy += preview_h + desktop_u(8);
+        cy += chip_h + desktop_u(8);
         snprintf(line, sizeof(line), "Recommended %ux for %ux%u",
                  (unsigned)fb_recommend_scale(), (unsigned)fb->width, (unsigned)fb->height);
         fb_draw_string(tx, cy, line, desktop_color_dim(), desktop_color_bg());
