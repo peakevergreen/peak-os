@@ -626,14 +626,23 @@ static int nc_listen_mode(int argc, char **argv) {
         peak_perror("nc", "network down");
         return 1;
     }
-    if (net_tcp_listen(port) != 0) {
+    int lid = net_tcp_listen(port);
+    if (lid < 0) {
         net_print_failure("nc", "listen failed");
         return 1;
     }
-    console_write("nc: waiting for connection…\n");
-    if (net_tcp_accept(400) != 0) {
+    console_write("nc: waiting for connection (400ms)…\n");
+    uint64_t deadline = timer_ticks() + 40;
+    int fd = -1;
+    while (timer_ticks() < deadline) {
+        net_poll();
+        fd = net_tcp_accept(lid);
+        if (fd >= 0)
+            break;
+    }
+    if (fd < 0) {
         net_print_failure("nc", "accept timeout");
-        net_tcp_close();
+        net_tcp_unlisten(port);
         return 1;
     }
     console_write("nc: client connected\n");
