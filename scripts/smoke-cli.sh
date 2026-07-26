@@ -385,6 +385,11 @@ grep -q 'desktop_menus_start_wheel' kernel/gui/desktop_menus.c
 
 
 
+echo "==> Wave 4 Pass 83 text buffer depth"
+grep -q 'READ_MAX 32768' kernel/user/utils_text6.c
+grep -q JQ_SELECT kernel/user/utils_text7.c
+grep -q '32 KiB' docs/CLI.md
+
 echo "==> Wave 4 Pass 82 mktemp/install"
 grep -q umktemp_main kernel/user/utils_file.c
 grep -q uinstall_main kernel/user/utils_file.c

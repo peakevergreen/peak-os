@@ -5,7 +5,7 @@
 #include "console.h"
 #include "util.h"
 
-#define READ_MAX 8192
+#define READ_MAX 32768
 #define LINE_MAX 256
 #define MAX_LINES 256
 #define MAX_FIELDS 32
