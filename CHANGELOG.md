@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 109:** DNS CNAME follow (4 hops) + `dnsflush` CLI
+
 - **Pass 108:** HTTP chunked body decode; HTTP/2 POST body lite
 
 - **Pass 107:** `curl`/`wget` `-H`/`-I`; `ping -c N` (max 10)

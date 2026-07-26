@@ -838,3 +838,14 @@ int utlsinfo_main(int argc, char **argv) {
     return 0;
 }
 
+int udnsflush_main(int argc, char **argv) {
+    (void)argv;
+    if (peak_wants_help(argc, argv)) {
+        peak_usage("dnsflush", "");
+        return 0;
+    }
+    net_dns_flush();
+    console_write("dns cache flushed\n");
+    return 0;
+}
+

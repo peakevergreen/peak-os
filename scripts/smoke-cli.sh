@@ -482,6 +482,12 @@ grep -q 'disksave' docs/CLI.md
 grep -q 'reboot' docs/CLI.md
 
 
+echo "==> Wave 5 Pass 109 dns cname flush"
+grep -q dns_answer_cname kernel/net/dns.c
+grep -q net_dns_flush kernel/net/dns.c
+grep -q udnsflush_main kernel/user/utils_net.c
+grep -q 'UBIN_CMD("dnsflush"' kernel/user/ubin_cmds.def
+
 echo "==> Wave 5 Pass 108 chunked h2 post"
 grep -q http_decode_chunked_body kernel/net/http_util.c
 grep -q http2_request kernel/net/http2.c
