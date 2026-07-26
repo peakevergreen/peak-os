@@ -240,14 +240,11 @@ int ustat_main(int argc, char **argv) {
         return 1;
     }
     console_printf("path: %s\n", abs);
-    const char *type_str = st.type == VFS_DIR ? "directory" :
-                           st.type == VFS_SYMLINK ? "symlink" : "file";
+    const char *type_str = st.type == VFS_DIR ? "directory" : "file";
     console_printf("type: %s\n", type_str);
     console_printf("size: %lu\n", (uint64_t)st.size);
     console_printf("children: %u\n", st.nchildren);
     console_printf("refs: %u\n", st.refs);
-    if (st.type == VFS_SYMLINK && st.link_target[0])
-        console_printf("target: %s\n", st.link_target);
     if (st.type == VFS_FILE) {
         struct vfs_node *node = vfs_lookup(abs);
         if (node) {
