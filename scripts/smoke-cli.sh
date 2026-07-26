@@ -474,6 +474,11 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 119 join/comm depth"
+grep -q 'line_field_delim' kernel/user/utils_text2.c
+grep -q 'suppress1' kernel/user/utils_text2.c
+grep -q '\`-2\`' docs/CLI.md || grep -q '-2' docs/CLI.md
+
 echo "==> Wave 5 Pass 99 cli docs sync"
 grep -q 'mktemp' docs/CLI.md
 grep -q 'sha1sum' docs/CLI.md
