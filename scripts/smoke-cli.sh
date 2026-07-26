@@ -474,6 +474,11 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 135 settings a11y scale preview"
+grep -q 'settings_draw_focus_ring_depth' kernel/gui/desktop_settings.c
+grep -q 'settings_scale_live_preview' kernel/gui/desktop_settings.c
+grep -q 'live preview (click chip to apply)' kernel/gui/desktop_settings.c
+
 echo "==> Wave 6 Pass 134 terminal scrollback search"
 grep -q 'term_clear_scrollback' kernel/gui/desktop_terminal.c
 grep -q 'term_find_update_meta' kernel/gui/desktop_terminal.c

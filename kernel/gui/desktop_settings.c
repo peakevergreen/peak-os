@@ -212,15 +212,27 @@ static void settings_kf_cycle(int dir) {
         settings_page = settings_hits[settings_kfocus].param;
 }
 
-static void settings_draw_focus_ring(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+static void settings_draw_focus_ring_depth(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     uint32_t c = desktop_color_accent();
     uint32_t t = desktop_u(2);
     if (t < 2)
         t = 2;
+    uint32_t gap = desktop_u(2);
     fb_fill_rect(x, y, w, t, c);
     fb_fill_rect(x, y + h - t, w, t, c);
     fb_fill_rect(x, y, t, h, c);
     fb_fill_rect(x + w - t, y, t, h, c);
+    if (w > 2 * (t + gap) && h > 2 * (t + gap)) {
+        uint32_t i = t + gap;
+        fb_fill_rect(x + i, y + i, w - 2 * i, t, c);
+        fb_fill_rect(x + i, y + h - i - t, w - 2 * i, t, c);
+        fb_fill_rect(x + i, y + i, t, h - 2 * i, c);
+        fb_fill_rect(x + w - i - t, y + i, t, h - 2 * i, c);
+    }
+}
+
+static void settings_draw_focus_ring(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    settings_draw_focus_ring_depth(x, y, w, h);
 }
 
 static void settings_hits_reset(void) {
@@ -300,6 +312,26 @@ static void settings_draw_scale_preview(uint32_t x, uint32_t y, uint32_t w, uint
                        "Preview", t->fg, t->surface);
     fb_fill_rect(x + desktop_u(4), y + h - desktop_u(10),
                  w - desktop_u(8), desktop_u(6), t->accent);
+}
+
+static void settings_scale_live_preview(uint32_t x, uint32_t y, uint32_t scale) {
+    if (scale < 1)
+        scale = 1;
+    if (scale > 4)
+        scale = 4;
+    uint32_t pw = desktop_u(18) * scale / 3;
+    uint32_t ph = desktop_u(24) * scale / 3;
+    if (pw < desktop_u(12))
+        pw = desktop_u(12);
+    if (ph < desktop_u(16))
+        ph = desktop_u(16);
+    const struct peak_theme *t = theme_get();
+    fb_fill_rect(x, y, pw, ph, t->surface);
+    fb_fill_rect(x, y, pw, desktop_u(4) * scale / 3, t->title);
+    char lab[12];
+    snprintf(lab, sizeof(lab), "%ux", (unsigned)scale);
+    fb_draw_string_fit(x + desktop_u(2), y + desktop_u(6), pw - desktop_u(4), lab, t->fg, t->surface);
+    fb_fill_rect(x, y + ph - desktop_u(3), pw, desktop_u(3), t->accent);
 }
 
 
@@ -420,9 +452,15 @@ void desktop_settings_draw(struct win *w) {
 
     if (settings_page == 0) {
         cy = settings_section(tx, cy, "UI scale");
+        uint32_t preview_scale = settings_gui_scale();
+        if (settings_kfocus >= 0 && settings_kfocus < settings_hit_n &&
+            settings_hits[settings_kfocus].act == SHIT_SCALE)
+            preview_scale = (uint32_t)settings_hits[settings_kfocus].param;
         uint32_t preview_w = desktop_u(72);
         uint32_t preview_h = desktop_u(36);
-        settings_draw_scale_preview(tx, cy, preview_w, preview_h);
+        settings_scale_live_preview(tx, cy, preview_scale);
+        fb_draw_string(tx + preview_w + desktop_u(4), cy + desktop_u(4),
+                       "live preview (click chip to apply)", desktop_color_dim(), desktop_color_bg());
         uint32_t chip_x = tx + preview_w + desktop_u(12);
         uint32_t chip_w = desktop_u(28);
         uint32_t chip_h = ch + desktop_u(4);
