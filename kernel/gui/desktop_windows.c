@@ -414,18 +414,34 @@ void desktop_win_keyboard_nudge(int idx, int dx, int dy) {
 
 static void draw_win_chrome(struct win *w, int focused) {
     uint32_t th = desktop_title_h();
-    window_draw_frame(w->x, w->y, w->w, w->h, desktop_app_title(w->kind),
+    const char *title = desktop_app_title(w->kind);
+    window_draw_frame(w->x, w->y, w->w, w->h, title,
                       focused ? desktop_color_bg() : desktop_color_surface());
     if (focused) {
         uint32_t s = desktop_u(3);
         if (s < 2) s = 2;
         uint32_t a = desktop_color_accent();
-        fb_fill_rect(w->x + s, w->y + s, w->w - 2 * s, s, a);
+        /* Outer focus inset — bottom + sides below the title band. */
         fb_fill_rect(w->x + s, w->y + w->h - 2 * s, w->w - 2 * s, s, a);
-        fb_fill_rect(w->x + s, w->y + s, s, w->h - 2 * s, a);
-        fb_fill_rect(w->x + w->w - 2 * s, w->y + s, s, w->h - 2 * s, a);
+        fb_fill_rect(w->x + s, w->y + th, s, w->h - th - 2 * s, a);
+        fb_fill_rect(w->x + w->w - 2 * s, w->y + th, s, w->h - th - 2 * s, a);
+        /* Title underline + short side ticks (not over title glyphs). */
         fb_fill_rect(w->x + s, w->y + th - s, w->w - 2 * s, s, a);
         fb_fill_rect(w->x + s, w->y + s, s, th - 2 * s, a);
+        fb_fill_rect(w->x + w->w - 2 * s, w->y + s, s, th - 2 * s, a);
+        fb_fill_rect(w->x + 2 * s, w->y + s, w->w - 4 * s, s, a);
+    }
+    /* Title clear of border + focus inset (and of chrome buttons on the right). */
+    {
+        uint32_t s = focused ? desktop_u(3) : desktop_u(1);
+        if (s < 2) s = 2;
+        uint32_t title_bg = theme_get()->title;
+        uint32_t pad_x = s + desktop_u(6);
+        uint32_t pad_y = s + desktop_u(2);
+        uint32_t btn_w = 3 * (desktop_u(14) + desktop_u(4)) + desktop_u(22);
+        uint32_t tw = (w->w > pad_x + btn_w + s) ? (w->w - pad_x - btn_w - s) : desktop_u(40);
+        fb_fill_rect(w->x + pad_x, w->y + pad_y, tw, fb_cell_h() + desktop_u(2), title_bg);
+        fb_draw_string(w->x + pad_x, w->y + pad_y, title, desktop_color_fg(), title_bg);
     }
     uint32_t by = w->y + desktop_u(6);
     uint32_t bs = desktop_u(14);
