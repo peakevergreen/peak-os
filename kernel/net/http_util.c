@@ -577,3 +577,69 @@ int http_blocks_active_mixed(const char *page_url, const char *req_url) {
         return 0;
     return 1;
 }
+
+#define HTTP_COOKIE_JAR_MAX 8
+
+static struct {
+    int used;
+    char host[64];
+    char cookie[128];
+} http_cookie_jar[HTTP_COOKIE_JAR_MAX];
+
+void http_cookie_jar_clear(void) {
+    memset(http_cookie_jar, 0, sizeof(http_cookie_jar));
+}
+
+const char *http_cookie_jar_honesty(void) {
+    return "cookie jar lite: max 8 host entries, session-only, no Secure/HttpOnly/SameSite";
+}
+
+void http_cookie_jar_store(const char *host, const char *set_cookie_line) {
+    if (!host || !host[0] || !set_cookie_line || !set_cookie_line[0])
+        return;
+    char name[48], val[64];
+    size_t ni = 0, vi = 0;
+    const char *p = set_cookie_line;
+    while (*p && *p != '=' && *p != ';' && ni + 1 < sizeof(name))
+        name[ni++] = *p++;
+    name[ni] = '\0';
+    if (*p == '=') {
+        p++;
+        while (*p && *p != ';' && vi + 1 < sizeof(val))
+            val[vi++] = *p++;
+    }
+    val[vi] = '\0';
+    if (!name[0])
+        return;
+    char pair[128];
+    snprintf(pair, sizeof(pair), "%s=%s", name, val);
+    for (int i = 0; i < HTTP_COOKIE_JAR_MAX; i++) {
+        if (http_cookie_jar[i].used && !strcmp(http_cookie_jar[i].host, host)) {
+            snprintf(http_cookie_jar[i].cookie, sizeof(http_cookie_jar[i].cookie), "%s", pair);
+            return;
+        }
+    }
+    for (int i = 0; i < HTTP_COOKIE_JAR_MAX; i++) {
+        if (!http_cookie_jar[i].used) {
+            http_cookie_jar[i].used = 1;
+            snprintf(http_cookie_jar[i].host, sizeof(http_cookie_jar[i].host), "%s", host);
+            snprintf(http_cookie_jar[i].cookie, sizeof(http_cookie_jar[i].cookie), "%s", pair);
+            return;
+        }
+    }
+}
+
+const char *http_cookie_jar_for_host(const char *host, char *out, size_t out_cap) {
+    if (!out || out_cap < 8)
+        return NULL;
+    out[0] = '\0';
+    if (!host)
+        return out;
+    for (int i = 0; i < HTTP_COOKIE_JAR_MAX; i++) {
+        if (http_cookie_jar[i].used && !strcmp(http_cookie_jar[i].host, host)) {
+            snprintf(out, out_cap, "Cookie: %s\r\n", http_cookie_jar[i].cookie);
+            return out;
+        }
+    }
+    return out;
+}

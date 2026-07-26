@@ -269,7 +269,7 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
     char cur[320];
     snprintf(cur, sizeof(cur), "%s", req->url);
 
-    for (int hop = 0; hop < 5; hop++) {
+    for (int hop = 0; hop < HTTP_REDIRECT_MAX; hop++) {
         int https = 0;
         char host[128], path[256];
         uint16_t port = 80;
@@ -310,9 +310,29 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
             send_body = NULL;
             send_len = 0;
         }
+        char hdr_merge[512];
+        hdr_merge[0] = '\0';
+        size_t hm = 0;
+        if (req->headers && req->headers[0]) {
+            hm = strlen(req->headers);
+            if (hm + 1 < sizeof(hdr_merge)) {
+                memcpy(hdr_merge, req->headers, hm);
+                hdr_merge[hm] = '\0';
+            }
+        }
+        {
+            char ck[160];
+            http_cookie_jar_for_host(host, ck, sizeof(ck));
+            if (ck[0] && hm + strlen(ck) + 1 < sizeof(hdr_merge)) {
+                memcpy(hdr_merge + hm, ck, strlen(ck));
+                hm += strlen(ck);
+                hdr_merge[hm] = '\0';
+            }
+        }
+        const char *send_hdrs = hdr_merge[0] ? hdr_merge : req->headers;
         if (https || port == 443) {
             http_needs_tls_flag = 1;
-            ex = https_exchange_raw(ip, host, path, method, req->headers, send_body,
+            ex = https_exchange_raw(ip, host, path, method, send_hdrs, send_body,
                                     send_len, body, body_cap, &st);
             if (ex != 0) {
                 if (status_out)
@@ -328,7 +348,7 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
                 return -1;
             }
         } else {
-            ex = http_exchange_raw(ip, port, host, path, method, req->headers, send_body,
+            ex = http_exchange_raw(ip, port, host, path, method, send_hdrs, send_body,
                                    send_len, body, body_cap, &st);
             if (ex != 0) {
                 if (status_out)
@@ -366,6 +386,11 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
         http_copy_response_headers(body, hdr_out, hdr_cap);
 
         if (st >= 200 && st < 300) {
+            {
+                char setck[256];
+                if (http_header_value(body, "set-cookie", setck, sizeof(setck)) == 0)
+                    http_cookie_jar_store(host, setck);
+            }
             if ((https || port == 443) && hdr_out)
                 hsts_process_header(host, hdr_out);
             else if (https || port == 443) {
@@ -391,7 +416,10 @@ int net_http_request(const struct net_http_request *req, char *body, size_t body
 
     if (status_out)
         *status_out = 0;
-    snprintf(body, body_cap, "<html><body><h1>Too many redirects</h1></body></html>");
+    snprintf(body, body_cap,
+             "<html><body><h1>Too many redirects</h1>"
+             "<p>Stopped after %d hops (HTTP_REDIRECT_MAX).</p></body></html>",
+             HTTP_REDIRECT_MAX);
     return -1;
 }
 

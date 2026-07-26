@@ -89,7 +89,8 @@ and ECDSA P-256/P-384 (SHA-256/SHA-384).
 - Ethernet + ARP cache + IPv4 + ICMP echo reply
 - UDP + DNS (A) + DHCP client
 - TCP client and TCP listen/accept
-- HTTP/1.0 GET client with redirect following
+- HTTP/1.0 GET client with redirect following (max **HTTP_REDIRECT_MAX** = 5 hops; honest error page)
+- Session cookie jar lite (max 8 host entries; no Secure/HttpOnly/SameSite — see `http_cookie_jar_honesty()`)
 - Container static HTTP server (GET/HEAD)
 - **TLS 1.2 / 1.3**: ECDHE (X25519 or P-256 on 1.2) + AES-128/256-GCM or ChaCha20-Poly1305;
   ALPN `http/1.1`; TLS 1.3 via `supported_versions` + `key_share` (X25519)
