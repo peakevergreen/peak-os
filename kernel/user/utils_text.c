@@ -61,14 +61,20 @@ int ucat_main(int argc, char **argv) {
 
 int uhead_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage("head", "[-n N] <path>");
+        peak_usage("head", "[-n N] [-c N] <path>");
         return 0;
     }
     int n = 10;
+    int byte_mode = 0;
     const char *path = NULL;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-n") && i + 1 < argc) {
             n = peak_atoi(argv[++i]);
+            continue;
+        }
+        if (!strcmp(argv[i], "-c") && i + 1 < argc) {
+            n = peak_atoi(argv[++i]);
+            byte_mode = 1;
             continue;
         }
         if (argv[i][0] != '-')
@@ -83,6 +89,16 @@ int uhead_main(int argc, char **argv) {
     size_t len = 0;
     if (read_abs(abs, data, sizeof(data), &len) != 0)
         return 1;
+    if (byte_mode) {
+        if (n < 0)
+            n = 0;
+        size_t want = (size_t)n;
+        if (want > len)
+            want = len;
+        for (size_t i = 0; i < want; i++)
+            console_putc(data[i]);
+        return 0;
+    }
     int lines = 0;
     for (size_t i = 0; i < len && lines < n; i++) {
         console_putc(data[i]);
@@ -94,14 +110,20 @@ int uhead_main(int argc, char **argv) {
 
 int utail_main(int argc, char **argv) {
     if (peak_wants_help(argc, argv)) {
-        peak_usage("tail", "[-n N] <path>");
+        peak_usage("tail", "[-n N] [-c N] <path>");
         return 0;
     }
     int n = 10;
+    int byte_mode = 0;
     const char *path = NULL;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-n") && i + 1 < argc) {
             n = peak_atoi(argv[++i]);
+            continue;
+        }
+        if (!strcmp(argv[i], "-c") && i + 1 < argc) {
+            n = peak_atoi(argv[++i]);
+            byte_mode = 1;
             continue;
         }
         if (argv[i][0] != '-')
@@ -116,6 +138,17 @@ int utail_main(int argc, char **argv) {
     size_t len = 0;
     if (read_abs(abs, data, sizeof(data), &len) != 0)
         return 1;
+    if (byte_mode) {
+        if (n < 0)
+            n = 0;
+        size_t want = (size_t)n;
+        if (want > len)
+            want = len;
+        size_t start = len > want ? len - want : 0;
+        for (size_t i = start; i < len; i++)
+            console_putc(data[i]);
+        return 0;
+    }
     int total = 0;
     for (size_t i = 0; i < len; i++)
         if (data[i] == '\n')

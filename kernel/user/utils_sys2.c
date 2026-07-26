@@ -278,14 +278,20 @@ int utimeout_main(int argc, char **argv) {
         path[i++] = *s;
     path[i] = '\0';
 
+    if (sec == 0) {
+        console_write("timeout: zero limit — skipping command (no preemption)\n");
+        return 124;
+    }
     uint64_t deadline = timer_ticks() + (uint64_t)sec * 100;
     int rc = ubin_run(path, argc - 2, argv + 2);
     if (rc == -999) {
         peak_perror("timeout", "unknown command");
         return 127;
     }
-    if (timer_ticks() > deadline)
-        console_write("timeout: deadline exceeded (command already finished)\n");
+    if (timer_ticks() > deadline) {
+        console_write("timeout: wall-clock limit exceeded (no preemption)\n");
+        return 124;
+    }
     return rc;
 }
 

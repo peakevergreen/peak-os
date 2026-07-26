@@ -82,7 +82,7 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 ## Text
 | Command | Notes |
 |---------|-------|
-| `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N`; `wc` `-l`/`-w`/`-c` select fields) |
+| `cat` `head` `tail` `wc` | file viewers (`head`/`tail` `-n N` or `-c N` bytes; `wc` `-l`/`-w`/`-c`) |
 | `grep [-i] [-n] [-v] [-r] <pat> [path...]` | substring match; `-i` case-fold, `-n` line numbers, `-v` invert, `-r` recurse dirs; multi-file prints `path:` |
 | `diff` `sort` `uniq` `cut` `tr` `sed` `cmp` | text filters (stdin/`-` ok; `sort` `-r`/`-n`/`-u`, `uniq` `-c`) |
 | `sed` | sed-lite: `[N\|[N,M]] s/old/new/[g]`, `y/from/to/`, `d`, `p`, `-n` (8 KiB) |
@@ -108,7 +108,8 @@ On failure the prompt shows exit status without changing the cwd prefix: `peak:/
 | `hostname` `uptime` `whoami` `id` `cal` | identity + calendar |
 | `uname [-asnmr]` | kernel identity (`-s` sysname, `-n` `$HOSTNAME`, `-r` release, `-m` machine, `-a` all + BootInfo platform) |
 | `gzip` `gunzip` | Peak RLE compress/decompress (PEAKGZ1 `.gz`, 8 KiB cap) |
-| `timeout` `watch` | run once with deadline note; repeat (`-n`, max 32 iters) |
+| `timeout` | `<sec> <cmd>` wall limit (exit 124 if exceeded; no preemption) |
+| `watch` | run once with deadline note; repeat (`-n`, max 32 iters) |
 | `top` `sysmon` | live system monitor (sparklines, legend; `q` quit, `r` reset, `e` export, `-n` once) |
 | `ps` | task list (state, CPU ticks, age, wake, share %) sorted by CPU ticks |
 | `kill <pid or name>` | mark READY/BLOCKED task zombie (not idle/self) |
