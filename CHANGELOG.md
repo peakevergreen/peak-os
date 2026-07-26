@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 129:** Start menu filter match count; taskbar hover preview chip with window title
+
 - **Pass 121:** shell `read`/`unset` builtins; pipe stages 6 / argv 24 caps
 
 - **Pass 120:** awk `BEGIN`/`END`/vars; sed `q`/`=`; jq nested `.key.keys` depth

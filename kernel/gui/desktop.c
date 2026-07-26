@@ -286,6 +286,7 @@ void desktop_run(void) {
 
         struct mouse_state m;
         mouse_poll(&m);
+        desktop_taskbar_preview_update(m.x, m.y);
 
         if (desktop_files_drag_active()) {
             static int32_t drag_mx = -1, drag_my = -1;

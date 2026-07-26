@@ -34,6 +34,7 @@ static int taskbar_all[MAX_WINS];
 static int taskbar_order[MAX_WINS];
 static int taskbar_visible;
 static int taskbar_overflow;
+static int taskbar_preview_slot = -1;
 
 static int app_kind_ready(enum app_kind k) {
     switch (k) {
@@ -216,7 +217,54 @@ void desktop_draw_taskbar(void) {
     fb_draw_string_fit((uint32_t)fb->width - desktop_u(160), y + (th - fb_cell_h()) / 2,
                        desktop_u(50), ni.up ? "net" : "off", ni.up ? desktop_color_accent() : desktop_color_dim(),
                        desktop_color_surface());
+    desktop_draw_taskbar_preview();
     desktop_draw_clock_area();
+}
+
+void desktop_taskbar_preview_update(int32_t mx, int32_t my) {
+    struct framebuffer *fb = fb_get();
+    uint32_t th = desktop_taskbar_h();
+    uint32_t ty = (uint32_t)fb->height - th;
+    int prev = taskbar_preview_slot;
+    taskbar_preview_slot = -1;
+    if (desktop_point_in(mx, my, desktop_u(70), ty,
+                         (uint32_t)fb->width - desktop_u(180), th)) {
+        int wi = -1, overflow = 0;
+        if (desktop_taskbar_hit_button(mx, my, &wi, &overflow) && !overflow && wi >= 0) {
+            taskbar_rebuild();
+            for (int s = 0; s < taskbar_visible; s++) {
+                if (taskbar_order[s] == wi) {
+                    taskbar_preview_slot = s;
+                    break;
+                }
+            }
+        }
+    }
+    if (prev != taskbar_preview_slot)
+        dirty_bits |= DIRTY_MOVE;
+}
+
+void desktop_draw_taskbar_preview(void) {
+    if (taskbar_preview_slot < 0)
+        return;
+    int win_idx = -1;
+    if (!desktop_taskbar_map_win(taskbar_preview_slot, &win_idx) || win_idx < 0)
+        return;
+    struct framebuffer *fb = fb_get();
+    uint32_t th = desktop_taskbar_h();
+    uint32_t ty = (uint32_t)fb->height - th;
+    uint32_t bx = desktop_u(70) + (uint32_t)taskbar_preview_slot * desktop_taskbar_btn_w();
+    uint32_t bw = desktop_u(180);
+    uint32_t bh = fb_cell_h() + desktop_u(8);
+    uint32_t px = bx;
+    if (px + bw > (uint32_t)fb->width - desktop_u(8))
+        px = (uint32_t)fb->width - desktop_u(8) - bw;
+    uint32_t py = ty > bh + desktop_u(4) ? ty - bh - desktop_u(4) : ty - bh;
+    fb_fill_rect(px, py, bw, bh, desktop_color_surface());
+    fb_fill_rect(px, py, bw, desktop_u(2), desktop_color_accent());
+    const char *title = desktop_app_title(wins[win_idx].kind);
+    fb_draw_string_fit(px + desktop_u(6), py + desktop_u(4), bw - desktop_u(12), title,
+                       desktop_color_fg(), desktop_color_surface());
 }
 
 #define START_APPS 12
@@ -340,11 +388,16 @@ void desktop_draw_start_menu(void) {
     uint32_t search_bg = desktop_color_bg();
     fb_fill_rect(mx + desktop_u(8), cy, mw - desktop_u(16), START_SEARCH_H - desktop_u(2), search_bg);
     fb_fill_rect(mx + desktop_u(8), cy, mw - desktop_u(16), desktop_u(1), desktop_color_dim());
-    if (start_filter[0])
+    if (start_filter[0]) {
         fb_draw_string(mx + desktop_u(14), cy + desktop_u(4), start_filter,
                        desktop_color_fg(), search_bg);
-    else
-        fb_draw_string(mx + desktop_u(14), cy + desktop_u(4), "Type to search…",
+        char match_hint[20];
+        snprintf(match_hint, sizeof(match_hint), "%d match%s",
+                 start_visible_rows, start_visible_rows == 1 ? "" : "es");
+        fb_draw_string(mx + mw - desktop_u(14) - (uint32_t)strlen(match_hint) * fb_cell_w(),
+                       cy + desktop_u(4), match_hint, desktop_color_dim(), search_bg);
+    } else
+        fb_draw_string(mx + desktop_u(14), cy + desktop_u(4), "Type to search apps…",
                        desktop_color_dim(), search_bg);
     cy += START_SEARCH_H + desktop_u(4);
     if (start_visible_rows == 0) {
