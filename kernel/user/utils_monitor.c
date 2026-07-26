@@ -103,7 +103,7 @@ int ups_main(int argc, char **argv) {
                            list[i].name,
                            list[i].pid == cur ? " *" : "");
     }
-    console_printf("tasks %d  ctx %lu  (sorted by CPU ticks)\n",
+    console_printf("tasks %d  ctx %lu  (sorted by SHR CPU ticks)\n",
                    n, (unsigned long)sched_ctx_switches());
     return 0;
 }
