@@ -23,7 +23,7 @@ Artifacts: `/tmp/peak-https-diag4/` (CLI matrix), `/tmp/peak-https-accept/` (Acc
 | B-HTTPS-03/04 | WebPKI path | cross-signed roots + ECDSA | SPKI anchor match + BIT STRING EC point parse | webpki.c | **Fixed** |
 | B-HTTPS-05 | Accept / Forget TOFU | Accept → trust; Forget → fail | `tlsinfo -A`/`-F` + error-page buttons | accept prove PASS | **Fixed** |
 | B-HTTPS-06 | Desktop matrix | tabs/Retry/lock/mixed/HSTS | CLI + code paths; GUI dumps optional | see notes | **Partial** |
-| B-HTTPS-H2 | HTTP/2 response body | non-empty HTML | Often `HTTP/2 200` with `0 bytes` (HEADERS without DATA) | diag4 | **Deferred** |
+| B-HTTPS-H2 | HTTP/2 response body | non-empty HTML | Frame cap was 12 KiB (rejected valid 16 KiB DATA); no PING ACK / WINDOW_UPDATE; body cap now 64 KiB | BR-1 http2.c | **Fixed** |
 
 ## Root causes fixed
 
@@ -35,5 +35,9 @@ Artifacts: `/tmp/peak-https-diag4/` (CLI matrix), `/tmp/peak-https-accept/` (Acc
 
 ## Deferred
 
-- **HTTP/2 empty bodies** on many public sites after successful WebPKI (follow-up: DATA/window handling). Trust/verify path is green; page HTML may be empty until H2 body path is fixed.
 - Full mouse-driven GUI matrix dumps (relative PS/2 fragile); CLI covers trust/Accept/expired.
+
+## BR-1 (HTTP/2 body path)
+
+- Accept frames up to `HTTP2_MAX_FRAME` (16384); store body up to `HTTP2_BODY_MAX` (65536) on the heap.
+- ACK PING; send WINDOW_UPDATE after DATA; SETTINGS INITIAL_WINDOW_SIZE; HEADERS+CONTINUATION until END_HEADERS.
