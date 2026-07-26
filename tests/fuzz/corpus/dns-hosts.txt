@@ -1,0 +1,14 @@
+# valid
+example.com
+sub.example.org
+a-b.c.d
+localhost
+peak.local
+# invalid
+-
+..
+bad..host
+-toolonglabeltoolonglabeltoolonglabeltoolonglabeltoolonglabeltoolonglabelx.example
+*wildcard
+host with space
+.

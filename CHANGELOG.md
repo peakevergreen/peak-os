@@ -4,6 +4,8 @@ All notable changes to Peak OS are documented here. Version strings in the guest
 
 ## 0.2.0-ai (current, untagged)
 
+- **Pass 157:** Fuzz corpus fixtures for DNS/ctr/blob parsers; `test_parser_corpus` host gate + `fuzz-parser-smoke.sh`
+
 - **Pass 156:** Net Explorer TCP connection filter (`/`); Disks save confirm/cancel toast on Esc
 
 - **Pass 155:** `man`/`help` entries for Wave 5–6 tools (`join`, `ss`, `pgrep`, …); `help <category>` filter
