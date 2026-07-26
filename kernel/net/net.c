@@ -50,6 +50,11 @@ int dhcp_have_nak;
 uint16_t ephem_port = 40000;
 uint16_t dns_txid;
 uint32_t dns_answer_ip;
+uint16_t dns_want_qtype;
+uint8_t dns_answer_aaaa[16];
+char dns_answer_ptr[256];
+int dns_answer_got_aaaa;
+int dns_answer_got_ptr;
 int dns_done;
 uint16_t dns_sport;
 

@@ -25,6 +25,13 @@ int  net_ready(void);
 void net_get_info(struct net_info *out);
 
 /* DNS A record. Returns host-order IPv4 or 0 on failure. */
+
+/* Extended DNS (AAAA / PTR). IPv6 not routed; answers are diagnostic only. */
+int net_dns_resolve_aaaa(const char *hostname, uint32_t timeout_ticks,
+                           uint8_t addr[16]);
+int net_dns_reverse_ptr(uint32_t ip, uint32_t timeout_ticks, char *name_out, size_t cap);
+void net_format_ipv6(const uint8_t addr[16], char *buf, size_t cap);
+
 uint32_t net_dns_resolve(const char *hostname, uint32_t timeout_ticks);
 
 #define NET_TCP_MAX     16
