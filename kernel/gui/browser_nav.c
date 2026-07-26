@@ -1,4 +1,5 @@
 #include "browser.h"
+#include "desktop_internal.h"
 #include "browser_internal.h"
 #include "browser_js.h"
 #include "css.h"
@@ -386,19 +387,23 @@ int browser_ctx_menu(struct ctx_menu_item *items, int max_items) {
     items[3].enabled = t->url[0] != '\0';
     items[3].separator = 0;
     items[3].action_id = CTX_ACT_BROWSER_BOOKMARK;
-    items[4].label = "Copy URL";
-    items[4].enabled = t->url[0] != '\0';
+    items[4].label = "Save to Downloads";
+    items[4].enabled = t->url[0] != '\0' && t->last_body_len > 0;
     items[4].separator = 0;
-    items[4].action_id = CTX_ACT_BROWSER_COPY_URL;
-    items[5].label = "New tab";
-    items[5].enabled = ntabs < BR_MAX_TABS;
+    items[4].action_id = CTX_ACT_BROWSER_DOWNLOAD;
+    items[5].label = "Copy URL";
+    items[5].enabled = t->url[0] != '\0';
     items[5].separator = 0;
-    items[5].action_id = CTX_ACT_BROWSER_NEW_TAB;
-    items[6].label = "Reopen closed tab";
-    items[6].enabled = browser_has_closed_tab() && ntabs < BR_MAX_TABS;
+    items[5].action_id = CTX_ACT_BROWSER_COPY_URL;
+    items[6].label = "New tab";
+    items[6].enabled = ntabs < BR_MAX_TABS;
     items[6].separator = 0;
-    items[6].action_id = CTX_ACT_BROWSER_RESTORE;
-    int n = 7;
+    items[6].action_id = CTX_ACT_BROWSER_NEW_TAB;
+    items[7].label = "Reopen closed tab";
+    items[7].enabled = browser_has_closed_tab() && ntabs < BR_MAX_TABS;
+    items[7].separator = 0;
+    items[7].action_id = CTX_ACT_BROWSER_RESTORE;
+    int n = 8;
     int bm = browser_bookmark_count();
     if (bm > 0 && n + 1 < max_items) {
         items[n].label = NULL;
@@ -407,13 +412,19 @@ int browser_ctx_menu(struct ctx_menu_item *items, int max_items) {
         items[n].action_id = CTX_ACT_NONE;
         n++;
     }
-    for (int i = 0; i < bm && i < 6 && n < max_items - 2; i++) {
+    for (int i = 0; i < bm && i < 4 && n < max_items - 4; i++) {
         const char *title = browser_bookmark_title(i);
         items[n].label = title ? title : "Bookmark";
         items[n].enabled = 1;
         items[n].separator = 0;
         items[n].action_id = CTX_ACT_BROWSER_BM_BASE + i;
         n++;
+        if (n >= max_items - 2)
+            break;
+        items[n].label = "Remove bookmark";
+        items[n].enabled = 1;
+        items[n].separator = 0;
+        items[n].action_id = CTX_ACT_BROWSER_BM_RM_BASE + i;
     }
     if (n < max_items) {
         items[n].label = NULL;
@@ -442,6 +453,17 @@ int browser_ctx_action(int action_id) {
     case CTX_ACT_BROWSER_RELOAD:
         browser_reload();
         return 1;
+    case CTX_ACT_BROWSER_DOWNLOAD: {
+        size_t bl = 0;
+        const char *body = browser_page_body(&bl);
+        if (body && bl) {
+            if (browser_download_save(t->url, body, bl, t->status, sizeof(t->status)) == 0)
+                notify_push_clipboard("Saved to Downloads");
+        } else
+            snprintf(t->status, sizeof(t->status), "Nothing to save");
+        needs_redraw = 1;
+        return 1;
+    }
     case CTX_ACT_BROWSER_BOOKMARK:
         if (browser_bookmark_add(t->url, t->title[0] ? t->title : NULL) == 0) {
             snprintf(t->status, sizeof(t->status), "Bookmark saved");
@@ -467,6 +489,13 @@ int browser_ctx_action(int action_id) {
         browser_restore_closed_tab();
         return 1;
     default:
+        if (action_id >= CTX_ACT_BROWSER_BM_RM_BASE &&
+            action_id < CTX_ACT_BROWSER_BM_RM_BASE + 16) {
+            if (browser_bookmark_remove(action_id - CTX_ACT_BROWSER_BM_RM_BASE) == 0)
+                snprintf(t->status, sizeof(t->status), "Bookmark removed");
+            needs_redraw = 1;
+            return 1;
+        }
         if (action_id >= CTX_ACT_BROWSER_BM_BASE &&
             action_id < CTX_ACT_BROWSER_BM_BASE + 16) {
             browser_bookmark_go(action_id - CTX_ACT_BROWSER_BM_BASE);

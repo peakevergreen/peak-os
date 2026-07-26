@@ -326,6 +326,12 @@ grep -q 'IPv4-only' kernel/user/utils_net.c
 
 
 
+echo "==> Wave 3 Pass 75 browser downloads/bookmarks"
+grep -q 'browser_download_save' kernel/gui/browser_bookmarks.c
+grep -q 'browser_bookmark_remove' kernel/gui/browser_bookmarks.c
+grep -q 'CTX_ACT_BROWSER_DOWNLOAD' kernel/gui/desktop_internal.h
+grep -q 'Save to Downloads' kernel/gui/browser_nav.c
+
 echo "==> Wave 3 Pass 74 VFS stream export"
 grep -q 'vfs_export_ramdisk_stream' kernel/vfs_peakfs.c
 grep -q 'VFS_EXPORT_STREAM_CHUNK' kernel/include/vfs.h

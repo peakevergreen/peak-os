@@ -138,3 +138,56 @@ void browser_bookmark_go(int idx) {
     if (url)
         browser_go(url);
 }
+
+
+int browser_bookmark_remove(int idx) {
+    int n = 0;
+    for (int i = 0; i < BR_BOOKMARK_MAX; i++) {
+        if (!bookmarks[i].used)
+            continue;
+        if (n == idx) {
+            bookmarks[i].used = 0;
+            bookmarks[i].title[0] = bookmarks[i].url[0] = '\0';
+            bookmarks_persist();
+            return 0;
+        }
+        n++;
+    }
+    return -1;
+}
+
+static void dl_safe_name(const char *url, char *out, size_t cap) {
+    size_t o = 0;
+    const char *p = url ? url : "page";
+    for (; *p && o + 1 < cap; p++) {
+        char c = *p;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+            c == '.' || c == '-' || c == '_')
+            out[o++] = c;
+        else if (c == '/' || c == ':')
+            out[o++] = '_';
+    }
+    if (o == 0)
+        snprintf(out, cap, "page");
+    else
+        out[o] = '\0';
+}
+
+int browser_download_save(const char *url, const char *body, size_t len, char *msg, size_t msg_cap) {
+    if (!body || !len || len > 256 * 1024)
+        return -1;
+    (void)vfs_mkdir("/home/dev");
+    (void)vfs_mkdir("/home/dev/Downloads");
+    char base[64];
+    dl_safe_name(url, base, sizeof(base));
+    char path[VFS_PATH_MAX];
+    snprintf(path, sizeof(path), "/home/dev/Downloads/%s.html", base);
+    if (vfs_write_file(path, body, len) != 0) {
+        if (msg && msg_cap)
+            snprintf(msg, msg_cap, "download write failed");
+        return -1;
+    }
+    if (msg && msg_cap)
+        snprintf(msg, msg_cap, "saved %s (%zu B)", path, len);
+    return 0;
+}
