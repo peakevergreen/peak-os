@@ -26,4 +26,7 @@ int  settings_tls_tofu(void);
 void settings_set_tls_tofu(int on);
 void settings_toggle_tls_tofu(void);
 
+int  settings_idle_lock_minutes(void);
+void settings_cycle_idle_lock_minutes(void);
+
 #endif

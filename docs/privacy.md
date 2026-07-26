@@ -35,8 +35,9 @@ Agent memory, net grants, and browser storage are session-scoped unless the user
 ## Session lock (honest)
 
 Desktop idle lock is a **privacy cover**, not authentication. Anyone with console
-access can press Enter to resume. It does not encrypt VFS, revoke capabilities, or
-replace a password. See [security-model.md](security-model.md).
+access can press Enter to resume — **Enter unlocks (not a password)**. It does not
+encrypt VFS, revoke capabilities, or replace a password. Configure idle minutes
+under Settings → Privacy. See [security-model.md](security-model.md).
 
 ## Kill switch
 
@@ -48,8 +49,9 @@ toggle by accident.
 ## UI surfaces
 
 Settings → General: plain-language storage summary (disk present, what persists).  
-Settings → Privacy: persist profile (private / workspace / full), network kill switch
-(double-click to enable), clear session (revokes grants, caps, clipboard).  
+Settings → Privacy: persist profile (private / workspace / full), idle lock minutes
+(1–60), network kill switch (double-click to enable), clear session (revokes grants,
+caps, clipboard).  
 Settings → Network: link info, trust-on-first-use toggle, forget saved TLS certificates.
 
 CLI: `privacy persist private|workspace|full`, `privacy net-allow`,

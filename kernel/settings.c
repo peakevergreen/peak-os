@@ -13,6 +13,7 @@ static uint32_t gui_scale = 3;
 static int show_brand = 1;
 static int show_clock = 1;
 static int tls_tofu = 0; /* opt-in; WebPKI is default */
+static int idle_lock_minutes = 5;
 
 static void clamp_scale(void) {
     if (gui_scale < 1)
@@ -26,6 +27,7 @@ void settings_init(void) {
     show_brand = 1;
     show_clock = 1;
     tls_tofu = 0;
+    idle_lock_minutes = 5;
 
     char buf[128];
     size_t n = 0;
@@ -53,6 +55,12 @@ void settings_init(void) {
             show_clock = (line[6] != '0');
         } else if (!strncmp(line, "tls_tofu=", 9)) {
             tls_tofu = (line[9] != '0');
+        } else if (!strncmp(line, "idle_lock=", 10)) {
+            int v = 0;
+            for (const char *c = line + 10; *c >= '0' && *c <= '9'; c++)
+                v = v * 10 + (*c - '0');
+            if (v >= 1 && v <= 60)
+                idle_lock_minutes = v;
         }
     }
     clamp_scale();
@@ -60,8 +68,9 @@ void settings_init(void) {
 
 void settings_persist(void) {
     char buf[96];
-    snprintf(buf, sizeof(buf), "scale=%u\nbrand=%d\nclock=%d\ntls_tofu=%d\n",
-             (unsigned)gui_scale, show_brand ? 1 : 0, show_clock ? 1 : 0, tls_tofu ? 1 : 0);
+    snprintf(buf, sizeof(buf), "scale=%u\nbrand=%d\nclock=%d\ntls_tofu=%d\nidle_lock=%d\n",
+             (unsigned)gui_scale, show_brand ? 1 : 0, show_clock ? 1 : 0, tls_tofu ? 1 : 0,
+             idle_lock_minutes);
     vfs_write_file(SETTINGS_PATH, buf, strlen(buf));
 }
 
@@ -116,3 +125,17 @@ int settings_tls_tofu(void) { return tls_tofu; }
 void settings_set_tls_tofu(int on) { tls_tofu = on ? 1 : 0; }
 
 void settings_toggle_tls_tofu(void) { tls_tofu = !tls_tofu; }
+
+int settings_idle_lock_minutes(void) {
+    if (idle_lock_minutes < 1)
+        idle_lock_minutes = 1;
+    if (idle_lock_minutes > 60)
+        idle_lock_minutes = 60;
+    return idle_lock_minutes;
+}
+
+void settings_cycle_idle_lock_minutes(void) {
+    idle_lock_minutes += 5;
+    if (idle_lock_minutes > 60)
+        idle_lock_minutes = 1;
+}

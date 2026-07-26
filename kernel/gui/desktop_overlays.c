@@ -7,6 +7,7 @@
 #include "clipboard.h"
 #include "power.h"
 #include "timer.h"
+#include "settings.h"
 #include "util.h"
 
 int alttab_open;
@@ -36,6 +37,8 @@ static const char *alttab_app_hint(enum app_kind k) {
     return "";
 }
 
+static const char idle_lock_honesty_copy[] = "Enter unlocks (not a password)";
+
 void desktop_draw_session_overlays(void) {
     struct framebuffer *fb = fb_get();
     if (session_lock) {
@@ -48,7 +51,7 @@ void desktop_draw_session_overlays(void) {
         fb_fill_rect(mx, my, mw, desktop_u(3), desktop_color_accent());
         fb_draw_string(mx + desktop_u(24), my + desktop_u(28), "Session locked", desktop_color_fg(), desktop_color_surface());
         fb_draw_string(mx + desktop_u(24), my + desktop_u(28) + fb_cell_h() + desktop_u(4),
-                       "Idle privacy cover — not a password login",
+                       idle_lock_honesty_copy,
                        desktop_color_dim(), desktop_color_surface());
         fb_draw_string(mx + desktop_u(24), my + desktop_u(28) + 2 * (fb_cell_h() + desktop_u(4)),
                        "Press Enter to resume (single-user)", desktop_color_dim(), desktop_color_surface());
@@ -356,7 +359,8 @@ void desktop_draw_help(void) {
 
 void desktop_overlays_idle_lock(uint64_t last_input_tick) {
     if (!session_lock && !power_confirm &&
-        timer_ticks() - last_input_tick > 30000) {
+        timer_ticks() - last_input_tick >
+            (uint64_t)settings_idle_lock_minutes() * 6000ull) {
         session_lock = 1;
         dirty_bits |= DIRTY_FULL;
     }
