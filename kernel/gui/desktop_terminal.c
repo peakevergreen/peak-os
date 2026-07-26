@@ -19,6 +19,8 @@ struct term_state {
     int find_active;
     int find_hit_row;
     int find_hit_col;
+    int find_match_total;
+    int find_match_idx;
     uint32_t caret_col;
     int inited;
     int full_redraw;
@@ -62,6 +64,7 @@ static void term_reset_state(struct term_state *t) {
     memset(t, 0, sizeof(*t));
     t->sel_row = t->sel_a = t->sel_b = -1;
     t->find_hit_row = t->find_hit_col = -1;
+    t->find_match_total = t->find_match_idx = 0;
     t->inited = 1;
     t->full_redraw = 1;
 }
@@ -281,6 +284,7 @@ void gui_term_reset(void) {
     t->find_len = 0;
     t->find_needle[0] = '\0';
     t->find_hit_row = t->find_hit_col = -1;
+    t->find_match_total = t->find_match_idx = 0;
     t->caret_col = 0;
     t->inited = 1;
     t->full_redraw = 1;
@@ -378,9 +382,30 @@ static int term_find_match_at(const char *line, int col, const char *needle, int
     return 1;
 }
 
+static void term_find_update_meta(struct term_state *t) {
+    t->find_match_total = 0;
+    t->find_match_idx = 0;
+    if (t->find_len <= 0)
+        return;
+    int seen = 0;
+    for (int row = 0; row < (int)TERM_ROWS; row++) {
+        const char *line = t->lines[row];
+        for (int col = 0; col < TERM_COLS; col++) {
+            if (!term_find_match_at(line, col, t->find_needle, t->find_len))
+                continue;
+            t->find_match_total++;
+            if (row < t->find_hit_row || (row == t->find_hit_row && col <= t->find_hit_col))
+                t->find_match_idx = t->find_match_total;
+        }
+    }
+    if (t->find_hit_row < 0)
+        t->find_match_idx = 0;
+}
+
 static void term_find_from(struct term_state *t, int start_row, int start_col) {
     if (t->find_len <= 0) {
         t->find_hit_row = t->find_hit_col = -1;
+        t->find_match_total = t->find_match_idx = 0;
         return;
     }
     int row = start_row;
@@ -398,6 +423,7 @@ static void term_find_from(struct term_state *t, int start_row, int start_col) {
                 if (term_find_match_at(line, col, t->find_needle, t->find_len)) {
                     t->find_hit_row = row;
                     t->find_hit_col = col;
+                    term_find_update_meta(t);
                     return;
                 }
             }
@@ -407,6 +433,7 @@ static void term_find_from(struct term_state *t, int start_row, int start_col) {
         col = 0;
     }
     t->find_hit_row = t->find_hit_col = -1;
+    term_find_update_meta(t);
 }
 
 static void term_find_next(struct term_state *t) {
@@ -505,10 +532,24 @@ void desktop_terminal_clear(void) {
     t->find_len = 0;
     t->find_needle[0] = '\0';
     t->find_hit_row = t->find_hit_col = -1;
+    t->find_match_total = t->find_match_idx = 0;
     t->caret_col = 0;
     t->full_redraw = 1;
     dirty_bits |= DIRTY_TERM;
     term_mark_active_surf_dirty();
+}
+
+void term_clear_scrollback(void) {
+    struct term_state *t = term_active();
+    for (uint32_t i = 0; i < t->row && i < TERM_ROWS; i++)
+        memset(t->lines[i], 0, sizeof(t->lines[i]));
+    t->scroll = 0;
+    t->sel_row = t->sel_a = t->sel_b = -1;
+    t->full_redraw = 1;
+    dirty_bits |= DIRTY_TERM;
+    term_mark_active_surf_dirty();
+    notify_push("Scrollback cleared");
+    dirty_bits |= DIRTY_TOAST;
 }
 
 void desktop_terminal_copy(void) {
@@ -556,7 +597,7 @@ void desktop_terminal_paste(void) {
 }
 
 int desktop_terminal_ctx_menu(struct ctx_menu_item *items, int max_items) {
-    if (!items || max_items < 8)
+    if (!items || max_items < 9)
         return 0;
     struct term_state *t = term_active();
     int has_sel = term_has_selection(t);
@@ -582,20 +623,24 @@ int desktop_terminal_ctx_menu(struct ctx_menu_item *items, int max_items) {
     items[4].label = "Clear scrollback";
     items[4].enabled = 1;
     items[4].separator = 0;
-    items[4].action_id = CTX_ACT_TERM_CLEAR;
-    items[5].label = "New Terminal";
+    items[4].action_id = CTX_ACT_TERM_CLEAR_SB;
+    items[5].label = "Clear all";
     items[5].enabled = 1;
     items[5].separator = 0;
-    items[5].action_id = CTX_ACT_TERM_NEW;
-    items[6].label = NULL;
-    items[6].enabled = 0;
-    items[6].separator = 1;
-    items[6].action_id = CTX_ACT_NONE;
-    items[7].label = "Close window";
-    items[7].enabled = 1;
-    items[7].separator = 0;
-    items[7].action_id = CTX_ACT_CLOSE;
-    return 8;
+    items[5].action_id = CTX_ACT_TERM_CLEAR;
+    items[6].label = "New Terminal";
+    items[6].enabled = 1;
+    items[6].separator = 0;
+    items[6].action_id = CTX_ACT_TERM_NEW;
+    items[7].label = NULL;
+    items[7].enabled = 0;
+    items[7].separator = 1;
+    items[7].action_id = CTX_ACT_NONE;
+    items[8].label = "Close window";
+    items[8].enabled = 1;
+    items[8].separator = 0;
+    items[8].action_id = CTX_ACT_CLOSE;
+    return 9;
 }
 
 int desktop_terminal_ctx_action(int action_id) {
@@ -612,6 +657,9 @@ int desktop_terminal_ctx_action(int action_id) {
     case CTX_ACT_TERM_CLEAR:
         desktop_terminal_clear();
         shell_redraw_prompt();
+        return 1;
+    case CTX_ACT_TERM_CLEAR_SB:
+        term_clear_scrollback();
         return 1;
     case CTX_ACT_TERM_FIND: {
         struct term_state *ts = term_active();
@@ -641,6 +689,7 @@ void desktop_terminal_find_close(void) {
     t->find_len = 0;
     t->find_needle[0] = '\0';
     t->find_hit_row = t->find_hit_col = -1;
+    t->find_match_total = t->find_match_idx = 0;
     t->full_redraw = 1;
     dirty_bits |= DIRTY_TERM;
     term_mark_active_surf_dirty();
@@ -803,8 +852,12 @@ void desktop_terminal_draw(struct win *w) {
         uint32_t hint_w = w->w > desktop_u(24) ? w->w - desktop_u(24) : w->w;
         if (t->find_active) {
             char fbar[72];
-            snprintf(fbar, sizeof(fbar), "Find: %s  Enter=next  Esc=close",
-                     t->find_needle);
+            if (t->find_len > 0 && t->find_match_total > 0)
+                snprintf(fbar, sizeof(fbar), "Find: %s  %d/%d  Enter=next  Esc=close",
+                         t->find_needle, t->find_match_idx, t->find_match_total);
+            else
+                snprintf(fbar, sizeof(fbar), "Find: %s  Enter=next  Esc=close",
+                         t->find_needle);
             fb_draw_string_fit(tx, hint_y, hint_w, fbar, desktop_color_accent(), bg);
         } else if (term_has_selection(t)) {
             fb_draw_string(tx, hint_y, "Ctrl+C copy  Ctrl+V paste", desktop_color_dim(), bg);

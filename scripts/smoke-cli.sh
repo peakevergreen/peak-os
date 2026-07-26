@@ -474,6 +474,12 @@ grep -q 'join' docs/CLI.md
 
 
 
+echo "==> Wave 6 Pass 134 terminal scrollback search"
+grep -q 'term_clear_scrollback' kernel/gui/desktop_terminal.c
+grep -q 'term_find_update_meta' kernel/gui/desktop_terminal.c
+grep -q 'find_match_total' kernel/gui/desktop_terminal.c
+grep -q 'CTX_ACT_TERM_CLEAR_SB' kernel/gui/desktop_internal.h
+
 echo "==> Wave 6 Pass 133 images format status"
 grep -q 'img_format_label' kernel/gui/desktop_images.c
 grep -q 'img_set_format_from_path' kernel/gui/desktop_images.c
