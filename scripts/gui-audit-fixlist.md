@@ -4,7 +4,7 @@
 **Profile:** BIOS, user-net, `-machine pc`, 1920×1080, UI scale 3  
 **Harness:** [`scripts/peak_qemu_audit_lib.py`](peak_qemu_audit_lib.py), [`scripts/peak-qemu-audit-run.py`](peak-qemu-audit-run.py)  
 **Dumps:** `/tmp/peak-audit-v2/` (60 PNG steps)  
-**Gate:** ≥20 Open proven defects before fix PRs — **25 Open** below.
+**Gate:** ≥20 Open proven defects before fix PRs — campaign closed: **0 Open**, 19 Fixed, 6 Deferred below.
 
 Historical (prior campaign): GA-001…004 Fixed (#288–#291).
 

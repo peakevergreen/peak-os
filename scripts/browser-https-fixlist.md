@@ -1,23 +1,25 @@
-# Browser HTTPS fixlist (QEMU-proven)
+# Browser HTTPS fixlist (QEMU campaign notes)
 
 Artifacts: `/tmp/peak-https-diag4/` (CLI matrix), `/tmp/peak-https-accept/` (Accept/Forget),
 `/tmp/peak-https-accept/expired.txt` (honesty). Harness: `scripts/browser-https-diag.py`,
 `scripts/browser-https-accept-prove.py`, `scripts/browser-https-gui-matrix.py`.
+Fresh recheck (2026-08-04): `scripts/browser-https-diag.py` + `scripts/browser-render-matrix.py`
+— live HTTPS M1–M6 / render matrix **not** green (empty body / handshake stall); plain HTTP OK.
 
 ## Matrix (user-net, `-machine pc`, virtio-rng, `-rtc base=2026-08-04T17:00:00`)
 
 | ID | URL / case | Expected | Actual | Proof | Status |
 |----|------------|----------|--------|-------|--------|
 | B-HTTPS-00 | `wget` `%.7s` method | `GET url` | snprintf lacked `.` precision → method reject | Fixed in `kernel/util.c` | **Fixed** |
-| B-CLI-01 | `date` / RTC | usable wall time | `2026-07-26 17:00:04` | diag4 | OK |
+| B-CLI-01 | `date` / RTC | usable wall time | `2026-08-04 17:00:04` | diag | OK |
 | B-CLI-02 | DNS `example.com` | A record | via `10.0.2.3` | diag | OK |
-| B-CLI-03 | `http://example.com/` | HTTP 200 | 200, 559 bytes | diag4 | OK |
-| B-HTTPS-M1 | `https://example.com/` | WebPKI OK | HTTP/2 200 (trust path) | diag4 | **Fixed** |
-| B-HTTPS-M2 | `https://www.cloudflare.com/` | WebPKI OK | HTTP/2 200 | diag4 | **Fixed** |
-| B-HTTPS-M3 | `https://peakevergreen.com/` | WebPKI OK | HTTP/2 200 | diag4 | **Fixed** |
-| B-HTTPS-M4 | `https://www.google.com/` | WebPKI OK | HTTP/2 200 | diag4 | **Fixed** |
-| B-HTTPS-M5 | `https://letsencrypt.org/` | WebPKI OK | HTTP/2 200 | diag4 | **Fixed** |
-| B-HTTPS-M6 | `https://github.com/` | WebPKI OK | HTTP/2 200 | diag4 | **Fixed** |
+| B-CLI-03 | `http://example.com/` | HTTP 200 | 200, 559 bytes | diag | OK |
+| B-HTTPS-M1 | `https://example.com/` | WebPKI OK + body | TLS Finished timeout / empty (`frames=0`); trust-path code Fixed separately | diag 2026-08-04 | **Partial** |
+| B-HTTPS-M2 | `https://www.cloudflare.com/` | WebPKI OK + body | empty / `fetch: tls-handshake` (`frames=0`) | diag 2026-08-04 | **Partial** |
+| B-HTTPS-M3 | `https://peakevergreen.com/` | WebPKI OK + body | empty / `fetch: tls-handshake` (`frames=0`) | diag 2026-08-04 | **Partial** |
+| B-HTTPS-M4 | `https://www.google.com/` | WebPKI OK + body | empty / `fetch: tls-handshake` (`frames=0`) | diag 2026-08-04 | **Partial** |
+| B-HTTPS-M5 | `https://letsencrypt.org/` | WebPKI OK + body | empty / `fetch: tls-handshake` (`frames=0`) | diag 2026-08-04 | **Partial** |
+| B-HTTPS-M6 | `https://github.com/` | WebPKI OK + body | empty / `fetch: tls-handshake` (`frames=0`) | diag 2026-08-04 | **Partial** |
 | B-HTTPS-01 | Fail-reason honesty | expired ≠ generic WebPKI | `fetch: tls-expired` on expired.badssl | expired.txt | **Fixed** |
 | B-HTTPS-02 | RTC | usable for validity | OK with `-rtc` / CMOS | diag | OK |
 | B-HTTPS-03/04 | WebPKI path | cross-signed roots + ECDSA | SPKI anchor match + BIT STRING EC point parse | webpki.c | **Fixed** |

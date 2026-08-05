@@ -70,13 +70,14 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 - Full **ring-3** script isolation (validated DOM/net handles)
 - [x] ES modules / `async`/`await` depth + more public-site fixtures
-- [x] **Interactive render bar (BR-1…14):** non-empty H2 bodies, external CSS, layout depth, images, forms/events, history — [browser-js.md](browser-js.md), [scripts/browser-render-checklist.md](../scripts/browser-render-checklist.md)
+- [x] **Interactive render bar (BR-1…14) code:** external CSS, layout depth, images, forms/events, multi-entry history, H2 client capacity (64 KiB) — [browser-js.md](browser-js.md), fixtures/`peak://demo`
+- [ ] **Live non-empty HTTPS bodies (B-HTTPS-H2):** Partial — Huffman HPACK + H1 fallback landed; QEMU CDN matrix still often empty (TLS/JA3) — [scripts/browser-https-fixlist.md](../scripts/browser-https-fixlist.md), [scripts/browser-render-checklist.md](../scripts/browser-render-checklist.md)
 
 ### Userspace & networking
 
 - [x] Deeper ring-3 `/bin/sh` ELF workload + per-process fds (`PROC_FD_MAX` 32)
 - [x] **virtio-net** (preferred over e1000 on QEMU) + richer socket API (`net_tcp_fd_peer` / `local` / `shutdown`)
-- [x] TLS 1.2/1.3 client, WebPKI, HTTP/2 ALPN — [network.md](network.md)
+- [x] TLS 1.2/1.3 client + WebPKI; HTTP/2 ALPN client **Partial** (negotiate + decode; live CDN bodies often empty) — [network.md](network.md)
 - ECH: fail-closed when required without config (`tls_ech_*`); full HPKE outer/inner ClientHello still open
 
 ### Passes 35–37 (shipped)

@@ -22,7 +22,7 @@ Open Browser → `peak://demo` (seeded on reset). Click **Count** to exercise DO
 
 ## Navigation chrome
 
-- **Back / Forward** (`<` `>` buttons, **b** / **f** keys): one-level history per tab; forward stack clears on a new navigation.
+- **Back / Forward** (`<` `>` buttons, **b** / **f** keys): multi-entry history per tab (`BR_HIST_MAX` 16); forward stack clears on a new navigation.
 - **Tab strip:** each tab shows page title (or URL) with fit-to-width labels; **~** prefix while fetching. Click a tab to switch; click **x** on a tab (when more than one tab is open) or press **w** to close. **+** opens a new tab (`peak://demo`).
 - **Reopen closed tab (lite):** **Shift+T** or context menu **Reopen closed tab** restores the last closed tab’s URL/title (one slot).
 - **Bookmarks**: saved to `/var/peak/bookmarks` (`title|url` lines). Context menu **Add bookmark**; bookmark bar shows up to four entries; full list in the context menu (max six).
@@ -34,7 +34,7 @@ If layout cannot produce enough boxes, the tab falls back to the reader-mode blo
 
 ## Interactive bar (BR-1…14)
 
-- **Fetch:** HTTP/2 stores up to 64 KiB with WINDOW_UPDATE / PING ACK; browser body budget 256 KiB; truncation noted in status.
+- **Fetch:** HTTP/2 client can store up to 64 KiB when peers send DATA (WINDOW_UPDATE / PING ACK); browser body budget 256 KiB; truncation noted in status. Live QEMU CDN matrix often yields empty bodies (`frames=0`) — see B-HTTPS-H2.
 - **CSS:** Inline `<style>` plus fetched `<link rel=stylesheet>` (bounded); specificity; width/max-width/height/text-align/border; inline flow + form/img boxes.
 - **Images:** PNG/JPEG (and PPM/BMP) via `img_decode_*`; painted in layout when decoded.
 - **Forms:** `input` / `textarea` / `button` focus + typing; GET/POST submit (`application/x-www-form-urlencoded`).
@@ -43,7 +43,7 @@ If layout cannot produce enough boxes, the tab falls back to the reader-mode blo
 
 ## Compatibility goal
 
-Interactive bar: readable + lightly interactive real sites. Full Chromium-level standards coverage is **not** a completion criterion.
+Interactive bar goal: readable + lightly interactive real sites **once bodies arrive**. Full Chromium-level standards coverage is **not** a completion criterion. Live CDN HTTPS bodies are still often empty (Partial — B-HTTPS-H2); fixtures and `peak://demo` exercise UI without that path.
 
 ## Isolation (current → next)
 
@@ -58,7 +58,8 @@ Interactive bar: readable + lightly interactive real sites. Full Chromium-level 
 ## Public sites
 
 Optional manual checks (not CI): Fark, peakevergreen.com, Google, Wikipedia Main Page.
-See `scripts/browser-render-checklist.md`.
+Last known `scripts/browser-render-matrix.py` run: **FAIL 5/5** (empty bodies / handshake stalls).
+See `scripts/browser-render-checklist.md` and `scripts/browser-https-fixlist.md` (B-HTTPS-H2).
 
 ## Tests
 

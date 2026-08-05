@@ -18,7 +18,7 @@ const char *bootinfo_sysname(void) {
 }
 
 const char *bootinfo_release(void) {
-    return "0.2.0-ai";
+    return "0.3.0-ai";
 }
 
 const char *bootinfo_machine(void) {

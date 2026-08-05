@@ -2,13 +2,17 @@
 
 All notable changes to Peak OS are documented here. Version strings in the guest/README may advance before a matching git tag exists.
 
-## 0.2.0-ai (current, untagged)
+## 0.3.0-ai
 
-- **HTTP/2 empty-body path (B-HTTPS-H2):** Huffman HPACK decoder + host gate; identity `accept-encoding`; progress recv timeout; wget `h2-trace`; per-request HTTP/1.1 ALPN fallback (restore H2 if H1 empty). Live CDN matrix still often empty pending TLS fingerprint work.
+Tagged as `v0.3.0-ai`. Prior release: `v0.2.0-ai`. Docs grounded so live CDN HTTPS body fetch is **Partial** (not claimed green).
 
-- **Browser render maturity (Interactive bar, BR-1…14):** HTTP/2 64 KiB bodies + flow control/PING ACK; larger DOM/CSS budgets; external stylesheets; cascade/inline layout; PNG/JPEG `<img>` paint; form controls + GET/POST submit; DOM events depth; `Response.text` / `querySelectorAll` / classList / location; multi-entry history; reader honesty; fixtures + `scripts/browser-render-matrix.py`
+- **HTTP/2 empty-body path (B-HTTPS-H2):** Huffman HPACK decoder + host gate; identity `accept-encoding`; progress recv timeout; wget `h2-trace`; per-request HTTP/1.1 ALPN fallback (restore H2 if H1 empty). Live QEMU user-net CDN matrix still FAIL (empty bodies / handshake stalls) pending TLS fingerprint work — see `scripts/browser-https-fixlist.md`.
 
-- **Browser HTTPS WebPKI:** SPKI trust-anchor match for cross-signed roots; ECDSA BIT STRING parse; TLS 1.2 fail-closed on cert; error-page Accept/Forget + `tlsinfo -A`/`-F`; snprintf `%.Ns`; QEMU URL matrix in `scripts/browser-https-fixlist.md`
+- **Browser render maturity (Interactive bar, BR-1…14):** HTTP/2 **client capacity** 64 KiB + flow control/PING ACK; larger DOM/CSS budgets; external stylesheets; cascade/inline layout; PNG/JPEG `<img>` paint; form controls + GET/POST submit; DOM events depth; `Response.text` / `querySelectorAll` / classList / location; multi-entry history; reader honesty; fixtures + `scripts/browser-render-matrix.py`. Matrix lock-in for live public HTTPS bodies is **not** green (same Partial as B-HTTPS-H2); fixture/`peak://demo` paths exercise UI.
+
+- **Browser HTTPS WebPKI:** SPKI trust-anchor match for cross-signed roots; ECDSA BIT STRING parse; TLS 1.2 fail-closed on cert; error-page Accept/Forget + `tlsinfo -A`/`-F`; snprintf `%.Ns`. Trust-path code Fixed; live M1–M6 body fetch is Partial (see fixlist).
+
+- **Docs honesty:** ROADMAP / network.md / browser-js.md / fixlists no longer overstate live HTTP/2 or “real sites” as done.
 
 - **Audit v2 harness:** mouse/PPM helpers + dense scenario runner; deep fixlist GA-101…125 closed Fixed/Deferred
 

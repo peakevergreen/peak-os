@@ -9,7 +9,7 @@
 [![CI](https://github.com/peakevergreen/peak-os/actions/workflows/ci.yml/badge.svg)](https://github.com/peakevergreen/peak-os/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Baseline tag: `v0.1.0-mvp` · Current: **0.2.0-ai** (see [CHANGELOG.md](CHANGELOG.md))
+Baseline tag: `v0.1.0-mvp` · Current: **0.3.0-ai** (see [CHANGELOG.md](CHANGELOG.md))
 
 ## Why Peak OS?
 
@@ -115,7 +115,7 @@ Peak loaders hand a versioned **BootInfo** (memory map, framebuffer, HHDM, optio
 | `privacy` | Persist profile / net-allow / kill-switch |
 | `gui` | Multi-window desktop (Ctrl+Alt+Esc leaves) |
 | `ctr build` / `ctr run` | In-guest demos |
-| Browser (GUI) | Tabs; `http(s)://` via in-guest stack |
+| Browser (GUI) | Tabs; `http(s)://` via in-guest stack (live CDN HTTPS bodies often empty — [network.md](docs/network.md)) |
 | `ifconfig` / `ping` / `wget` | IPv4 + TLS tools |
 | `top` / `sysmon` / `ps` | Live system monitor + task list |
 
@@ -125,7 +125,8 @@ Desktop stress checklist: [scripts/gui-stress-checklist.md](scripts/gui-stress-c
 
 ```bash
 ./scripts/run-qemu.sh
-# guest: ifconfig && wget https://example.com/
+# guest: ifconfig && wget http://example.com/   # plain HTTP OK
+# guest: wget https://example.com/              # live CDN HTTPS often empty — see B-HTTPS-H2
 # gui → Browser → URL → Enter
 ```
 

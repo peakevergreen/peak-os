@@ -1,7 +1,7 @@
 # Peak networking
 
 Peak has an **in-guest** IPv4 stack on QEMU `e1000`, with DHCP (fallback to
-static), TCP client + **TCP listen**, HTTP/HTTPS client, and a TLS 1.2 client
+static), TCP client + **TCP listen**, HTTP/HTTPS client, and a TLS 1.2/1.3 client
 written in Peak C (no OpenSSL / BearSSL / host fetch).
 
 ## Address configuration
@@ -116,13 +116,12 @@ and ECDSA P-256/P-384 (SHA-256/SHA-384).
 | AES-256-GCM | `0xC02C`/`0xC030` | `0x1302` |
 | ChaCha20-Poly1305 | `0xCCA8`/`0xCCA9` | `0x1303` |
 | ALPN `http/1.1` | yes | yes |
-| ALPN `h2` + HTTP/2 GET | yes (Huffman HPACK, SETTINGS/`ENABLE_PUSH=0`, 16 KiB frames, 64 KiB store, H1 fallback) | yes |
+| ALPN `h2` + HTTP/2 GET | **partial** (Huffman HPACK, identity AE, empty SETTINGS on wire, 16 KiB frames / 64 KiB store, H1 ALPN fallback; live CDN bodies often empty — B-HTTPS-H2) | **partial** |
 | SKE / CertVerify | ECDSA-P256, RSA-PSS/PKCS1 | ECDSA-P256, RSA-PSS-SHA256 |
 | Finished check | PRF verify_data | HMAC-finished |
 | GREASE ClientHello | yes | yes |
 | Session tickets / PSK | cache+offer (1.2 NST) | cache+offer (1.3 PSK-lite) |
 | ECH | scaffold (fail-closed) | scaffold (fail-closed) |
-| HTTP/2 ALPN `h2` | yes (Huffman HPACK, identity AE, empty-body H1 fallback; see B-HTTPS-H2) | yes |
 
 Host goldens: `tests/host/test_tls.c` (`test_clienthello_goldens`) asserts suite order and
 extensions. Optional live probe: `make smoke-tls-live` (soft-fail offline).

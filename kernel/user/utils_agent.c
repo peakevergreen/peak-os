@@ -10,7 +10,7 @@
 int upeak_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
-    console_write("Peak OS 0.2.0-ai — research workstation\n");
+    console_write("Peak OS 0.3.0-ai — research workstation\n");
     console_write("Agent tools: fs.read fs.write fs.list fs.exec fs.stat fs.mkdir fs.rm\n");
     console_write("             fs.search fs.grep fs.diff sys.info net.ping net.fetch mem.recall audit.tail console.print\n");
     console_write("Try: ask \"summarize workspace\"   ask \"search README\"   audit   memory   peakvec   policy\n");

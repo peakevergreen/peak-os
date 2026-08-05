@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Peak OS — R&amp;D</title>
+  <meta name="description" content="Peak OS is a from-scratch, AI-first developer OS: freestanding C kernel, Peak bootloaders, in-guest agent, networking, desktop, and browser. No Linux. No host bridges." />
+  <meta property="og:title" content="Peak OS — R&amp;D" />
+  <meta property="og:description" content="From-scratch, AI-first developer OS. Agents, workspace, and memory as system primitives — not host sidecars." />
+  <meta property="og:type" content="article" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0B1A12;
+      --bg-deep: #06110C;
+      --fg: #E8ECF0;
+      --dim: #A8D0BC;
+      --accent: #3DA36A;
+      --accent-soft: rgba(61, 163, 106, 0.18);
+      --surface: #0E1F16;
+      --border: #2A4A3A;
+      --danger: #C45C5C;
+      --title: #1A3D2C;
+      --max: 42rem;
+      --wide: 68rem;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+      font-size: 1.0625rem;
+      line-height: 1.7;
+      color: var(--fg);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Atmosphere */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      background:
+        radial-gradient(ellipse 90% 60% at 15% -10%, rgba(61, 163, 106, 0.22), transparent 55%),
+        radial-gradient(ellipse 70% 50% at 95% 20%, rgba(26, 61, 44, 0.55), transparent 50%),
+        radial-gradient(ellipse 80% 40% at 50% 100%, rgba(6, 17, 12, 0.9), transparent 45%),
+        linear-gradient(165deg, var(--bg-deep) 0%, var(--bg) 40%, #0A1C14 100%);
+      animation: hero-shift 28s ease-in-out infinite alternate;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.045;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    @keyframes hero-shift {
+      from { filter: hue-rotate(0deg) brightness(1); }
+      to { filter: hue-rotate(-8deg) brightness(1.05); }
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.2em;
+    }
+    a:hover { color: #5cbc85; }
+
+    .wrap {
+      width: min(100% - 2.5rem, var(--wide));
+      margin-inline: auto;
+    }
+
+    .prose {
+      width: min(100% - 2.5rem, var(--max));
+      margin-inline: auto;
+    }
+
+    /* —— Hero —— */
+    .hero {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 2rem 0 4.5rem;
+      position: relative;
+    }
+
+    .hero-brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .hero-brand img {
+      width: 4.5rem;
+      height: auto;
+      filter: drop-shadow(0 0 24px rgba(61, 163, 106, 0.35));
+    }
+
+    .hero-wordmark {
+      font-family: "Fraunces", ui-serif, Georgia, serif;
+      font-size: clamp(3.25rem, 9vw, 5.75rem);
+      font-weight: 700;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      margin: 0;
+      color: var(--fg);
+    }
+
+    .hero-wordmark span {
+      display: block;
+      font-size: 0.28em;
+      font-weight: 500;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-bottom: 0.55em;
+      font-family: "IBM Plex Sans", sans-serif;
+    }
+
+    .hero-line {
+      font-family: "Fraunces", ui-serif, Georgia, serif;
+      font-size: clamp(1.35rem, 3.2vw, 1.85rem);
+      font-weight: 500;
+      line-height: 1.35;
+      max-width: 28rem;
+      margin: 0 0 1rem;
+      color: var(--fg);
+    }
+
+    .hero-sub {
+      max-width: 32rem;
+      margin: 0 0 2rem;
+      color: var(--dim);
+      font-size: 1.05rem;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem 1.25rem;
+      align-items: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.7rem 1.25rem;
+      border-radius: 2px;
+      font-weight: 550;
+      font-size: 0.95rem;
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: background 0.25s var(--ease), border-color 0.25s var(--ease), color 0.25s var(--ease);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #06110C;
+    }
+    .btn-primary:hover {
+      background: #4db87a;
+      color: #06110C;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--dim);
+      border-color: var(--border);
+    }
+    .btn-ghost:hover {
+      color: var(--fg);
+      border-color: var(--accent);
+    }
+
+    .ver {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.78rem;
+      color: var(--dim);
+      opacity: 0.85;
+    }
+
+    /* —— Sections —— */
+    section {
+      padding: 4.5rem 0;
+    }
+
+    section + section {
+      border-top: 1px solid var(--border);
+    }
+
+    .section-label {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 0.85rem;
+    }
+
+    h2 {
+      font-family: "Fraunces", ui-serif, Georgia, serif;
+      font-size: clamp(1.75rem, 3.5vw, 2.35rem);
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      margin: 0 0 1.35rem;
+      color: var(--fg);
+    }
+
+    h3 {
+      font-family: "Fraunces", ui-serif, Georgia, serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 2.25rem 0 0.65rem;
+      color: var(--fg);
+    }
+
+    p { margin: 0 0 1.15rem; }
+    p:last-child { margin-bottom: 0; }
+
+    .lede {
+      font-size: 1.2rem;
+      color: var(--dim);
+      margin-bottom: 1.5rem;
+    }
+
+    ul, ol {
+      margin: 0 0 1.25rem;
+      padding-left: 1.25rem;
+    }
+    li { margin-bottom: 0.55rem; }
+    li::marker { color: var(--accent); }
+
+    .pull {
+      font-family: "Fraunces", ui-serif, Georgia, serif;
+      font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+      font-weight: 500;
+      line-height: 1.4;
+      color: var(--fg);
+      border-left: 3px solid var(--accent);
+      padding: 0.35rem 0 0.35rem 1.25rem;
+      margin: 2rem 0;
+    }
+
+    code, .mono {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.88em;
+    }
+
+    /* Two-column lists for solves / non-goals */
+    .split {
+      display: grid;
+      gap: 2.5rem;
+      margin-top: 1.5rem;
+    }
+    @media (min-width: 720px) {
+      .split { grid-template-columns: 1fr 1fr; gap: 3rem; }
+    }
+
+    .split h3 { margin-top: 0; }
+
+    .list-tight li { margin-bottom: 0.85rem; }
+    .list-tight strong {
+      display: block;
+      color: var(--fg);
+      font-weight: 600;
+      margin-bottom: 0.15rem;
+    }
+    .list-tight span { color: var(--dim); font-size: 0.95rem; }
+
+    .not-list li strong { color: var(--danger); }
+
+    /* Architecture flow */
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 0.35rem;
+      margin: 2rem 0 0;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.78rem;
+    }
+
+    .flow-node {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.85rem;
+      color: var(--fg);
+      white-space: nowrap;
+    }
+
+    .flow-arrow {
+      color: var(--accent);
+      padding: 0 0.15rem;
+      user-select: none;
+    }
+
+    /* Gallery */
+    .gallery {
+      display: grid;
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    @media (min-width: 640px) {
+      .gallery { grid-template-columns: 1fr 1fr; }
+    }
+
+    figure {
+      margin: 0;
+    }
+
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    figcaption {
+      margin-top: 0.55rem;
+      font-size: 0.88rem;
+      color: var(--dim);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    /* Status table-like */
+    .status-grid {
+      display: grid;
+      gap: 0;
+      margin: 1.75rem 0;
+      border: 1px solid var(--border);
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.25rem;
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .status-row:last-child { border-bottom: none; }
+    @media (min-width: 560px) {
+      .status-row {
+        grid-template-columns: 11rem 1fr;
+        gap: 1rem;
+        align-items: baseline;
+      }
+    }
+
+    .status-row dt {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+      margin: 0;
+    }
+    .status-row dd {
+      margin: 0;
+      color: var(--dim);
+      font-size: 0.95rem;
+    }
+
+    /* Footer */
+    footer {
+      padding: 3rem 0 4rem;
+      border-top: 1px solid var(--border);
+      color: var(--dim);
+      font-size: 0.9rem;
+    }
+
+    footer .prose p { margin-bottom: 0.75rem; }
+
+    /* Reveal on scroll */
+    .reveal {
+      opacity: 0;
+      transform: translateY(1.25rem);
+      transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+    }
+    .reveal.in {
+      opacity: 1;
+      transform: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      body::before { animation: none; }
+      .reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero wrap" id="top">
+    <div class="hero-brand">
+      <img src="../assets/logo.png" width="72" height="72" alt="" />
+      <h1 class="hero-wordmark">
+        <span>Peak Evergreen</span>
+        Peak OS
+      </h1>
+    </div>
+    <p class="hero-line">A from-scratch, AI-first developer OS.</p>
+    <p class="hero-sub">Freestanding C. Own bootloaders. In-guest agent, network, desktop, and browser. No Linux. No host bridges.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/peakevergreen/peak-os">View on GitHub</a>
+      <a class="btn btn-ghost" href="#thesis">Read the thesis</a>
+      <span class="ver">0.3.0-ai · research workstation</span>
+    </div>
+  </header>
+
+  <main>
+    <section id="thesis">
+      <div class="prose reveal">
+        <p class="section-label">01 — Thesis</p>
+        <h2>The agent belongs in the kernel’s neighborhood, not on the host.</h2>
+        <p class="lede">Peak OS is Peak Evergreen’s R&amp;D bet that an “AI-first” developer environment should be a real operating system — not a chat panel glued to Linux, and not a hobby kernel that stops at a shell prompt.</p>
+        <p>Most hobby OS projects prove that boot works. Most “AI OS” demos prove that a model can call tools over SSH. Peak aims past both: a freestanding kernel with Peak-authored BIOS and UEFI loaders (and a Raspberry Pi shim), a VFS workspace, an in-guest planner called <strong>peak-agent</strong>, a multi-window desktop, an HTTP(S) browser surface, containers, and a local vector index — all Peak C inside the guest.</p>
+        <blockquote class="pull">Agents, tools, and project context are system primitives. Inference stays an in-guest planner. There is no host LLM bridge by default.</blockquote>
+        <p>That sentence is the product architecture. The north star is deliberately small:</p>
+        <p class="mono" style="color: var(--dim); margin: 1.25rem 0;">userspace shell → peak-agent (local) → tools (fs / exec)</p>
+        <p>Under <code>/var/peak/</code> live the durable primitives: workspace policy, action audit, session memory, and PeakVec recall. Capabilities gate what a subject may touch. Privacy grants gate the network. Opening the desktop does not phone home.</p>
+      </div>
+    </section>
+
+    <section id="problem">
+      <div class="prose reveal">
+        <p class="section-label">02 — The problem shape</p>
+        <h2>What “AI OS” usually means — and why that is not interesting enough.</h2>
+        <p>Today’s default path is convenient and opaque at once: a general-purpose Linux host, a container runtime, a cloud model, and a sidecar that shells out. The “operating system” part of the story is borrowed. The agent’s memory is an app concern. The trust boundary is fuzzy — serial bridges, host proxies, and copy-pasted credentials blur where the guest ends and the lab laptop begins.</p>
+        <p>Hobby kernels have the opposite failure mode. They stop when the serial console prints <code>hello</code>. Networking, TLS, a desktop, a browser, and an agent that can write files under policy never arrive — because those are years of vertical integration, and the demo does not require them.</p>
+        <p>Peak OS treats that gap as the research question: <em>can you build a single-user research workstation where the interesting parts are Peak-authored, inspectable, and local-first — without pretending to be Linux?</em></p>
+        <p>The purity constraint makes the claim falsifiable. CI runs <code>scripts/purity-check.sh</code>: no Limine, no COM2/COM3 host bridges, no <code>peak-host-proxy</code>, no <code>agent_poll_host</code>. If the agent works, it works in-guest. If HTTPS works, Peak’s stack spoke TLS. That honesty is the point of the project.</p>
+      </div>
+    </section>
+
+    <section id="solves">
+      <div class="prose reveal">
+        <p class="section-label">03 — Trying to solve</p>
+        <h2>Problems Peak OS is actively attacking.</h2>
+        <p class="lede">Not every systems problem — a focused set that makes an AI-native workstation coherent.</p>
+
+        <div class="split">
+          <div>
+            <h3>Vertical developer surface</h3>
+            <ul class="list-tight">
+              <li>
+                <strong>Past the bootloader</strong>
+                <span>CLI utilities, multi-window desktop, browser tabs, net tools, and <code>ctr</code> demos inside one Peak kernel — so “it boots” is not the end of the story.</span>
+              </li>
+              <li>
+                <strong>In-guest networking that is real</strong>
+                <span>DHCP, DNS, TCP, TLS 1.2/1.3, HTTP/2 ALPN client, WebPKI and optional TOFU — Peak C, not a host userspace stack borrowed for the demo. Live CDN HTTPS bodies are still often empty (Partial — TLS fingerprint / B-HTTPS-H2).</span>
+              </li>
+              <li>
+                <strong>Dual-arch path</strong>
+                <span>x86_64 QEMU (BIOS/UEFI) as the daily research loop; flashable aarch64 Raspberry Pi SD image with Pi 3 as the primary hardware gate.</span>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h3>Local-first agency</h3>
+            <ul class="list-tight">
+              <li>
+                <strong>Agent as OS citizen</strong>
+                <span><code>ask "…"</code> and a GUI Agent window drive a bounded planner over allowlisted tools (<code>fs.*</code>, <code>net.*</code>, <code>mem.recall</code>, …) with policy, audit, and write approval.</span>
+              </li>
+              <li>
+                <strong>Context as infrastructure</strong>
+                <span>Session memory and PeakVec (hashed n-gram embeddings, cosine search, blobstore-backed) sit beside VFS — not as a SaaS RAG bolt-on.</span>
+              </li>
+              <li>
+                <strong>Privacy as product property</strong>
+                <span>No telemetry. Network-idle GUI. Explicit persist profiles (<code>private</code> / <code>workspace</code> / <code>full</code>). Explicit net grants and a kill switch. Kerckhoffs: schemes public, seeds secret.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>Trust you can read</h3>
+        <p>Capability bits (<code>CAP_AGENT</code>, <code>CAP_VEC</code>, <code>CAP_NET_*</code>, …), NX/W^X, ASLR/KASLR/canaries, fail-closed entropy for release crypto, and an audit log under <code>/var/peak/audit.log</code> are part of the narrative — not a separate “security phase” bolted on after the screenshots look nice. Peak Evergreen wants the research workstation to be <em>explainable</em>: what persisted, what went on the wire, what the agent was allowed to do.</p>
+      </div>
+    </section>
+
+    <section id="non-goals">
+      <div class="prose reveal">
+        <p class="section-label">04 — Not solving</p>
+        <h2>What Peak OS is deliberately not.</h2>
+        <p class="lede">Scope discipline is part of the R&amp;D story. Calling non-goals early keeps the page honest when it lands on peakevergreen.</p>
+
+        <ul class="list-tight not-list">
+          <li>
+            <strong>Not a Linux ABI / glibc userspace</strong>
+            <span>Peak <code>/bin/*</code> builtins and ELF scaffolding — not “drop your Debian userspace on our hobby kernel.” That would collapse the purity claim.</span>
+          </li>
+          <li>
+            <strong>Not a host LLM sidecar</strong>
+            <span>No serial agent bridges, no default remote model. The planner is a bounded in-guest rule/intent engine. An optional remote LLM over TLS may exist later; it must never be the default path.</span>
+          </li>
+          <li>
+            <strong>Not Chromium, not OCI, not Pinecone</strong>
+            <span>The browser is a Peak JS + DOM/CSS subset. <code>ctr</code> is not runc/containerd (no image pulls, netns, or process isolation theater). PeakVec is not a cloud vector database — no model weights, local hashed embeddings only.</span>
+          </li>
+          <li>
+            <strong>Not GPU / Wayland / multi-monitor</strong>
+            <span>Software linear framebuffer and compositor. Commercial polish targets (1080p @ UI scale 3) exist; hardware accel is deferred unless Monitor proves a new bottleneck.</span>
+          </li>
+          <li>
+            <strong>Not production hardened — yet</strong>
+            <span>Treat Peak as experimental research / commercial-hobby software. Verified boot and signed release ceremony are incomplete. Full ring-3 browser isolation is still deepening. Session lock is a privacy cover (Enter unlocks) — not authentication.</span>
+          </li>
+          <li>
+            <strong>Not defending the hostile hypervisor</strong>
+            <span>Threat model non-goals include a hostile QEMU host and physical bus attackers / hardware side channels. Secure deletion is best-effort against snapshots you do not control.</span>
+          </li>
+          <li>
+            <strong>Not done on Pi silicon</strong>
+            <span>Pi 3 SD images build in CI; HDMI/USB/PeakFS hardware acceptance is still the gate. Pi 4/5 Ethernet, xHCI, Wi‑Fi, and GPU paths are staged or stubs. SMP secondaries stay parked.</span>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="interesting">
+      <div class="prose reveal">
+        <p class="section-label">05 — What’s interesting</p>
+        <h2>Why this is worth an R&amp;D page.</h2>
+
+        <h3>Purity as a product constraint</h3>
+        <p>Most demos cheat quietly. Peak encodes the cheat as a CI failure. The guest must carry its own boot, net, TLS, agent, and UI. That forces architecture: a versioned <strong>BootInfo</strong> ABI from Peak loaders into <code>kernel_entry</code>, thin <code>arch_*</code> / <code>platform_*</code> / <code>blockdev</code> / <code>netdev</code> seams, and portable subsystems above them (VFS/PeakFS, GUI, Peak JS, peak-agent, PeakVec).</p>
+
+        <h3>Agent + PeakVec as kernel-adjacent primitives</h3>
+        <p>Tool catalog and policy live in-kernel. Writes can require GUI Y/N. Turns land in session memory and upsert into PeakVec for semantic recall. Syscalls <code>SYS_agent</code> and <code>SYS_peakvec</code> make the story systemic rather than “an Electron app we also ship.” The interesting claim is not “we have an LLM” — Peak does not, by default — but “workspace agency has a policy surface, an audit trail, and local recall without cloud embeddings.”</p>
+
+        <h3>In-guest “cloud-shaped” surfaces without Linux</h3>
+        <p>TLS with WebPKI, a software-composited desktop, a browser that fetches only on explicit Go, and a tiny container runtime that serves demos over Peak TCP. None of these need to win a standards bake-off to be research-valuable. Together they answer: <em>does the stack compose?</em></p>
+
+        <h3>Enhancement-pass culture</h3>
+        <p>The tree carries a long sequence of numbered passes (through Wave 7 / ~Pass 158), locked by <code>smoke-cli</code> gates. That is not marketing cadence — it is how Peak Evergreen keeps vertical integration from rotting. The changelog is a research log of “what became true in the guest this week.”</p>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="prose reveal">
+        <p class="section-label">06 — Architecture</p>
+        <h2>One path from firmware to shell.</h2>
+        <p>Firmware (SeaBIOS, OVMF, or VideoCore) hands off to a Peak loader — BIOS El Torito, UEFI application, or Pi shim. The loader builds BootInfo (memory map, framebuffer, HHDM, optional DTB) and enters the higher-half kernel. Shared subsystems — VFS, GUI, net, agent — sit above the HAL. The user meets a shell and a desktop.</p>
+        <div class="flow" aria-label="Boot to desktop flow">
+          <span class="flow-node">Firmware</span>
+          <span class="flow-arrow" aria-hidden="true">→</span>
+          <span class="flow-node">Peak loader</span>
+          <span class="flow-arrow" aria-hidden="true">→</span>
+          <span class="flow-node">kernel_entry</span>
+          <span class="flow-arrow" aria-hidden="true">→</span>
+          <span class="flow-node">VFS · GUI · Net · Agent</span>
+          <span class="flow-arrow" aria-hidden="true">→</span>
+          <span class="flow-node">Shell &amp; desktop</span>
+        </div>
+        <p style="margin-top: 1.75rem;">Higher-half at <code>0xffffffff80000000</code>, HHDM at <code>0xffff800000000000</code>. PeakFS streams persist to PeakDisk (ATA on PC, SDHCI on Pi). Blobstore backs large objects and PeakVec pages. None of that needs to be memorized to understand the thesis — but it is why the screenshots are not a theme skin over someone else’s kernel.</p>
+      </div>
+    </section>
+
+    <section id="proof">
+      <div class="wrap reveal">
+        <div class="prose" style="margin-bottom: 0;">
+          <p class="section-label">07 — Proof surface</p>
+          <h2>What it looks like in QEMU today.</h2>
+          <p class="lede">Captured from the guest framebuffer. Relative paths point at <code>assets/screenshots/</code> in this repo — rewrite them when you drop this file onto a personal or peakevergreen site.</p>
+        </div>
+        <div class="gallery">
+          <figure>
+            <img src="../assets/screenshots/desktop.png" alt="Peak OS multi-window desktop in QEMU" loading="lazy" />
+            <figcaption>Desktop — software compositor, Peak chrome</figcaption>
+          </figure>
+          <figure>
+            <img src="../assets/screenshots/shell.png" alt="Peak OS shell prompt" loading="lazy" />
+            <figcaption>Shell — Peak /bin surface</figcaption>
+          </figure>
+          <figure>
+            <img src="../assets/screenshots/browser.png" alt="Peak OS browser window" loading="lazy" />
+            <figcaption>Browser — in-guest HTTP(S) via Peak stack</figcaption>
+          </figure>
+          <figure>
+            <img src="../assets/screenshots/sysmon.png" alt="Peak OS system monitor" loading="lazy" />
+            <figcaption>Sysmon — live guest telemetry</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="status">
+      <div class="prose reveal">
+        <p class="section-label">08 — Status &amp; honesty</p>
+        <h2>Where the research sits.</h2>
+        <p>Baseline tag <code>v0.1.0-mvp</code>; current line <strong>0.3.0-ai</strong>. The interesting work is already in-tree: agent, PeakVec, TLS/WebPKI, desktop polish passes, browser interactive-bar <em>code</em>, container demos. Honest gaps are also in-tree — live public HTTPS body fetch is still Partial (B-HTTPS-H2), documented rather than papered over.</p>
+
+        <dl class="status-grid">
+          <div class="status-row">
+            <dt>x86_64 QEMU</dt>
+            <dd>Supported — SeaBIOS smoke in CI; UEFI locally.</dd>
+          </div>
+          <div class="status-row">
+            <dt>aarch64 QEMU</dt>
+            <dd>Supported — serial smoke in CI.</dd>
+          </div>
+          <div class="status-row">
+            <dt>Raspberry Pi 3</dt>
+            <dd>SD image built in CI; HDMI/USB hardware acceptance still pending.</dd>
+          </div>
+          <div class="status-row">
+            <dt>Pi 4 / 5 I/O</dt>
+            <dd>Ethernet, xHCI, Wi‑Fi, GPU accel — not ready.</dd>
+          </div>
+          <div class="status-row">
+            <dt>Security posture</dt>
+            <dd>Experimental. Verified boot / signed releases incomplete. Report issues via SECURITY.md.</dd>
+          </div>
+          <div class="status-row">
+            <dt>License</dt>
+            <dd>MIT for Peak-authored code. Raspberry Pi boot/Wi‑Fi firmware is a documented binary exception.</dd>
+          </div>
+        </dl>
+
+        <p>Privacy promises that already hold as product claims: no telemetry; local-only agent; network-idle GUI; explicit persistence; explicit network disclosure; identifier minimization; release serial must not print seeds, canaries, or passphrases.</p>
+        <p>If you only remember one sentence: <strong>Peak OS is trying to make an AI-native research workstation true in the guest — and equally trying not to fake that truth with Linux, Limine, or a host bridge.</strong></p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="prose">
+      <p><strong style="color: var(--fg);">Peak Evergreen</strong> · Peak OS R&amp;D</p>
+      <p>MIT licensed. Source: <a href="https://github.com/peakevergreen/peak-os">github.com/peakevergreen/peak-os</a></p>
+      <p>This page is a single inline HTML file (<code>docs/peak-rd.html</code>). Screenshots and logo use relative paths (<code>../assets/…</code>). When publishing elsewhere, point those URLs at your CDN or mirror.</p>
+      <p><a href="#top">Back to top</a></p>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var nodes = document.querySelectorAll(".reveal");
+      if (reduce || !("IntersectionObserver" in window)) {
+        nodes.forEach(function (el) { el.classList.add("in"); });
+        return;
+      }
+      var io = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) {
+              e.target.classList.add("in");
+              io.unobserve(e.target);
+            }
+          });
+        },
+        { rootMargin: "0px 0px -8% 0px", threshold: 0.12 }
+      );
+      nodes.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
+</body>
+</html>

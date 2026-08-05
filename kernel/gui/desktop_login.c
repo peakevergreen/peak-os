@@ -32,7 +32,7 @@ void desktop_login(void) {
         uint32_t tx = mx + desktop_u(28);
         uint32_t ty = my + desktop_u(28);
         fb_draw_string(tx, ty, "PeakOS", desktop_color_fg(), desktop_color_surface());
-        fb_draw_string(tx + fb_cell_w() * 6, ty, "0.2.0-ai", desktop_color_accent(), desktop_color_surface());
+        fb_draw_string(tx + fb_cell_w() * 6, ty, "0.3.0-ai", desktop_color_accent(), desktop_color_surface());
         ty += fb_cell_h() + desktop_u(10);
         fb_fill_rect(tx, ty, mw - desktop_u(56), desktop_u(1), desktop_color_border());
         ty += desktop_u(14);
