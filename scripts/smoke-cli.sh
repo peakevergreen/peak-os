@@ -187,8 +187,13 @@ grep -q 'PEAK_ELOOP' kernel/include/peak_errno.h
 
 echo "==> Pass 53 HTTP/2 client depth"
 grep -q 'HTTP2_BODY_MAX' kernel/include/http2.h
+grep -q 'hpack_decode_block' kernel/net/hpack.c
 grep -q 'hpack_decode_block' kernel/net/http2.c
 grep -q 'http2_last_meta' kernel/net/http2.c
+grep -q 'ENABLE_PUSH' kernel/net/http2.c || grep -q '0x2' kernel/net/http2.c
+grep -q 'tls_alpn_set_offer_h2' kernel/net/http.c
+grep -q 'tls_session_set_resume_enabled' kernel/net/http.c
+grep -q 'test_http2_hpack' Makefile
 grep -q 'net_http_last_h2' kernel/include/net.h
 grep -q 'net_http_last_body_truncated' kernel/net/http.c
 grep -q 'show_headers' kernel/user/utils_net.c

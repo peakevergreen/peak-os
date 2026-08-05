@@ -103,6 +103,7 @@ int net_http_last_tls_secure(void);
 int net_http_last_tls_verified(void);
 /* Last transfer used HTTP/2 (ALPN h2) and body limit metadata. */
 int net_http_last_h2(void);
+int net_http_last_h2_fallback(void);
 size_t net_http_last_body_total(void);
 size_t net_http_last_body_stored(void);
 int net_http_last_body_truncated(void);

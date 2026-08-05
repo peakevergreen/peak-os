@@ -4,7 +4,7 @@ Artifacts: `/tmp/peak-https-diag4/` (CLI matrix), `/tmp/peak-https-accept/` (Acc
 `/tmp/peak-https-accept/expired.txt` (honesty). Harness: `scripts/browser-https-diag.py`,
 `scripts/browser-https-accept-prove.py`, `scripts/browser-https-gui-matrix.py`.
 
-## Matrix (user-net, `-machine pc`, virtio-rng, `-rtc base=2026-07-26T17:00:00`)
+## Matrix (user-net, `-machine pc`, virtio-rng, `-rtc base=2026-08-04T17:00:00`)
 
 | ID | URL / case | Expected | Actual | Proof | Status |
 |----|------------|----------|--------|-------|--------|
@@ -23,7 +23,7 @@ Artifacts: `/tmp/peak-https-diag4/` (CLI matrix), `/tmp/peak-https-accept/` (Acc
 | B-HTTPS-03/04 | WebPKI path | cross-signed roots + ECDSA | SPKI anchor match + BIT STRING EC point parse | webpki.c | **Fixed** |
 | B-HTTPS-05 | Accept / Forget TOFU | Accept → trust; Forget → fail | `tlsinfo -A`/`-F` + error-page buttons | accept prove PASS | **Fixed** |
 | B-HTTPS-06 | Desktop matrix | tabs/Retry/lock/mixed/HSTS | CLI + code paths; GUI dumps optional | see notes | **Partial** |
-| B-HTTPS-H2 | HTTP/2 response body | non-empty HTML | Client accepts 16 KiB frames / 64 KiB store / PING+WINDOW_UPDATE; many CDNs still return HEADERS END_STREAM with 0 DATA to Peak’s lite H2 fingerprint | BR-1 + matrix | **Partial** |
+| B-HTTPS-H2 | HTTP/2 response body | non-empty HTML | Huffman HPACK + no silent fake-200 on unseen `:status`; client SETTINGS helper (`ENABLE_PUSH=0`); identity AE; progress recv timeout; per-request H1 ALPN fallback (HTTP/1.1). Live QEMU user-net CDNs still often yield HEADERS-timeout / empty H1 appdata (Peak JA3) — matrix not green yet | `scripts/browser-render-matrix.py` + `/tmp/peak-h2-frames/` | **Partial** |
 
 ## Root causes fixed
 
@@ -40,5 +40,9 @@ Artifacts: `/tmp/peak-https-diag4/` (CLI matrix), `/tmp/peak-https-accept/` (Acc
 ## BR-1 (HTTP/2 body path)
 
 - Accept frames up to `HTTP2_MAX_FRAME` (16384); store body up to `HTTP2_BODY_MAX` (65536) on the heap.
-- ACK PING; WINDOW_UPDATE after DATA + connection preface window; HEADERS+CONTINUATION until END_HEADERS; User-Agent on requests.
-- **Still open:** some public hosts negotiate `h2` then finish with HEADERS END_STREAM and no DATA (0-byte body). Follow-up: fuller HPACK/Huffman + client fingerprint parity.
+- ACK PING; WINDOW_UPDATE after DATA + connection preface window; HEADERS+CONTINUATION until END_HEADERS.
+- Huffman HPACK + integer coding (`kernel/net/hpack.c`); do not invent `:status` 200 when headers decoded without it.
+- Client SETTINGS helper encodes `ENABLE_PUSH=0`, `MAX_CONCURRENT_STREAMS=100`, `INITIAL_WINDOW_SIZE=256KiB`, `MAX_FRAME_SIZE=16384`. Preface still sends empty SETTINGS on the wire — non-empty SETTINGS + Peak JA3 makes several CDNs go silent (zero frames).
+- Request headers: `:method` `:path` `:scheme` `:authority` + UA + `accept: */*` + `accept-encoding: identity`.
+- Recv timeout from last frame progress; RST/GOAWAY / `h2-trace` on wget.
+- Per-request HTTP/1.1 ALPN fallback when H2 body is empty (not 204/304/205); resume disabled for that reconnect; H2 result restored if H1 is empty. Peak TLS H1 app-data path is still often empty on the same hosts.

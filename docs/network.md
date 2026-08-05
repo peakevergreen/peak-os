@@ -73,8 +73,10 @@ ctr build … && ctr run -p 8080 …
 ```
 
 `wget` / `curl` print `fetching...` before the transfer, label **HTTP/2** when ALPN
-`h2` is negotiated, show **Content-Type** (or full response headers with `-i`), and
-warn when the body hits the **65536-byte (64 KiB)** client limit (`structured meta: truncated, received …`).
+`h2` is negotiated (or **HTTP … (h1 fallback)** after a per-request retry), show
+**Content-Type** (or full response headers with `-i`), emit `h2-trace` / `h2-fr` frame
+summaries, and warn when the body hits the **65536-byte (64 KiB)** client limit
+(`structured meta: truncated, received …`).
 TLS failures surface `tls_last_error()` plus stable reject names (`fetch: tls-*`).
 
 HTTPS trust is **WebPKI** (embedded roots + path build + hostname/time) by default.
@@ -114,13 +116,13 @@ and ECDSA P-256/P-384 (SHA-256/SHA-384).
 | AES-256-GCM | `0xC02C`/`0xC030` | `0x1302` |
 | ChaCha20-Poly1305 | `0xCCA8`/`0xCCA9` | `0x1303` |
 | ALPN `http/1.1` | yes | yes |
-| ALPN `h2` + HTTP/2 GET | yes (HPACK, 16 KiB frames, 64 KiB body store, WINDOW_UPDATE/PING) | yes |
+| ALPN `h2` + HTTP/2 GET | yes (Huffman HPACK, SETTINGS/`ENABLE_PUSH=0`, 16 KiB frames, 64 KiB store, H1 fallback) | yes |
 | SKE / CertVerify | ECDSA-P256, RSA-PSS/PKCS1 | ECDSA-P256, RSA-PSS-SHA256 |
 | Finished check | PRF verify_data | HMAC-finished |
 | GREASE ClientHello | yes | yes |
 | Session tickets / PSK | cache+offer (1.2 NST) | cache+offer (1.3 PSK-lite) |
 | ECH | scaffold (fail-closed) | scaffold (fail-closed) |
-| HTTP/2 ALPN `h2` | yes (HPACK headers, body limits) | yes |
+| HTTP/2 ALPN `h2` | yes (Huffman HPACK, identity AE, empty-body H1 fallback; see B-HTTPS-H2) | yes |
 
 Host goldens: `tests/host/test_tls.c` (`test_clienthello_goldens`) asserts suite order and
 extensions. Optional live probe: `make smoke-tls-live` (soft-fail offline).

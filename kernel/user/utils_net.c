@@ -7,6 +7,7 @@
 #include "console.h"
 #include "net.h"
 #include "http_util.h"
+#include "http2.h"
 #include "tls.h"
 #include "tls_util.h"
 #include "tls_session.h"
@@ -395,13 +396,53 @@ int uwget_main(int argc, char **argv) {
     console_printf("%s %s\n", req.method, url);
     console_write("fetching...\n");
     if (net_http_request(&req, body, sizeof(body), &st, hdrs, sizeof(hdrs)) != 0) {
+        {
+            struct http2_meta hm;
+            http2_last_meta(&hm);
+            console_printf(
+                "h2-trace: st=%d saw=%u hdr_es=%u data=%u rst=%u goaway=%u frames=%u "
+                "hpack=%x %x %x %x body=%lu\n",
+                hm.status, (unsigned)hm.saw_status, (unsigned)hm.headers_end_stream,
+                (unsigned)hm.data_frames, (unsigned)hm.rst, (unsigned)hm.goaway,
+                (unsigned)hm.frames_in, (unsigned)hm.first_hpack[0],
+                (unsigned)hm.first_hpack[1], (unsigned)hm.first_hpack[2],
+                (unsigned)hm.first_hpack[3], (unsigned long)hm.body_stored);
+            for (unsigned i = 0; i < hm.ntrace; i++) {
+                console_printf("h2-fr: type=%02x flags=%02x sid=%lu plen=%lu\n",
+                               hm.trace[i].type, hm.trace[i].flags,
+                               (unsigned long)hm.trace[i].sid,
+                               (unsigned long)hm.trace[i].plen);
+            }
+        }
         wget_print_failure(st, body);
         return 1;
     }
     if (net_http_last_h2())
         console_printf("HTTP/2 %d\n", st);
+    else if (net_http_last_h2_fallback())
+        console_printf("HTTP %d (h1 fallback)\n", st);
     else
         console_printf("HTTP %d\n", st);
+    {
+        struct http2_meta hm;
+        http2_last_meta(&hm);
+        if (hm.frames_in || net_http_last_h2() || net_http_last_h2_fallback()) {
+            console_printf(
+                "h2-trace: st=%d saw=%u hdr_es=%u data=%u rst=%u goaway=%u frames=%u "
+                "hpack=%x %x %x %x body=%lu\n",
+                hm.status, (unsigned)hm.saw_status, (unsigned)hm.headers_end_stream,
+                (unsigned)hm.data_frames, (unsigned)hm.rst, (unsigned)hm.goaway,
+                (unsigned)hm.frames_in, (unsigned)hm.first_hpack[0], (unsigned)hm.first_hpack[1],
+                (unsigned)hm.first_hpack[2], (unsigned)hm.first_hpack[3],
+                (unsigned long)hm.body_stored);
+            for (unsigned i = 0; i < hm.ntrace; i++) {
+                console_printf("h2-fr: type=%02x flags=%02x sid=%lu plen=%lu\n",
+                               hm.trace[i].type, hm.trace[i].flags,
+                               (unsigned long)hm.trace[i].sid,
+                               (unsigned long)hm.trace[i].plen);
+            }
+        }
+    }
     if (show_headers && hdrs[0]) {
         console_write(hdrs);
     } else if (!head_only) {

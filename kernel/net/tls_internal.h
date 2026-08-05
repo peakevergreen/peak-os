@@ -94,6 +94,7 @@ void tls_scrub_secrets(void);
 void tls_alpn_clear(void);
 int tls_alpn_is_h2(void);
 void tls_alpn_set_offer_h2(int on);
+int tls_alpn_get_offer_h2(void);
 void tls_alpn_set_from_ext(const uint8_t *data, size_t len);
 
 /* tls_record.c */
