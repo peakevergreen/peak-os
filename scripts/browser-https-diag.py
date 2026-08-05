@@ -135,7 +135,7 @@ def main() -> int:
         "-device", "virtio-rng-pci-transitional",
         "-netdev", "user,id=net0",
         "-device", "e1000,netdev=net0",
-        "-rtc", "base=2026-07-26T17:00:00",
+        "-rtc", "base=2026-08-04T17:00:00",
         "-no-reboot",
     ]
     print("starting QEMU…", flush=True)

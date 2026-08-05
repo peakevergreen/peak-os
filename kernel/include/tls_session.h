@@ -24,6 +24,8 @@ int tls_session_put(const char *sni, const uint8_t *ticket, size_t ticket_len,
 int tls_session_get(const char *sni, uint8_t *ticket_out, size_t *ticket_len_inout,
                     struct tls_session_meta *meta_out);
 
+void tls_session_set_resume_enabled(int on);
+
 void tls_session_clear(void);
 
 int tls_session_used_count(void);

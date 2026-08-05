@@ -40,6 +40,9 @@ int tls_trust_pin_count(void);
 int tls_alpn_is_h2(void);
 /* When 0, ClientHello offers http/1.1 only (used for empty-H2 fallback). */
 void tls_alpn_set_offer_h2(int on);
+int tls_alpn_get_offer_h2(void);
+/* When 0, ClientHello omits session tickets / PSK resume (H1 fallback). */
+void tls_session_set_resume_enabled(int on);
 /* Pin a SHA-256 digest of a trusted root/SPKI (32 bytes). Returns 0 on success. */
 int tls_trust_pin_sha256(const uint8_t pin[32]);
 /* Clear in-memory pins + PeakFS TOFU + HSTS stores. */

@@ -3,7 +3,9 @@
 #include "http_util.h"
 #include "http2.h"
 #include "tls.h"
+#include "tls_session.h"
 #include "tls_hsts.h"
+#include "heap.h"
 #include "tls_util.h"
 #include "cap.h"
 #include "privacy.h"
@@ -13,17 +15,20 @@
 static int last_tls_secure;
 static int last_tls_verified;
 static int last_http_h2;
+static int last_http_h2_fallback;
 static size_t last_http_body_total;
 static size_t last_http_body_stored;
 static int last_http_body_truncated;
 
 int net_http_last_h2(void) { return last_http_h2; }
+int net_http_last_h2_fallback(void) { return last_http_h2_fallback; }
 size_t net_http_last_body_total(void) { return last_http_body_total; }
 size_t net_http_last_body_stored(void) { return last_http_body_stored; }
 int net_http_last_body_truncated(void) { return last_http_body_truncated; }
 
 static void http_clear_transfer_meta(void) {
     last_http_h2 = 0;
+    last_http_h2_fallback = 0;
     last_http_body_total = 0;
     last_http_body_stored = 0;
     last_http_body_truncated = 0;
@@ -98,7 +103,10 @@ static int build_http_request(char *req, size_t req_cap, const char *method,
                               size_t body_len, int tls) {
     size_t off = 0;
     const char *m = method && method[0] ? method : "GET";
-    off = (size_t)snprintf(req, req_cap, "%s %s HTTP/1.0\r\nHost: %s\r\n", m, path, host);
+    if (tls)
+        off = (size_t)snprintf(req, req_cap, "%s %s HTTP/1.1\r\nHost: %s\r\n", m, path, host);
+    else
+        off = (size_t)snprintf(req, req_cap, "%s %s HTTP/1.0\r\nHost: %s\r\n", m, path, host);
     if (tls)
         off += (size_t)snprintf(req + off, req_cap - off,
                                 "User-Agent: PeakBrowser/1\r\n");
@@ -198,19 +206,115 @@ static int https_exchange_raw(uint32_t ip, const char *host, const char *path,
         else
             rc = http2_get(host, path, extra_headers, buf, buf_cap, &st);
         tls_close();
-        if (rc != 0)
-            return -4;
-        last_http_h2 = 1;
         {
             struct http2_meta hm;
             http2_last_meta(&hm);
-            last_http_body_total = hm.body_total;
-            last_http_body_truncated = hm.truncated;
-            last_http_body_stored = hm.body_stored;
+            int empty_ok = (st == 204 || st == 304 || st == 205);
+            if (rc == 0 && (hm.body_stored > 0 || empty_ok || st >= 300)) {
+                last_http_h2 = 1;
+                last_http_body_total = hm.body_total;
+                last_http_body_truncated = hm.truncated;
+                last_http_body_stored = hm.body_stored;
+                if (status_out)
+                    *status_out = st;
+                return 0;
+            }
+            if (rc == 0 && method && strcmp(method, "GET") != 0) {
+                last_http_h2 = 1;
+                last_http_body_total = hm.body_total;
+                last_http_body_truncated = hm.truncated;
+                last_http_body_stored = hm.body_stored;
+                if (status_out)
+                    *status_out = st;
+                return 0;
+            }
+            char *h2_save = NULL;
+            size_t h2_save_len = 0;
+            if (rc == 0) {
+                last_http_h2 = 1;
+                last_http_body_total = hm.body_total;
+                last_http_body_truncated = hm.truncated;
+                last_http_body_stored = hm.body_stored;
+                if (status_out)
+                    *status_out = st;
+                h2_save_len = hm.message_len ? hm.message_len : strlen(buf);
+                if (h2_save_len >= buf_cap)
+                    h2_save_len = buf_cap - 1;
+                h2_save = (char *)kmalloc(h2_save_len + 1);
+                if (h2_save) {
+                    memcpy(h2_save, buf, h2_save_len);
+                    h2_save[h2_save_len] = '\0';
+                }
+            }
+            if (!method || !strcmp(method, "GET")) {
+                int saved_offer = tls_alpn_get_offer_h2();
+                int h1rc;
+                tls_alpn_set_offer_h2(0);
+                tls_session_set_resume_enabled(0);
+                h1rc = tls_connect(ip, 443, host, NET_TLS_HANDSHAKE_TICKS);
+                tls_alpn_set_offer_h2(saved_offer);
+                tls_session_set_resume_enabled(1);
+                if (h1rc == 0) {
+                    last_tls_secure = 1;
+                    last_tls_verified = tls_cert_verified() && tls_hostname_matched();
+                    last_http_h2_fallback = 1;
+                } else {
+                    if (h2_save) {
+                        memcpy(buf, h2_save, h2_save_len + 1);
+                        kfree(h2_save);
+                        return 0;
+                    }
+                    return rc == 0 ? 0 : -2;
+                }
+            } else if (rc != 0) {
+                return -4;
+            } else {
+                if (h2_save)
+                    kfree(h2_save);
+                return 0;
+            }
+            {
+                char req[2048];
+                int ex;
+                if (build_http_request(req, sizeof(req), method, path, host, extra_headers, body,
+                                       body_len, 1) != 0) {
+                    tls_close();
+                    if (h2_save) {
+                        memcpy(buf, h2_save, h2_save_len + 1);
+                        kfree(h2_save);
+                        last_http_h2_fallback = 0;
+                        return 0;
+                    }
+                    return -3;
+                }
+                if (tls_send(req, strlen(req)) != 0) {
+                    tls_close();
+                    if (h2_save) {
+                        memcpy(buf, h2_save, h2_save_len + 1);
+                        kfree(h2_save);
+                        last_http_h2_fallback = 0;
+                        return 0;
+                    }
+                    return -3;
+                }
+                ex = recv_http_response_tls(buf, buf_cap);
+                tls_close();
+                if (ex != 0) {
+                    if (h2_save) {
+                        memcpy(buf, h2_save, h2_save_len + 1);
+                        kfree(h2_save);
+                        last_http_h2_fallback = 0;
+                        return 0;
+                    }
+                    return -4;
+                }
+                if (h2_save)
+                    kfree(h2_save);
+                last_http_h2 = 0;
+                http_parse_status(buf, status_out);
+                return 0;
+            }
         }
-        if (status_out)
-            *status_out = st;
-        return 0;
     }
 
     char req[2048];

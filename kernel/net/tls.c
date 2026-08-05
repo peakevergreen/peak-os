@@ -60,6 +60,10 @@ void tls_alpn_set_offer_h2(int on) {
     tls_alpn_offer_h2 = on ? 1 : 0;
 }
 
+int tls_alpn_get_offer_h2(void) {
+    return tls_alpn_offer_h2 ? 1 : 0;
+}
+
 void tls_alpn_set_from_ext(const uint8_t *data, size_t len) {
     /* ALPN extension data: list_len(2) + name_len(1) + name */
     if (!data || len < 3)

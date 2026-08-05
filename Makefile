@@ -117,6 +117,7 @@ KERNEL_COMMON_SRCS := \
 	kernel/net/tls_psk.c \
 	kernel/net/tls_hsts.c \
 	kernel/net/tls_ech.c \
+	kernel/net/hpack.c \
 	kernel/net/http2.c \
 	kernel/net/x509.c \
 	kernel/net/webpki.c \
@@ -365,7 +366,7 @@ HOST_TEST_NAMES := \
 	phase7 gfx boot lan http_tcp js webapi random tls libpeak ubin_registry \
 	shell_split console_scroll display_present wallpaper_cache \
 	peakdisk peakvec guiproto vmm_usercopy blobstore heap_pmm agent_policy \
-	agent_tools desktop_titles ctr_path dom vfs cli_crypto cli_text5 cli_sys2 cli_awk cli_sed cli_jq cli_zip cli_grep cli_find cli_sortflags cli_filemagic cli_date img_decode parser_corpus
+	agent_tools desktop_titles ctr_path dom vfs cli_crypto cli_text5 cli_sys2 cli_awk cli_sed cli_jq cli_zip cli_grep cli_find cli_sortflags cli_filemagic cli_date img_decode parser_corpus http2_hpack
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
 
 test: test-host
@@ -480,6 +481,8 @@ $(eval $(call HOST_TEST_RULE,vfs,tests/host/test_vfs.c tests/host/vfs_host_stubs
 	kernel/vfs.c kernel/vfs_peakfs.c kernel/vfs_path_util.c kernel/peak_errno.c kernel/blobstore.c kernel/blockdev.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST -DBLOBSTORE_CACHE_PAGES=4 $(HOST_TEST_INC_KERNEL)))
 $(eval $(call HOST_TEST_RULE,parser_corpus,tests/host/test_parser_corpus.c kernel/net/dns_util.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
+$(eval $(call HOST_TEST_RULE,http2_hpack,tests/host/test_http2_hpack.c kernel/net/hpack.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
 
 smoke:

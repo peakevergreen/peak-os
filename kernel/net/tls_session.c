@@ -26,6 +26,11 @@ struct tls_session_entry {
 
 static struct tls_session_entry slots[TLS_SESSION_SLOTS];
 static uint32_t stamp_seq;
+static int resume_enabled = 1;
+
+void tls_session_set_resume_enabled(int on) {
+    resume_enabled = on ? 1 : 0;
+}
 
 static void copy_sni(char *dst, const char *sni) {
     size_t i = 0;
@@ -125,6 +130,8 @@ int tls_session_put(const char *sni, const uint8_t *ticket, size_t ticket_len,
 int tls_session_get(const char *sni, uint8_t *ticket_out, size_t *ticket_len_inout,
                     struct tls_session_meta *meta_out) {
     char key[TLS_SESSION_SNI_MAX];
+    if (!resume_enabled)
+        return 0;
     if (!sni || !sni[0] || !ticket_out || !ticket_len_inout)
         return 0;
     copy_sni(key, sni);

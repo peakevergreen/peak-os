@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get("PEAK_RENDER_DIAG", "/tmp/peak-render-matrix"))
+H2_FRAMES = Path(os.environ.get("PEAK_H2_FRAMES", "/tmp/peak-h2-frames"))
 SER_PATH = os.environ.get("PEAK_QEMU_SERIAL", "/tmp/peak-render.ser")
 MON_PATH = os.environ.get("PEAK_QEMU_MON", "/tmp/peak-render.mon")
 os.environ["PEAK_QEMU_SERIAL"] = SER_PATH
@@ -110,6 +111,7 @@ def body_ok(out: str) -> bool:
 
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
+    H2_FRAMES.mkdir(parents=True, exist_ok=True)
     if not ISO.exists():
         print("missing ISO — run make iso first")
         return 1
@@ -130,7 +132,7 @@ def main() -> int:
         "-device", "virtio-rng-pci-transitional",
         "-netdev", "user,id=net0",
         "-device", "e1000,netdev=net0",
-        "-rtc", "base=2026-07-26T17:00:00",
+        "-rtc", "base=2026-08-04T17:00:00",
         "-no-reboot",
     ]
     print("starting QEMU…", flush=True)
@@ -162,6 +164,7 @@ def main() -> int:
             out = run_cmd(buf, ser, f"wget -O - {url}", wait=100)
             safe = re.sub(r"[^a-zA-Z0-9]+", "_", url).strip("_")
             (OUT / f"{safe}.txt").write_text(out)
+            (H2_FRAMES / f"{safe}.txt").write_text(out)
             ok = body_ok(out)
             status = "PASS" if ok else "FAIL"
             if not ok:
