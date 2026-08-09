@@ -12,7 +12,9 @@ env:
 jobs:
   build-iso:
     name: Build x86 ISO
-    runs-on: ubuntu-22.04
+    runs-on:
+      group: org/Default
+      labels: [self-hosted, Linux, X64, pe-ci]
     steps:
       - uses: actions/checkout@v4
       - name: Cache apt archives
@@ -50,7 +52,9 @@ jobs:
 
   build-rpi:
     name: Build Raspberry Pi image
-    runs-on: ubuntu-22.04
+    runs-on:
+      group: org/Default
+      labels: [self-hosted, Linux, X64, pe-ci]
     steps:
       - uses: actions/checkout@v4
       - name: Cache apt archives
@@ -89,7 +93,9 @@ jobs:
 
   host-tests:
     name: Host tests + purity
-    runs-on: ubuntu-22.04
+    runs-on:
+      group: org/Default
+      labels: [self-hosted, Linux, X64, pe-ci]
     needs: [build-iso]
     steps:
       - uses: actions/checkout@v4
@@ -137,7 +143,9 @@ jobs:
 
   smoke-qemu:
     name: QEMU BIOS + UEFI smoke
-    runs-on: ubuntu-22.04
+    runs-on:
+      group: org/Default
+      labels: [self-hosted, Linux, X64, pe-ci]
     needs: [build-iso]
     steps:
       - uses: actions/checkout@v4
@@ -169,7 +177,9 @@ jobs:
 
   smoke-peakfs:
     name: QEMU PeakFS roundtrip
-    runs-on: ubuntu-22.04
+    runs-on:
+      group: org/Default
+      labels: [self-hosted, Linux, X64, pe-ci]
     needs: [build-iso]
     steps:
       - uses: actions/checkout@v4
@@ -202,7 +212,9 @@ jobs:
 
   smoke-aarch64:
     name: QEMU aarch64 smoke
-    runs-on: ubuntu-22.04
+    runs-on:
+      group: org/Default
+      labels: [self-hosted, Linux, X64, pe-ci]
     needs: [build-rpi]
     steps:
       - uses: actions/checkout@v4
