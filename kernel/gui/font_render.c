@@ -131,30 +131,58 @@ static struct glyph_slot *rebuild_ink_cache(char c, uint32_t scale) {
     return slot;
 }
 
+/* Clip fill to [x0, x0+cw) × [y0, y0+ch) before drawing (no neighbor spill). */
+static void fill_in_cell(uint32_t x0, uint32_t y0, uint32_t cw, uint32_t ch,
+                         uint32_t px, uint32_t py, uint32_t rw, uint32_t rh,
+                         uint32_t color, font_fill_fn fill) {
+    if (!rw || !rh || !cw || !ch)
+        return;
+    if (px < x0) {
+        uint32_t cut = x0 - px;
+        if (cut >= rw)
+            return;
+        px = x0;
+        rw -= cut;
+    }
+    if (py < y0) {
+        uint32_t cut = y0 - py;
+        if (cut >= rh)
+            return;
+        py = y0;
+        rh -= cut;
+    }
+    uint32_t dx = px - x0;
+    uint32_t dy = py - y0;
+    if (dx >= cw || dy >= ch)
+        return;
+    if (rw > cw - dx)
+        rw = cw - dx;
+    if (rh > ch - dy)
+        rh = ch - dy;
+    if (!rw || !rh)
+        return;
+    fill(px, py, rw, rh, color);
+}
+
 static void draw_spans(const struct glyph_slot *slot, uint32_t x, uint32_t y,
-                       uint32_t fg, uint32_t scale, uint32_t cw,
+                       uint32_t fg, uint32_t scale, uint32_t cw, uint32_t ch,
                        font_fill_fn fill) {
-    uint32_t gh = 16 * scale;
     for (uint8_t i = 0; i < slot->span_n; i++) {
         const struct ink_span *s = &slot->spans[i];
         uint32_t px = x + (uint32_t)s->start * scale;
         uint32_t py = y + (uint32_t)s->row * scale;
         uint32_t rw = (uint32_t)s->run * scale;
         uint32_t rh = (uint32_t)s->rows * scale;
-        if (scale == 1) {
-            uint32_t hx = px + 1;
-            uint32_t hy = py + 1;
-            if (hx + rw <= x + cw && hy + rh <= y + gh)
-                fill(hx, hy, rw, rh, 0x00181818);
-        }
-        fill(px, py, rw, rh, fg);
+        if (scale == 1)
+            fill_in_cell(x, y, cw, ch, px + 1, py + 1, rw, rh, 0x00181818, fill);
+        fill_in_cell(x, y, cw, ch, px, py, rw, rh, fg, fill);
     }
 }
 
 static void draw_glyph_uncached(char c, uint32_t x, uint32_t y, uint32_t fg,
-                                uint32_t scale, uint32_t cw, font_fill_fn fill) {
+                                uint32_t scale, uint32_t cw, uint32_t ch,
+                                font_fill_fn fill) {
     const uint8_t *glyph = font8x16[(uint8_t)c];
-    uint32_t gh = 16 * scale;
     for (uint8_t row = 0; row < 16; row++) {
         uint8_t bits = glyph[row];
         uint8_t col = 0;
@@ -170,13 +198,9 @@ static void draw_glyph_uncached(char c, uint32_t x, uint32_t y, uint32_t fg,
             uint32_t py = y + (uint32_t)row * scale;
             uint32_t rw = (uint32_t)(col - start) * scale;
             uint32_t rh = scale;
-            if (scale == 1) {
-                uint32_t hx = px + 1;
-                uint32_t hy = py + 1;
-                if (hx + rw <= x + cw && hy + rh <= y + gh)
-                    fill(hx, hy, rw, rh, 0x00181818);
-            }
-            fill(px, py, rw, rh, fg);
+            if (scale == 1)
+                fill_in_cell(x, y, cw, ch, px + 1, py + 1, rw, rh, 0x00181818, fill);
+            fill_in_cell(x, y, cw, ch, px, py, rw, rh, fg, fill);
         }
     }
 }
@@ -197,13 +221,12 @@ void font_render_cell_bg(uint32_t x, uint32_t y, uint32_t cw, uint32_t ch,
 
 void font_render_glyph(char c, uint32_t x, uint32_t y, uint32_t fg, uint32_t scale,
                        uint32_t cw, uint32_t ch, font_fill_fn fill) {
-    (void)ch;
     struct glyph_slot *slot = glyph_lookup(c, scale);
     if (!slot)
         slot = rebuild_ink_cache(c, scale);
     if (!slot) {
-        draw_glyph_uncached(c, x, y, fg, scale, cw, fill);
+        draw_glyph_uncached(c, x, y, fg, scale, cw, ch, fill);
         return;
     }
-    draw_spans(slot, x, y, fg, scale, cw, fill);
+    draw_spans(slot, x, y, fg, scale, cw, ch, fill);
 }
