@@ -524,9 +524,16 @@ void browser_forward(void) {
 
 void browser_reload(void) {
     struct br_tab *t = browser_cur();
+    browser_reload_tab((int)(t - &tabs[0]));
+}
+
+void browser_reload_tab(int tab) {
+    if (tab < 0 || tab >= ntabs || !tabs[tab].used)
+        return;
+    struct br_tab *t = &tabs[tab];
     t->show_retry = 0;
     t->show_tls_accept = 0;
-    browser_go(t->url);
+    browser_go_tab(tab, t->url);
 }
 
 int browser_ctx_menu(struct ctx_menu_item *items, int max_items) {

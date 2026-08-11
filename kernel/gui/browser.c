@@ -45,6 +45,20 @@ struct br_tab *browser_cur(void) {
     return &tabs[active];
 }
 
+int browser_tab_index_for_js_host(const struct browser_js_host *h) {
+    if (!h)
+        return -1;
+    for (int i = 0; i < ntabs; i++) {
+        if (!tabs[i].used)
+            continue;
+        if (&tabs[i].jsh == h)
+            return i;
+        if (tabs[i].js && h->rt && tabs[i].js == h->rt)
+            return i;
+    }
+    return -1;
+}
+
 static void browser_free_images(struct br_tab *t) {
     if (!t)
         return;
@@ -504,9 +518,10 @@ void browser_error_page(struct br_tab *t, enum br_err_kind kind,
     needs_redraw = 1;
 }
 
-void browser_go(const char *url) {
+static void browser_go_on_tab(struct br_tab *t, const char *url) {
+    if (!t || !url)
+        return;
     privacy_grant_net_client(0);
-    struct br_tab *t = browser_cur();
     char norm[BR_URL_MAX];
     browser_normalize_url(url, norm, sizeof(norm));
     if (!browser_hist_navigating && t->url[0] && strcmp(t->url, norm))
@@ -593,6 +608,16 @@ void browser_go(const char *url) {
     if (t->body_truncated && !t->reader_reason[0])
         snprintf(t->reader_reason, sizeof(t->reader_reason), "body truncated");
     load_document(t, body);
+}
+
+void browser_go(const char *url) {
+    browser_go_on_tab(browser_cur(), url);
+}
+
+void browser_go_tab(int tab, const char *url) {
+    if (tab < 0 || tab >= ntabs || !tabs[tab].used)
+        return;
+    browser_go_on_tab(&tabs[tab], url);
 }
 
 /* Form submit: build GET query or POST body from form controls. */

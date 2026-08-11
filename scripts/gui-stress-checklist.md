@@ -121,6 +121,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Close tab with JS active; no hang / Exception 13
 - [ ] Two JS tabs: close the first; interact with the second (DOM + click) — no Exception 13
 - [ ] `setTimeout(() => location.assign('peak://demo'), 0)` — no Exception 13 mid-timer
+- [ ] Two tabs: background tab `location.assign` / `reload` from timer — navigates that tab only (active tab JS untouched)
 - [ ] Monitor shows JS tab/object/timer counters when Browser has run scripts
 - [ ] External site that breaks JS budgets still shows reader fallback text
 
@@ -144,6 +145,7 @@ True idle must reach `hlt` (no forever `dirty_bits` / deferred-present busy-spin
 - [ ] Sticky key: Shift+letter release order — no autorepeat flood; another key clears
 - [ ] Agent: second write while pending shows busy / already-pending (not opaque deny)
 - [ ] JS: close non-last tab; `location.assign` from timer — no Exception 13
+- [ ] JS: two tabs; background tab deferred `location.assign`/`reload` — only that tab navigates
 - [ ] Opaque title-drag then close/Esc: gesture aborts; no stuck underlay
 - [ ] Autosave / disksave: GUI stays interactive; VFS write during save returns busy
 - [ ] PeakFS load of corrupt/truncated image: fail closed (no half-cleared workspace)

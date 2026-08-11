@@ -10,9 +10,12 @@
 #include <stdlib.h>
 
 void browser_js_host_test_reset(void);
+void browser_js_host_test_register_tab(int idx, struct browser_js_host *h);
 int browser_js_host_test_go_count(void);
 int browser_js_host_test_reload_count(void);
 const char *browser_js_host_test_last_go(void);
+int browser_js_host_test_last_go_tab(void);
+int browser_js_host_test_last_reload_tab(void);
 
 static int fails;
 
@@ -101,6 +104,55 @@ static void test_nav_deferred_until_flush(void) {
     js_rt_destroy(rt);
 }
 
+static void test_flush_targets_owning_tab(void) {
+    struct {
+        struct dom_document doc;
+        int dirty;
+        struct js_runtime *js;
+        struct browser_js_host jsh;
+    } slots[2];
+
+    memset(slots, 0, sizeof(slots));
+    for (int i = 0; i < 2; i++) {
+        setup_doc(&slots[i].doc);
+        slots[i].js = js_rt_create();
+        expect(slots[i].js != NULL, "rt create for tab slot");
+        browser_js_host_init(&slots[i].jsh, slots[i].js, &slots[i].doc, &slots[i].dirty);
+        browser_js_install_dom(&slots[i].jsh);
+    }
+
+    browser_js_host_test_reset();
+    browser_js_host_test_register_tab(0, &slots[0].jsh);
+    browser_js_host_test_register_tab(1, &slots[1].jsh);
+
+    char out[64];
+    expect(js_eval(slots[0].js, "location.assign('peak://from-tab0');", "<t>", out,
+                   sizeof(out)) == 0,
+           "assign on tab0");
+    expect(slots[0].jsh.pending_nav == 1, "tab0 pending assign");
+
+    expect(browser_js_flush_pending_nav(&slots[0].jsh) == 1, "flush tab0");
+    expect(browser_js_host_test_go_count() == 1, "one go");
+    expect(browser_js_host_test_last_go_tab() == 0, "go targeted tab0 not active");
+    expect(strcmp(browser_js_host_test_last_go(), "peak://from-tab0") == 0, "go url tab0");
+
+    browser_js_host_test_reset();
+    browser_js_host_test_register_tab(0, &slots[0].jsh);
+    browser_js_host_test_register_tab(1, &slots[1].jsh);
+
+    expect(js_eval(slots[1].js, "location.reload();", "<t>", out, sizeof(out)) == 0,
+           "reload on tab1");
+    expect(slots[1].jsh.pending_nav == 2, "tab1 pending reload");
+    expect(browser_js_flush_pending_nav(&slots[1].jsh) == 1, "flush tab1");
+    expect(browser_js_host_test_reload_count() == 1, "one reload");
+    expect(browser_js_host_test_last_reload_tab() == 1, "reload targeted tab1");
+
+    for (int i = 0; i < 2; i++) {
+        js_rt_set_host_mark(slots[i].js, NULL, NULL);
+        js_rt_destroy(slots[i].js);
+    }
+}
+
 static void test_fixup_after_move(void) {
     struct {
         struct dom_document doc;
@@ -138,6 +190,7 @@ int main(void) {
     js_runtime_init();
     test_listener_survives_gc();
     test_nav_deferred_until_flush();
+    test_flush_targets_owning_tab();
     test_fixup_after_move();
     if (fails) {
         fprintf(stderr, "%d browser_js test(s) failed\n", fails);
