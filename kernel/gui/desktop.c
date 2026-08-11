@@ -113,8 +113,13 @@ void desktop_run(void) {
         if (!session_lock && !power_confirm) {
             browser_tick();
             if (browser_wants_redraw()) {
-                dirty_bits |= DIRTY_BROWSER;
-                desktop_mark_win_surf_dirty(desktop_find_win(APP_BROWSER));
+                int bi = desktop_find_win(APP_BROWSER);
+                if (bi >= 0 && wins[bi].open && !wins[bi].minimized) {
+                    dirty_bits |= DIRTY_BROWSER;
+                    desktop_mark_win_surf_dirty(bi);
+                }
+                /* Latch-and-clear so no/minimized Browser cannot peg presents. */
+                browser_clear_wants_redraw();
             }
         } else {
             browser_clear_wants_redraw();

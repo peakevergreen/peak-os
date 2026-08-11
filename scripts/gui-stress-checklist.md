@@ -41,6 +41,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Focused window shows accent titlebar ring; unfocused windows stay dim
 - [ ] Session lock / power confirm: idle does not spin-present every tick; Enter/Y/N still work
 - [ ] Idle with Browser open (pending setTimeout): CPU settles / hlt — no busy-spin present
+- [ ] Idle with Browser never opened / minimized after timer dirty: no forever present storm
 - [ ] Held mouse button alone does not prevent idle lock forever
 - [ ] Dirty workspace → wait autosave: desktop stays interactive (disksave yields)
 

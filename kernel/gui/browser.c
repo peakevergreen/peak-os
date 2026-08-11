@@ -20,7 +20,7 @@ struct br_tab tabs[BR_MAX_TABS];
 int ntabs;
 int active;
 int editing;
-int needs_redraw = 1;
+int needs_redraw = 0;
 static char *body_cache;
 int browser_hist_navigating; /* skip hist_push during back/forward */
 
