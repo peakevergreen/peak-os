@@ -169,6 +169,8 @@ int desktop_find_win(enum app_kind k) {
 }
 
 void desktop_raise_win(int idx) {
+    if (idx < 0 || idx >= MAX_WINS || !wins[idx].open)
+        return;
     int prev_focus = focus;
     int maxz = 0;
     for (int i = 0; i < MAX_WINS; i++)
@@ -185,6 +187,8 @@ void desktop_raise_win(int idx) {
 }
 
 void desktop_maximize_win(int idx) {
+    if (idx < 0 || idx >= MAX_WINS || !wins[idx].open)
+        return;
     struct framebuffer *fb = fb_get();
     struct win *w = &wins[idx];
     uint32_t ox = w->x, oy = w->y, ow = w->w, oh = w->h;
@@ -217,6 +221,8 @@ void desktop_maximize_win(int idx) {
 }
 
 void desktop_minimize_win(int idx) {
+    if (idx < 0 || idx >= MAX_WINS || !wins[idx].open)
+        return;
     if (dragging || resizing || move_live || move_win == idx)
         desktop_abort_pointer_gesture();
     if (wins[idx].kind == APP_FILES)
@@ -358,6 +364,8 @@ int desktop_open_app(enum app_kind k) {
 }
 
 void desktop_close_win(int idx) {
+    if (idx < 0 || idx >= MAX_WINS || !wins[idx].open)
+        return;
     if (dragging || resizing || move_live || move_win == idx)
         desktop_abort_pointer_gesture();
     if (wins[idx].kind == APP_FILES)
@@ -373,6 +381,7 @@ void desktop_close_win(int idx) {
     wins[idx].open = 0;
     wins[idx].minimized = 0;
     wins[idx].maximized = 0;
+    wins[idx].kind = APP_TERM; /* slot dead; !open is authoritative */
     if (focus == idx) {
         focus = -1;
         int best = -1, bz = -1;
@@ -416,7 +425,7 @@ void desktop_snap_zone_rect(int mode, uint32_t *x, uint32_t *y, uint32_t *w, uin
 }
 
 void desktop_snap_apply(int idx, int mode) {
-    if (idx < 0 || mode <= 0)
+    if (idx < 0 || idx >= MAX_WINS || !wins[idx].open || mode <= 0)
         return;
     struct win *w = &wins[idx];
     uint32_t ox = w->x, oy = w->y, ow = w->w, oh = w->h;

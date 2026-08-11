@@ -158,6 +158,8 @@ True idle must reach `hlt` (no forever `dirty_bits` / deferred-present busy-spin
 - [ ] PeakFS load of corrupt/truncated image: fail closed (no half-cleared workspace)
 - [ ] Context menu: open menu → Ctrl+W target window → click menu item is a no-op
 - [ ] Resize mid-close / narrow chrome / Files DnD cancel on Files close-minimize (see Opaque drag section)
+- [ ] Raise / maximize / minimize / close with stale idx: no-ops when !open (closed slot dead)
+- [ ] Multi-tab Browser: fetch on tab B must not expose tab B body via View Source on tab A (shared body invalidated)
 
 ## Phase 2 UI crash (regression)
 

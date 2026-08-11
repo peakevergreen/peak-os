@@ -119,6 +119,8 @@ enum js_op {
 #define JS_TIMER_MIN_TICKS 2
 /* Cap microtask jobs per drain so a self-enqueueing chain cannot monopolize a tick. */
 #define JS_MICRO_DRAIN_MAX 64
+/* Cap timer callbacks per js_tick; remaining due timers wait for the next tick. */
+#define JS_TIMER_FIRE_MAX 16
 
 struct js_frame {
     uint32_t ip;
