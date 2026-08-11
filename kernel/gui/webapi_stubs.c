@@ -441,6 +441,7 @@ static int signal_is_aborted(struct js_runtime *rt, const struct js_value *sig) 
 }
 
 static int stub_fetch(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    webapi_bind_runtime(rt);
     if (!browser_isolation_net_allowed()) {
         js_val_set_undefined((struct js_value *)ret);
         snprintf(rt->err, sizeof(rt->err), "%s", browser_isolation_fetch_denied_reason());
@@ -568,6 +569,7 @@ void webapi_install_fetch_stub(struct js_runtime *rt) {
 #define WEB_STORE_VAL_SCRATCH (WEB_STORE_VAL + 8)
 
 static int stub_storage_get(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    webapi_bind_runtime(rt);
     char key[WEB_STORE_KEY_SCRATCH], val[WEB_STORE_VAL];
     js_val_set_null(ret);
     if (argc < 1)
@@ -581,6 +583,7 @@ static int stub_storage_get(struct js_runtime *rt, int argc, void *argv, void *r
 }
 
 static int stub_storage_set(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
+    webapi_bind_runtime(rt);
     char key[WEB_STORE_KEY_SCRATCH], val[WEB_STORE_VAL_SCRATCH];
     js_val_set_undefined(ret);
     if (argc < 2)
@@ -598,6 +601,7 @@ static int stub_storage_set(struct js_runtime *rt, int argc, void *argv, void *r
 
 static int stub_storage_remove(struct js_runtime *rt, int argc, void *argv, void *ret,
                                void *ud) {
+    webapi_bind_runtime(rt);
     char key[WEB_STORE_KEY_SCRATCH];
     js_val_set_undefined(ret);
     if (argc < 1)

@@ -59,6 +59,30 @@ int browser_tab_index_for_js_host(const struct browser_js_host *h) {
     return -1;
 }
 
+static void browser_webapi_bind_rt(struct js_runtime *rt) {
+    if (!rt)
+        return;
+    for (int i = 0; i < ntabs; i++) {
+        if (!tabs[i].used || tabs[i].js != rt)
+            continue;
+        webapi_bind(i, 0, tabs[i].url);
+        return;
+    }
+}
+
+static void browser_ensure_webapi_binder(void) {
+    webapi_set_runtime_binder(browser_webapi_bind_rt);
+}
+
+static int browser_tab_index(const struct br_tab *t) {
+    if (!t)
+        return -1;
+    int i = (int)(t - tabs);
+    if (i < 0 || i >= BR_MAX_TABS)
+        return -1;
+    return i;
+}
+
 static void browser_free_images(struct br_tab *t) {
     if (!t)
         return;
@@ -345,7 +369,12 @@ static void load_document(struct br_tab *t, const char *html) {
         t->dom_dirty = 0;
         browser_js_host_init(&t->jsh, t->js, &t->doc, &t->dom_dirty);
         browser_js_install_dom(&t->jsh);
-        webapi_set_tab(active, 0);
+        {
+            int tab = browser_tab_index(t);
+            if (tab < 0)
+                tab = active;
+            webapi_bind(tab, 0, t->url);
+        }
         webapi_install(t->js, t->url);
         /* Partial script failure must not force reader if layout has content. */
         if (browser_js_run_scripts(&t->jsh) != 0)
@@ -381,6 +410,7 @@ static void load_document(struct br_tab *t, const char *html) {
 }
 
 void browser_reset(void) {
+    browser_ensure_webapi_binder();
     for (int i = 0; i < ntabs; i++)
         browser_tab_teardown_js(&tabs[i]);
     memset(tabs, 0, sizeof(tabs));
@@ -747,6 +777,7 @@ void browser_clear_wants_redraw(void) {
 }
 
 void browser_tick(void) {
+    browser_ensure_webapi_binder();
     static uint8_t last_spin_frame = 0xff;
     for (int i = 0; i < ntabs; i++) {
         if (!tabs[i].used)
@@ -762,6 +793,8 @@ void browser_tick(void) {
         }
         if (!tabs[i].js)
             continue;
+        /* Bind webapi origin/store to this tab before timers/microtasks. */
+        webapi_bind(i, 0, tabs[i].url);
         if (js_tick(tabs[i].js))
             needs_redraw = 1; /* timer fire / microtask drain only */
         if (browser_js_flush_pending_nav(&tabs[i].jsh))

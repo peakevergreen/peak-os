@@ -23,7 +23,17 @@
 int webapi_install(struct js_runtime *rt, const char *page_url);
 
 void webapi_set_tab(int tab_id, int private_tab);
+/* Bind active store index + page URL used by fetch/storage stubs. */
+void webapi_bind(int tab_id, int private_tab, const char *page_url);
 void webapi_clear_tab(int tab_id);
+/* After tab close: drop closed_idx stores and shift higher indices down. */
+void webapi_compact_tab(int closed_idx);
+/*
+ * Optional hook: before stub entry, rebind g_web_* from the calling runtime
+ * (browser registers a lookup of tab-by-js). NULL = leave globals unchanged.
+ */
+void webapi_set_runtime_binder(void (*fn)(struct js_runtime *rt));
+void webapi_bind_runtime(struct js_runtime *rt);
 
 int webapi_load_classic_scripts(struct js_runtime *rt, struct dom_document *doc,
                                 const char *page_url);

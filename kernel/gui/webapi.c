@@ -14,6 +14,8 @@ int g_web_tab_id;
 char g_web_page_url[WEB_ORIGIN_MAX];
 int g_web_private_tab;
 
+static void (*g_webapi_rt_binder)(struct js_runtime *rt);
+
 void webapi_set_tab(int tab_id, int private_tab) {
     if (tab_id < 0)
         tab_id = 0;
@@ -23,11 +25,40 @@ void webapi_set_tab(int tab_id, int private_tab) {
     g_web_private_tab = private_tab ? 1 : 0;
 }
 
+void webapi_bind(int tab_id, int private_tab, const char *page_url) {
+    webapi_set_tab(tab_id, private_tab);
+    snprintf(g_web_page_url, sizeof(g_web_page_url), "%s", page_url ? page_url : "");
+}
+
 void webapi_clear_tab(int tab_id) {
     if (tab_id < 0 || tab_id >= WEB_TAB_STORES)
         return;
     memset(&g_web_local[tab_id], 0, sizeof(g_web_local[tab_id]));
     memset(&g_web_session[tab_id], 0, sizeof(g_web_session[tab_id]));
+}
+
+void webapi_compact_tab(int closed_idx) {
+    if (closed_idx < 0 || closed_idx >= WEB_TAB_STORES)
+        return;
+    for (int j = closed_idx; j < WEB_TAB_STORES - 1; j++) {
+        g_web_local[j] = g_web_local[j + 1];
+        g_web_session[j] = g_web_session[j + 1];
+    }
+    memset(&g_web_local[WEB_TAB_STORES - 1], 0, sizeof(g_web_local[0]));
+    memset(&g_web_session[WEB_TAB_STORES - 1], 0, sizeof(g_web_session[0]));
+    if (g_web_tab_id > closed_idx)
+        g_web_tab_id--;
+    else if (g_web_tab_id == closed_idx)
+        g_web_tab_id = closed_idx > 0 ? closed_idx - 1 : 0;
+}
+
+void webapi_set_runtime_binder(void (*fn)(struct js_runtime *rt)) {
+    g_webapi_rt_binder = fn;
+}
+
+void webapi_bind_runtime(struct js_runtime *rt) {
+    if (g_webapi_rt_binder)
+        g_webapi_rt_binder(rt);
 }
 
 struct web_store *web_store_for(const char *which) {
