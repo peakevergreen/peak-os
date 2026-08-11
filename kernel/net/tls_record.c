@@ -52,24 +52,42 @@ static void tls13_nonce(uint8_t nonce[12], const uint8_t iv[12], uint64_t seq) {
         nonce[4 + i] ^= seqb[i];
 }
 
+/* Off-stack scratch for record encrypt/decrypt — netd is single-threaded TLS. */
+static uint8_t tls_send_rec[16600];
+static uint8_t tls_send_plain[16001];
+static uint8_t tls_send_cipher[16016];
+static uint8_t tls_recv_plain[16384 + 1];
+static volatile int tls_scratch_busy;
+
 int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted) {
-    uint8_t rec[16600];
+    if (tls_scratch_busy)
+        return -1;
+    tls_scratch_busy = 1;
+    uint8_t *rec = tls_send_rec;
     if (!encrypted) {
-        if (5 + len > sizeof(rec))
+        if (5 + len > sizeof(tls_send_rec)) {
+            tls_scratch_busy = 0;
             return -1;
+        }
         rec[0] = type;
         rec[1] = 0x03;
         rec[2] = 0x03;
         tls_wr16(rec + 3, (uint16_t)len);
         memcpy(rec + 5, data, len);
-        return net_tcp_send(rec, 5 + len);
+        {
+            int rc = net_tcp_send(rec, 5 + len);
+            tls_scratch_busy = 0;
+            return rc;
+        }
     }
 
     if (tls13) {
         /* TLS 1.3: outer type application_data; inner type trailing byte. */
-        if (len + 1 > sizeof(rec) - 5 - 16)
+        if (len + 1 > sizeof(tls_send_rec) - 5 - 16) {
+            tls_scratch_busy = 0;
             return -1;
-        uint8_t plain[16001];
+        }
+        uint8_t *plain = tls_send_plain;
         memcpy(plain, data, len);
         plain[len] = type;
         size_t plen = len + 1;
@@ -78,7 +96,7 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
         aad[1] = 0x03;
         aad[2] = 0x03;
         tls_wr16(aad + 3, (uint16_t)(plen + 16));
-        uint8_t cipher[16016];
+        uint8_t *cipher = tls_send_cipher;
         uint8_t tag[16];
         uint8_t nonce[12];
         tls13_nonce(nonce, client_iv, client_seq);
@@ -89,8 +107,10 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
             enc_rc = aes256_gcm_encrypt(client_key, nonce, aad, 5, plain, plen, cipher, tag);
         else
             enc_rc = aes128_gcm_encrypt(client_key, nonce, aad, 5, plain, plen, cipher, tag);
-        if (enc_rc != 0)
+        if (enc_rc != 0) {
+            tls_scratch_busy = 0;
             return -1;
+        }
         size_t payload = plen + 16;
         rec[0] = TLS_CONTENT_APP;
         rec[1] = 0x03;
@@ -99,7 +119,11 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
         memcpy(rec + 5, cipher, plen);
         memcpy(rec + 5 + plen, tag, 16);
         client_seq++;
-        return net_tcp_send(rec, 5 + payload);
+        {
+            int rc = net_tcp_send(rec, 5 + payload);
+            tls_scratch_busy = 0;
+            return rc;
+        }
     }
 
     uint8_t aad[13];
@@ -109,10 +133,12 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
     aad[10] = 0x03;
     tls_wr16(aad + 11, (uint16_t)len);
 
-    uint8_t cipher[16000];
+    uint8_t *cipher = tls_send_cipher;
     uint8_t tag[16];
-    if (len > sizeof(cipher))
+    if (len > 16000) {
+        tls_scratch_busy = 0;
         return -1;
+    }
 
     if (cipher_kind == CIPHER_CHACHA20) {
         uint8_t nonce[12];
@@ -121,8 +147,10 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
         seq_bytes(seqb, client_seq);
         for (int i = 0; i < 8; i++)
             nonce[4 + i] ^= seqb[i];
-        if (chacha20_poly1305_encrypt(client_key, nonce, aad, 13, data, len, cipher, tag) != 0)
+        if (chacha20_poly1305_encrypt(client_key, nonce, aad, 13, data, len, cipher, tag) != 0) {
+            tls_scratch_busy = 0;
             return -1;
+        }
         size_t payload = len + 16;
         rec[0] = type;
         rec[1] = 0x03;
@@ -131,7 +159,11 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
         memcpy(rec + 5, cipher, len);
         memcpy(rec + 5 + len, tag, 16);
         client_seq++;
-        return net_tcp_send(rec, 5 + payload);
+        {
+            int rc = net_tcp_send(rec, 5 + payload);
+            tls_scratch_busy = 0;
+            return rc;
+        }
     }
 
     uint8_t iv[12];
@@ -144,8 +176,10 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
         enc_rc = aes256_gcm_encrypt(client_key, iv, aad, 13, data, len, cipher, tag);
     else
         enc_rc = aes128_gcm_encrypt(client_key, iv, aad, 13, data, len, cipher, tag);
-    if (enc_rc != 0)
+    if (enc_rc != 0) {
+        tls_scratch_busy = 0;
         return -1;
+    }
     size_t payload = 8 + len + 16;
     rec[0] = type;
     rec[1] = 0x03;
@@ -155,7 +189,11 @@ int tls_send_record(uint8_t type, const uint8_t *data, size_t len, int encrypted
     memcpy(rec + 13, cipher, len);
     memcpy(rec + 13 + len, tag, 16);
     client_seq++;
-    return net_tcp_send(rec, 5 + payload);
+    {
+        int rc = net_tcp_send(rec, 5 + payload);
+        tls_scratch_busy = 0;
+        return rc;
+    }
 }
 
 int tls_recv_record(uint8_t *type_out, uint8_t *buf, size_t cap, size_t *out_len,
@@ -198,8 +236,8 @@ int tls_recv_record(uint8_t *type_out, uint8_t *buf, size_t cap, size_t *out_len
         aad[1] = hdr[1];
         aad[2] = hdr[2];
         tls_wr16(aad + 3, len);
-        uint8_t plain[16384 + 1];
-        if (clen > sizeof(plain))
+        uint8_t *plain = tls_recv_plain;
+        if (clen > sizeof(tls_recv_plain))
             return -1;
         uint8_t nonce[12];
         tls13_nonce(nonce, server_iv, server_seq);
