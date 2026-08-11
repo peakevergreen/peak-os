@@ -111,14 +111,17 @@ void desktop_run(void) {
         sound_poll();
         platform_poll();
         if (!session_lock && !power_confirm) {
-            browser_tick();
-            if (browser_wants_redraw()) {
-                int bi = desktop_find_win(APP_BROWSER);
-                if (bi >= 0 && wins[bi].open && !wins[bi].minimized) {
+            /* Tick only while an open, non-minimized Browser exists (pause on
+             * minimize/close; full JS teardown is in desktop_close_win). */
+            int bi = desktop_find_win(APP_BROWSER);
+            if (bi >= 0 && !wins[bi].minimized) {
+                browser_tick();
+                if (browser_wants_redraw()) {
                     dirty_bits |= DIRTY_BROWSER;
                     desktop_mark_win_surf_dirty(bi);
+                    browser_clear_wants_redraw();
                 }
-                /* Latch-and-clear so no/minimized Browser cannot peg presents. */
+            } else {
                 browser_clear_wants_redraw();
             }
         } else {

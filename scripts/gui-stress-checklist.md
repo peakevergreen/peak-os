@@ -42,6 +42,8 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Session lock / power confirm: idle does not spin-present every tick; Enter/Y/N still work
 - [ ] Idle with Browser open (pending setTimeout): CPU settles / hlt — no busy-spin present
 - [ ] Idle with Browser never opened / minimized after timer dirty: no forever present storm
+- [ ] Close Browser window (JS timers pending): no further ticks/presents; reopen still works
+- [ ] Minimize Browser with pending setTimeout: idle settles (ticks paused); restore resumes
 - [ ] Held mouse button alone does not prevent idle lock forever
 - [ ] Dirty workspace → wait autosave: desktop stays interactive (disksave yields)
 
@@ -138,6 +140,7 @@ Focused pass after kernel/GUI stability merges. Details also appear in sections 
 True idle must reach `hlt` (no forever `dirty_bits` / deferred-present busy-spin).
 
 - [ ] Idle desktop with Browser + pending `setTimeout`: fan settles; serial not flooded with presents
+- [ ] Close Browser (pending timers): teardown — no tick/present storm after close; reopen OK
 - [ ] Sticky key: Shift+letter release order — no autorepeat flood; another key clears
 - [ ] Agent: second write while pending shows busy / already-pending (not opaque deny)
 - [ ] JS: close non-last tab; `location.assign` from timer — no Exception 13
