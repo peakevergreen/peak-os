@@ -1,5 +1,6 @@
 #include "agent_internal.h"
 #include "console.h"
+#include "heap.h"
 #include "serial.h"
 #include "vfs.h"
 #include "peakvec.h"
@@ -994,9 +995,16 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     }
 
     if (intent == INTENT_READ) {
-        char body[AGENT_READ_CONTENT_MAX];
+        char *body = kmalloc(AGENT_READ_CONTENT_MAX);
+        if (!body) {
+            agent_tool_console_print("[agent] read failed (oom)");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "read oom");
+            memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
+            return;
+        }
         size_t n = 0;
-        if (agent_tool_fs_read(slots.path, body, sizeof(body), &n) == 0) {
+        if (agent_tool_fs_read(slots.path, body, AGENT_READ_CONTENT_MAX, &n) == 0) {
             TOOL_NOTE("fs.read");
             agent_tool_console_print(slots.path);
             TOOL_NOTE("console.print");
@@ -1008,6 +1016,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "read failed");
         }
+        kfree(body);
         memory_append_turn(goal, tools_used, path_used[0] ? path_used : NULL, memory_outcome_from_summary(summary), summary);
         return;
     }
@@ -1019,8 +1028,16 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         else
             workspace_path_from_name(NULL, path, sizeof(path));
 
-        char content[AGENT_PENDING_CONTENT_MAX];
-        memset(content, 0, sizeof(content));
+        char *content = kmalloc(AGENT_PENDING_CONTENT_MAX);
+        char *existing = NULL;
+        if (!content) {
+            agent_tool_console_print("[agent] write scratch oom");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "write oom");
+            memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
+            return;
+        }
+        memset(content, 0, AGENT_PENDING_CONTENT_MAX);
 
         if (intent == INTENT_EDIT) {
             /* Multi-step: resolve (search?) → read → transform → write */
@@ -1031,23 +1048,34 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                 TOOL_NOTE("console.print");
                 set_summary(summary, summary_cap, "edit path missing");
                 memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
+                kfree(content);
                 return;
             }
             memcpy(path, resolved, strlen(resolved) + 1);
             agent_tool_console_print("[agent] step: fs.read");
-            char existing[AGENT_READ_CONTENT_MAX];
+            existing = kmalloc(AGENT_READ_CONTENT_MAX);
+            if (!existing) {
+                agent_tool_console_print("[agent] edit: read scratch oom");
+                TOOL_NOTE("console.print");
+                set_summary(summary, summary_cap, "edit oom");
+                memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
+                kfree(content);
+                return;
+            }
             size_t n = 0;
-            if (agent_tool_fs_read(path, existing, sizeof(existing), &n) != 0 || !n) {
+            if (agent_tool_fs_read(path, existing, AGENT_READ_CONTENT_MAX, &n) != 0 || !n) {
                 TOOL_NOTE("fs.read");
                 agent_tool_console_print("[agent] edit: read failed after resolve");
                 TOOL_NOTE("console.print");
                 set_summary(summary, summary_cap, "edit read failed");
                 memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
+                kfree(existing);
+                kfree(content);
                 return;
             }
             TOOL_NOTE("fs.read");
             agent_tool_console_print("[agent] step: transform");
-            if (!apply_edit_transform(goal, existing, n, content, sizeof(content))) {
+            if (!apply_edit_transform(goal, existing, n, content, AGENT_PENDING_CONTENT_MAX)) {
                 agent_tool_console_print(
                     "[agent] no edit transform matched — try: "
                     "\"edit … error handling\" | \"edit … print\" | "
@@ -1055,8 +1083,12 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                 TOOL_NOTE("console.print");
                 set_summary(summary, summary_cap, "edit refused");
                 memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
+                kfree(existing);
+                kfree(content);
                 return;
             }
+            kfree(existing);
+            existing = NULL;
             agent_tool_console_print("[agent] step: fs.write");
         }
 
@@ -1068,7 +1100,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                 console_write_ui(listing);
             }
             agent_tool_console_print("[agent] step: scaffold");
-            if (!scaffold_create(goal, path, content, sizeof(content))) {
+            if (!scaffold_create(goal, path, content, AGENT_PENDING_CONTENT_MAX)) {
                 agent_tool_console_print(
                     "[agent] no create template matched — try: "
                     "\"create fib.c\" | \"create hello.c\" | "
@@ -1076,6 +1108,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                 TOOL_NOTE("console.print");
                 set_summary(summary, summary_cap, "create refused");
                 memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
+                kfree(content);
                 return;
             }
             agent_tool_console_print("[agent] step: fs.write");
@@ -1111,6 +1144,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         }
         memory_append_turn(goal, tools_used, path_used, memory_outcome_from_summary(summary), summary);
         agent_audit_append("goal complete");
+        kfree(content);
     }
     #undef TOOL_NOTE
 }

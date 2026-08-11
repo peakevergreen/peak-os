@@ -441,6 +441,14 @@ static void ctx_close(void) {
     ctx_spec.hover_row = -1;
 }
 
+void desktop_ctx_close(void) {
+    ctx_close();
+}
+
+static int ctx_win_live(void) {
+    return ctx_win >= 0 && ctx_win < MAX_WINS && wins[ctx_win].open;
+}
+
 static void ctx_add_item(const char *label, int enabled, int separator, int action_id) {
     if (ctx_item_count >= CTX_MENU_MAX_ITEMS)
         return;
@@ -837,13 +845,13 @@ static void ctx_dispatch_action(int action_id) {
         settings_page = 0;
         break;
     case CTX_ACT_RAISE:
-        if (ctx_win >= 0) {
+        if (ctx_win_live()) {
             wins[ctx_win].minimized = 0;
             desktop_raise_win(ctx_win);
         }
         break;
     case CTX_ACT_MIN_RESTORE:
-        if (ctx_win >= 0) {
+        if (ctx_win_live()) {
             if (ctx_target_kind == CTX_TASKBAR && wins[ctx_win].minimized)
                 wins[ctx_win].minimized = 0;
             else if (wins[ctx_win].minimized)
@@ -855,11 +863,11 @@ static void ctx_dispatch_action(int action_id) {
         }
         break;
     case CTX_ACT_MAX_RESTORE:
-        if (ctx_win >= 0)
+        if (ctx_win_live())
             desktop_maximize_win(ctx_win);
         break;
     case CTX_ACT_CLOSE:
-        if (ctx_win >= 0)
+        if (ctx_win_live())
             desktop_close_win(ctx_win);
         break;
     case CTX_ACT_HELP:
@@ -867,7 +875,7 @@ static void ctx_dispatch_action(int action_id) {
         dirty_bits |= DIRTY_FULL;
         break;
     default:
-        if (action_id >= CTX_ACT_APP_BASE && ctx_win >= 0 &&
+        if (action_id >= CTX_ACT_APP_BASE && ctx_win_live() &&
             desktop_app_ctx_action(wins[ctx_win].kind, action_id))
             break;
         break;

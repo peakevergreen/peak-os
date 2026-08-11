@@ -217,6 +217,7 @@ void desktop_draw_taskbar(void);
 void desktop_draw_start_menu(void);
 void desktop_draw_ctx_menu(void);
 int desktop_app_ctx_menu(enum app_kind kind, struct ctx_menu_item *items, int max_items);
+void desktop_ctx_close(void);
 int desktop_app_ctx_action(enum app_kind kind, int action_id);
 void desktop_menus_open_ctx_target(int32_t mx, int32_t my, enum ctx_target target, int win_idx);
 int desktop_menus_ctx_hit_test(int32_t mx, int32_t my, enum ctx_target *target, int *win_idx);
