@@ -43,6 +43,67 @@ int dom_find_ancestor(struct dom_document *doc, int id, const char *tag) {
     return -1;
 }
 
+/* Bounded sibling step: validates live node and rejects self-cycles. */
+int dom_next_sibling(struct dom_document *doc, int id) {
+    struct dom_node *n = dom_node(doc, id);
+    if (!n)
+        return -1;
+    int next = n->next_sibling;
+    if (next == id)
+        return -1;
+    if (!dom_node(doc, next))
+        return -1;
+    return next;
+}
+
+static void dom_unlink_from_parent(struct dom_document *doc, int child) {
+    struct dom_node *c = dom_node(doc, child);
+    if (!c || c->parent < 0)
+        return;
+    struct dom_node *p = dom_node(doc, c->parent);
+    if (!p) {
+        c->parent = -1;
+        c->next_sibling = -1;
+        return;
+    }
+    if (p->first_child == child) {
+        p->first_child = c->next_sibling;
+    } else {
+        int steps = 0;
+        for (int s = p->first_child; s >= 0 && steps < doc->nnodes; steps++) {
+            struct dom_node *sn = dom_node(doc, s);
+            if (!sn)
+                break;
+            int nxt = sn->next_sibling;
+            if (nxt == child) {
+                sn->next_sibling = c->next_sibling;
+                break;
+            }
+            if (nxt == s)
+                break;
+            s = nxt;
+        }
+    }
+    c->parent = -1;
+    c->next_sibling = -1;
+}
+
+static int is_ancestor_of(struct dom_document *doc, int maybe_anc, int node) {
+    int steps = 0;
+    for (int p = node; p >= 0 && steps < doc->nnodes; steps++) {
+        if (p == maybe_anc)
+            return 1;
+        struct dom_node *n = dom_node(doc, p);
+        if (!n)
+            return 0;
+        int next = n->parent;
+        if (next == p)
+            return 0;
+        p = next;
+    }
+    return 0;
+}
+
 static int alloc_node(struct dom_document *doc) {
     if (doc->nnodes >= DOM_MAX_NODES)
         return -1;
@@ -85,14 +146,49 @@ int dom_append_child(struct dom_document *doc, int parent, int child) {
     struct dom_node *c = dom_node(doc, child);
     if (!p || !c || p->type == DOM_TEXT)
         return -1;
+    if (parent == child)
+        return -1;
+    /* Reject cycles: cannot append an ancestor under a descendant. */
+    if (is_ancestor_of(doc, child, parent))
+        return -1;
+    /* Already a direct child — treat as success (idempotent). */
+    if (c->parent == parent) {
+        int steps = 0;
+        for (int s = p->first_child; s >= 0 && steps < doc->nnodes; steps++) {
+            if (s == child)
+                return 0;
+            s = dom_next_sibling(doc, s);
+        }
+    }
+    dom_unlink_from_parent(doc, child);
+    c = dom_node(doc, child);
+    if (!c)
+        return -1;
     c->parent = parent;
+    c->next_sibling = -1;
     if (p->first_child < 0) {
         p->first_child = child;
     } else {
         int n = p->first_child;
-        while (doc->nodes[n].next_sibling >= 0)
-            n = doc->nodes[n].next_sibling;
-        doc->nodes[n].next_sibling = child;
+        int steps = 0;
+        while (steps < doc->nnodes) {
+            struct dom_node *sn = dom_node(doc, n);
+            if (!sn)
+                return -1;
+            int nxt = sn->next_sibling;
+            if (nxt < 0) {
+                sn->next_sibling = child;
+                break;
+            }
+            if (nxt == n)
+                return -1;
+            if (!dom_node(doc, nxt))
+                return -1;
+            n = nxt;
+            steps++;
+        }
+        if (steps >= doc->nnodes)
+            return -1;
     }
     doc->dirty = 1;
     return 0;
@@ -342,16 +438,20 @@ int dom_collect_text(struct dom_document *doc, int id, char *out, size_t cap) {
         return (int)strlen(out);
     }
     size_t o = 0;
-    for (int c = n->first_child; c >= 0; c = doc->nodes[c].next_sibling) {
+    int steps = 0;
+    for (int c = n->first_child; c >= 0 && steps < doc->nnodes; steps++) {
         char piece[DOM_TEXT_MAX];
         dom_collect_text(doc, c, piece, sizeof(piece));
         size_t pl = strlen(piece);
-        if (!pl)
+        if (!pl) {
+            c = dom_next_sibling(doc, c);
             continue;
+        }
         if (o && o + 1 < cap)
             out[o++] = ' ';
         for (size_t i = 0; i < pl && o + 1 < cap; i++)
             out[o++] = piece[i];
+        c = dom_next_sibling(doc, c);
     }
     out[o] = '\0';
     return (int)o;

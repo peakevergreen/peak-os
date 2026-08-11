@@ -75,6 +75,9 @@ void dom_set_inner_html(struct dom_document *doc, int id, const char *html);
  * Returns matching element id, or -1. Starts at `id` (inclusive). */
 int dom_find_ancestor(struct dom_document *doc, int id, const char *tag);
 
+/* Bounded next_sibling via dom_node(); -1 on NULL / self-cycle / dead. */
+int dom_next_sibling(struct dom_document *doc, int id);
+
 /* Collect visible text blocks for reader/paint fallback. */
 int dom_collect_text(struct dom_document *doc, int id, char *out, size_t cap);
 

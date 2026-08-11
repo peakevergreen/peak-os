@@ -208,9 +208,13 @@ int css_layout(struct dom_document *doc, struct css_sheet *sheet,
 
     int queue[DOM_MAX_NODES];
     int qh = 0, qt = 0;
-    for (int c = doc->nodes[body].first_child; c >= 0; c = doc->nodes[c].next_sibling) {
-        if (qt < DOM_MAX_NODES)
-            queue[qt++] = c;
+    {
+        int steps = 0;
+        for (int c = doc->nodes[body].first_child; c >= 0 && steps < doc->nnodes; steps++) {
+            if (qt < DOM_MAX_NODES)
+                queue[qt++] = c;
+            c = dom_next_sibling(doc, c);
+        }
     }
     while (qh < qt && n < max_boxes) {
         int id = queue[qh++];
@@ -348,16 +352,24 @@ int css_layout(struct dom_document *doc, struct css_sheet *sheet,
             /* Still walk children for nested interactive controls. */
             if (!strcmp(node->tag, "form") || !strcmp(node->tag, "div") ||
                 !strcmp(node->tag, "section") || !strcmp(node->tag, "li")) {
-                for (int c = node->first_child; c >= 0; c = doc->nodes[c].next_sibling)
+                int steps = 0;
+                for (int c = node->first_child; c >= 0 && steps < doc->nnodes; steps++) {
                     if (qt < DOM_MAX_NODES)
                         queue[qt++] = c;
+                    c = dom_next_sibling(doc, c);
+                }
             }
             continue;
         }
 
-        for (int c = node->first_child; c >= 0; c = doc->nodes[c].next_sibling)
-            if (qt < DOM_MAX_NODES)
-                queue[qt++] = c;
+        {
+            int steps = 0;
+            for (int c = node->first_child; c >= 0 && steps < doc->nnodes; steps++) {
+                if (qt < DOM_MAX_NODES)
+                    queue[qt++] = c;
+                c = dom_next_sibling(doc, c);
+            }
+        }
     }
     return n;
 }
