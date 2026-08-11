@@ -6,6 +6,60 @@
 #include "css.h"
 #include "browser_js.h"
 #include "ui_widgets.h"
+#include "fb.h"
+
+/* Same as desktop_u: logical px → framebuffer px via UI scale. */
+static inline uint32_t browser_u(uint32_t v) { return v * fb_ui_scale(); }
+
+/* Shared chrome spacing for draw + hit-test (must stay in sync). */
+struct browser_chrome_metrics {
+    uint32_t ch;
+    uint32_t cw;
+    uint32_t pad;       /* outer pad (was 6) */
+    uint32_t gap;       /* small gaps (was 4) */
+    uint32_t gap_lg;    /* larger gaps (was 8) */
+    uint32_t tab_pad;   /* added to ch for tab strip height (was 6) */
+    uint32_t tab_min_w; /* min tab width (was 48) */
+    uint32_t bar_pad;   /* added to ch for nav/url bar height (was 4) */
+    uint32_t nav_extra; /* nav button width beyond 2 cells (was 8) */
+    uint32_t content_x_inset; /* page content x = pad + gap (was pad+4) */
+    uint32_t padlock_advance; /* url_x bump after TLS padlock (was 10) */
+};
+
+static inline void browser_chrome_metrics_init(struct browser_chrome_metrics *m) {
+    m->ch = fb_cell_h();
+    m->cw = fb_cell_w();
+    m->pad = browser_u(6);
+    m->gap = browser_u(4);
+    m->gap_lg = browser_u(8);
+    m->tab_pad = browser_u(6);
+    m->tab_min_w = browser_u(48);
+    m->bar_pad = browser_u(4);
+    m->nav_extra = browser_u(8);
+    m->content_x_inset = m->pad + m->gap;
+    m->padlock_advance = browser_u(10);
+}
+
+static inline uint32_t browser_chrome_tab_h(const struct browser_chrome_metrics *m) {
+    return m->ch + m->tab_pad;
+}
+
+static inline uint32_t browser_chrome_bar_h(const struct browser_chrome_metrics *m) {
+    return m->ch + m->bar_pad;
+}
+
+static inline uint32_t browser_chrome_nav_btn_w(const struct browser_chrome_metrics *m) {
+    return m->cw * 2 + m->nav_extra;
+}
+
+/* Matches draw: tab_h + ch + pad*2 + 8 [+ bm_h + 4]. */
+static inline uint32_t browser_chrome_h(const struct browser_chrome_metrics *m,
+                                       uint32_t tab_h, uint32_t bm_h) {
+    uint32_t h = tab_h + m->ch + m->pad * 2 + m->gap_lg;
+    if (bm_h > 0)
+        h += bm_h + m->gap;
+    return h;
+}
 
 #define BR_URL_MAX    160
 #define BR_BODY_MAX   (256 * 1024)

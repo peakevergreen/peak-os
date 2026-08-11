@@ -394,13 +394,11 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
         return;
     }
     if (t->use_layout) {
-        uint32_t ch = fb_cell_h();
-        uint32_t pad = 6;
-        uint32_t chrome_h = hit_tab_h + ch + pad * 2 + 8;
-        if (hit_bm_h > 0)
-            chrome_h += hit_bm_h + 4;
-        int32_t py = ly - (int32_t)chrome_h - (int32_t)pad + t->scroll_y;
-        int32_t px = lx - (int32_t)pad - 4;
+        struct browser_chrome_metrics cm;
+        browser_chrome_metrics_init(&cm);
+        uint32_t chrome_h = browser_chrome_h(&cm, hit_tab_h, hit_bm_h);
+        int32_t py = ly - (int32_t)chrome_h - (int32_t)cm.pad + t->scroll_y;
+        int32_t px = lx - (int32_t)cm.content_x_inset;
         for (int i = 0; i < t->nboxes; i++) {
             struct css_box *b = &t->boxes[i];
             if (px >= b->x && px < b->x + b->w && py >= b->y && py < b->y + b->h) {
