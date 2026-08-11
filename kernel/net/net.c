@@ -143,9 +143,13 @@ void net_format_ip(uint32_t ip, char *buf, size_t cap) {
              (unsigned)((ip >> 8) & 0xFF), (unsigned)(ip & 0xFF));
 }
 
+/* Off-stack TX scratch — avoids stacking ~3KB under netd / nested IP→ETH. */
+static uint8_t net_tx_frame[1518];
+static uint8_t net_tx_pkt[1500];
+
 int net_eth_send(uint16_t ethertype, const uint8_t dst[6], const void *payload, uint16_t plen) {
-    uint8_t frame[1518];
-    if (plen + 14 > sizeof(frame))
+    uint8_t *frame = net_tx_frame;
+    if (plen + 14 > sizeof(net_tx_frame))
         return PEAK_ENOBUFS;
     for (int i = 0; i < 6; i++) {
         frame[i] = dst[i];
@@ -161,9 +165,9 @@ int net_ip_send(uint32_t dst_ip, uint8_t proto, const void *payload, uint16_t pl
     uint8_t dmac[6];
     if (net_resolve_next_hop_mac(dst_ip, dmac, NET_ARP_RESOLVE_TICKS) != 0)
         return PEAK_ENETUNREACH;
-    uint8_t pkt[1500];
+    uint8_t *pkt = net_tx_pkt;
     uint16_t total = (uint16_t)(20 + plen);
-    if (total > sizeof(pkt))
+    if (total > sizeof(net_tx_pkt))
         return PEAK_ENOBUFS;
     memset(pkt, 0, 20);
     pkt[0] = 0x45;

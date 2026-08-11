@@ -6,7 +6,8 @@
 
 #define TASK_NAME_MAX 32
 #define MAX_TASKS 32
-#define KSTACK_PAGES 2
+/* 16 KiB: netd (eth/IP/TLS paths) and disksave (PeakFS export) need headroom. */
+#define KSTACK_PAGES 4
 #define KSTACK_SIZE  (KSTACK_PAGES * 4096)
 
 enum task_state {
