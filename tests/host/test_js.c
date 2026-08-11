@@ -176,6 +176,20 @@ int main(void) {
     expect(rc != 0, "object budget trips");
     js_rt_set_budgets(rt, JS_INS_BUDGET_DEFAULT, JS_HEAP_OBJS_DEFAULT);
 
+    /* js_tick returns 1 only when a timer fires (not merely while pending). */
+    expect(js_eval(rt, "var n=0; setTimeout(function(){ n=1; }, 0);", "<tick>", out,
+                   sizeof(out)) == 0,
+           "schedule timeout");
+    expect(js_pending_work(rt) != 0, "pending before fire");
+    int tick_idle = js_tick(rt);
+    /* First tick may or may not fire depending on stub tick advance; drain. */
+    for (int i = 0; i < 8 && !tick_idle; i++)
+        tick_idle = js_tick(rt);
+    expect(tick_idle != 0, "js_tick reports fire");
+    expect(js_eval(rt, "n", "<tick>", out, sizeof(out)) == 0 && out[0] == '1',
+           "timeout ran");
+    expect(js_tick(rt) == 0, "js_tick idle after drain");
+
     js_rt_destroy(rt);
     if (fails) {
         fprintf(stderr, "%d js host test(s) failed\n", fails);

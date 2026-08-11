@@ -13,6 +13,7 @@ void browser_reload(void);
 /* Click in browser content coords (relative to draw origin). */
 void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h);
 int  browser_wants_redraw(void);
+void browser_clear_wants_redraw(void);
 /* Drain per-tab JS timers/microtasks; may set wants_redraw. */
 void browser_tick(void);
 /* Aggregate JS metrics across tabs (for Monitor). */

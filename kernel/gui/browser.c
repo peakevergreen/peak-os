@@ -717,14 +717,28 @@ int browser_wants_redraw(void) {
     return needs_redraw;
 }
 
+void browser_clear_wants_redraw(void) {
+    needs_redraw = 0;
+}
+
 void browser_tick(void) {
-    int anim = 0;
+    static uint8_t last_spin_frame = 0xff;
     for (int i = 0; i < ntabs; i++) {
-        if (tabs[i].used && tabs[i].fetching)
-            anim = 1;
-        if (!tabs[i].used || !tabs[i].js)
+        if (!tabs[i].used)
             continue;
-        js_tick(tabs[i].js);
+        /* Cap fetch spinner dirty to glyph frame changes (~8 ticks). */
+        if (tabs[i].fetching) {
+            uint8_t frame =
+                (uint8_t)(((timer_ticks() - tabs[i].fetch_start) / 8) % 4);
+            if (frame != last_spin_frame) {
+                last_spin_frame = frame;
+                needs_redraw = 1;
+            }
+        }
+        if (!tabs[i].js)
+            continue;
+        if (js_tick(tabs[i].js))
+            needs_redraw = 1; /* timer fire / microtask drain only */
         if (browser_js_flush_pending_nav(&tabs[i].jsh))
             continue; /* tab may have been torn down / replaced */
         if (!tabs[i].js)
@@ -734,11 +748,8 @@ void browser_tick(void) {
             browser_rebuild_layout(&tabs[i], 640);
             needs_redraw = 1;
         }
-        if (js_pending_work(tabs[i].js))
-            needs_redraw = 1;
+        /* Do not dirty for js_pending_work() — future timers must not peg paint. */
     }
-    if (anim)
-        needs_redraw = 1;
 }
 
 void browser_js_metrics(uint32_t *tabs_with_js, uint32_t *objs, uint32_t *timers,

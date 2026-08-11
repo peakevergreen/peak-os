@@ -66,7 +66,7 @@ int js_val_call(struct js_runtime *rt, void *fn, void *this_v, int argc, void *a
 /* Timers / microtasks for browser embedding. */
 int js_set_timeout(struct js_runtime *rt, void *fn, uint32_t ms, int repeat);
 void js_clear_timer(struct js_runtime *rt, int id);
-void js_tick(struct js_runtime *rt); /* drain due timers + microtasks */
+int js_tick(struct js_runtime *rt); /* 1 if timer fired and/or microtasks drained */
 int js_pending_work(struct js_runtime *rt);
 
 /* Metrics */
