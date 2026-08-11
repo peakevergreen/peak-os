@@ -63,6 +63,85 @@ static void peakfs_clear_persist(void) {
 /* Peak ramdisk: magic "PEAKFS1\0", u32 count, then entries:
    u16 name_len, name bytes, u32 data_len, data bytes.
    Directories: path ends with '/' and data_len == 0. */
+
+#ifdef PEAK_HOST_TEST
+static int peakfs_host_fail_apply_at = -1;
+
+void peakfs_host_set_fail_apply_at(int n) {
+    peakfs_host_fail_apply_at = n;
+}
+#endif
+
+/* Apply already-validated entries; does not clear namespaces. */
+static int peakfs_apply_entries(const uint8_t *p, size_t len, uint32_t count) {
+    (void)len;
+    size_t off = 12;
+    for (uint32_t i = 0; i < count; i++) {
+#ifdef PEAK_HOST_TEST
+        if (peakfs_host_fail_apply_at >= 0 && (int)i == peakfs_host_fail_apply_at)
+            return PEAK_EIO;
+#endif
+        uint16_t nlen;
+        memcpy(&nlen, p + off, 2);
+        off += 2;
+        char path[VFS_PATH_MAX];
+        memcpy(path, p + off, nlen);
+        path[nlen] = '\0';
+        off += nlen;
+        uint32_t dlen;
+        memcpy(&dlen, p + off, 4);
+        off += 4;
+        if (nlen > 0 && path[nlen - 1] == '/') {
+            path[nlen - 1] = '\0';
+            if (!vfs_mkdir(path))
+                return PEAK_EIO;
+        } else {
+            if (vfs_write_file(path, p + off, dlen) != 0)
+                return PEAK_EIO;
+        }
+        off += dlen;
+    }
+    return 0;
+}
+
+static void *peakfs_snapshot_persist(int *out_len) {
+    *out_len = 0;
+    int need = vfs_export_ramdisk_size();
+    if (need < 12)
+        return NULL;
+    void *snap = kmalloc((size_t)need);
+    if (!snap)
+        return NULL;
+    int n = vfs_export_ramdisk(snap, (size_t)need);
+    if (n < 12) {
+        kfree(snap);
+        return NULL;
+    }
+    *out_len = n;
+    return snap;
+}
+
+static int peakfs_restore_snapshot(const void *snap, int snap_len) {
+    if (!snap || snap_len < 12)
+        return PEAK_EIO;
+    const uint8_t *p = snap;
+    if (memcmp(p, "PEAKFS1", 7) != 0)
+        return PEAK_EIO;
+    uint32_t count;
+    memcpy(&count, p + 8, 4);
+    peakfs_clear_persist();
+#ifdef PEAK_HOST_TEST
+    /* Never inject apply failures while restoring the rollback snapshot. */
+    int saved_fail = peakfs_host_fail_apply_at;
+    peakfs_host_fail_apply_at = -1;
+#endif
+    int rc = peakfs_apply_entries(p, (size_t)snap_len, count);
+#ifdef PEAK_HOST_TEST
+    peakfs_host_fail_apply_at = saved_fail;
+#endif
+    return rc;
+}
+
 int vfs_load_ramdisk(const void *blob, size_t len) {
     const uint8_t *p = blob;
     if (len < 12 || memcmp(p, "PEAKFS1", 7) != 0)
@@ -98,30 +177,26 @@ int vfs_load_ramdisk(const void *blob, size_t len) {
             return PEAK_EACCES;
         off += dlen;
     }
-    /* Replace persisted namespaces rather than overlaying. */
+
+    /* Snapshot prior persist tree so mid-apply failure can roll back. */
+    int snap_len = 0;
+    void *snap = peakfs_snapshot_persist(&snap_len);
+
     peakfs_clear_persist();
-    off = 12;
-    for (uint32_t i = 0; i < count; i++) {
-        uint16_t nlen;
-        memcpy(&nlen, p + off, 2);
-        off += 2;
-        char path[VFS_PATH_MAX];
-        memcpy(path, p + off, nlen);
-        path[nlen] = '\0';
-        off += nlen;
-        uint32_t dlen;
-        memcpy(&dlen, p + off, 4);
-        off += 4;
-        if (nlen > 0 && path[nlen - 1] == '/') {
-            path[nlen - 1] = '\0';
-            if (!vfs_mkdir(path))
-                return PEAK_EIO;
+    int rc = peakfs_apply_entries(p, len, count);
+    if (rc != 0) {
+        /* Fail closed: restore prior tree, or empty persist namespaces. */
+        if (snap && snap_len >= 12) {
+            (void)peakfs_restore_snapshot(snap, snap_len);
         } else {
-            if (vfs_write_file(path, p + off, dlen) != 0)
-                return PEAK_EIO;
+            peakfs_clear_persist();
         }
-        off += dlen;
+        if (snap)
+            kfree(snap);
+        return rc;
     }
+    if (snap)
+        kfree(snap);
     return 0;
 }
 

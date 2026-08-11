@@ -177,6 +177,26 @@ int main(void) {
         expect(vfs_load_ramdisk(junk, 4) == PEAK_EIO, "too short");
     }
 
+    /* --- mid-apply failure rolls back to prior persist tree --- */
+    {
+        uint8_t blob[512];
+        reset_vfs();
+        privacy_set_persist_profile(2);
+        vfs_seed_defaults();
+        expect(vfs_write_file("/home/dev/workspace/prior.txt", "keep", 4) == 0,
+               "seed prior");
+        expect(encode_one(blob, sizeof(blob), "/home/dev/workspace/new.txt", "n", 1) > 0,
+               "encode new");
+        peakfs_host_set_fail_apply_at(0);
+        expect(vfs_load_ramdisk(blob, sizeof(blob)) == PEAK_EIO,
+               "forced mid-apply fail");
+        peakfs_host_set_fail_apply_at(-1);
+        expect(vfs_is_file("/home/dev/workspace/prior.txt"),
+               "rollback restored prior");
+        expect(!vfs_exists("/home/dev/workspace/new.txt"),
+               "partial apply not left behind");
+    }
+
     /* --- audit.log preserved across clear when not in blob --- */
     {
         uint8_t blob[512];

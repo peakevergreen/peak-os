@@ -109,4 +109,9 @@ uint64_t vfs_tree_bytes(const char *path);
 const char *vfs_last_error(void);
 const char *vfs_last_error_path(void);
 
+#ifdef PEAK_HOST_TEST
+/* Fail vfs_load_ramdisk apply on entry index n (-1 disables). */
+void peakfs_host_set_fail_apply_at(int n);
+#endif
+
 #endif
