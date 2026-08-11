@@ -34,6 +34,10 @@ int agent_export_transcript(const char *path);
 const char *agent_last_tool_result(void);
 void agent_approval_queue_draw(uint32_t x, uint32_t y, uint32_t w);
 
-#endif
+/* Transcript filter: only active after Ctrl+F / '/'; Esc clears and exits. */
+int agent_transcript_filter_active(void);
+void agent_transcript_filter_set_active(int on);
 int agent_transcript_filter_key(int key);
 const char *agent_transcript_filter_text(void);
+
+#endif

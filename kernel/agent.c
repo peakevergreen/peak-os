@@ -23,6 +23,7 @@ static char tlines[AGENT_TLINES][AGENT_TLINE];
 static int tcount;
 static int tscroll;
 static char agent_transcript_filter[24];
+static int agent_filter_active;
 static char last_tool_result[AGENT_TLINE];
 
 static void transcript_push_one(const char *line) {
@@ -346,11 +347,28 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
 
 }
 
+int agent_transcript_filter_active(void) {
+    return agent_filter_active;
+}
+
+void agent_transcript_filter_set_active(int on) {
+    agent_filter_active = on ? 1 : 0;
+    if (!agent_filter_active)
+        agent_transcript_filter[0] = '\0';
+}
+
 int agent_transcript_filter_key(int key) {
-    if (key == 27) { agent_transcript_filter[0] = '\0'; return 1; }
+    if (!agent_filter_active)
+        return 0;
+    if (key == 27) {
+        agent_transcript_filter[0] = '\0';
+        agent_filter_active = 0;
+        return 1;
+    }
     if (key == '\b') {
         size_t n = strlen(agent_transcript_filter);
-        if (n) agent_transcript_filter[n - 1] = '\0';
+        if (n)
+            agent_transcript_filter[n - 1] = '\0';
         return 1;
     }
     if (key >= 32 && key < 127) {
@@ -363,4 +381,7 @@ int agent_transcript_filter_key(int key) {
     }
     return 0;
 }
-const char *agent_transcript_filter_text(void) { return agent_transcript_filter; }
+
+const char *agent_transcript_filter_text(void) {
+    return agent_transcript_filter;
+}

@@ -5,7 +5,7 @@ The agent runs **entirely in-guest**. There is no host serial bridge.
 ## Entry points
 
 - Shell: `ask <goal text>`
-- GUI: Agent window chat + Y/N approval for `fs.write`; approval queue status line; **Ctrl+E** exports transcript + last tool result to `/home/dev/agent-export.txt`
+- GUI: Agent window chat + Y/N approval for `fs.write`; approval queue status line; **Ctrl+F** (or `/`) toggles transcript filter (Esc closes); **Ctrl+E** exports transcript + last tool result to `/home/dev/agent-export.txt`
 - Syscall: `SYS_agent`
 
 ## Tools (guest-executed)

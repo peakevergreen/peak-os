@@ -266,7 +266,7 @@ static const char *desktop_help_focus_hint(void) {
     case APP_FILES: return "Files: Tab/arrows select; drag row to open.";
     case APP_NOTEPAD: return "Notepad: Ctrl+S save, Ctrl+F find.";
     case APP_BROWSER: return "Browser: Shift+T restore tab; wheel scroll.";
-    case APP_AGENT: return "Agent: type to filter transcript; Y/N writes.";
+    case APP_AGENT: return "Agent: type a goal; Ctrl+F filter; Y/N writes; Ctrl+E export.";
     case APP_MONITOR: return "Monitor: E or Export button -> /tmp/sysmon.txt.";
     default: return "Right-click title bar for window menu.";
     }

@@ -44,6 +44,17 @@ static void agent_input_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t lh) {
         fb_draw_string_fit(x, y + lh, w, agent_input + off, desktop_color_fg(), desktop_color_surface());
 }
 
+static void agent_filter_bar_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t lh) {
+    const struct peak_theme *th = theme_get();
+    char fbar[96];
+    const char *q = agent_transcript_filter_text();
+    snprintf(fbar, sizeof(fbar), "Filter: %s  Esc=close  Ctrl+F=toggle",
+             q && q[0] ? q : "");
+    fb_fill_rect(x, y, w, lh + desktop_u(4), th->surface);
+    fb_draw_string_fit(x + desktop_u(4), y + desktop_u(2), w - desktop_u(8), fbar,
+                       th->accent, th->surface);
+}
+
 static void agent_approval_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     const struct peak_theme *th = theme_get();
     const char *path = agent_pending_write_path();
@@ -57,7 +68,12 @@ static void agent_approval_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) 
     fb_draw_string_fit(x + desktop_u(8), y + 2 * lh, w - desktop_u(16), pline, th->fg, th->surface);
 }
 
-void desktop_agent_init(void) { agent_input_len ='\0'; agent_input[0] ='\0'; }
+void desktop_agent_init(void) {
+    agent_input_len = 0;
+    agent_input[0] = '\0';
+    agent_transcript_filter_set_active(0);
+}
+
 void desktop_app_opened(enum app_kind k) {
     if (k == APP_AGENT) desktop_agent_init();
     if (k == APP_NOTEPAD) desktop_notepad_init();
@@ -69,57 +85,112 @@ void desktop_agent_draw(struct win *w) {
     uint32_t aw = w->w - desktop_u(16), ah = w->h - desktop_title_h() - desktop_u(12);
     uint32_t lh = fb_char_h() + desktop_u(4);
     uint32_t input_h = lh * AGENT_INPUT_LINES + desktop_u(12);
+    uint32_t filter_h = agent_transcript_filter_active() ? lh + desktop_u(8) : 0;
     uint32_t appr_h = agent_write_pending() ? lh * 3 + desktop_u(16) : 0;
     uint32_t gap = desktop_u(4);
-    uint32_t trans_h = ah > input_h + appr_h + gap * 2 ? ah - input_h - appr_h - gap * 2 : ah / 2;
+    uint32_t reserved = input_h + appr_h + filter_h + gap * 2;
+    uint32_t trans_h = ah > reserved ? ah - reserved : ah / 2;
     agent_gui_draw(ax, ay, aw, trans_h);
     uint32_t cy = ay + trans_h + gap;
-    if (agent_write_pending()) { agent_approval_draw(ax, cy, aw, appr_h); cy += appr_h + gap; }
-    else if (agent_pending_approvals() > 0) {
+    if (agent_write_pending()) {
+        agent_approval_draw(ax, cy, aw, appr_h);
+        cy += appr_h + gap;
+    } else if (agent_pending_approvals() > 0) {
         uint32_t qh = lh * 2 + desktop_u(8);
         agent_approval_queue_draw(ax, cy, aw);
         cy += qh + gap;
+    }
+    if (agent_transcript_filter_active()) {
+        agent_filter_bar_draw(ax, cy, aw, lh);
+        cy += filter_h;
     }
     fb_fill_rect(ax, cy, aw, input_h, desktop_color_surface());
     fb_fill_rect(ax, cy, aw, desktop_u(2), th->accent);
     agent_input_draw(ax + desktop_u(4), cy + desktop_u(4), aw - desktop_u(8), lh);
 }
 
+static void agent_do_export(void) {
+    if (agent_export_transcript("/home/dev/agent-export.txt") >= 0) {
+        notify_push("Agent transcript exported");
+        dirty_bits |= DIRTY_TOAST;
+    } else {
+        notify_push("Export failed");
+        dirty_bits |= DIRTY_TOAST;
+    }
+    dirty_bits |= DIRTY_WIN;
+}
+
 int desktop_agent_key(int key) {
-    if ((key == 6 || key == 'f' || key == 'F') && keyboard_ctrl_down()) {
-        if (agent_transcript_filter_key(0)) {} /* open filter via typing */
+    /* Ctrl+F (ASCII 6) or '/' toggles filter mode. */
+    if ((key == 6 && keyboard_ctrl_down()) ||
+        (key == '/' && !agent_transcript_filter_active() && !agent_write_pending())) {
+        agent_transcript_filter_set_active(!agent_transcript_filter_active());
         dirty_bits |= DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
         return 1;
     }
-    if (agent_transcript_filter_key(key)) { dirty_bits |= DIRTY_WIN; return 1; }
-    if (agent_write_pending() && (key == 'y' || key == 'Y' || key == 'n' || key == 'N'))
+
+    /* Y/N approval always wins while a write is pending (even over filter). */
+    if (agent_write_pending() && (key == 'y' || key == 'Y' || key == 'n' || key == 'N')) {
         agent_approve_write(key == 'y' || key == 'Y');
-    else if ((key == 'e' || key == 'E') && keyboard_ctrl_down()) {
-        if (agent_export_transcript("/home/dev/agent-export.txt") >= 0) {
-            notify_push("Agent transcript exported");
-            dirty_bits |= DIRTY_TOAST;
-        } else {
-            notify_push("Export failed");
-            dirty_bits |= DIRTY_TOAST;
-        }
         dirty_bits |= DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+        return 1;
     }
-    else if (key == KEY_UP) { if (agent_transcript_scroll(keyboard_ctrl_down() ? AGENT_SCROLL_PAGE : 1)) dirty_bits |= DIRTY_WIN; }
-    else if (key == KEY_DOWN) { if (agent_transcript_scroll(keyboard_ctrl_down() ? -AGENT_SCROLL_PAGE : -1)) dirty_bits |= DIRTY_WIN; }
-    else if (key == KEY_HOME) { agent_transcript_reset_scroll(); dirty_bits |= DIRTY_WIN; }
-    else if (key == KEY_END) { if (agent_transcript_scroll_end()) dirty_bits |= DIRTY_WIN; }
-    else if ((key == 6 || key == 18) && keyboard_ctrl_down()) { if (agent_transcript_filter_key(key == 6 ? 27 : key)) dirty_bits |= DIRTY_WIN; }
-    else if (key == '\n' && agent_input_len) {
-        agent_ask(agent_input); clipboard_set(agent_input, agent_input_len);
-        agent_input_len ='\0'; agent_input[0] ='\0'; agent_notify_done();
-    } else if (key == '\b' && agent_input_len) agent_input[--agent_input_len] ='\0';
-    else if (key >= 32 && key < 127 && agent_input_len + 1 < sizeof(agent_input)) {
-        agent_input[agent_input_len++] = (char)key; agent_input[agent_input_len] ='\0';
-    } else return 0;
-    dirty_bits |= DIRTY_WIN; desktop_mark_focus_surf_dirty(); return 1;
+
+    /* Filter keys only when filter mode is active. */
+    if (agent_transcript_filter_active() && agent_transcript_filter_key(key)) {
+        dirty_bits |= DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+        return 1;
+    }
+
+    /* Ctrl+E export: keyboard delivers Ctrl+letter as ASCII 1–26 (e → 5). */
+    if (key == 5 || ((key == 'e' || key == 'E') && keyboard_ctrl_down())) {
+        agent_do_export();
+        desktop_mark_focus_surf_dirty();
+        return 1;
+    }
+
+    if (key == KEY_UP) {
+        if (agent_transcript_scroll(keyboard_ctrl_down() ? AGENT_SCROLL_PAGE : 1))
+            dirty_bits |= DIRTY_WIN;
+    } else if (key == KEY_DOWN) {
+        if (agent_transcript_scroll(keyboard_ctrl_down() ? -AGENT_SCROLL_PAGE : -1))
+            dirty_bits |= DIRTY_WIN;
+    } else if (key == KEY_HOME) {
+        agent_transcript_reset_scroll();
+        dirty_bits |= DIRTY_WIN;
+    } else if (key == KEY_END) {
+        if (agent_transcript_scroll_end())
+            dirty_bits |= DIRTY_WIN;
+    } else if (key == '\n' && agent_input_len) {
+        agent_ask(agent_input);
+        clipboard_set(agent_input, agent_input_len);
+        agent_input_len = 0;
+        agent_input[0] = '\0';
+        agent_notify_done();
+    } else if (key == '\b' && agent_input_len) {
+        agent_input[--agent_input_len] = '\0';
+    } else if (key >= 32 && key < 127 && agent_input_len + 1 < sizeof(agent_input)) {
+        agent_input[agent_input_len++] = (char)key;
+        agent_input[agent_input_len] = '\0';
+    } else {
+        return 0;
+    }
+    dirty_bits |= DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
+    return 1;
 }
 
 int desktop_agent_click(void) {
-    if (agent_input_len) agent_ask(agent_input); else agent_ask("summarize workspace README");
-    agent_notify_done(); dirty_bits |= DIRTY_WIN; return 1;
+    if (agent_input_len)
+        agent_ask(agent_input);
+    else
+        agent_ask("summarize workspace README");
+    agent_input_len = 0;
+    agent_input[0] = '\0';
+    agent_notify_done();
+    dirty_bits |= DIRTY_WIN;
+    return 1;
 }
