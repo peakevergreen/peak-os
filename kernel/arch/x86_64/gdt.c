@@ -41,6 +41,8 @@ struct tss {
 static struct gdt_entry gdt[7];
 static struct tss tss;
 static uint8_t kernel_stack[16384] __attribute__((aligned(16)));
+/* IST1: dedicated double-fault stack so #DF can dump even if RSP0 is corrupt. */
+static uint8_t df_stack[4096] __attribute__((aligned(16)));
 
 static void gdt_set(int i, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran) {
     gdt[i].base_low = base & 0xFFFF;
@@ -59,6 +61,7 @@ void gdt_set_kernel_stack(uint64_t rsp0) {
 void gdt_init(void) {
     memset(&tss, 0, sizeof(tss));
     tss.rsp0 = (uint64_t)(kernel_stack + sizeof(kernel_stack));
+    tss.ist[0] = (uint64_t)(df_stack + sizeof(df_stack));
     tss.iomap_base = sizeof(tss);
 
     memset(gdt, 0, sizeof(gdt));

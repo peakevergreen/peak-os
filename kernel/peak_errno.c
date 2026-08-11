@@ -21,6 +21,7 @@ const char *peak_errno_str(int err) {
     case PEAK_EDHCP: return "DHCP failed";
     case PEAK_EAGAIN: return "try again";
     case PEAK_ELOOP: return "too many symlink levels";
+    case PEAK_EFAULT: return "bad address";
     default: return "unknown error";
     }
 }
