@@ -4,9 +4,10 @@ The agent runs **entirely in-guest**. There is no host serial bridge.
 
 ## Entry points
 
-- Shell: `ask <goal text>`
-- GUI: Agent window chat + Y/N approval for `fs.write`; approval queue status line; **Ctrl+F** (or `/`) toggles transcript filter (Esc closes); **Ctrl+E** exports transcript + last tool result to `/home/dev/agent-export.txt`
+- Shell: `ask <goal text>` — if `fs.write` needs approval, prints a hint to open Agent/Files/Notepad and press **Y**/**N** (shell cannot approve inline)
+- GUI: Agent window chat (**Enter** submits; body click does not); Y/N approval for `fs.write`; approval queue status line; **Ctrl+F** (or `/`) toggles transcript filter (Esc closes); **Ctrl+E** exports transcript + last tool result to `/home/dev/agent-export.txt`
 - GUI surfaces: Notepad shows a pending-write bar (**A** apply patch to buffer, **Y**/**N** approve/deny) plus context-menu actions; Files status bar shows the pending path inline (row marked `!`) with the same **Y**/**N** keys
+- A second write while one is already pending reports **write already pending** (not a silent deny)
 - Syscall: `SYS_agent`
 
 ## Tools (guest-executed)

@@ -166,10 +166,10 @@ void agent_approval_queue_draw(uint32_t x, uint32_t y, uint32_t w) {
 }
 int agent_queue_write_approval(const char *path, const char *content) {
     if (write_wait)
-        return -1;
+        return -2;
     size_t cl = strlen(content);
     if (cl >= AGENT_PENDING_CONTENT_MAX)
-        return -1;
+        return -3;
     size_t pl = strlen(path);
     if (pl >= sizeof(write_path))
         return -1;

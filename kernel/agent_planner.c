@@ -1091,9 +1091,19 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "wrote file");
         } else if (wr == 1) {
-            agent_tool_console_print("[agent] write waiting for GUI approval");
+            agent_tool_console_print(
+                "[agent] write waiting for GUI approval — open Agent and press Y/N");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "write pending approval");
+        } else if (wr == -2) {
+            agent_tool_console_print(
+                "[agent] write already pending — press Y/N in Agent (or Files/Notepad)");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "write already pending");
+        } else if (wr == -3) {
+            agent_tool_console_print("[agent] write too large for approval buffer");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "write too large");
         } else {
             agent_tool_console_print("[agent] write denied/failed");
             TOOL_NOTE("console.print");

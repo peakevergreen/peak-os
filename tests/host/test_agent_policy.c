@@ -3,6 +3,7 @@
  * agent_planner.c) under PEAK_HOST_TEST stubs.
  */
 #include "agent_internal.h"
+#include "agent.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -13,6 +14,7 @@
 void agent_host_vfs_reset(void);
 const char *agent_host_last_transcript_tool(void);
 void agent_host_clear_transcript_tool(void);
+void agent_host_clear_write_pending(void);
 
 static int fails;
 
@@ -481,6 +483,36 @@ static void test_planner_diff_and_fetch(void) {
     expect(!strcmp(summary, "fetch ok"), "fetch intent summary");
 }
 
+void agent_host_clear_write_pending(void);
+
+static void test_write_pending_busy(void) {
+    agent_host_vfs_reset();
+    agent_host_clear_write_pending();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.read,fs.write,fs.list,console.print\n"
+        "require_approval=fs.write\n");
+    agent_policy_reload();
+
+    char summary[128];
+    agent_plan_goal("create fib.c", summary, sizeof(summary));
+    expect(!strcmp(summary, "write pending approval"), "first create pending");
+    expect(agent_write_pending(), "write pending flag");
+
+    agent_plan_goal("create hello.c", summary, sizeof(summary));
+    expect(!strcmp(summary, "write already pending"), "second create busy not failed");
+    expect(agent_write_pending(), "still pending after busy");
+
+    agent_approve_write(1);
+    expect(!agent_write_pending(), "cleared after approve");
+    char body[512];
+    size_t n = 0;
+    expect(vfs_read_file("/home/dev/workspace/fib.c", body, sizeof(body) - 1, &n) == 0, "fib written");
+    body[n] = '\0';
+    expect(strstr(body, "fib(") != NULL, "fib content");
+}
+
 int main(void) {
     test_path_policy();
     test_tool_policy_reload();
@@ -502,6 +534,7 @@ int main(void) {
     test_planner_why_deny();
     test_planner_unparsed_goal();
     test_planner_diff_and_fetch();
+    test_write_pending_busy();
 
     if (fails) {
         fprintf(stderr, "%d agent policy test(s) failed\n", fails);
