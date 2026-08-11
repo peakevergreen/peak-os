@@ -140,6 +140,61 @@ int main(void) {
     }
     expect(heap_fragmentation_pct() <= 100, "frag pct bounded");
 
+    /* Header magic + size-class: corrupt free must dump and leave heap alone. */
+    {
+        uint32_t bad0 = heap_bad_header_count();
+        void *p = kmalloc(64);
+        expect(p != NULL, "magic probe alloc");
+        memset(p, 0x11, 64);
+        uint64_t used0 = 0, free0h = 0, blocks0 = 0;
+        heap_get_stats(&used0, &free0h, &blocks0);
+        heap_host_corrupt_magic(p);
+        kfree(p); /* must reject */
+        {
+            uint64_t used1 = 0, free1 = 0, blocks1 = 0;
+            heap_get_stats(&used1, &free1, &blocks1);
+            expect(used1 == used0 && free1 == free0h && blocks1 == blocks0,
+                   "corrupt magic free leaves stats unchanged");
+        }
+        expect(heap_bad_header_count() == bad0 + 1u, "bad header counted on magic");
+
+        void *q = kmalloc(64);
+        expect(q != NULL, "size-class probe alloc");
+        uint64_t used2 = 0, free2 = 0, blocks2 = 0;
+        heap_get_stats(&used2, &free2, &blocks2);
+        heap_host_corrupt_size_class(q);
+        kfree(q);
+        {
+            uint64_t used3 = 0, free3 = 0, blocks3 = 0;
+            heap_get_stats(&used3, &free3, &blocks3);
+            expect(used3 == used2 && free3 == free2 && blocks3 == blocks2,
+                   "corrupt size-class free leaves stats unchanged");
+        }
+        expect(heap_bad_header_count() == bad0 + 2u, "bad header counted on class");
+    }
+
+    /* Host/debug poison on free (middle block so coalesce cannot overwrite). */
+    {
+        void *a = kmalloc(64);
+        void *b = kmalloc(64);
+        void *c = kmalloc(64);
+        expect(a && b && c, "poison sandwich alloc");
+        memset(b, 0x5A, 64);
+        kfree(b);
+        {
+            uint8_t *p = (uint8_t *)b;
+            int poisoned = 1;
+            int poison = heap_host_poison_byte();
+            for (int i = 0; i < 64; i++) {
+                if (p[i] != (uint8_t)poison)
+                    poisoned = 0;
+            }
+            expect(poisoned, "kfree poisons payload on host");
+        }
+        kfree(a);
+        kfree(c);
+    }
+
     heap_pmm_host_teardown();
 
     if (fails) {
