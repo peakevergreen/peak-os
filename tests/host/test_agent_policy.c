@@ -388,6 +388,35 @@ static void test_deny_reason_in_transcript(void) {
     expect(strstr(agent_host_last_transcript_tool(), "deny-tool:") != NULL, "net.ping deny in transcript");
 }
 
+static void test_planner_create_edit_templates(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.read,fs.write,fs.list,console.print\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+
+    char summary[128];
+    agent_plan_goal("create fib.c", summary, sizeof(summary));
+    expect(!strcmp(summary, "wrote file"), "fib create wrote");
+    char body[512];
+    size_t n = 0;
+    expect(vfs_read_file("/home/dev/workspace/fib.c", body, sizeof(body) - 1, &n) == 0, "fib exists");
+    body[n] = '\0';
+    expect(strstr(body, "fib(") != NULL, "fib template has fib()");
+    expect(strstr(body, "int main(void) { return 0; }") == NULL, "fib is not empty stub");
+
+    agent_plan_goal("edit fib.c add error handling", summary, sizeof(summary));
+    expect(!strcmp(summary, "wrote file"), "edit wrote");
+    n = 0;
+    expect(vfs_read_file("/home/dev/workspace/fib.c", body, sizeof(body) - 1, &n) == 0, "fib reread");
+    body[n] = '\0';
+    expect(strstr(body, "peak_check") != NULL, "edit added peak_check");
+    expect(strstr(body, "/* peak-agent edit:") == NULL || strstr(body, "peak_check") != NULL,
+           "edit is not comment-only");
+}
+
 static void test_planner_unparsed_goal(void) {
     agent_host_vfs_reset();
     agent_policy_load_defaults();
@@ -432,6 +461,7 @@ int main(void) {
     test_fs_exec_allowlist();
     test_fs_diff_and_net_fetch();
     test_deny_reason_in_transcript();
+    test_planner_create_edit_templates();
     test_planner_unparsed_goal();
     test_planner_diff_and_fetch();
 
