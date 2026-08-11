@@ -436,9 +436,20 @@ int desktop_notepad_key(int key) {
     return 0;
 }
 
+/* Y of first text row — must match desktop_notepad_draw (hdr + Save/Find [+ agent]). */
+static int32_t np_list_origin_y(struct win *w) {
+    uint32_t ch = fb_cell_h();
+    int32_t y = (int32_t)(w->y + desktop_title_h() + desktop_u(6));
+    y += (int32_t)(ch + desktop_u(4)); /* path header */
+    y += (int32_t)(ch + desktop_u(4)); /* Save / Find row */
+    if (agent_write_pending())
+        y += (int32_t)(ch + desktop_u(6));
+    return y;
+}
+
 int desktop_notepad_click(struct win *w, int32_t mx, int32_t my) {
     (void)mx;
-    int row = (int)((my - (int32_t)(w->y + desktop_title_h() + desktop_u(6) + fb_cell_h() + desktop_u(4))) / (int32_t)fb_cell_h());
+    int row = (int)((my - np_list_origin_y(w)) / (int32_t)fb_cell_h());
     if (row < 0) return 0;
     row += np_scroll; if (row >= np_row_count()) row = np_row_count() - 1;
     np_caret = np_row_start(row); np_clear_sel(); np_mark_dirty(); return 1;

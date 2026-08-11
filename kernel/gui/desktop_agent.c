@@ -58,7 +58,7 @@ static void agent_filter_bar_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t l
 static void agent_approval_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     const struct peak_theme *th = theme_get();
     const char *path = agent_pending_write_path();
-    uint32_t lh = fb_char_h() + desktop_u(4);
+    uint32_t lh = fb_cell_h() + desktop_u(4);
     fb_fill_rect(x, y, w, h, th->border);
     fb_fill_rect(x + desktop_u(1), y + desktop_u(1), w - desktop_u(2), h - desktop_u(2), th->surface);
     fb_draw_string(x + desktop_u(8), y + desktop_u(4), "Write approval required", th->danger, th->surface);
@@ -83,7 +83,7 @@ void desktop_agent_draw(struct win *w) {
     const struct peak_theme *th = theme_get();
     uint32_t ax = w->x + desktop_u(8), ay = w->y + desktop_title_h() + desktop_u(4);
     uint32_t aw = w->w - desktop_u(16), ah = w->h - desktop_title_h() - desktop_u(12);
-    uint32_t lh = fb_char_h() + desktop_u(4);
+    uint32_t lh = fb_cell_h() + desktop_u(4);
     uint32_t input_h = lh * AGENT_INPUT_LINES + desktop_u(12);
     uint32_t filter_h = agent_transcript_filter_active() ? lh + desktop_u(8) : 0;
     uint32_t appr_h = 0;

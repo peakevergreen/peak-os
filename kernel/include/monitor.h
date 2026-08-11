@@ -12,5 +12,7 @@ void monitor_clear_redraw(void);
 void monitor_input(char c); /* 1/2/3 tabs, P pause, R reset, [/] pages */
 void monitor_toggle_pause(void);
 int  monitor_is_paused(void);
+/* Absolute FB coords — hit rects stored during monitor_draw. */
+int  monitor_export_click_at(int32_t mx, int32_t my);
 
 #endif

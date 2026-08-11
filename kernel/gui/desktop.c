@@ -544,6 +544,12 @@ void desktop_run(void) {
                                           m.y - (int32_t)(w->y + desktop_title_h() + desktop_u(2)),
                                           w->w - desktop_u(8), w->h - desktop_title_h() - desktop_u(8));
                             dirty_bits |= DIRTY_BROWSER;
+                        } else if (w->kind == APP_MONITOR) {
+                            /* Export btn hit rects are absolute (set in monitor_draw). */
+                            if (monitor_export_click_at(m.x, m.y)) {
+                                dirty_bits |= DIRTY_MONITOR | DIRTY_TOAST;
+                                desktop_mark_win_surf_dirty(i);
+                            }
                         } else if (w->kind == APP_AGENT) {
                             desktop_agent_click();
                         } else {
