@@ -121,6 +121,17 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Monitor shows JS tab/object/timer counters when Browser has run scripts
 - [ ] External site that breaks JS budgets still shows reader fallback text
 
+## Stability campaign regressions (re-verify)
+
+Focused pass after kernel/GUI stability merges. Details also appear in sections above.
+
+- [ ] Idle must `hlt`: Browser open with pending `setTimeout` — CPU settles, no busy-spin present
+- [ ] JS tab close: close active JS tab; with two tabs, close the first then use the second — no hang / Exception 13
+- [ ] Opaque drag abort: title-drag then Ctrl+W / Esc / window close — no stuck pixmap or wrong-window snap
+- [ ] Sticky key: Hold Shift+letter, release Shift then letter — software repeat clears
+- [ ] Agent approval busy: second `ask create …` while pending → "write already pending" (see also [docs/agent-protocol.md](../docs/agent-protocol.md))
+- [ ] disksave yield: dirty workspace → wait autosave — desktop stays interactive
+
 ## Stability campaign (regression)
 
 True idle must reach `hlt` (no forever `dirty_bits` / deferred-present busy-spin).
