@@ -11,6 +11,7 @@
 | [browser-js.md](browser-js.md) | Browser + Peak JS subset |
 | [sysmon.md](sysmon.md) | System monitor CLI/GUI (incl. compose/present timing) |
 | [agent-protocol.md](agent-protocol.md) | In-guest peak-agent |
+| [agent-llm.md](agent-llm.md) | Opt-in remote LLM design (not implemented) |
 | [peakvec.md](peakvec.md) | Local vector index + blobstore |
 | [security-model.md](security-model.md) | Capabilities, VFS policy, threat model |
 | [privacy.md](privacy.md) | Privacy posture |
