@@ -24,6 +24,7 @@
 #define PEAK_EDHCP       -16  /* DHCP-only mode failure */
 #define PEAK_EAGAIN      -17  /* try again (non-blocking empty) */
 #define PEAK_ELOOP       -18  /* symlink loop */
+#define PEAK_EFAULT      -19  /* bad user pointer / usercopy */
 
 const char *peak_errno_str(int err);
 

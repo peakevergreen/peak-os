@@ -41,7 +41,7 @@ static int64_t sys_write(int fd, const void *user_buf, size_t len) {
         len = 4096;
     char kbuf[4096];
     if (copy_from_user(kbuf, user_buf, len) != 0)
-        return PEAK_EINVAL;
+        return PEAK_EFAULT;
     for (size_t i = 0; i < len; i++)
         console_putc(kbuf[i]);
     return (int64_t)len;
@@ -49,7 +49,7 @@ static int64_t sys_write(int fd, const void *user_buf, size_t len) {
 
 static int64_t sys_open(const char *user_path) {
     if (!cap_check(CAP_FS_READ)) return PEAK_EACCES;
-    char path[VFS_PATH_MAX]; if (copyinstr_from_user(path, user_path, VFS_PATH_MAX) != 0) return PEAK_EINVAL;
+    char path[VFS_PATH_MAX]; if (copyinstr_from_user(path, user_path, VFS_PATH_MAX) != 0) return PEAK_EFAULT;
     char resolved[VFS_PATH_MAX]; int rc = vfs_resolve(path, resolved, sizeof(resolved)); if (rc != 0) return rc;
     if (!vfs_lookup(resolved)) return PEAK_ENOENT;
     int is_proc = 0; struct proc_fd *fds = fd_table(&is_proc);
@@ -88,7 +88,7 @@ static int64_t sys_read(int fd, void *user_buf, size_t len) {
     if (vr != 0)
         return vr < 0 ? vr : PEAK_EIO;
     if (copy_to_user(user_buf, kbuf, out) != 0)
-        return PEAK_EINVAL;
+        return PEAK_EFAULT;
     return (int64_t)out;
 }
 
@@ -154,7 +154,7 @@ void syscall_handler(struct interrupt_frame *frame) {
         char path[VFS_PATH_MAX];
         char listbuf[1024];
         if (copyinstr_from_user(path, (const void *)a0, VFS_PATH_MAX) != 0) {
-            ret = PEAK_EINVAL;
+            ret = PEAK_EFAULT;
             break;
         }
         int lr = vfs_list(path, listbuf, sizeof(listbuf));
@@ -165,7 +165,7 @@ void syscall_handler(struct interrupt_frame *frame) {
             if (n > a2)
                 n = a2;
             if (copy_to_user((void *)a1, listbuf, n) != 0)
-                ret = PEAK_EINVAL;
+                ret = PEAK_EFAULT;
             else
                 ret = (int64_t)n;
         }
@@ -179,7 +179,7 @@ void syscall_handler(struct interrupt_frame *frame) {
         if (a0 == 1) {
             char goal[256];
             if (copyinstr_from_user(goal, (const void *)a1, sizeof(goal)) != 0) {
-                ret = PEAK_EINVAL;
+                ret = PEAK_EFAULT;
                 break;
             }
             ret = agent_syscall(1, (uint64_t)(uintptr_t)goal, 0, 0);
@@ -193,7 +193,7 @@ void syscall_handler(struct interrupt_frame *frame) {
             if ((size_t)n > a2)
                 n = (int64_t)a2;
             if (copy_to_user((void *)a1, tools, (size_t)n) != 0)
-                ret = PEAK_EINVAL;
+                ret = PEAK_EFAULT;
             else
                 ret = n;
         } else {
@@ -204,7 +204,7 @@ void syscall_handler(struct interrupt_frame *frame) {
     case SYS_exec: {
         char path[VFS_PATH_MAX];
         if (copyinstr_from_user(path, (const void *)a0, VFS_PATH_MAX) != 0) {
-            ret = PEAK_EINVAL;
+            ret = PEAK_EFAULT;
             break;
         }
         ret = proc_exec(path, 0, NULL);
@@ -225,7 +225,7 @@ void syscall_handler(struct interrupt_frame *frame) {
             char key[PEAKVEC_KEY_MAX];
             char text[256];
             if (copyinstr_from_user(key, (const void *)a1, sizeof(key)) != 0) {
-                ret = PEAK_EINVAL;
+                ret = PEAK_EFAULT;
                 break;
             }
             if (a0 == 4) {
@@ -233,7 +233,7 @@ void syscall_handler(struct interrupt_frame *frame) {
                 break;
             }
             if (copyinstr_from_user(text, (const void *)a2, sizeof(text)) != 0) {
-                ret = PEAK_EINVAL;
+                ret = PEAK_EFAULT;
                 break;
             }
             int16_t vec[PEAKVEC_DIM];
@@ -244,7 +244,7 @@ void syscall_handler(struct interrupt_frame *frame) {
         if (a0 == 2) {
             char text[256];
             if (copyinstr_from_user(text, (const void *)a1, sizeof(text)) != 0) {
-                ret = PEAK_EINVAL;
+                ret = PEAK_EFAULT;
                 break;
             }
             struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
@@ -260,7 +260,7 @@ void syscall_handler(struct interrupt_frame *frame) {
             }
             size_t bytes = (size_t)n * sizeof(hits[0]);
             if (copy_to_user((void *)a2, hits, bytes) != 0)
-                ret = PEAK_EINVAL;
+                ret = PEAK_EFAULT;
             else
                 ret = n;
             break;
@@ -272,7 +272,7 @@ void syscall_handler(struct interrupt_frame *frame) {
         /* a0 = pointer to struct gui_msg in user memory */
         struct gui_msg msg;
         if (copy_from_user(&msg, (const void *)a0, sizeof(msg)) != 0) {
-            ret = PEAK_EINVAL;
+            ret = PEAK_EFAULT;
             break;
         }
         ret = guiproto_dispatch(&msg);

@@ -36,15 +36,39 @@ extern void irq12(void); extern void irq13(void); extern void irq14(void);
 extern void irq15(void);
 extern void isr128(void);
 
-static void idt_set(uint8_t vec, void *isr, uint8_t flags) {
+/* From elf.c — tear down user image and return to kernel launcher. */
+extern void proc_finish_exit(int code);
+
+static void idt_set(uint8_t vec, void *isr, uint8_t flags, uint8_t ist) {
     uint64_t addr = (uint64_t)isr;
     idt[vec].offset_low  = (uint16_t)(addr & 0xFFFF);
     idt[vec].selector    = 0x08; /* Peak kernel code (gdt_init) */
-    idt[vec].ist         = 0;
+    idt[vec].ist         = ist;
     idt[vec].type_attr   = flags;
     idt[vec].offset_mid  = (uint16_t)((addr >> 16) & 0xFFFF);
     idt[vec].offset_high = (uint32_t)((addr >> 32) & 0xFFFFFFFF);
     idt[vec].zero        = 0;
+}
+
+static void exception_dump(struct interrupt_frame *frame, const char *tag) {
+    char buf[24];
+    serial_write_str(tag);
+    serial_write_str("Exception: ");
+    itoa_u(frame->int_no, buf, 10);
+    serial_write_str(buf);
+    serial_write_str(" err=0x");
+    itoa_u(frame->err_code, buf, 16);
+    serial_write_str(buf);
+    serial_write_str(" rip=0x");
+    itoa_u(frame->rip, buf, 16);
+    serial_write_str(buf);
+    serial_write_str(" cs=0x");
+    itoa_u(frame->cs, buf, 16);
+    serial_write_str(buf);
+    serial_write_str(" rsp=0x");
+    itoa_u(frame->rsp, buf, 16);
+    serial_write_str(buf);
+    serial_write_str("\n");
 }
 
 void isr_dispatch(struct interrupt_frame *frame) {
@@ -58,21 +82,18 @@ void isr_dispatch(struct interrupt_frame *frame) {
         pic_eoi(irq);
         return;
     }
-    /* CPU exceptions — log and halt for MVP */
-    char buf[24];
-    serial_write_str("Exception: ");
-    itoa_u(frame->int_no, buf, 10);
-    serial_write_str(buf);
-    serial_write_str(" err=0x");
-    itoa_u(frame->err_code, buf, 16);
-    serial_write_str(buf);
-    serial_write_str(" rip=0x");
-    itoa_u(frame->rip, buf, 16);
-    serial_write_str(buf);
-    serial_write_str(" rsp=0x");
-    itoa_u(frame->rsp, buf, 16);
-    serial_write_str(buf);
-    serial_write_str("\n");
+
+    /* User-mode fault: kill the process / fail the run — do not halt the OS. */
+    if ((frame->cs & 3u) == 3u) {
+        exception_dump(frame, "user ");
+        proc_finish_exit(-1);
+        /* No launcher context: stay parked rather than iret to a bad RIP. */
+        for (;;)
+            hlt();
+    }
+
+    /* Kernel CPU exceptions — log and halt (#DF uses IST1). */
+    exception_dump(frame, (frame->int_no == 8) ? "DF " : "");
     for (;;)
         hlt();
 }
@@ -80,34 +101,35 @@ void isr_dispatch(struct interrupt_frame *frame) {
 void idt_init(void) {
     memset(idt, 0, sizeof(idt));
 
-    idt_set(0,  isr0,  0x8E); idt_set(1,  isr1,  0x8E);
-    idt_set(2,  isr2,  0x8E); idt_set(3,  isr3,  0x8E);
-    idt_set(4,  isr4,  0x8E); idt_set(5,  isr5,  0x8E);
-    idt_set(6,  isr6,  0x8E); idt_set(7,  isr7,  0x8E);
-    idt_set(8,  isr8,  0x8E); idt_set(9,  isr9,  0x8E);
-    idt_set(10, isr10, 0x8E); idt_set(11, isr11, 0x8E);
-    idt_set(12, isr12, 0x8E); idt_set(13, isr13, 0x8E);
-    idt_set(14, isr14, 0x8E); idt_set(15, isr15, 0x8E);
-    idt_set(16, isr16, 0x8E); idt_set(17, isr17, 0x8E);
-    idt_set(18, isr18, 0x8E); idt_set(19, isr19, 0x8E);
-    idt_set(20, isr20, 0x8E); idt_set(21, isr21, 0x8E);
-    idt_set(22, isr22, 0x8E); idt_set(23, isr23, 0x8E);
-    idt_set(24, isr24, 0x8E); idt_set(25, isr25, 0x8E);
-    idt_set(26, isr26, 0x8E); idt_set(27, isr27, 0x8E);
-    idt_set(28, isr28, 0x8E); idt_set(29, isr29, 0x8E);
-    idt_set(30, isr30, 0x8E); idt_set(31, isr31, 0x8E);
+    idt_set(0,  isr0,  0x8E, 0); idt_set(1,  isr1,  0x8E, 0);
+    idt_set(2,  isr2,  0x8E, 0); idt_set(3,  isr3,  0x8E, 0);
+    idt_set(4,  isr4,  0x8E, 0); idt_set(5,  isr5,  0x8E, 0);
+    idt_set(6,  isr6,  0x8E, 0); idt_set(7,  isr7,  0x8E, 0);
+    /* #DF (8) on IST1 — dedicated stack in TSS */
+    idt_set(8,  isr8,  0x8E, 1); idt_set(9,  isr9,  0x8E, 0);
+    idt_set(10, isr10, 0x8E, 0); idt_set(11, isr11, 0x8E, 0);
+    idt_set(12, isr12, 0x8E, 0); idt_set(13, isr13, 0x8E, 0);
+    idt_set(14, isr14, 0x8E, 0); idt_set(15, isr15, 0x8E, 0);
+    idt_set(16, isr16, 0x8E, 0); idt_set(17, isr17, 0x8E, 0);
+    idt_set(18, isr18, 0x8E, 0); idt_set(19, isr19, 0x8E, 0);
+    idt_set(20, isr20, 0x8E, 0); idt_set(21, isr21, 0x8E, 0);
+    idt_set(22, isr22, 0x8E, 0); idt_set(23, isr23, 0x8E, 0);
+    idt_set(24, isr24, 0x8E, 0); idt_set(25, isr25, 0x8E, 0);
+    idt_set(26, isr26, 0x8E, 0); idt_set(27, isr27, 0x8E, 0);
+    idt_set(28, isr28, 0x8E, 0); idt_set(29, isr29, 0x8E, 0);
+    idt_set(30, isr30, 0x8E, 0); idt_set(31, isr31, 0x8E, 0);
 
-    idt_set(32, irq0,  0x8E); idt_set(33, irq1,  0x8E);
-    idt_set(34, irq2,  0x8E); idt_set(35, irq3,  0x8E);
-    idt_set(36, irq4,  0x8E); idt_set(37, irq5,  0x8E);
-    idt_set(38, irq6,  0x8E); idt_set(39, irq7,  0x8E);
-    idt_set(40, irq8,  0x8E); idt_set(41, irq9,  0x8E);
-    idt_set(42, irq10, 0x8E); idt_set(43, irq11, 0x8E);
-    idt_set(44, irq12, 0x8E); idt_set(45, irq13, 0x8E);
-    idt_set(46, irq14, 0x8E); idt_set(47, irq15, 0x8E);
+    idt_set(32, irq0,  0x8E, 0); idt_set(33, irq1,  0x8E, 0);
+    idt_set(34, irq2,  0x8E, 0); idt_set(35, irq3,  0x8E, 0);
+    idt_set(36, irq4,  0x8E, 0); idt_set(37, irq5,  0x8E, 0);
+    idt_set(38, irq6,  0x8E, 0); idt_set(39, irq7,  0x8E, 0);
+    idt_set(40, irq8,  0x8E, 0); idt_set(41, irq9,  0x8E, 0);
+    idt_set(42, irq10, 0x8E, 0); idt_set(43, irq11, 0x8E, 0);
+    idt_set(44, irq12, 0x8E, 0); idt_set(45, irq13, 0x8E, 0);
+    idt_set(46, irq14, 0x8E, 0); idt_set(47, irq15, 0x8E, 0);
 
     /* syscall int 0x80 — DPL 3 so userspace may invoke */
-    idt_set(128, isr128, 0xEE);
+    idt_set(128, isr128, 0xEE, 0);
 
     lidt(idt, sizeof(idt) - 1);
 }
