@@ -525,12 +525,16 @@ int js_tick(struct js_runtime *rt) {
     if (!rt)
         return 0;
     int fired = 0;
+    int fire_n = 0;
     uint64_t now = timer_ticks();
     for (int i = 0; i < JS_TIMER_MAX; i++) {
         if (!rt->timers[i].used)
             continue;
         if (now < rt->timers[i].due_tick)
             continue;
+        if (fire_n >= JS_TIMER_FIRE_MAX)
+            break; /* leave remaining due timers for the next tick */
+        fire_n++;
         fired = 1;
         struct js_value fn = rt->timers[i].fn;
         if (fn.type == JT_FUNC || fn.type == JT_NATIVE) {

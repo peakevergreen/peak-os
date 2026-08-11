@@ -225,6 +225,39 @@ int main(void) {
     expect(js_eval(rt, "n", "<micro>", out, sizeof(out)) == 0 && atoi(out) == 200,
            "all microtasks ran across ticks");
 
+    /* Timer fire cap: many due timeouts need multiple js_tick passes.
+     * Do not js_eval while timers remain pending — eval recompiles code. */
+    js_rt_reset(rt);
+    expect(js_eval(rt,
+                   "var n=0; for(var i=0;i<24;i=i+1){"
+                   "setTimeout(function(){ n=n+1; }, 0); }",
+                   "<firecap>", out, sizeof(out)) == 0,
+           "schedule many timeouts");
+    {
+        uint32_t timers0 = 0;
+        js_rt_stats(rt, NULL, NULL, &timers0, NULL);
+        expect(timers0 == 24, "24 timers pending");
+        int first = js_tick(rt);
+        for (int i = 0; i < 4 && !first; i++)
+            first = js_tick(rt);
+        expect(first != 0, "js_tick fires some timers");
+        uint32_t timers1 = 0;
+        js_rt_stats(rt, NULL, NULL, &timers1, NULL);
+        expect(timers1 > 0 && timers1 < timers0, "first tick leaves remainder");
+        expect(timers0 - timers1 <= 16, "first tick caps timer fires at 16");
+        expect(js_pending_work(rt) != 0, "remainder deferred");
+        int ticks = 1;
+        while (js_pending_work(rt) && ticks < 16) {
+            js_tick(rt);
+            ticks++;
+        }
+        expect(ticks >= 2, "24 timers need multiple capped fire passes");
+        expect(!js_pending_work(rt), "timer queue eventually drained");
+        expect(js_eval(rt, "n", "<firecap>", out, sizeof(out)) == 0 &&
+                   atoi(out) >= 20,
+               "most timeouts ran across ticks");
+    }
+
     js_rt_destroy(rt);
     if (fails) {
         fprintf(stderr, "%d js host test(s) failed\n", fails);

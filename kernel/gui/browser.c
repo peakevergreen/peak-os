@@ -39,6 +39,15 @@ static char *ensure_body_cache(void) {
     return body_cache;
 }
 
+/* Shared body_cache is one buffer; only the claiming tab may expose it after a
+ * successful store. Clear all last_body_len so a mid-fetch / failed overwrite
+ * cannot leak another tab's (or this tab's prior) body via browser_page_body. */
+static void browser_body_cache_claim(struct br_tab *owner) {
+    (void)owner;
+    for (int i = 0; i < BR_MAX_TABS; i++)
+        tabs[i].last_body_len = 0;
+}
+
 struct br_tab *browser_cur(void) {
     if (active < 0 || active >= ntabs || !tabs[active].used)
         return &tabs[0];
@@ -582,6 +591,7 @@ static void browser_go_on_tab(struct br_tab *t, const char *url) {
         needs_redraw = 1;
         return;
     }
+    browser_body_cache_claim(t);
 
     int st = 0;
     body[0] = '\0';
@@ -744,6 +754,7 @@ int browser_form_submit(struct br_tab *t, int form_node) {
     char *body = ensure_body_cache();
     if (!body)
         return -1;
+    browser_body_cache_claim(t);
     int st = 0;
     struct net_http_request req;
     memset(&req, 0, sizeof(req));
