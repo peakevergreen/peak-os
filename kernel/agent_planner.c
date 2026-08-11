@@ -491,6 +491,53 @@ static int apply_edit_transform(const char *goal, const char *existing, size_t e
     return 0;
 }
 
+static int basename_of(const char *path, char *out, size_t out_len) {
+    if (!path || !out || out_len < 2)
+        return -1;
+    const char *base = path;
+    for (const char *p = path; *p; p++)
+        if (*p == '/')
+            base = p + 1;
+    size_t i = 0;
+    for (; base[i] && i + 1 < out_len; i++)
+        out[i] = base[i];
+    out[i] = '\0';
+    return i > 0 ? 0 : -1;
+}
+
+/* Resolve path for edit: try direct read path, else fs.search basename. */
+static int resolve_path_via_search(const char *hint_path, char *out_path, size_t out_len,
+                                   char *tools_used, size_t tools_cap, size_t *tu) {
+    char existing[8];
+    size_t n = 0;
+    if (hint_path[0] &&
+        agent_tool_fs_read(hint_path, existing, sizeof(existing), &n) == 0) {
+        size_t i = 0;
+        for (; hint_path[i] && i + 1 < out_len; i++)
+            out_path[i] = hint_path[i];
+        out_path[i] = '\0';
+        return 0;
+    }
+    char base[64];
+    if (basename_of(hint_path, base, sizeof(base)) != 0)
+        return -1;
+    char hits[512];
+    if (agent_tool_fs_search(base, hits, sizeof(hits)) != 0)
+        return -1;
+    if (tu && tools_used && *tu + 12 < tools_cap) {
+        if (*tu) tools_used[(*tu)++] = ',';
+        const char *t = "fs.search";
+        for (; *t && *tu + 1 < tools_cap; t++)
+            tools_used[(*tu)++] = *t;
+        tools_used[*tu] = '\0';
+    }
+    size_t pi = 0;
+    for (const char *p = hits; *p && *p != '\n' && pi + 1 < out_len; p++)
+        out_path[pi++] = *p;
+    out_path[pi] = '\0';
+    return out_path[0] ? 0 : -1;
+}
+
 void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     console_write_ui("[agent] planner\n");
     console_printf_ui("[agent] goal: %s\n", goal);
@@ -831,13 +878,6 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     }
 
     {
-        char listing[512];
-        if (agent_tool_fs_list("/home/dev/workspace", listing, sizeof(listing)) == 0) {
-            TOOL_NOTE("fs.list");
-            console_write_ui("[agent] workspace:\n");
-            console_write_ui(listing);
-        }
-
         char path[VFS_PATH_MAX];
         if (slots.path[0])
             memcpy(path, slots.path, strlen(slots.path) + 1);
@@ -848,26 +888,51 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         memset(content, 0, sizeof(content));
 
         if (intent == INTENT_EDIT) {
+            /* Multi-step: resolve (search?) → read → transform → write */
+            char resolved[VFS_PATH_MAX];
+            if (resolve_path_via_search(path, resolved, sizeof(resolved),
+                                        tools_used, sizeof(tools_used), &tu) != 0) {
+                agent_tool_console_print("[agent] edit: file not found — try create first");
+                TOOL_NOTE("console.print");
+                set_summary(summary, summary_cap, "edit path missing");
+                memory_append_turn(goal, tools_used, path);
+                return;
+            }
+            memcpy(path, resolved, strlen(resolved) + 1);
+            agent_tool_console_print("[agent] step: fs.read");
             char existing[AGENT_READ_CONTENT_MAX];
             size_t n = 0;
-            if (agent_tool_fs_read(path, existing, sizeof(existing), &n) == 0 && n) {
+            if (agent_tool_fs_read(path, existing, sizeof(existing), &n) != 0 || !n) {
                 TOOL_NOTE("fs.read");
-                if (!apply_edit_transform(goal, existing, n, content, sizeof(content))) {
-                    agent_tool_console_print(
-                        "[agent] no edit transform matched — try: "
-                        "\"edit … error handling\" | \"edit … print\" | "
-                        "\"edit … recursion\" | \"edit … todo\"");
-                    TOOL_NOTE("console.print");
-                    set_summary(summary, summary_cap, "edit refused");
-                    memory_append_turn(goal, tools_used, path);
-                    return;
-                }
-            } else {
-                intent = INTENT_CREATE;
+                agent_tool_console_print("[agent] edit: read failed after resolve");
+                TOOL_NOTE("console.print");
+                set_summary(summary, summary_cap, "edit read failed");
+                memory_append_turn(goal, tools_used, path);
+                return;
             }
+            TOOL_NOTE("fs.read");
+            agent_tool_console_print("[agent] step: transform");
+            if (!apply_edit_transform(goal, existing, n, content, sizeof(content))) {
+                agent_tool_console_print(
+                    "[agent] no edit transform matched — try: "
+                    "\"edit … error handling\" | \"edit … print\" | "
+                    "\"edit … recursion\" | \"edit … todo\"");
+                TOOL_NOTE("console.print");
+                set_summary(summary, summary_cap, "edit refused");
+                memory_append_turn(goal, tools_used, path);
+                return;
+            }
+            agent_tool_console_print("[agent] step: fs.write");
         }
 
         if (intent == INTENT_CREATE || content[0] == '\0') {
+            char listing[512];
+            if (agent_tool_fs_list("/home/dev/workspace", listing, sizeof(listing)) == 0) {
+                TOOL_NOTE("fs.list");
+                console_write_ui("[agent] workspace:\n");
+                console_write_ui(listing);
+            }
+            agent_tool_console_print("[agent] step: scaffold");
             if (!scaffold_create(goal, path, content, sizeof(content))) {
                 agent_tool_console_print(
                     "[agent] no create template matched — try: "
@@ -878,6 +943,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                 memory_append_turn(goal, tools_used, path);
                 return;
             }
+            agent_tool_console_print("[agent] step: fs.write");
         }
 
         console_printf_ui("[agent] tool fs.write %s\n", path);
