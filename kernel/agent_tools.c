@@ -15,6 +15,12 @@ static const char tools_catalog[] =
     "sys.info,sys.ps,net.ping,net.fetch,mem.recall,mem.store,peakvec.query,audit.tail,"
     "console.print,fs.tree";
 
+static void agent_tool_note_deny(const char *tool, const char *path) {
+    char why[96];
+    if (agent_policy_deny_reason(tool, path, why, sizeof(why)) == 0)
+        agent_transcript_note_tool(why);
+}
+
 const char *agent_tools_catalog(void) {
     return tools_catalog;
 }
@@ -26,6 +32,7 @@ size_t agent_tools_catalog_len(void) {
 int agent_tool_console_print(const char *msg) {
     if (!agent_policy_tool_allowed("console.print")) {
         agent_audit_event("console.print", "-", "deny-tool");
+        agent_tool_note_deny("console.print", NULL);
         return -1;
     }
     console_write_ui(msg ? msg : "");
@@ -38,18 +45,15 @@ int agent_tool_console_print(const char *msg) {
 
 int agent_tool_fs_read(const char *path, char *out, size_t out_len, size_t *out_n) {
     char norm[VFS_PATH_MAX];
-    char why[96];
     if (!agent_policy_tool_allowed("fs.read")) {
         agent_audit_event("fs.read", path, "deny-tool");
-        if (agent_policy_deny_reason("fs.read", path, why, sizeof(why)) == 0)
-            agent_transcript_note_tool(why);
+        agent_tool_note_deny("fs.read", path);
         return -1;
     }
     if (agent_policy_normalize_path(path, norm, sizeof(norm)) != 0 ||
         !agent_policy_path_allowed(norm)) {
         agent_audit_event("fs.read", path, "deny-path");
-        if (agent_policy_deny_reason("fs.read", path, why, sizeof(why)) == 0)
-            agent_transcript_note_tool(why);
+        agent_tool_note_deny("fs.read", path);
         return -1;
     }
     size_t n = 0;
@@ -72,15 +76,18 @@ int agent_tool_fs_write(const char *path, const char *content, int auto_ok) {
     char norm[VFS_PATH_MAX];
     if (!agent_policy_tool_allowed("fs.write")) {
         agent_audit_event("fs.write", path, "deny-tool");
+        agent_tool_note_deny("fs.write", path);
         return -1;
     }
     if (agent_policy_normalize_path(path, norm, sizeof(norm)) != 0 ||
         !agent_policy_path_allowed(norm)) {
         agent_audit_event("fs.write", path, "deny-path");
+        agent_tool_note_deny("fs.write", path);
         return -1;
     }
     if (!strcmp(norm, AGENT_AUDIT_PATH)) {
         agent_audit_event("fs.write", norm, "deny-audit");
+        agent_tool_note_deny("fs.write", norm);
         return -1;
     }
     if (agent_policy_write_requires_approval() && !auto_ok) {
@@ -99,12 +106,14 @@ int agent_tool_fs_list(const char *path, char *out, size_t out_len) {
     char norm[VFS_PATH_MAX];
     if (!agent_policy_tool_allowed("fs.list")) {
         agent_audit_event("fs.list", path, "deny-tool");
+        agent_tool_note_deny("fs.list", path);
         return -1;
     }
     if (agent_policy_normalize_path(path, norm, sizeof(norm)) != 0)
         return -1;
     if (!agent_policy_path_allowed(norm) && strcmp(norm, "/home/dev") != 0) {
         agent_audit_event("fs.list", norm, "deny-path");
+        agent_tool_note_deny("fs.list", norm);
         return -1;
     }
     int r = vfs_list(norm, out, out_len);
@@ -141,10 +150,12 @@ static int exec_line_safe(const char *line) {
 int agent_tool_fs_exec(const char *line) {
     if (!agent_policy_tool_allowed("fs.exec")) {
         agent_audit_event("fs.exec", line, "deny-tool");
+        agent_tool_note_deny("fs.exec", NULL);
         return -1;
     }
     if (!exec_line_safe(line)) {
         agent_audit_event("fs.exec", line, "deny-syntax");
+        agent_transcript_note_tool("deny-syntax: fs.exec rejects shell metacharacters");
         return -1;
     }
     char linebuf[128];
@@ -163,6 +174,7 @@ int agent_tool_fs_exec(const char *line) {
     cmd[i] = '\0';
     if (!cmd[0] || !exec_cmd_allowed(cmd)) {
         agent_audit_event("fs.exec", line, "deny-cmd");
+        agent_transcript_note_tool("deny-cmd: fs.exec command not on allowlist");
         return -1;
     }
     char *argv[16];
@@ -191,11 +203,13 @@ int agent_tool_fs_stat(const char *path, char *out, size_t out_len) {
     char norm[VFS_PATH_MAX];
     if (!agent_policy_tool_allowed("fs.stat")) {
         agent_audit_event("fs.stat", path, "deny-tool");
+        agent_tool_note_deny("fs.stat", path);
         return -1;
     }
     if (agent_policy_normalize_path(path, norm, sizeof(norm)) != 0 ||
         !agent_policy_path_allowed(norm)) {
         agent_audit_event("fs.stat", path, "deny-path");
+        agent_tool_note_deny("fs.stat", path);
         return -1;
     }
     struct vfs_stat st;
@@ -219,11 +233,13 @@ int agent_tool_fs_mkdir(const char *path) {
     char norm[VFS_PATH_MAX];
     if (!agent_policy_tool_allowed("fs.mkdir")) {
         agent_audit_event("fs.mkdir", path, "deny-tool");
+        agent_tool_note_deny("fs.mkdir", path);
         return -1;
     }
     if (agent_policy_normalize_path(path, norm, sizeof(norm)) != 0 ||
         !agent_policy_path_allowed(norm)) {
         agent_audit_event("fs.mkdir", path, "deny-path");
+        agent_tool_note_deny("fs.mkdir", path);
         return -1;
     }
     if (!vfs_mkdir(norm)) {
@@ -238,15 +254,18 @@ int agent_tool_fs_rm(const char *path) {
     char norm[VFS_PATH_MAX];
     if (!agent_policy_tool_allowed("fs.rm")) {
         agent_audit_event("fs.rm", path, "deny-tool");
+        agent_tool_note_deny("fs.rm", path);
         return -1;
     }
     if (agent_policy_normalize_path(path, norm, sizeof(norm)) != 0 ||
         !agent_policy_path_allowed(norm)) {
         agent_audit_event("fs.rm", path, "deny-path");
+        agent_tool_note_deny("fs.rm", path);
         return -1;
     }
     if (!strcmp(norm, AGENT_AUDIT_PATH) || !strcmp(norm, AGENT_MEM_PATH)) {
         agent_audit_event("fs.rm", norm, "deny-protected");
+        agent_transcript_note_tool("deny-protected: audit/memory paths cannot be removed");
         return -1;
     }
     int rc = vfs_is_dir(norm) ? vfs_remove_tree(norm) : vfs_unlink(norm);
@@ -316,6 +335,7 @@ static int search_walk_cb(const char *path, struct vfs_node *node, void *ctx) {
 int agent_tool_fs_search(const char *needle, char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("fs.search")) {
         agent_audit_event("fs.search", needle ? needle : "-", "deny-tool");
+        agent_tool_note_deny("fs.search", NULL);
         return -1;
     }
     if (!needle || !needle[0] || !out || out_len < 4) {
@@ -414,6 +434,7 @@ int agent_tool_fs_diff(const char *path_a, const char *path_b, char *out, size_t
     char norm_b[VFS_PATH_MAX];
     if (!agent_policy_tool_allowed("fs.diff")) {
         agent_audit_event("fs.diff", path_a ? path_a : "-", "deny-tool");
+        agent_tool_note_deny("fs.diff", path_a);
         return -1;
     }
     if (!path_a || !path_b || !out || out_len < 16) {
@@ -425,6 +446,7 @@ int agent_tool_fs_diff(const char *path_a, const char *path_b, char *out, size_t
         agent_policy_normalize_path(path_b, norm_b, sizeof(norm_b)) != 0 ||
         !agent_policy_path_allowed(norm_b)) {
         agent_audit_event("fs.diff", path_a, "deny-path");
+        agent_tool_note_deny("fs.diff", path_a);
         return -1;
     }
     char body_a[AGENT_DIFF_BODY_MAX];
@@ -497,6 +519,7 @@ int agent_tool_fs_diff(const char *path_a, const char *path_b, char *out, size_t
 int agent_tool_fs_grep(const char *needle, char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("fs.grep")) {
         agent_audit_event("fs.grep", needle ? needle : "-", "deny-tool");
+        agent_tool_note_deny("fs.grep", NULL);
         return -1;
     }
     if (!needle || !needle[0] || !out || out_len < 4) {
@@ -579,6 +602,7 @@ static void format_session_tail(const char *raw, size_t raw_len, char *out, size
 int agent_tool_sys_info(char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("sys.info")) {
         agent_audit_event("sys.info", "-", "deny-tool");
+        agent_tool_note_deny("sys.info", NULL);
         return -1;
     }
     if (!out || out_len < 32)
@@ -621,10 +645,12 @@ static int fetch_url_allowed(const char *url) {
 int agent_tool_net_fetch(const char *url, char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("net.fetch")) {
         agent_audit_event("net.fetch", url ? url : "-", "deny-tool");
+        agent_tool_note_deny("net.fetch", NULL);
         return -1;
     }
     if (!privacy_net_client_allowed()) {
         agent_audit_event("net.fetch", url ? url : "-", "deny-privacy");
+        agent_transcript_note_tool("deny-privacy: net client grant required");
         return -1;
     }
     if (!url || !url[0] || !out || out_len < 32) {
@@ -634,6 +660,7 @@ int agent_tool_net_fetch(const char *url, char *out, size_t out_len) {
     if (!fetch_url_allowed(url)) {
         agent_audit_event("net.fetch", url, "deny-scheme");
         snprintf(out, out_len, "fetch: only http:// and https:// URLs allowed");
+        agent_transcript_note_tool("deny-scheme: only http:// and https:// URLs allowed");
         return -1;
     }
     if (!net_ready()) {
@@ -672,10 +699,12 @@ int agent_tool_net_fetch(const char *url, char *out, size_t out_len) {
 int agent_tool_net_ping(const char *host, char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("net.ping")) {
         agent_audit_event("net.ping", host ? host : "-", "deny-tool");
+        agent_tool_note_deny("net.ping", NULL);
         return -1;
     }
     if (!privacy_net_client_allowed()) {
         agent_audit_event("net.ping", host ? host : "-", "deny-privacy");
+        agent_transcript_note_tool("deny-privacy: net client grant required");
         return -1;
     }
     if (!host || !host[0] || !out || out_len < 32) {
@@ -717,6 +746,7 @@ int agent_tool_net_ping(const char *host, char *out, size_t out_len) {
 int agent_tool_mem_recall(const char *goal, char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("mem.recall")) {
         agent_audit_event("mem.recall", goal ? goal : "-", "deny-tool");
+        agent_tool_note_deny("mem.recall", NULL);
         return -1;
     }
     if (!out || out_len < 8)
@@ -776,6 +806,7 @@ int agent_tool_mem_recall(const char *goal, char *out, size_t out_len) {
 int agent_tool_mem_store(const char *text) {
     if (!agent_policy_tool_allowed("mem.store")) {
         agent_audit_event("mem.store", "-", "deny-tool");
+        agent_tool_note_deny("mem.store", NULL);
         return -1;
     }
     if (!text || !text[0]) {
@@ -817,6 +848,7 @@ int agent_tool_mem_store(const char *text) {
 int agent_tool_peakvec_query(const char *ns, const char *query, char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("peakvec.query")) {
         agent_audit_event("peakvec.query", query ? query : "-", "deny-tool");
+        agent_tool_note_deny("peakvec.query", NULL);
         return -1;
     }
     if (!out || out_len < 8)
@@ -913,6 +945,7 @@ static int tree_walk_cb(const char *path, struct vfs_node *node, void *v) {
 int agent_tool_fs_tree(const char *path, char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("fs.tree")) {
         agent_audit_event("fs.tree", path ? path : "-", "deny-tool");
+        agent_tool_note_deny("fs.tree", path);
         return -1;
     }
     if (!out || out_len < 16)
@@ -923,6 +956,7 @@ int agent_tool_fs_tree(const char *path, char *out, size_t out_len) {
     if (vfs_normalize(path, norm, sizeof(norm)) != 0 ||
         !agent_policy_path_allowed(norm)) {
         agent_audit_event("fs.tree", path, "deny-path");
+        agent_tool_note_deny("fs.tree", path);
         return -1;
     }
     struct tree_ctx c;
@@ -944,6 +978,7 @@ int agent_tool_fs_tree(const char *path, char *out, size_t out_len) {
 int agent_tool_sys_ps(char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("sys.ps")) {
         agent_audit_event("sys.ps", "-", "deny-tool");
+        agent_tool_note_deny("sys.ps", NULL);
         return -1;
     }
     if (!out || out_len < 32)
@@ -976,6 +1011,7 @@ int agent_tool_sys_ps(char *out, size_t out_len) {
 int agent_tool_audit_tail(char *out, size_t out_len) {
     if (!agent_policy_tool_allowed("audit.tail")) {
         agent_audit_event("audit.tail", "-", "deny-tool");
+        agent_tool_note_deny("audit.tail", NULL);
         return -1;
     }
     if (!out || out_len < 8)

@@ -285,8 +285,24 @@ void agent_transcript_note_audit(const char *op, const char *target, const char 
     (void)decision;
 }
 
+static char last_transcript_tool[160];
+
 void agent_transcript_note_tool(const char *msg) {
-    (void)msg;
+    last_transcript_tool[0] = '\0';
+    if (!msg)
+        return;
+    size_t i = 0;
+    for (; msg[i] && i + 1 < sizeof(last_transcript_tool); i++)
+        last_transcript_tool[i] = msg[i];
+    last_transcript_tool[i] = '\0';
+}
+
+const char *agent_host_last_transcript_tool(void) {
+    return last_transcript_tool;
+}
+
+void agent_host_clear_transcript_tool(void) {
+    last_transcript_tool[0] = '\0';
 }
 
 void itoa_u(uint64_t val, char *buf, int base) {
