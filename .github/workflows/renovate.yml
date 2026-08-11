@@ -13,9 +13,7 @@ permissions:
 jobs:
   renovate:
     name: Dependency updates
-    runs-on:
-      group: org/Default
-      labels: [self-hosted, Linux, X64, pe-ci]
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - name: Run Renovate
