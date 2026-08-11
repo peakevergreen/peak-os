@@ -85,6 +85,17 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Settings → Look: theme / wallpaper / brand clicks hit correct rows
 - [ ] Settings → Display: click chip sets N×
 
+## Hitboxes / UI scale
+
+Focused pass: change UI scale, then confirm clicks land on the drawn controls (no stale hit caches).
+
+- [ ] Settings → Look: click scale chips 1× ↔ 4× (chips set that scale directly; not a cycle)
+- [ ] After scale change: Settings → Look theme / wallpaper / brand rows still hit the correct control
+- [ ] After scale 1↔4: Browser TLS error Retry / Accept / Forget still clickable (client-relative hits)
+- [ ] After scale 1↔4: Files list rows select the drawn row (shared list origin)
+- [ ] After scale 1↔4: titlebar min / max / close chrome hits match buttons (narrow strip still gated)
+- [ ] Open Start / context / help menu, then change scale → menus dismiss; no stale menu hits after redraw
+
 ## Images / surfaces
 
 - [ ] Images zoom/pan stays in viewport (no hang on large negative pan)
@@ -118,7 +129,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] `gui` → sign in → idle: serial shows no DNS/TCP/HTTP/TLS attempts and no `TLS certificate unverified`
 - [ ] Browser default tab is local Peak JS demo (`peak://demo`, no network)
 - [ ] Explicit Browser Go without trust pin fails inside Browser only (no desktop startup failure)
-- [ ] TLS error page: Retry / Accept / Forget clickable at UI scale 1 and 4 (client-relative hits)
+- [ ] TLS error page: Retry / Accept / Forget work (scale 1↔4 covered under Hitboxes / UI scale)
 
 ## Browser JavaScript
 

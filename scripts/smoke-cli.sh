@@ -33,6 +33,7 @@ grep -q 'test_cli_sed' Makefile
 grep -q 'test_cli_jq' Makefile
 grep -q 'test_cli_zip' Makefile
 grep -q 'test_desktop_titles' Makefile
+grep -q 'test_hitbox_scale' Makefile
 grep -q 'shell_parse_pipeline' kernel/shell_split.c
 grep -q 'SHELL_PIPE_MAX' kernel/include/shell_split.h
 grep -q 'nslookup' kernel/user/ubin_cmds.def
