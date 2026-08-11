@@ -190,6 +190,41 @@ int main(void) {
            "timeout ran");
     expect(js_tick(rt) == 0, "js_tick idle after drain");
 
+    /* Min interval: ms<10 still takes >=2 PIT ticks; cannot fire every tick. */
+    expect(js_eval(rt,
+                   "var fires=0; setInterval(function(){ fires=fires+1; }, 0);",
+                   "<ival>", out, sizeof(out)) == 0,
+           "schedule interval");
+    for (int i = 0; i < 20; i++)
+        js_tick(rt);
+    expect(js_eval(rt, "fires", "<ival>", out, sizeof(out)) == 0, "read fires");
+    {
+        int fires = atoi(out);
+        expect(fires > 0 && fires <= 10, "interval capped to >=2 ticks");
+    }
+    js_rt_reset(rt);
+
+    /* Microtask drain cap: self-enqueueing chain needs multiple ticks (do not
+     * js_eval while a function microtask remains — eval recompiles code). */
+    expect(js_eval(rt,
+                   "var n=0; queueMicrotask(function f(){ n=n+1; "
+                   "if(n<200) queueMicrotask(f); });",
+                   "<micro>", out, sizeof(out)) == 0,
+           "queue microtask chain");
+    expect(js_tick(rt) != 0, "js_tick drains some microtasks");
+    expect(js_pending_work(rt) != 0, "remainder deferred to next tick");
+    {
+        int ticks = 1;
+        while (js_pending_work(rt) && ticks < 16) {
+            js_tick(rt);
+            ticks++;
+        }
+        expect(ticks >= 4, "200 micros need multiple capped drains");
+        expect(!js_pending_work(rt), "chain eventually drained");
+    }
+    expect(js_eval(rt, "n", "<micro>", out, sizeof(out)) == 0 && atoi(out) == 200,
+           "all microtasks ran across ticks");
+
     js_rt_destroy(rt);
     if (fails) {
         fprintf(stderr, "%d js host test(s) failed\n", fails);
