@@ -31,6 +31,7 @@ Product profile: **1080p @ UI scale 3**.
 
 - [ ] Move cursor during Monitor refresh and window drag — cursor must not vanish
 - [ ] Cursor leaves no trails / holes on wallpaper
+- [ ] Idle with cursor over clock/toast: soft present must not leave cursor holes (sprite restores)
 - [ ] Boot serial shows `display: vblank=0/1 pageflip=0/1`
 - [ ] QEMU `vblank=1` is IS1 probe only — not tear-free proof (see docs/rpi.md)
 
@@ -44,6 +45,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Idle with Browser never opened / minimized after timer dirty: no forever present storm
 - [ ] Close Browser window (JS timers pending): no further ticks/presents; reopen still works
 - [ ] Minimize Browser with pending setTimeout: idle settles (ticks paused); restore resumes
+- [ ] Open Game: sim ticks only while focused; minimize / unfocus / lock — idle settles (no DIRTY_GAME storm); restore+focus resumes
 - [ ] Held mouse button alone does not prevent idle lock forever
 - [ ] Dirty workspace → wait autosave: desktop stays interactive (disksave yields)
 

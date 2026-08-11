@@ -121,14 +121,25 @@ static void cursor_shape_paint(int32_t x, int32_t y, uint32_t size, int to_back)
 void desktop_cursor_erase_front(void) {
     if (!cursor_saved)
         return;
+    struct framebuffer *fb = fb_get();
+    uint32_t fw = (uint32_t)fb->width, fh = (uint32_t)fb->height;
+    uint32_t rx = (uint32_t)last_cx, ry = (uint32_t)last_cy, rw = last_csize, rh = last_csize;
+    if (!display_clip_rect(fw, fh, rx, ry, rw, rh, &rx, &ry, &rw, &rh)) {
+        cursor_saved = 0;
+        return;
+    }
     if (fb_backbuffer_ok())
-        fb_restore_from_back((uint32_t)last_cx, (uint32_t)last_cy, last_csize, last_csize);
+        fb_restore_from_back(rx, ry, rw, rh);
     else {
-        for (uint32_t row = 0; row < last_csize; row++)
-            for (uint32_t col = 0; col < last_csize; col++)
-                fb_front_put_pixel((uint32_t)(last_cx + (int32_t)col),
-                                   (uint32_t)(last_cy + (int32_t)row),
-                                   cursor_backup[row][col]);
+        for (uint32_t row = 0; row < rh; row++) {
+            for (uint32_t col = 0; col < rw; col++) {
+                uint32_t bx = rx - (uint32_t)last_cx + col;
+                uint32_t by = ry - (uint32_t)last_cy + row;
+                if (bx >= last_csize || by >= last_csize)
+                    continue;
+                fb_front_put_pixel(rx + col, ry + row, cursor_backup[by][bx]);
+            }
+        }
     }
     cursor_saved = 0;
 }
@@ -141,7 +152,10 @@ void desktop_draw_cursor(int32_t x, int32_t y) {
     if (x < 0) x = 0;
     if (y < 0) y = 0;
 
-    if (cursor_saved && last_cx == x && last_cy == y && last_csize == size)
+    /* cursor_mx/my == -1 after present forces restore+redraw (soft present may
+     * have overwritten front under the sprite without moving the mouse). */
+    if (cursor_saved && cursor_mx == x && cursor_my == y &&
+        last_cx == x && last_cy == y && last_csize == size)
         return;
 
     desktop_cursor_erase_front();
@@ -168,20 +182,6 @@ static int rects_overlap(uint32_t ax, uint32_t ay, uint32_t aw, uint32_t ah,
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
-/* True when a saved cursor sprite overlaps any soft-damage rect. */
-static int cursor_hits_damage(void) {
-    if (!cursor_saved || last_csize == 0)
-        return 0;
-    uint32_t cx = (uint32_t)last_cx, cy = (uint32_t)last_cy, cs = last_csize;
-    for (int i = 0; i < damage_count; i++) {
-        if (rects_overlap(cx, cy, cs, cs,
-                          damage_list[i].x, damage_list[i].y,
-                          damage_list[i].w, damage_list[i].h))
-            return 1;
-    }
-    return 0;
-}
-
 static void present_scene(int full_present) {
     if (!fb_backbuffer_ok())
         return;
@@ -206,8 +206,9 @@ static void present_scene(int full_present) {
             use_full = 1;
     }
 
-    if (use_full || cursor_hits_damage())
-        desktop_cursor_erase_front();
+    /* Soft/full present replaces front pixels; drop the sprite first so clock/
+     * toast (and other soft) rects cannot leave holes under a stale cursor. */
+    desktop_cursor_erase_front();
 
     if (use_full) {
         display_frame_begin();
@@ -227,6 +228,8 @@ static void present_scene(int full_present) {
         }
         if (batch)
             display_frame_end();
+        /* Same as full-present path in desktop.c: force next cursor draw. */
+        cursor_mx = cursor_my = -1;
     }
     sysmon_note_present_us(gfx_now_us() - t0);
     sysmon_note_surf_pressure((uint32_t)surface_pressure_pct());
