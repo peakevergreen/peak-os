@@ -6,7 +6,7 @@ PeakVec is a Peak-authored, in-guest vector index for session/workspace context.
 
 - **Local-only by default.** Embeddings are hashed n-grams (`peakvec_embed_text`) — no model weights, no network.
 - **Slim kernel, large data on disk.** Index pages through the [blobstore](#blobstore) LRU cache (128 KiB). Total size scales with the block device.
-- **Cosine search** over int16 vectors (`PEAKVEC_DIM=64`). Norms are cached; the query is normalized once. When a namespace has ≥64 live entries, an IVF-lite coarse bucket (argmax dimension) probes the query bucket and ±1 neighbors first, then falls back to the remainder. Namespaces are honored on upsert/query/delete/count (RAM tags; default `agent`). Last query duration is published to sysmon (`peakvec_us`).
+- **Cosine search** over int16 vectors (`PEAKVEC_DIM=64`). Norms are cached; the query is normalized once. When a namespace has ≥64 live entries, an IVF-lite coarse bucket (argmax dimension) probes the query bucket and ±1 neighbors first, then falls back to the remainder. Namespaces are honored on upsert/query/delete/count (RAM tags; default `agent`). Agent `fs.write` also upserts workspace files under namespace `ws` (path key + path|excerpt meta) so `mem.recall` can surface files, not only past goals. Last query duration is published to sysmon (`peakvec_us`).
 - **Query explain:** `peakvec_query_ex(..., &explain)` reports coarse bucket id, multi-bucket probe count, probe/remainder counts, early-out skips, and elapsed µs. Stats expose `ann_active` and per-bucket histogram.
 - **Capability-gated:** `CAP_VEC` (shell default includes it); agent namespace also accepts `CAP_AGENT`.
 

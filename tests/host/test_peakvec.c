@@ -168,6 +168,20 @@ static void test_dense_pack_after_deletes(void) {
     expect(!strcmp(hits[0].key, "c"), "c still queryable after pack");
 }
 
+static void test_ws_namespace_agent_files(void) {
+    peakvec_init();
+    int16_t vec[PEAKVEC_DIM];
+    peakvec_embed_text("/home/dev/workspace/fib.c|fibonacci", vec);
+    expect(peakvec_upsert("ws", "/home/dev/workspace/fib.c", vec,
+                          "/home/dev/workspace/fib.c|fibonacci") == 0,
+           "upsert ws file");
+    expect(peakvec_count("ws") == 1, "ws count");
+    struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
+    int n = peakvec_query("ws", vec, 2, hits);
+    expect(n == 1, "ws query hit");
+    expect(!strcmp(hits[0].key, "/home/dev/workspace/fib.c"), "ws key is path");
+}
+
 static void test_namespace_isolation(void) {
     peakvec_init();
     int16_t vec[PEAKVEC_DIM];
@@ -268,6 +282,7 @@ int main(void) {
     test_delete_and_zero_query();
     test_upsert_refreshes_norm();
     test_dense_pack_after_deletes();
+    test_ws_namespace_agent_files();
     test_namespace_isolation();
     test_stats();
     test_query_explain_brute();

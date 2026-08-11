@@ -21,6 +21,31 @@ static void agent_tool_note_deny(const char *tool, const char *path) {
         agent_transcript_note_tool(why);
 }
 
+/* Index workspace file path + short excerpt into PeakVec namespace "ws". */
+static void agent_ws_peakvec_upsert(const char *path, const char *content) {
+    if (!path || !path[0])
+        return;
+    int16_t vec[PEAKVEC_DIM];
+    char meta[PEAKVEC_META_MAX];
+    size_t mi = 0;
+    const char *p = path;
+    while (*p && mi + 1 < sizeof(meta))
+        meta[mi++] = *p++;
+    if (content && content[0] && mi + 2 < sizeof(meta)) {
+        meta[mi++] = '|';
+        for (size_t i = 0; content[i] && mi + 1 < sizeof(meta) && i < 96; i++) {
+            char c = content[i];
+            if (c == '\n' || c == '|')
+                c = ' ';
+            meta[mi++] = c;
+        }
+    }
+    meta[mi] = '\0';
+    /* Embed path + excerpt so queries like "fib" hit file keys. */
+    peakvec_embed_text(meta, vec);
+    (void)peakvec_upsert("ws", path, vec, meta);
+}
+
 const char *agent_tools_catalog(void) {
     return tools_catalog;
 }
@@ -98,6 +123,7 @@ int agent_tool_fs_write(const char *path, const char *content, int auto_ok) {
     }
     if (vfs_write_file(norm, content, strlen(content)) != 0)
         return -1;
+    agent_ws_peakvec_upsert(norm, content);
     agent_audit_event("fs.write", norm, "ok");
     return 0;
 }
@@ -753,6 +779,39 @@ int agent_tool_mem_recall(const char *goal, char *out, size_t out_len) {
         return -1;
     out[0] = '\0';
     size_t o = 0;
+
+    {
+        int16_t q[PEAKVEC_DIM];
+        peakvec_embed_text(goal ? goal : "", q);
+        struct peakvec_hit hits[PEAKVEC_TOPK_MAX];
+        int n = peakvec_query("ws", q, 3, hits);
+        if (n > 0) {
+            char hdr[48];
+            snprintf(hdr, sizeof(hdr), "[recall/workspace] %d hit%s\n", n, n == 1 ? "" : "s");
+            for (const char *p = hdr; *p && o + 1 < out_len; p++)
+                out[o++] = *p;
+            for (int i = 0; i < n; i++) {
+                if (!hits[i].key[0])
+                    continue;
+                char line[160];
+                int score = hits[i].score_milli;
+                snprintf(line, sizeof(line), "  %d.%03d  %s: ",
+                         score / 1000, score % 1000, hits[i].key);
+                for (const char *p = line; *p && o + 1 < out_len; p++)
+                    out[o++] = *p;
+                size_t shown = 0;
+                for (const char *p = hits[i].meta; *p && o + 1 < out_len; p++, shown++) {
+                    if (shown >= 72) {
+                        if (o + 4 < out_len) { out[o++]='.'; out[o++]='.'; out[o++]='.'; }
+                        break;
+                    }
+                    out[o++] = *p;
+                }
+                if (o + 1 < out_len)
+                    out[o++] = '\n';
+            }
+        }
+    }
 
     {
         int16_t q[PEAKVEC_DIM];

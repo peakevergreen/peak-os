@@ -7,6 +7,7 @@
 #include "fb.h"
 #include "theme.h"
 #include "notify.h"
+#include "peakvec.h"
 
 static char last_summary[256];
 static int pending;
@@ -267,6 +268,12 @@ void agent_approve_write(int yes) {
     if (yes) {
         if (vfs_write_file(write_path, write_content, strlen(write_content)) == 0) {
             agent_audit_event("fs.write", write_path, "approved");
+            /* Index approved writes into workspace PeakVec (fs.write tool path skips when pending). */
+            {
+                int16_t vec[PEAKVEC_DIM];
+                peakvec_embed_text(write_path, vec);
+                (void)peakvec_upsert("ws", write_path, vec, write_path);
+            }
             notify_push("Write approved");
             agent_transcript_push("[write approved]");
         } else {
