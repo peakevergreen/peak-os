@@ -22,10 +22,18 @@ struct browser_js_host {
     } listeners[64];
     int nlisteners;
     int prevent_default;
+    /* Deferred navigation — never destroy JS mid js_tick/dispatch. */
+    int pending_nav; /* 0 none, 1 assign, 2 reload */
+    char pending_url[160];
 };
 
 void browser_js_host_init(struct browser_js_host *h, struct js_runtime *rt,
                           struct dom_document *doc, int *dirty);
+/* After tab array compact: rebind doc/dirty/rt and native userdata. */
+void browser_js_fixup_after_move(struct browser_js_host *h, struct js_runtime *rt,
+                                   struct dom_document *doc, int *dirty, void *old_host);
+/* Apply deferred location.assign / reload; returns 1 if navigation ran. */
+int browser_js_flush_pending_nav(struct browser_js_host *h);
 /* Invalidate outstanding JS DOM handles (call on navigate / tab reset). */
 void browser_js_invalidate_handles(struct browser_js_host *h);
 int browser_js_install_dom(struct browser_js_host *h);

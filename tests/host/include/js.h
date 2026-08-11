@@ -18,6 +18,11 @@ struct js_runtime *js_rt_create(void);
 void js_rt_destroy(struct js_runtime *rt);
 void js_rt_set_budgets(struct js_runtime *rt, uint32_t ins_budget, uint32_t max_objs);
 void js_rt_reset(struct js_runtime *rt);
+void js_rt_gc(struct js_runtime *rt);
+typedef void (*js_host_mark_fn)(struct js_runtime *rt, void *userdata);
+void js_rt_set_host_mark(struct js_runtime *rt, js_host_mark_fn fn, void *userdata);
+void js_gc_mark_val(struct js_runtime *rt, const void *val /* js_value* */);
+void js_rt_rebind_native_userdata(struct js_runtime *rt, void *from, void *to);
 
 /* Evaluate source. Returns 0 on success. out_json may receive a short JSON-ish result. */
 int js_eval(struct js_runtime *rt, const char *source, const char *filename,

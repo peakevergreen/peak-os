@@ -105,5 +105,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Status/timer updates after ~400ms (`setTimeout`)
 - [ ] Navigate away and back to `peak://demo`; runtime recreates cleanly
 - [ ] Close tab with JS active; no hang / Exception 13
+- [ ] Two JS tabs: close the first; interact with the second (DOM + click) — no Exception 13
+- [ ] `setTimeout(() => location.assign('peak://demo'), 0)` — no Exception 13 mid-timer
 - [ ] Monitor shows JS tab/object/timer counters when Browser has run scripts
 - [ ] External site that breaks JS budgets still shows reader fallback text

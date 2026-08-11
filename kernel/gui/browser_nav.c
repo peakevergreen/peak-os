@@ -101,8 +101,13 @@ void browser_close_tab(int i) {
     else
         snprintf(last_closed.title, sizeof(last_closed.title), "Tab");
     browser_tab_teardown_js(&tabs[i]);
-    for (int j = i; j < ntabs - 1; j++)
+    for (int j = i; j < ntabs - 1; j++) {
+        void *old_jsh = &tabs[j + 1].jsh;
         tabs[j] = tabs[j + 1];
+        if (tabs[j].js)
+            browser_js_fixup_after_move(&tabs[j].jsh, tabs[j].js, &tabs[j].doc,
+                                         &tabs[j].dom_dirty, old_jsh);
+    }
     ntabs--;
     memset(&tabs[ntabs], 0, sizeof(tabs[ntabs]));
     if (active >= ntabs)
@@ -163,6 +168,8 @@ void browser_input(char c) {
                     }
                 }
                 browser_js_dispatch_event(&t->jsh, form, "submit");
+                if (browser_js_flush_pending_nav(&t->jsh))
+                    return;
                 if (!t->jsh.prevent_default)
                     browser_form_submit(t, form);
             }
@@ -175,6 +182,8 @@ void browser_input(char c) {
             dom_set_attr(&t->doc, t->focus_node, "value", t->focus_value);
             browser_js_dispatch_input(&t->jsh, t->focus_node, t->focus_value);
             browser_js_dispatch_keydown(&t->jsh, t->focus_node, '\b');
+            if (browser_js_flush_pending_nav(&t->jsh))
+                return;
             needs_redraw = 1;
             return;
         }
@@ -185,6 +194,8 @@ void browser_input(char c) {
             dom_set_attr(&t->doc, t->focus_node, "value", t->focus_value);
             browser_js_dispatch_input(&t->jsh, t->focus_node, t->focus_value);
             browser_js_dispatch_keydown(&t->jsh, t->focus_node, (int)c);
+            if (browser_js_flush_pending_nav(&t->jsh))
+                return;
             needs_redraw = 1;
             return;
         }
@@ -411,6 +422,8 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
                         }
                         t->jsh.prevent_default = 0;
                         browser_js_dispatch_event(&t->jsh, form, "submit");
+                        if (browser_js_flush_pending_nav(&t->jsh))
+                            return;
                         if (!t->jsh.prevent_default)
                             browser_form_submit(t, form);
                         return;
@@ -432,6 +445,8 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
                         }
                     }
                     browser_js_dispatch_click(&t->jsh, b->node_id);
+                    if (browser_js_flush_pending_nav(&t->jsh))
+                        return;
                     if (form >= 0 && !t->jsh.prevent_default)
                         browser_form_submit(t, form);
                     browser_rebuild_layout(t, (int)(w > 40 ? w - 24 : 640));
@@ -440,6 +455,8 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
                 }
                 if (t->js)
                     browser_js_dispatch_click(&t->jsh, b->node_id);
+                if (browser_js_flush_pending_nav(&t->jsh))
+                    return;
                 browser_rebuild_layout(t, (int)(w > 40 ? w - 24 : 640));
                 needs_redraw = 1;
                 break;
