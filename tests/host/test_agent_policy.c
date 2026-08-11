@@ -388,6 +388,26 @@ static void test_deny_reason_in_transcript(void) {
     expect(strstr(agent_host_last_transcript_tool(), "deny-tool:") != NULL, "net.ping deny in transcript");
 }
 
+static void test_planner_plan_preview(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.read,fs.write,fs.list,console.print\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+    agent_host_clear_transcript_tool();
+    char summary[128];
+    agent_plan_goal("create hello.c", summary, sizeof(summary));
+    /* Last tool note is from the run; ensure plan ran (file written). */
+    expect(!strcmp(summary, "wrote file") || !strcmp(summary, "write pending approval"),
+           "create after plan preview");
+    char body[256];
+    size_t n = 0;
+    expect(vfs_read_file("/home/dev/workspace/hello.c", body, sizeof(body) - 1, &n) == 0,
+           "hello.c created after plan");
+}
+
 static void test_planner_create_edit_templates(void) {
     agent_host_vfs_reset();
     agent_policy_load_defaults();
@@ -461,6 +481,7 @@ int main(void) {
     test_fs_exec_allowlist();
     test_fs_diff_and_net_fetch();
     test_deny_reason_in_transcript();
+    test_planner_plan_preview();
     test_planner_create_edit_templates();
     test_planner_unparsed_goal();
     test_planner_diff_and_fetch();
