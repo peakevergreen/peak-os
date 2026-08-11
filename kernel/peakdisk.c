@@ -2,6 +2,7 @@
 #include "blockdev.h"
 #include "blobstore.h"
 #include "heap.h"
+#include "pmm.h"
 #include "vfs.h"
 #include "util.h"
 #include "serial.h"
@@ -15,6 +16,9 @@
 #define PEAKDISK_LBA0 1
 #define PEAKDISK_KDF_ITERS 4096u
 #define PEAKDISK_AUTOSAVE_DEFAULT_SEC 120u
+/* Export blob + optional AEAD buffer must leave headroom for wallpaper/surfaces. */
+#define PEAKDISK_SAVE_HEAP_MARGIN (2u * 1024u * 1024u)
+#define PEAKDISK_PAGE_SIZE 4096ULL
 
 static volatile int save_busy;
 static volatile int save_queued;
@@ -29,6 +33,17 @@ static uint64_t last_save_uptime_sec;
 static uint64_t dirty_since_uptime_sec;
 
 static void peakdisk_save_worker(void);
+
+/* True if heap+PMM can hold dual PeakFS buffers (image + AEAD) plus GUI margin. */
+static int peakdisk_heap_ok_for_image(size_t image_bytes) {
+    uint64_t used = 0, freeb = 0, blocks = 0;
+    heap_get_stats(&used, &freeb, &blocks);
+    (void)used;
+    (void)blocks;
+    uint64_t avail = freeb + pmm_free_pages() * PEAKDISK_PAGE_SIZE;
+    uint64_t need = (uint64_t)image_bytes * 2u + (uint64_t)PEAKDISK_SAVE_HEAP_MARGIN;
+    return avail >= need;
+}
 
 void peakdisk_set_passphrase(const char *pass) {
     memzero_explicit(g_pass, sizeof(g_pass));
@@ -119,6 +134,12 @@ void peakdisk_autosave_tick(void) {
     uint64_t now = timer_uptime_secs();
     if (now - dirty_since_uptime_sec < autosave_interval_sec)
         return;
+    /* Defer under heap pressure so dual PeakFS alloc cannot OOM the GUI. */
+    int need = vfs_export_ramdisk_size();
+    if (need >= 12 && !peakdisk_heap_ok_for_image((size_t)need)) {
+        serial_log(SERIAL_LOG_INFO, "peakdisk: autosave deferred (heap pressure)\n");
+        return;
+    }
     if (peakdisk_save_async() == 0)
         serial_log(SERIAL_LOG_INFO, "peakdisk: autosave queued\n");
 }
@@ -178,6 +199,12 @@ int peakdisk_save(void) {
     if ((size_t)need > 32u * 1024u * 1024u) {
         peakdisk_set_err("workspace image too large (>32 MiB)");
         serial_log(SERIAL_LOG_WARN, "peakdisk: image too large\n");
+        save_busy = 0;
+        return -1;
+    }
+    if (!peakdisk_heap_ok_for_image((size_t)need)) {
+        peakdisk_set_err("insufficient heap for save (export+AEAD)");
+        serial_log(SERIAL_LOG_WARN, "peakdisk: save refused (heap pressure)\n");
         save_busy = 0;
         return -1;
     }

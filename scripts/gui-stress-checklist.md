@@ -51,6 +51,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Open Game: sim ticks only while focused; minimize / unfocus / lock — idle settles (no DIRTY_GAME storm); restore+focus resumes
 - [ ] Held mouse button alone does not prevent idle lock forever
 - [ ] Dirty workspace → wait autosave: desktop stays interactive (disksave yields)
+- [ ] Autosave under heap pressure: deferred (no dual PeakFS OOM); wallpaper survives VFS rewrite of PPM path
 
 ## Pi HID (aarch64)
 
@@ -153,6 +154,7 @@ True idle must reach `hlt` (no forever `dirty_bits` / deferred-present busy-spin
 - [ ] JS: two tabs; background tab deferred `location.assign`/`reload` — only that tab navigates
 - [ ] Opaque title-drag then close/Esc: gesture aborts; no stuck underlay
 - [ ] Autosave / disksave: GUI stays interactive; VFS write during save returns busy
+- [ ] Autosave heap watermark: under low free heap/PMM, autosave defers (serial: heap pressure); GUI keeps wallpaper/surfaces
 - [ ] PeakFS load of corrupt/truncated image: fail closed (no half-cleared workspace)
 - [ ] Context menu: open menu → Ctrl+W target window → click menu item is a no-op
 - [ ] Resize mid-close / narrow chrome / Files DnD cancel on Files close-minimize (see Opaque drag section)

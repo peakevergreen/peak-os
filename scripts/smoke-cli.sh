@@ -805,6 +805,8 @@ grep -q 'multi-bucket' docs/peakvec.md || grep -q 'multi-bucket probe' docs/peak
 echo "==> Wave 7 Pass 145 PeakDisk autosave dirty"
 grep -q 'peakdisk_mark_dirty' kernel/peakdisk.c
 grep -q 'peakdisk_autosave_tick' kernel/peakdisk.c
+grep -q 'autosave deferred (heap pressure)' kernel/peakdisk.c
+grep -q 'Owned RGB copy' kernel/wallpaper.c
 grep -q 'peakdisk_is_dirty' kernel/gui/desktop_disks.c
 grep -q 'vfs_note_workspace_dirty' kernel/vfs.c
 grep -q 'autosave interval' docs/CLI.md || grep -q 'autosave' docs/CLI.md
