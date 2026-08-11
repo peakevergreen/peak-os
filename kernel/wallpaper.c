@@ -16,7 +16,8 @@ extern const uint8_t wallpaper_evergreen_ppm[];
 extern const uint64_t wallpaper_evergreen_ppm_len;
 
 static char wp_path[VFS_PATH_MAX];
-static const uint8_t *wp_rgb;
+/* Owned RGB copy — never alias VFS node data (writes free/replace n->data). */
+static uint8_t *wp_rgb;
 static uint32_t wp_w, wp_h;
 static size_t wp_rgb_len;
 
@@ -84,12 +85,19 @@ static int parse_ppm(const uint8_t *data, size_t len,
     return 0;
 }
 
+static void free_wp_rgb(void) {
+    if (wp_rgb) {
+        kfree(wp_rgb);
+        wp_rgb = NULL;
+    }
+    wp_rgb_len = 0;
+}
+
 static void clear_wp(void) {
     wp_path[0] = '\0';
-    wp_rgb = NULL;
-    wp_w = wp_h = 0;
-    wp_rgb_len = 0;
     wp_cache_invalidate();
+    free_wp_rgb();
+    wp_w = wp_h = 0;
 }
 
 static int load_from_vfs(const char *path) {
@@ -100,15 +108,22 @@ static int load_from_vfs(const char *path) {
     uint32_t w, h;
     if (parse_ppm(n->data, n->size, &rgb, &w, &h) != 0)
         return -1;
+    size_t rgb_len = (size_t)w * (size_t)h * 3;
+    uint8_t *owned = (uint8_t *)kmalloc(rgb_len);
+    if (!owned)
+        return -1;
+    memcpy(owned, rgb, rgb_len);
+
     size_t i = 0;
     for (; path[i] && i + 1 < sizeof(wp_path); i++)
         wp_path[i] = path[i];
     wp_path[i] = '\0';
-    wp_rgb = rgb;
+    wp_cache_invalidate();
+    free_wp_rgb();
+    wp_rgb = owned;
     wp_w = w;
     wp_h = h;
-    wp_rgb_len = (size_t)w * (size_t)h * 3;
-    wp_cache_invalidate();
+    wp_rgb_len = rgb_len;
     return 0;
 }
 

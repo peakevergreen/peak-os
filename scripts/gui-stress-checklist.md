@@ -46,6 +46,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Minimize Browser with pending setTimeout: idle settles (ticks paused); restore resumes
 - [ ] Held mouse button alone does not prevent idle lock forever
 - [ ] Dirty workspace → wait autosave: desktop stays interactive (disksave yields)
+- [ ] Autosave under heap pressure: deferred (no dual PeakFS OOM); wallpaper survives VFS rewrite of PPM path
 
 ## Pi HID (aarch64)
 
@@ -146,5 +147,6 @@ True idle must reach `hlt` (no forever `dirty_bits` / deferred-present busy-spin
 - [ ] JS: close non-last tab; `location.assign` from timer — no Exception 13
 - [ ] Opaque title-drag then close/Esc: gesture aborts; no stuck underlay
 - [ ] Autosave / disksave: GUI stays interactive; VFS write during save returns busy
+- [ ] Autosave heap watermark: under low free heap/PMM, autosave defers (serial: heap pressure); GUI keeps wallpaper/surfaces
 - [ ] PeakFS load of corrupt/truncated image: fail closed (no half-cleared workspace)
 - [ ] Context menu: open menu → Ctrl+W target window → click menu item is a no-op
