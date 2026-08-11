@@ -262,6 +262,10 @@ const char *agent_pending_write_path(void) {
     return write_wait ? write_path : "";
 }
 
+const char *agent_pending_write_content(void) {
+    return write_wait ? write_content : "";
+}
+
 void agent_approve_write(int yes) {
     if (!write_wait)
         return;

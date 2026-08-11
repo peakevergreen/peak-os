@@ -86,6 +86,8 @@ Product profile: **1080p @ UI scale 3**.
 
 - [ ] `ask create foo.c` → Agent shows Approve write? Y/N
 - [ ] `N` denies; `Y` writes under workspace
+- [ ] With write pending: Files status bar shows path + Y/N; target row marked `!`
+- [ ] Notepad: pending bar offers A apply / Y approve / N deny; Apply loads patch into buffer without writing
 
 ## Network / TLS isolation
 

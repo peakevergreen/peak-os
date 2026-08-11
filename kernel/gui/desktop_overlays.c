@@ -263,8 +263,8 @@ static const char *desktop_help_focus_hint(void) {
         return "Focus an app window for context hints.";
     switch (wins[focus].kind) {
     case APP_TERM: return "Terminal: Ctrl+F find, wheel scrollback.";
-    case APP_FILES: return "Files: Tab/arrows select; drag row to open.";
-    case APP_NOTEPAD: return "Notepad: Ctrl+S save, Ctrl+F find.";
+    case APP_FILES: return "Files: n/d/r/u; Y/N when agent write pending.";
+    case APP_NOTEPAD: return "Notepad: Ctrl+S/F; A/Y/N for agent write.";
     case APP_BROWSER: return "Browser: Shift+T restore tab; wheel scroll.";
     case APP_AGENT: return "Agent: type a goal; Ctrl+F filter; Y/N writes; Ctrl+E export.";
     case APP_MONITOR: return "Monitor: E or Export button -> /tmp/sysmon.txt.";

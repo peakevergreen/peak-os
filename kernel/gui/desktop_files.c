@@ -6,6 +6,7 @@
 #include "clipboard.h"
 #include "notify.h"
 #include "util.h"
+#include "agent.h"
 
 static char files_cwd[VFS_PATH_MAX] = "/home/dev/workspace";
 static char files_clip_path[VFS_PATH_MAX];
@@ -315,6 +316,40 @@ static const char *files_basename(const char *path) {
     return base;
 }
 
+/* True if pending agent write path lives under files_cwd (same directory). */
+static int files_pending_in_cwd(char *name_out, size_t name_cap) {
+    if (name_out && name_cap)
+        name_out[0] = '\0';
+    if (!agent_write_pending())
+        return 0;
+    const char *path = agent_pending_write_path();
+    if (!path || !path[0])
+        return 0;
+    const char *base = files_basename(path);
+    size_t cwd_len = strlen(files_cwd);
+    size_t path_len = strlen(path);
+    size_t base_len = strlen(base);
+    if (base_len == 0 || path_len <= base_len)
+        return 0;
+    if (!strcmp(files_cwd, "/")) {
+        if (path[0] != '/' || strcmp(path + 1, base) != 0)
+            return 0;
+    } else {
+        if (path_len != cwd_len + 1 + base_len)
+            return 0;
+        if (strncmp(path, files_cwd, cwd_len) != 0 || path[cwd_len] != '/' ||
+            strcmp(path + cwd_len + 1, base) != 0)
+            return 0;
+    }
+    if (name_out && name_cap) {
+        size_t i = 0;
+        for (; base[i] && i + 1 < name_cap; i++)
+            name_out[i] = base[i];
+        name_out[i] = '\0';
+    }
+    return 1;
+}
+
 static void files_build_dest(const char *name, char *dest, size_t cap) {
     if (!name || !name[0] || !dest || cap == 0) {
         if (dest && cap) dest[0] = '\0';
@@ -437,8 +472,14 @@ static void files_draw_status(struct win *w, uint32_t tx, uint32_t sy, uint32_t 
     struct vfs_dirent ents[FILES_ROWS];
     int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
     if (n < 0) n = 0;
+    uint32_t fg = desktop_color_dim();
 
-    if (files_clip_cut && files_clip_path[0]) {
+    if (agent_write_pending()) {
+        const char *pp = agent_pending_write_path();
+        snprintf(status, sizeof(status), "Agent write: %s  ·  Y approve  N deny",
+                 pp && pp[0] ? pp : "?");
+        fg = theme_get()->danger;
+    } else if (files_clip_cut && files_clip_path[0]) {
         snprintf(status, sizeof(status), "Cut: %s  ·  Ctrl+V paste here  Esc cancel",
                  files_basename(files_clip_path));
     } else if (n <= 0) {
@@ -475,7 +516,7 @@ static void files_draw_status(struct win *w, uint32_t tx, uint32_t sy, uint32_t 
 
     fb_fill_rect(tx, sy, inner, files_status_h(), desktop_color_surface());
     fb_draw_string_fit(tx + desktop_u(4), sy + desktop_u(2), inner - desktop_u(8), status,
-                       desktop_color_dim(), desktop_color_surface());
+                       fg, desktop_color_surface());
 }
 
 void desktop_files_draw(struct win *w) {
@@ -518,18 +559,25 @@ void desktop_files_draw(struct win *w) {
     if (files_scroll > n) files_scroll = n > 0 ? n - 1 : 0;
     if (files_sel < files_scroll) files_scroll = files_sel;
     if (files_sel >= files_scroll + max_rows) files_scroll = files_sel - max_rows + 1;
+    char pending_name[VFS_NAME_MAX];
+    int have_pending = files_pending_in_cwd(pending_name, sizeof(pending_name));
     for (int i = 0; i < max_rows && files_scroll + i < n; i++) {
         int idx = files_scroll + i;
         uint32_t rowy = ty + ch * 4 + desktop_u(4) + (uint32_t)i * ch;
         int selected = files_in_sel_range(idx);
+        int is_pending = have_pending && ents[idx].type == VFS_FILE &&
+                         !strcmp(ents[idx].name, pending_name);
         uint32_t bg = selected ? desktop_color_title() : desktop_color_bg();
         if (selected) fb_fill_rect(tx, rowy, inner, ch, desktop_color_title());
         if (selected && !files_a11y_crumb)
             files_draw_focus_ring(tx, rowy, inner, ch);
         char label[VFS_NAME_MAX + 4];
-        snprintf(label, sizeof(label), "%s%s", ents[idx].name, ents[idx].type == VFS_DIR ? "/" : "");
-        fb_draw_string_fit(tx, rowy, name_w, label,
-                           ents[idx].type == VFS_DIR ? desktop_color_accent() : desktop_color_fg(), bg);
+        snprintf(label, sizeof(label), "%s%s%s", ents[idx].name,
+                 ents[idx].type == VFS_DIR ? "/" : "",
+                 is_pending ? " !" : "");
+        uint32_t name_fg = ents[idx].type == VFS_DIR ? desktop_color_accent()
+                            : (is_pending ? theme_get()->danger : desktop_color_fg());
+        fb_draw_string_fit(tx, rowy, name_w, label, name_fg, bg);
         char path[VFS_PATH_MAX], szbuf[16];
         files_build_path(idx, path, sizeof(path));
         if (ents[idx].type == VFS_DIR) {
@@ -764,6 +812,12 @@ int desktop_files_ctx_action(int action_id) {
 
 int desktop_files_key(int key) {
     int extend = keyboard_shift_down();
+    if (agent_write_pending() && (key == 'y' || key == 'Y' || key == 'n' || key == 'N')) {
+        agent_approve_write(key == 'y' || key == 'Y');
+        dirty_bits |= DIRTY_WIN | DIRTY_TOAST;
+        desktop_mark_focus_surf_dirty();
+        return 1;
+    }
     if (key == KEY_TAB || key == '\t') {
         files_a11y_crumb = !files_a11y_crumb;
         if (files_a11y_crumb && files_crumb_hit_n > 0)
