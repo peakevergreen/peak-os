@@ -37,7 +37,9 @@ struct settings_hit {
     int param;
 };
 
-#define SETTINGS_HIT_MAX 40
+/* Worst page today ~13 (Look: tabs+themes+wallpapers+brand). Headroom for grants. */
+#define SETTINGS_HIT_MAX 48
+_Static_assert(SETTINGS_HIT_MAX >= SETTINGS_PAGES + 16, "SETTINGS_HIT_MAX tight");
 static struct settings_hit settings_hits[SETTINGS_HIT_MAX];
 static int settings_hit_n;
 static int settings_kfocus;
@@ -247,8 +249,10 @@ void desktop_settings_hits_reset(void) {
 
 static void settings_hit_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                              enum settings_hit_act act, int param) {
-    if (settings_hit_n >= SETTINGS_HIT_MAX)
+    if (settings_hit_n >= SETTINGS_HIT_MAX) {
+        /* Bump SETTINGS_HIT_MAX if this fires on a normal Settings page. */
         return;
+    }
     settings_hits[settings_hit_n].x = x;
     settings_hits[settings_hit_n].y = y;
     settings_hits[settings_hit_n].w = w;

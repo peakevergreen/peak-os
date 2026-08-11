@@ -83,7 +83,7 @@ Product profile: **1080p @ UI scale 3**.
 
 - [ ] Wheel on Files clamps selection to directory count
 - [ ] Settings → Look: theme / wallpaper / brand clicks hit correct rows
-- [ ] Settings → Display: scale click cycles 1–4
+- [ ] Settings → Display: click chip sets N×
 
 ## Images / surfaces
 
