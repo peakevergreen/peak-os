@@ -437,6 +437,22 @@ static void test_planner_create_edit_templates(void) {
            "edit is not comment-only");
 }
 
+static void test_planner_why_deny(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.read,fs.write,audit.tail,console.print\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+    /* Force a deny-path into the audit log. */
+    expect(agent_tool_fs_read("/etc/passwd", NULL, 0, NULL) != 0, "seed deny-path");
+    char summary[128];
+    agent_plan_goal("why was my write denied", summary, sizeof(summary));
+    expect(!strcmp(summary, "why: explained deny") || !strcmp(summary, "why: no deny found"),
+           "why intent ran");
+}
+
 static void test_planner_unparsed_goal(void) {
     agent_host_vfs_reset();
     agent_policy_load_defaults();
@@ -483,6 +499,7 @@ int main(void) {
     test_deny_reason_in_transcript();
     test_planner_plan_preview();
     test_planner_create_edit_templates();
+    test_planner_why_deny();
     test_planner_unparsed_goal();
     test_planner_diff_and_fetch();
 
