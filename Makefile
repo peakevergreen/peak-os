@@ -366,7 +366,7 @@ HOST_TEST_NAMES := \
 	phase7 gfx boot lan http_tcp js webapi random tls libpeak ubin_registry \
 	shell_split console_scroll display_present font_render wallpaper_cache \
 	peakdisk peakvec guiproto vmm_usercopy blobstore heap_pmm agent_policy \
-	agent_tools desktop_titles ctr_path dom vfs cli_crypto cli_text5 cli_sys2 cli_awk cli_sed cli_jq cli_zip cli_grep cli_find cli_sortflags cli_filemagic cli_date img_decode parser_corpus http2_hpack keyboard_repeat browser_js
+	agent_tools desktop_titles hitbox_scale ctr_path dom vfs cli_crypto cli_text5 cli_sys2 cli_awk cli_sed cli_jq cli_zip cli_grep cli_find cli_sortflags cli_filemagic cli_date img_decode parser_corpus http2_hpack keyboard_repeat browser_js
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
 
 test: test-host
@@ -458,6 +458,7 @@ $(eval $(call HOST_TEST_RULE,agent_tools,tests/host/test_agent_tools.c tests/hos
 	kernel/agent_tools.c kernel/agent_policy.c,\
 	$(HOST_CFLAGS_REDECL) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel))
 $(eval $(call HOST_TEST_RULE,desktop_titles,tests/host/test_desktop_titles.c,$(HOST_CFLAGS)))
+$(eval $(call HOST_TEST_RULE,hitbox_scale,tests/host/test_hitbox_scale.c,$(HOST_CFLAGS)))
 $(eval $(call HOST_TEST_RULE,ctr_path,tests/host/test_ctr_path.c kernel/ctr_path.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL) -Ikernel))
 $(eval $(call HOST_TEST_RULE,dom,tests/host/test_dom.c tests/host/dom_host_stubs.c \
