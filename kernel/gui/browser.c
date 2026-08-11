@@ -787,6 +787,18 @@ void browser_clear_wants_redraw(void) {
     needs_redraw = 0;
 }
 
+void browser_clear_hit_rects(void) {
+    hit_tab_h = hit_tab_w = 0;
+    hit_plus_x = hit_go_x = hit_go_w = hit_bar_y = hit_bar_h = 0;
+    hit_back_x = hit_back_w = hit_fwd_x = hit_fwd_w = 0;
+    hit_retry_w = hit_retry_h = 0;
+    hit_accept_w = hit_accept_h = 0;
+    hit_forget_w = hit_forget_h = 0;
+    hit_bm_h = 0;
+    memset(hit_tab_close_w, 0, sizeof(hit_tab_close_w));
+    memset(hit_bm_w, 0, sizeof(hit_bm_w));
+}
+
 void browser_tick(void) {
     browser_ensure_webapi_binder();
     static uint8_t last_spin_frame = 0xff;
