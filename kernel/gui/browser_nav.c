@@ -2,6 +2,7 @@
 #include "desktop_internal.h"
 #include "browser_internal.h"
 #include "browser_js.h"
+#include "webapi.h"
 #include "css.h"
 #include "dom.h"
 #include "fb.h"
@@ -68,6 +69,7 @@ void browser_select_tab(int i) {
     active = i;
     editing = 0;
     needs_redraw = 1;
+    webapi_bind(i, 0, tabs[i].url);
 }
 
 int browser_new_tab(const char *url) {
@@ -101,6 +103,7 @@ void browser_close_tab(int i) {
     else
         snprintf(last_closed.title, sizeof(last_closed.title), "Tab");
     browser_tab_teardown_js(&tabs[i]);
+    webapi_compact_tab(i);
     for (int j = i; j < ntabs - 1; j++) {
         void *old_jsh = &tabs[j + 1].jsh;
         tabs[j] = tabs[j + 1];
@@ -114,6 +117,8 @@ void browser_close_tab(int i) {
         active = ntabs - 1;
     editing = 0;
     needs_redraw = 1;
+    if (active >= 0 && active < ntabs && tabs[active].used)
+        webapi_bind(active, 0, tabs[active].url);
 }
 
 int browser_has_closed_tab(void) {

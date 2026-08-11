@@ -228,6 +228,42 @@ int main(void) {
     eval_fails(rt, "fetch('https://example.com/x')", "ring-3 isolation enforce");
     browser_isolation_set_enforce(0);
 
+    /* Bind switches page URL + store index for the calling tab. */
+    webapi_set_runtime_binder(NULL);
+    webapi_clear_tab(0);
+    webapi_clear_tab(1);
+    webapi_bind(0, 0, "https://a.example/page");
+    expect(webapi_install(rt, "https://a.example/page") == 0, "bind tab0 install");
+    eval_ok(rt, "sessionStorage.setItem('k','a'); sessionStorage.getItem('k')", "\"a\"");
+    webapi_bind(1, 0, "https://b.example/page");
+    expect(strcmp(g_web_page_url, "https://b.example/page") == 0, "bind updates page url");
+    expect(g_web_tab_id == 1, "bind updates tab id");
+    expect(webapi_install(rt, "https://b.example/page") == 0, "bind tab1 install");
+    eval_ok(rt, "sessionStorage.getItem('k')", "null"); /* isolated store */
+    eval_ok(rt, "sessionStorage.setItem('k','b'); sessionStorage.getItem('k')", "\"b\"");
+    webapi_bind(0, 0, "https://a.example/page");
+    eval_ok(rt, "sessionStorage.getItem('k')", "\"a\""); /* tab0 session preserved */
+
+    /* Compact on close shifts higher tab stores down. */
+    webapi_bind(1, 0, "https://b.example/page");
+    eval_ok(rt, "sessionStorage.getItem('k')", "\"b\"");
+    webapi_compact_tab(0); /* drop tab0; tab1 → slot 0 */
+    expect(g_web_tab_id == 0, "compact decrements tab id");
+    webapi_bind(0, 0, "https://b.example/page");
+    eval_ok(rt, "sessionStorage.getItem('k')", "\"b\""); /* former tab1 data */
+    webapi_clear_tab(0);
+    webapi_clear_tab(1);
+
+    /* Relative fetch uses rebound page URL (not a stale active-tab origin). */
+    webapi_host_set_http(0, 200, "from-b", "");
+    webapi_bind(1, 0, "https://b.example/dir/page");
+    expect(webapi_install(rt, "https://b.example/dir/page") == 0, "rebind fetch origin");
+    eval_ok(rt, "var r=fetch('../x'); r.bodyText", "\"from-b\"");
+    webapi_bind(0, 0, "https://a.example/");
+    webapi_host_set_http(0, 200, "from-a", "");
+    expect(webapi_install(rt, "https://a.example/") == 0, "rebind fetch origin a");
+    eval_ok(rt, "var r=fetch('/x'); r.bodyText", "\"from-a\"");
+
     js_rt_destroy(rt);
     if (fails) {
         fprintf(stderr, "%d webapi host test(s) failed\n", fails);
