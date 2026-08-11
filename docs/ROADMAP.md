@@ -88,7 +88,7 @@ Shipped baseline and history: [CHANGELOG.md](../CHANGELOG.md). Architecture: [AR
 
 ### Agent / storage
 
-- Optional opt-in remote LLM over TLS (**never** default)
+- Optional opt-in remote LLM over TLS (**never** default) — design: [agent-llm.md](agent-llm.md)
 - PeakVec ANN when corpora grow
 - VFS large-file back-end on blobstore (beyond PeakVec)
 
