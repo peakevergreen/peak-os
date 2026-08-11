@@ -56,6 +56,30 @@ int desktop_point_in(int32_t px, int32_t py, uint32_t x, uint32_t y, uint32_t w,
            px < (int32_t)(x + w) && py < (int32_t)(y + h);
 }
 
+uint32_t desktop_chrome_btn_strip_w(void) {
+    /* Title reserve / hit strip: 3 buttons (bs+gap) + close inset from right. */
+    return 3 * (desktop_u(14) + desktop_u(4)) + desktop_u(22);
+}
+
+int desktop_chrome_btns(const struct win *w, uint32_t *close_x, uint32_t *max_x,
+                        uint32_t *min_x, uint32_t *by, uint32_t *bs) {
+    uint32_t bsz = desktop_u(14);
+    uint32_t gap = desktop_u(4);
+    /* close at w-22; max/min each subtract (bs+gap) — need full strip or underflow. */
+    uint32_t need = desktop_u(22) + 2 * (bsz + gap);
+    if (!w || w->w < need)
+        return 0;
+    uint32_t cx = w->x + w->w - desktop_u(22);
+    uint32_t mx = cx - bsz - gap;
+    uint32_t nx = mx - bsz - gap;
+    if (close_x) *close_x = cx;
+    if (max_x) *max_x = mx;
+    if (min_x) *min_x = nx;
+    if (by) *by = w->y + desktop_u(6);
+    if (bs) *bs = bsz;
+    return 1;
+}
+
 uint32_t desktop_win_min_w(void) { return desktop_u(180); }
 uint32_t desktop_win_min_h(void) { return desktop_title_h() + desktop_u(100); }
 
@@ -195,6 +219,8 @@ void desktop_maximize_win(int idx) {
 void desktop_minimize_win(int idx) {
     if (dragging || resizing || move_live || move_win == idx)
         desktop_abort_pointer_gesture();
+    if (wins[idx].kind == APP_FILES)
+        desktop_files_drag_cancel();
     uint32_t ox = wins[idx].x, oy = wins[idx].y, ow = wins[idx].w, oh = wins[idx].h;
     int prev_focus = focus;
     wins[idx].minimized = 1;
@@ -334,6 +360,8 @@ int desktop_open_app(enum app_kind k) {
 void desktop_close_win(int idx) {
     if (dragging || resizing || move_live || move_win == idx)
         desktop_abort_pointer_gesture();
+    if (wins[idx].kind == APP_FILES)
+        desktop_files_drag_cancel();
     if (ctx_menu && ctx_win == idx)
         desktop_ctx_close();
     if (wins[idx].kind == APP_BROWSER) {
@@ -457,37 +485,42 @@ static void draw_win_chrome(struct win *w, int focused) {
         uint32_t title_bg = theme_get()->title;
         uint32_t pad_x = s + desktop_u(6);
         uint32_t pad_y = s + desktop_u(2);
-        uint32_t btn_w = 3 * (desktop_u(14) + desktop_u(4)) + desktop_u(22);
+        uint32_t btn_w = desktop_chrome_btn_strip_w();
         uint32_t tw = (w->w > pad_x + btn_w + s) ? (w->w - pad_x - btn_w - s) : desktop_u(40);
         fb_fill_rect(w->x + pad_x, w->y + pad_y, tw, fb_cell_h() + desktop_u(2), title_bg);
         fb_draw_string(w->x + pad_x, w->y + pad_y, title, desktop_color_fg(), title_bg);
     }
-    uint32_t by = w->y + desktop_u(6);
-    uint32_t bs = desktop_u(14);
-    uint32_t gap = desktop_u(4);
-    uint32_t bx = w->x + w->w - desktop_u(22);
-    fb_fill_rect(bx, by, bs, bs, theme_get()->danger);
-    fb_draw_string(bx + desktop_u(3), by + desktop_u(1), "x", desktop_color_fg(), theme_get()->danger);
-    bx -= bs + gap;
-    fb_fill_rect(bx, by, bs, bs, desktop_color_accent());
     {
-        uint32_t m = desktop_u(3);
-        uint32_t fg = desktop_color_fg();
-        if (w->maximized) {
-            fb_fill_rect(bx + m, by + m + desktop_u(2), bs - 2 * m, desktop_u(1), fg);
-            fb_fill_rect(bx + m, by + m + desktop_u(2), desktop_u(1), bs - 2 * m - desktop_u(2), fg);
-            fb_fill_rect(bx + m + desktop_u(2), by + m, bs - 2 * m - desktop_u(2), desktop_u(1), fg);
-            fb_fill_rect(bx + bs - m - desktop_u(1), by + m, desktop_u(1), bs - 2 * m, fg);
-        } else {
-            fb_fill_rect(bx + m, by + m, bs - 2 * m, desktop_u(1), fg);
-            fb_fill_rect(bx + m, by + bs - m - desktop_u(1), bs - 2 * m, desktop_u(1), fg);
-            fb_fill_rect(bx + m, by + m, desktop_u(1), bs - 2 * m, fg);
-            fb_fill_rect(bx + bs - m - desktop_u(1), by + m, desktop_u(1), bs - 2 * m, fg);
+        uint32_t close_x, max_x, min_x, by, bs;
+        if (desktop_chrome_btns(w, &close_x, &max_x, &min_x, &by, &bs)) {
+            fb_fill_rect(close_x, by, bs, bs, theme_get()->danger);
+            fb_draw_string(close_x + desktop_u(3), by + desktop_u(1), "x",
+                           desktop_color_fg(), theme_get()->danger);
+            fb_fill_rect(max_x, by, bs, bs, desktop_color_accent());
+            {
+                uint32_t m = desktop_u(3);
+                uint32_t fg = desktop_color_fg();
+                uint32_t bx = max_x;
+                if (w->maximized) {
+                    fb_fill_rect(bx + m, by + m + desktop_u(2), bs - 2 * m, desktop_u(1), fg);
+                    fb_fill_rect(bx + m, by + m + desktop_u(2), desktop_u(1),
+                                 bs - 2 * m - desktop_u(2), fg);
+                    fb_fill_rect(bx + m + desktop_u(2), by + m,
+                                 bs - 2 * m - desktop_u(2), desktop_u(1), fg);
+                    fb_fill_rect(bx + bs - m - desktop_u(1), by + m, desktop_u(1),
+                                 bs - 2 * m, fg);
+                } else {
+                    fb_fill_rect(bx + m, by + m, bs - 2 * m, desktop_u(1), fg);
+                    fb_fill_rect(bx + m, by + bs - m - desktop_u(1), bs - 2 * m, desktop_u(1), fg);
+                    fb_fill_rect(bx + m, by + m, desktop_u(1), bs - 2 * m, fg);
+                    fb_fill_rect(bx + bs - m - desktop_u(1), by + m, desktop_u(1), bs - 2 * m, fg);
+                }
+            }
+            fb_fill_rect(min_x, by, bs, bs, desktop_color_dim());
+            fb_draw_string(min_x + desktop_u(3), by + desktop_u(1), "_",
+                           desktop_color_fg(), desktop_color_dim());
         }
     }
-    bx -= bs + gap;
-    fb_fill_rect(bx, by, bs, bs, desktop_color_dim());
-    fb_draw_string(bx + desktop_u(3), by + desktop_u(1), "_", desktop_color_fg(), desktop_color_dim());
 
     if (!w->maximized) {
         uint32_t g = resize_grip();
