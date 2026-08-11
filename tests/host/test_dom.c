@@ -123,6 +123,35 @@ static void test_find_ancestor_safe(void) {
     expect(dom_find_ancestor(&doc, input, "form") == -1, "cycle stops");
 }
 
+static void test_append_child_guards(void) {
+    struct dom_document doc;
+    dom_doc_init(&doc);
+
+    int root = dom_create_element(&doc, "div");
+    int a = dom_create_element(&doc, "span");
+    int b = dom_create_element(&doc, "span");
+    int c = dom_create_element(&doc, "span");
+    expect(root >= 0 && a >= 0 && b >= 0 && c >= 0, "create append tree");
+    expect(dom_append_child(&doc, root, a) == 0, "root->a");
+    expect(dom_append_child(&doc, root, b) == 0, "root->b");
+    expect(dom_append_child(&doc, a, c) == 0, "a->c");
+
+    /* Cannot append self or ancestor under descendant. */
+    expect(dom_append_child(&doc, a, a) != 0, "reject self");
+    expect(dom_append_child(&doc, c, a) != 0, "reject ancestor under child");
+    expect(dom_append_child(&doc, c, root) != 0, "reject root under descendant");
+
+    /* Re-parent: unlink from old parent then append. */
+    expect(dom_append_child(&doc, b, c) == 0, "reparent c under b");
+    expect(doc.nodes[a].first_child < 0 || doc.nodes[a].first_child != c, "a lost c");
+    expect(doc.nodes[c].parent == b, "c parent is b");
+    expect(dom_append_child(&doc, b, c) == 0, "idempotent re-append");
+
+    /* Bounded next_sibling stops on self-cycle. */
+    doc.nodes[a].next_sibling = a;
+    expect(dom_next_sibling(&doc, a) == -1, "self-cycle sibling stops");
+}
+
 static void test_inner_html_orphans_unused(void) {
     struct dom_document doc;
     dom_doc_init(&doc);
@@ -153,6 +182,7 @@ int main(void) {
     test_id_and_tag();
     test_compound_selector();
     test_find_ancestor_safe();
+    test_append_child_guards();
     test_inner_html_orphans_unused();
     if (fails) {
         fprintf(stderr, "test_dom: %d failure(s)\n", fails);
