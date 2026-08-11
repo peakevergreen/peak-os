@@ -17,6 +17,9 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Snap to left/right half-screen still works
 - [ ] Drag title to top edge maximizes; accent snap preview shows near edges
 - [ ] Title-drag then Ctrl+W / Esc aborts cleanly (no stuck pixmap / wrong-window snap)
+- [ ] Edge-resize then Ctrl+W / close mid-drag: no geometry apply / surface_ensure on closed win
+- [ ] Narrow window titlebar: chrome min/max/close hits disabled (no underflow); buttons omit if strip does not fit
+- [ ] Files DnD then close or minimize Files: drag cancels (toast); no stale drop ghost
 - [ ] Maximized (or over-cap) title-drag uses outline, not dual full-size pixmap alloc
 
 ## Soft updates
@@ -148,3 +151,4 @@ True idle must reach `hlt` (no forever `dirty_bits` / deferred-present busy-spin
 - [ ] Autosave / disksave: GUI stays interactive; VFS write during save returns busy
 - [ ] PeakFS load of corrupt/truncated image: fail closed (no half-cleared workspace)
 - [ ] Context menu: open menu → Ctrl+W target window → click menu item is a no-op
+- [ ] Resize mid-close / narrow chrome / Files DnD cancel on Files close-minimize (see Opaque drag section)

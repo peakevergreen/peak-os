@@ -466,24 +466,21 @@ void desktop_run(void) {
                 for (int k = 0; k < n; k++) {
                     int i = order[k];
                     struct win *w = &wins[i];
-                    uint32_t by = w->y + desktop_u(6);
-                    uint32_t bs = desktop_u(14);
-                    uint32_t gap = desktop_u(4);
-                    uint32_t close_x = w->x + w->w - desktop_u(22);
-                    uint32_t max_x = close_x - bs - gap;
-                    uint32_t min_x = max_x - bs - gap;
-                    if (desktop_point_in(m.x, m.y, close_x, by, bs, bs)) {
-                        desktop_close_win(i);
-                        break;
-                    }
-                    if (desktop_point_in(m.x, m.y, max_x, by, bs, bs)) {
-                        desktop_raise_win(i);
-                        desktop_maximize_win(i);
-                        break;
-                    }
-                    if (desktop_point_in(m.x, m.y, min_x, by, bs, bs)) {
-                        desktop_minimize_win(i);
-                        break;
+                    uint32_t close_x, max_x, min_x, by, bs;
+                    if (desktop_chrome_btns(w, &close_x, &max_x, &min_x, &by, &bs)) {
+                        if (desktop_point_in(m.x, m.y, close_x, by, bs, bs)) {
+                            desktop_close_win(i);
+                            break;
+                        }
+                        if (desktop_point_in(m.x, m.y, max_x, by, bs, bs)) {
+                            desktop_raise_win(i);
+                            desktop_maximize_win(i);
+                            break;
+                        }
+                        if (desktop_point_in(m.x, m.y, min_x, by, bs, bs)) {
+                            desktop_minimize_win(i);
+                            break;
+                        }
                     }
                     if (desktop_point_in(m.x, m.y, w->x, w->y, w->w, w->h)) {
                         desktop_raise_win(i);
@@ -590,14 +587,19 @@ void desktop_run(void) {
             }
             if (resizing && move_win >= 0 && band_live) {
                 int mw = move_win;
-                wins[mw].x = band_x;
-                wins[mw].y = band_y;
-                wins[mw].w = band_w;
-                wins[mw].h = band_h;
-                desktop_clamp_win_geom(&wins[mw]);
-                surface_ensure(&wins[mw].surf, wins[mw].w, wins[mw].h);
-                surface_mark_dirty(&wins[mw].surf);
-                dirty_bits |= DIRTY_FULL;
+                if (mw < 0 || !wins[mw].open) {
+                    desktop_abort_pointer_gesture();
+                    dirty_bits |= DIRTY_FULL;
+                } else {
+                    wins[mw].x = band_x;
+                    wins[mw].y = band_y;
+                    wins[mw].w = band_w;
+                    wins[mw].h = band_h;
+                    desktop_clamp_win_geom(&wins[mw]);
+                    surface_ensure(&wins[mw].surf, wins[mw].w, wins[mw].h);
+                    surface_mark_dirty(&wins[mw].surf);
+                    dirty_bits |= DIRTY_FULL;
+                }
             } else if (resizing) {
                 dirty_bits |= DIRTY_FULL;
             }
@@ -658,7 +660,7 @@ void desktop_run(void) {
                 dirty_bits |= DIRTY_MOVE;
             }
         }
-        if (resizing && move_win >= 0 && (m.buttons & 1)) {
+        if (resizing && move_win >= 0 && wins[move_win].open && (m.buttons & 1)) {
             int32_t dw = m.x - resize_origin_x;
             int32_t dh = m.y - resize_origin_y;
             int32_t nx = (int32_t)resize_orig_x;
