@@ -36,6 +36,7 @@ void agent_audit_event(const char *op, const char *target, const char *decision)
 
 void agent_transcript_note_audit(const char *op, const char *target, const char *decision);
 void agent_transcript_note_tool(const char *msg);
+void agent_transcript_push(const char *line);
 
 const char *agent_tools_catalog(void);
 size_t agent_tools_catalog_len(void);

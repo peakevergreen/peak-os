@@ -352,10 +352,11 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
         if (!show)
             continue;
         uint32_t line_fg = fg;
-        if (txt[0] == '[' &&
+        if (txt[0] == '[' && !strncmp(txt, "[plan]", 6))
+            line_fg = acc;
+        else if (txt[0] == '[' &&
             (!strncmp(txt, "[audit]", 7) || !strncmp(txt, "[tool]", 6) ||
-             !strncmp(txt, "[pending", 8) || !strncmp(txt, "[write", 6) ||
-             !strncmp(txt, "[plan]", 6)))
+             !strncmp(txt, "[pending", 8) || !strncmp(txt, "[write", 6)))
             line_fg = dim;
         fb_draw_string_fit(x + 8 * s, ty + (uint32_t)drawn * line_h, w - 16 * s,
                            txt, line_fg, bg);
