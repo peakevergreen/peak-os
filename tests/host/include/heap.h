@@ -19,6 +19,11 @@ struct heap_freelist_stats {
 };
 void heap_get_freelist_stats(struct heap_freelist_stats *out);
 uint32_t heap_oom_count(void);
+uint32_t heap_bad_header_count(void);
 uint64_t heap_total_allocated(void);
+
+void heap_host_corrupt_magic(void *ptr);
+void heap_host_corrupt_size_class(void *ptr);
+int heap_host_poison_byte(void);
 
 #endif

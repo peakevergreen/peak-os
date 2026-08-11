@@ -22,7 +22,15 @@ struct heap_freelist_stats {
 };
 void heap_get_freelist_stats(struct heap_freelist_stats *out);
 uint32_t heap_oom_count(void);
+/* Count of kfree/krealloc rejects due to magic / size-class mismatch. */
+uint32_t heap_bad_header_count(void);
 /* Peak JS / browser accounting helpers. */
 uint64_t heap_total_allocated(void);
+
+#ifdef PEAK_HOST_TEST
+void heap_host_corrupt_magic(void *ptr);
+void heap_host_corrupt_size_class(void *ptr);
+int heap_host_poison_byte(void);
+#endif
 
 #endif

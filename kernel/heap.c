@@ -1,18 +1,26 @@
 #include "heap.h"
 #include "pmm.h"
+#include "serial.h"
 #include "sync.h"
 #include "util.h"
 #include "vmm.h"
 
+#define HEAP_MAGIC_ALLOC 0xA11C0DEDu
+#define HEAP_MAGIC_FREE  0xF4EEF4EEu
+#define HEAP_POISON_BYTE 0xDCu
+
 struct heap_block {
+    uint32_t magic;
+    uint16_t free;
+    int16_t size_class; /* heap_size_class(size) at alloc / free-list insert */
     size_t size;
-    int free;
     struct heap_block *next;      /* all blocks (stats / coalesce) */
     struct heap_block *free_next; /* size-class freelist when free */
 };
+_Static_assert(sizeof(struct heap_block) % 16 == 0, "heap_block must be 16-byte aligned size");
+_Static_assert(sizeof(struct heap_block) == 32, "heap_block layout");
 
 /* Segregated free lists for small allocations (16-byte aligned). */
-#define HEAP_NCLASSES 9
 static const size_t heap_class_size[HEAP_NCLASSES] = {
     16, 32, 64, 128, 256, 512, 1024, 2048, 4032
 };
@@ -21,6 +29,7 @@ static struct heap_block *blocks;
 static struct heap_block *free_lists[HEAP_NCLASSES];
 static struct spinlock heap_lock;
 static uint32_t heap_ooms;
+static uint32_t heap_bad_hdrs;
 
 static int heap_size_class(size_t size) {
     for (int i = 0; i < HEAP_NCLASSES; i++) {
@@ -30,8 +39,45 @@ static int heap_size_class(size_t size) {
     return -1;
 }
 
+static void heap_dump_bad(const char *why, void *ptr, struct heap_block *b) {
+    char buf[160];
+    heap_bad_hdrs++;
+    if (b) {
+        snprintf(buf, sizeof(buf),
+                 "heap: %s ptr=%p magic=%x free=%d cls=%d size=%zu\n", why, ptr,
+                 (unsigned)b->magic, b->free, b->size_class, b->size);
+    } else {
+        snprintf(buf, sizeof(buf), "heap: %s ptr=%p (null header)\n", why, ptr);
+    }
+    serial_log(SERIAL_LOG_ERROR, buf);
+}
+
+static int heap_header_ok_alloced(struct heap_block *b) {
+    if (!b)
+        return 0;
+    if (b->magic != HEAP_MAGIC_ALLOC || b->free)
+        return 0;
+    if (b->size == 0 || (b->size & 15u) != 0)
+        return 0;
+    int cls = heap_size_class(b->size);
+    if (cls != b->size_class)
+        return 0;
+    return 1;
+}
+
+static void heap_poison_payload(struct heap_block *b) {
+#if defined(PEAK_HOST_TEST) || (defined(PEAK_DEV_INSECURE_RNG) && PEAK_DEV_INSECURE_RNG)
+    if (!b || b->size == 0)
+        return;
+    memset((void *)(b + 1), HEAP_POISON_BYTE, b->size);
+#else
+    (void)b;
+#endif
+}
+
 static void freelist_push(struct heap_block *b) {
     int cls = heap_size_class(b->size);
+    b->size_class = cls;
     if (cls < 0) {
         b->free_next = NULL;
         return;
@@ -67,6 +113,8 @@ void heap_init(void) {
         struct heap_block *b = (struct heap_block *)vmm_phys_to_virt((uint64_t)phys);
         b->size = 4096 - sizeof(struct heap_block);
         b->free = 1;
+        b->magic = HEAP_MAGIC_FREE;
+        b->size_class = heap_size_class(b->size);
         b->free_next = NULL;
         b->next = blocks;
         blocks = b;
@@ -83,6 +131,8 @@ static void *alloc_pages_block(size_t size) {
     struct heap_block *b = (struct heap_block *)vmm_phys_to_virt((uint64_t)phys);
     b->size = npages * (size_t)PAGE_SIZE - sizeof(struct heap_block);
     b->free = 0;
+    b->magic = HEAP_MAGIC_ALLOC;
+    b->size_class = heap_size_class(b->size);
     b->free_next = NULL;
     b->next = blocks;
     blocks = b;
@@ -99,6 +149,13 @@ static struct heap_block *heap_freelist_steal(int cls) {
         return b;
     }
     return NULL;
+}
+
+static void heap_mark_alloced(struct heap_block *b) {
+    b->free = 0;
+    b->magic = HEAP_MAGIC_ALLOC;
+    b->size_class = heap_size_class(b->size);
+    b->free_next = NULL;
 }
 
 void *kmalloc(size_t size) {
@@ -122,13 +179,15 @@ void *kmalloc(size_t size) {
                 struct heap_block *n = (struct heap_block *)split_at;
                 n->size = b->size - size - sizeof(struct heap_block);
                 n->free = 1;
+                n->magic = HEAP_MAGIC_FREE;
+                n->size_class = heap_size_class(n->size);
                 n->free_next = NULL;
                 n->next = b->next;
                 b->next = n;
                 b->size = size;
                 freelist_push(n);
             }
-            b->free = 0;
+            heap_mark_alloced(b);
             void *ret = (void *)(b + 1);
             spin_unlock(&heap_lock);
             return ret;
@@ -140,13 +199,15 @@ void *kmalloc(size_t size) {
                 struct heap_block *n = (struct heap_block *)split_at;
                 n->size = stolen->size - size - sizeof(struct heap_block);
                 n->free = 1;
+                n->magic = HEAP_MAGIC_FREE;
+                n->size_class = heap_size_class(n->size);
                 n->free_next = NULL;
                 n->next = stolen->next;
                 stolen->next = n;
                 stolen->size = size;
                 freelist_push(n);
             }
-            stolen->free = 0;
+            heap_mark_alloced(stolen);
             void *ret = (void *)(stolen + 1);
             spin_unlock(&heap_lock);
             return ret;
@@ -165,6 +226,10 @@ uint32_t heap_oom_count(void) {
     return heap_ooms;
 }
 
+uint32_t heap_bad_header_count(void) {
+    return heap_bad_hdrs;
+}
+
 void *kzalloc(size_t size) {
     void *p = kmalloc(size);
     if (p)
@@ -181,6 +246,10 @@ void *krealloc(void *ptr, size_t size) {
     }
     size = (size + 15) & ~(size_t)15;
     struct heap_block *b = ((struct heap_block *)ptr) - 1;
+    if (!heap_header_ok_alloced(b)) {
+        heap_dump_bad("krealloc bad header", ptr, b);
+        return NULL;
+    }
     if (b->size >= size)
         return ptr;
     void *n = kmalloc(size);
@@ -210,6 +279,7 @@ static void heap_coalesce(void) {
             freelist_remove(b->next);
             b->size += sizeof(struct heap_block) + b->next->size;
             b->next = b->next->next;
+            b->magic = HEAP_MAGIC_FREE;
             freelist_push(b);
         }
     }
@@ -230,13 +300,19 @@ void kfree(void *ptr) {
         return;
     spin_lock(&heap_lock);
     struct heap_block *b = ((struct heap_block *)ptr) - 1;
-    if (b->free) {
+    if (b->free || b->magic == HEAP_MAGIC_FREE) {
         /* Double-free: leave heap unchanged. */
+        spin_unlock(&heap_lock);
+        return;
+    }
+    if (!heap_header_ok_alloced(b)) {
+        heap_dump_bad("kfree bad header", ptr, b);
         spin_unlock(&heap_lock);
         return;
     }
     size_t total = b->size + sizeof(*b);
     if (total > PAGE_SIZE) {
+        heap_poison_payload(b);
         if (blocks == b) {
             blocks = b->next;
         } else {
@@ -252,7 +328,9 @@ void kfree(void *ptr) {
         spin_unlock(&heap_lock);
         return;
     }
+    heap_poison_payload(b);
     b->free = 1;
+    b->magic = HEAP_MAGIC_FREE;
     freelist_push(b);
     heap_coalesce();
     spin_unlock(&heap_lock);
@@ -319,3 +397,23 @@ void heap_get_freelist_stats(struct heap_freelist_stats *out) {
     }
     spin_unlock(&heap_lock);
 }
+
+#ifdef PEAK_HOST_TEST
+void heap_host_corrupt_magic(void *ptr) {
+    if (!ptr)
+        return;
+    struct heap_block *b = ((struct heap_block *)ptr) - 1;
+    b->magic = 0xBAD0BAD0u;
+}
+
+void heap_host_corrupt_size_class(void *ptr) {
+    if (!ptr)
+        return;
+    struct heap_block *b = ((struct heap_block *)ptr) - 1;
+    b->size_class = (b->size_class == 0) ? 1 : 0;
+}
+
+int heap_host_poison_byte(void) {
+    return (int)HEAP_POISON_BYTE;
+}
+#endif
