@@ -7,6 +7,8 @@
 #define IMG_MAX_DIM     1024u
 #define IMG_MAX_PIXELS  (512u * 1024u / 3u) /* matches IMG_MAX_RGB / 3 */
 #define IMG_MAX_RGB     (512u * 1024u)
+/* Cap VFS snapshot size: max RGB payload plus modest header/padding slack. */
+#define IMG_MAX_FILE_BYTES (IMG_MAX_RGB + 4096u)
 
 static int is_space(char c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n';
@@ -869,23 +871,43 @@ int img_decode_mem(const uint8_t *data, size_t len, struct img_decoded *out) {
 }
 
 int img_decode_file(const char *path, struct img_decoded *out) {
+    uint8_t *owned;
+    size_t size;
+    size_t nl;
+    int rc;
+
     if (!path || !out)
         return -1;
     struct vfs_node *n = vfs_lookup(path);
     if (!n || n->type != VFS_FILE || !n->data || n->size < 8)
         return -1;
-    size_t nl = strlen(path);
+    /* Snapshot VFS bytes — vfs_write_file may free/replace n->data under us. */
+    if (n->size > IMG_MAX_FILE_BYTES)
+        return -1;
+    size = n->size;
+    owned = (uint8_t *)kmalloc(size);
+    if (!owned)
+        return -1;
+    memcpy(owned, n->data, size);
+
+    nl = strlen(path);
     if (nl >= 4) {
         if (!strcmp(path + nl - 4, ".bmp"))
-            return img_decode_bmp(n->data, n->size, out);
-        if (!strcmp(path + nl - 4, ".ppm"))
-            return img_decode_ppm(n->data, n->size, out);
-        if (!strcmp(path + nl - 4, ".png"))
-            return img_decode_png(n->data, n->size, out);
-        if (!strcmp(path + nl - 4, ".jpg"))
-            return img_decode_jpeg(n->data, n->size, out);
+            rc = img_decode_bmp(owned, size, out);
+        else if (!strcmp(path + nl - 4, ".ppm"))
+            rc = img_decode_ppm(owned, size, out);
+        else if (!strcmp(path + nl - 4, ".png"))
+            rc = img_decode_png(owned, size, out);
+        else if (!strcmp(path + nl - 4, ".jpg"))
+            rc = img_decode_jpeg(owned, size, out);
+        else if (nl >= 5 && !strcmp(path + nl - 5, ".jpeg"))
+            rc = img_decode_jpeg(owned, size, out);
+        else
+            rc = img_decode_mem(owned, size, out);
+    } else {
+        rc = img_decode_mem(owned, size, out);
     }
-    if (nl >= 5 && !strcmp(path + nl - 5, ".jpeg"))
-        return img_decode_jpeg(n->data, n->size, out);
-    return img_decode_mem(n->data, n->size, out);
+
+    kfree(owned);
+    return rc;
 }

@@ -6,7 +6,16 @@
 #include "img_decode.h"
 #include "inflate_lite.h"
 
+/* From img_decode_host_stubs.c */
+void img_decode_host_set_vfs_file(const char *path, uint8_t *data, size_t size);
+void img_decode_host_clear_vfs_file(void);
+
 static int fails;
+static int alloc_count;
+static int fail_next_kmalloc;
+static int poison_vfs_from_alloc;
+static uint8_t *g_vfs_bytes;
+static size_t g_vfs_len;
 
 static void expect(int cond, const char *msg) {
     if (!cond) {
@@ -15,17 +24,20 @@ static void expect(int cond, const char *msg) {
     }
 }
 
-static void *host_kmalloc(size_t n) {
-    return malloc(n);
-}
-
-static void host_kfree(void *p) {
-    free(p);
-}
-
 /* Stubs for kernel heap used by img_decode.c */
-void *kmalloc(size_t n) { return host_kmalloc(n); }
-void kfree(void *p) { host_kfree(p); }
+void *kmalloc(size_t n) {
+    if (fail_next_kmalloc) {
+        fail_next_kmalloc = 0;
+        return NULL;
+    }
+    void *p = malloc(n);
+    alloc_count++;
+    /* After owned VFS snapshot alloc, poison source bytes so decode must use the copy. */
+    if (poison_vfs_from_alloc && alloc_count >= poison_vfs_from_alloc && g_vfs_bytes)
+        memset(g_vfs_bytes, 0xDF, g_vfs_len);
+    return p;
+}
+void kfree(void *p) { free(p); }
 
 static const char ppm_ok[] =
     "P6\n3 2\n255\n"
@@ -175,6 +187,67 @@ int main(void) {
     img_decode_free(&img);
 
     expect(img_decode_mem((const uint8_t *)"\x00\x01", 2, &img) != 0, "mem reject unknown");
+
+    /* img_decode_file: owned VFS snapshot (vfs_write may free n->data mid-decode). */
+    {
+        size_t ppm_len = sizeof(ppm_ok) - 1;
+        g_vfs_bytes = (uint8_t *)malloc(ppm_len);
+        expect(g_vfs_bytes != NULL, "vfs ppm alloc");
+        if (g_vfs_bytes) {
+            memcpy(g_vfs_bytes, ppm_ok, ppm_len);
+            g_vfs_len = ppm_len;
+            img_decode_host_set_vfs_file("/tmp/pic.ppm", g_vfs_bytes, ppm_len);
+            alloc_count = 0;
+            poison_vfs_from_alloc = 2; /* poison after owned copy kmalloc */
+            memset(&img, 0, sizeof(img));
+            expect(img_decode_file("/tmp/pic.ppm", &img) == 0, "file ppm via owned copy");
+            expect(img.w == 3 && img.h == 2, "file ppm dims");
+            expect(img.rgb && img.rgb[0] == 1 && img.rgb[5] == 6, "file ppm pixels after vfs poison");
+            img_decode_free(&img);
+            poison_vfs_from_alloc = 0;
+            img_decode_host_clear_vfs_file();
+            free(g_vfs_bytes);
+            g_vfs_bytes = NULL;
+            g_vfs_len = 0;
+        }
+    }
+    {
+        /* Oversized VFS body rejected before copy. */
+        size_t huge = (512u * 1024u) + 4096u + 1u;
+        g_vfs_bytes = (uint8_t *)malloc(huge);
+        expect(g_vfs_bytes != NULL, "huge vfs alloc");
+        if (g_vfs_bytes) {
+            memset(g_vfs_bytes, 0, huge);
+            g_vfs_bytes[0] = 'P';
+            g_vfs_bytes[1] = '6';
+            g_vfs_len = huge;
+            img_decode_host_set_vfs_file("/tmp/huge.ppm", g_vfs_bytes, huge);
+            memset(&img, 0, sizeof(img));
+            expect(img_decode_file("/tmp/huge.ppm", &img) != 0, "reject oversized vfs file");
+            img_decode_host_clear_vfs_file();
+            free(g_vfs_bytes);
+            g_vfs_bytes = NULL;
+            g_vfs_len = 0;
+        }
+    }
+    {
+        size_t ppm_len = sizeof(ppm_ok) - 1;
+        g_vfs_bytes = (uint8_t *)malloc(ppm_len);
+        expect(g_vfs_bytes != NULL, "oom vfs alloc");
+        if (g_vfs_bytes) {
+            memcpy(g_vfs_bytes, ppm_ok, ppm_len);
+            g_vfs_len = ppm_len;
+            img_decode_host_set_vfs_file("/tmp/oom.ppm", g_vfs_bytes, ppm_len);
+            fail_next_kmalloc = 1;
+            memset(&img, 0, sizeof(img));
+            expect(img_decode_file("/tmp/oom.ppm", &img) != 0, "oom fail closed on owned copy");
+            fail_next_kmalloc = 0;
+            img_decode_host_clear_vfs_file();
+            free(g_vfs_bytes);
+            g_vfs_bytes = NULL;
+            g_vfs_len = 0;
+        }
+    }
 
     if (fails) {
         fprintf(stderr, "%d img_decode test(s) failed\n", fails);
