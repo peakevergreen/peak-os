@@ -109,10 +109,15 @@ void desktop_run(void) {
         keyboard_poll();
         sound_poll();
         platform_poll();
-        browser_tick();
-        if (browser_wants_redraw()) {
-            dirty_bits |= DIRTY_BROWSER;
-            desktop_mark_win_surf_dirty(desktop_find_win(APP_BROWSER));
+        if (!session_lock && !power_confirm) {
+            browser_tick();
+            if (browser_wants_redraw()) {
+                dirty_bits |= DIRTY_BROWSER;
+                desktop_mark_win_surf_dirty(desktop_find_win(APP_BROWSER));
+            }
+        } else {
+            browser_clear_wants_redraw();
+            dirty_bits &= ~(DIRTY_BROWSER | DIRTY_GAME | DIRTY_MONITOR);
         }
         for (uint32_t pid = 0; pid < 16; pid++) {
             uint32_t dx, dy, dw, dh;
@@ -122,7 +127,7 @@ void desktop_run(void) {
             }
         }
         int key = keyboard_try_getkey();
-        if (key || mouse_buttons_any())
+        if (key)
             last_input_tick = timer_ticks();
         desktop_overlays_idle_lock(last_input_tick);
 
@@ -313,6 +318,9 @@ void desktop_run(void) {
 
         struct mouse_state m;
         mouse_poll(&m);
+        /* Edge activity only — held buttons must not block idle-lock forever. */
+        if (m.left_pressed || m.right_pressed || m.wheel)
+            last_input_tick = timer_ticks();
         desktop_taskbar_preview_update(m.x, m.y);
 
         if (desktop_files_drag_active()) {
@@ -699,6 +707,7 @@ void desktop_run(void) {
 
         sched_maybe_preempt();
 
+        int presented = 0;
         if (dirty_bits) {
             uint64_t now = timer_ticks();
             int urgent = dragging || resizing || (dirty_bits & DIRTY_MOVE) ||
@@ -708,13 +717,15 @@ void desktop_run(void) {
                 sysmon_note_frame();
                 last_present_tick = now;
                 cursor_mx = cursor_my = -1;
+                presented = 1;
             }
         }
         if (desktop_files_drag_active())
             desktop_files_drag_paint(m.x, m.y);
         desktop_draw_cursor(m.x, m.y);
 
-        if (!dirty_bits) {
+        /* Idle unless we just presented: deferred dirty must not busy-spin. */
+        if (!presented) {
             sysmon_idle_enter();
             hlt();
             sysmon_idle_leave();

@@ -362,6 +362,7 @@ void desktop_overlays_idle_lock(uint64_t last_input_tick) {
         timer_ticks() - last_input_tick >
             (uint64_t)settings_idle_lock_minutes() * 6000ull) {
         session_lock = 1;
+        dirty_bits &= ~(DIRTY_BROWSER | DIRTY_GAME | DIRTY_MONITOR);
         dirty_bits |= DIRTY_FULL;
     }
 }

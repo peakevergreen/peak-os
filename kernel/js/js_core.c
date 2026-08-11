@@ -497,15 +497,17 @@ void js_drain_microtasks(struct js_runtime *rt) {
     }
 }
 
-void js_tick(struct js_runtime *rt) {
+int js_tick(struct js_runtime *rt) {
     if (!rt)
-        return;
+        return 0;
+    int fired = 0;
     uint64_t now = timer_ticks();
     for (int i = 0; i < JS_TIMER_MAX; i++) {
         if (!rt->timers[i].used)
             continue;
         if (now < rt->timers[i].due_tick)
             continue;
+        fired = 1;
         struct js_value fn = rt->timers[i].fn;
         if (fn.type == JT_FUNC || fn.type == JT_NATIVE) {
             struct js_value ret;
@@ -516,7 +518,9 @@ void js_tick(struct js_runtime *rt) {
         else
             rt->timers[i].used = 0;
     }
+    int had_micro = rt->micro_n > 0;
     js_drain_microtasks(rt);
+    return fired || had_micro;
 }
 
 int js_pending_work(struct js_runtime *rt) {
