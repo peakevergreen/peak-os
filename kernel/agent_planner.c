@@ -5,8 +5,9 @@
 #include "peakvec.h"
 #include "util.h"
 
-static void memory_append_turn(const char *goal, const char *tools, const char *path) {
-    char note[256];
+static void memory_append_turn(const char *goal, const char *tools, const char *path,
+                               const char *outcome, const char *result) {
+    char note[320];
     size_t o = 0;
     const char *prefix = "turn|goal=";
     for (const char *p = prefix; *p && o + 1 < sizeof(note); p++)
@@ -30,6 +31,28 @@ static void memory_append_turn(const char *goal, const char *tools, const char *
         note[o++] = '=';
         for (const char *p = path; *p && o + 1 < sizeof(note); p++)
             note[o++] = *p;
+    }
+    if (outcome && outcome[0] && o + 8 < sizeof(note)) {
+        note[o++] = '|';
+        note[o++] = 'o';
+        note[o++] = '=';
+        for (const char *p = outcome; *p && o + 1 < sizeof(note); p++) {
+            char c = *p;
+            if (c == '\n' || c == '|')
+                c = ' ';
+            note[o++] = c;
+        }
+    }
+    if (result && result[0] && o + 8 < sizeof(note)) {
+        note[o++] = '|';
+        note[o++] = 'r';
+        note[o++] = '=';
+        for (const char *p = result; *p && o + 1 < sizeof(note); p++) {
+            char c = *p;
+            if (c == '\n' || c == '|')
+                c = ' ';
+            note[o++] = c;
+        }
     }
     note[o] = '\0';
 
@@ -190,6 +213,19 @@ static const struct {
     { "help", INTENT_HELP },
     { NULL, INTENT_UNKNOWN },
 };
+
+static const char *memory_outcome_from_summary(const char *summary) {
+    if (!summary || !summary[0])
+        return "ok";
+    if (contains_ci(summary, "fail") || contains_ci(summary, "refuse") ||
+        contains_ci(summary, "unparsed") || contains_ci(summary, "missing"))
+        return "error";
+    if (contains_ci(summary, "denied"))
+        return "denied";
+    if (contains_ci(summary, "pending"))
+        return "pending";
+    return "ok";
+}
 
 static void copy_token(const char *src, char *dst, size_t dst_len) {
     size_t i = 0;
@@ -591,7 +627,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             "\"fetch http://example.com\" | \"summarize workspace\" | help");
         TOOL_NOTE("console.print");
         set_summary(summary, summary_cap, "unparsed goal");
-        memory_append_turn(goal, tools_used, NULL);
+        memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -608,7 +644,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "peakvec query failed");
         }
-        memory_append_turn(goal, tools_used, NULL);
+        memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -624,7 +660,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "store failed");
         }
-        memory_append_turn(goal, tools_used, text);
+        memory_append_turn(goal, tools_used, text, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -639,7 +675,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             agent_tool_console_print("[agent] fs.tree failed");
             set_summary(summary, summary_cap, "tree failed");
         }
-        memory_append_turn(goal, tools_used, path_used[0] ? path_used : NULL);
+        memory_append_turn(goal, tools_used, path_used[0] ? path_used : NULL, memory_outcome_from_summary(summary), summary);
         return;
     }
     if (intent == INTENT_PS) {
@@ -652,7 +688,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             agent_tool_console_print("[agent] sys.ps failed");
             set_summary(summary, summary_cap, "ps failed");
         }
-        memory_append_turn(goal, tools_used, NULL);
+        memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -667,7 +703,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         agent_tool_console_print("CLI builtins: man <cmd> or help");
         TOOL_NOTE("console.print");
         set_summary(summary, summary_cap, "help");
-        memory_append_turn(goal, tools_used, NULL);
+        memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -683,7 +719,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "exec failed");
         }
-        memory_append_turn(goal, tools_used, cmdline);
+        memory_append_turn(goal, tools_used, cmdline, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -698,7 +734,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
         }
         set_summary(summary, summary_cap, "recalled session memory");
-        memory_append_turn(goal, tools_used, NULL);
+        memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -714,7 +750,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
         }
         set_summary(summary, summary_cap, "showed audit");
-        memory_append_turn(goal, tools_used, AGENT_AUDIT_PATH);
+        memory_append_turn(goal, tools_used, AGENT_AUDIT_PATH, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -731,7 +767,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "sysinfo failed");
         }
-        memory_append_turn(goal, tools_used, NULL);
+        memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -740,7 +776,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             agent_tool_console_print("[agent] ping needs a host — try: ask \"ping example.com\"");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "ping failed");
-            memory_append_turn(goal, tools_used, NULL);
+            memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
             return;
         }
         char result[256];
@@ -754,7 +790,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "ping failed");
         }
-        memory_append_turn(goal, tools_used, slots.arg);
+        memory_append_turn(goal, tools_used, slots.arg, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -763,7 +799,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             agent_tool_console_print("[agent] fetch needs a URL — try: ask \"fetch http://example.com\"");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "fetch failed");
-            memory_append_turn(goal, tools_used, NULL);
+            memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
             return;
         }
         char result[AGENT_FETCH_BODY_MAX + 64];
@@ -777,7 +813,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "fetch failed");
         }
-        memory_append_turn(goal, tools_used, slots.arg);
+        memory_append_turn(goal, tools_used, slots.arg, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -794,7 +830,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "diff failed");
         }
-        memory_append_turn(goal, tools_used, slots.path);
+        memory_append_turn(goal, tools_used, slots.path, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -803,7 +839,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             agent_tool_console_print("[agent] search needs a term — try: ask \"grep needle\"");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "search failed");
-            memory_append_turn(goal, tools_used, NULL);
+            memory_append_turn(goal, tools_used, NULL, memory_outcome_from_summary(summary), summary);
             return;
         }
         char hits[512];
@@ -824,7 +860,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "search empty");
         }
-        memory_append_turn(goal, tools_used, slots.arg);
+        memory_append_turn(goal, tools_used, slots.arg, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -856,7 +892,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                     }
                 }
                 set_summary(summary, summary_cap, "search summarize");
-                memory_append_turn(goal, tools_used, slots.arg);
+                memory_append_turn(goal, tools_used, slots.arg, memory_outcome_from_summary(summary), summary);
                 return;
             }
         }
@@ -872,7 +908,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
         }
         set_summary(summary, summary_cap, "summarized workspace");
-        memory_append_turn(goal, tools_used, "/home/dev/workspace");
+        memory_append_turn(goal, tools_used, "/home/dev/workspace", memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -891,7 +927,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "read failed");
         }
-        memory_append_turn(goal, tools_used, path_used[0] ? path_used : NULL);
+        memory_append_turn(goal, tools_used, path_used[0] ? path_used : NULL, memory_outcome_from_summary(summary), summary);
         return;
     }
 
@@ -913,7 +949,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                 agent_tool_console_print("[agent] edit: file not found — try create first");
                 TOOL_NOTE("console.print");
                 set_summary(summary, summary_cap, "edit path missing");
-                memory_append_turn(goal, tools_used, path);
+                memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
                 return;
             }
             memcpy(path, resolved, strlen(resolved) + 1);
@@ -925,7 +961,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                 agent_tool_console_print("[agent] edit: read failed after resolve");
                 TOOL_NOTE("console.print");
                 set_summary(summary, summary_cap, "edit read failed");
-                memory_append_turn(goal, tools_used, path);
+                memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
                 return;
             }
             TOOL_NOTE("fs.read");
@@ -937,7 +973,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                     "\"edit … recursion\" | \"edit … todo\"");
                 TOOL_NOTE("console.print");
                 set_summary(summary, summary_cap, "edit refused");
-                memory_append_turn(goal, tools_used, path);
+                memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
                 return;
             }
             agent_tool_console_print("[agent] step: fs.write");
@@ -958,7 +994,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                     "\"create README.md\" | \"create Makefile\"");
                 TOOL_NOTE("console.print");
                 set_summary(summary, summary_cap, "create refused");
-                memory_append_turn(goal, tools_used, path);
+                memory_append_turn(goal, tools_used, path, memory_outcome_from_summary(summary), summary);
                 return;
             }
             agent_tool_console_print("[agent] step: fs.write");
@@ -982,7 +1018,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "write failed");
         }
-        memory_append_turn(goal, tools_used, path_used);
+        memory_append_turn(goal, tools_used, path_used, memory_outcome_from_summary(summary), summary);
         agent_audit_append("goal complete");
     }
     #undef TOOL_NOTE
