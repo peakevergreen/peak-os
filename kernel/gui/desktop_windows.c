@@ -331,6 +331,8 @@ int desktop_open_app(enum app_kind k) {
 void desktop_close_win(int idx) {
     if (dragging || resizing || move_live || move_win == idx)
         desktop_abort_pointer_gesture();
+    if (ctx_menu && ctx_win == idx)
+        desktop_ctx_close();
     surface_free(&wins[idx].surf);
     wins[idx].open = 0;
     wins[idx].minimized = 0;
