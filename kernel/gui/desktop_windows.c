@@ -40,6 +40,7 @@ int move_prev_valid;
 uint32_t *move_pixmap, *move_underlay;
 uint32_t move_pw, move_ph;
 int move_live;
+int move_win = -1;
 uint32_t band_x, band_y, band_w, band_h;
 int band_live;
 int snap_live;
@@ -192,6 +193,8 @@ void desktop_maximize_win(int idx) {
 }
 
 void desktop_minimize_win(int idx) {
+    if (dragging || resizing || move_live || move_win == idx)
+        desktop_abort_pointer_gesture();
     uint32_t ox = wins[idx].x, oy = wins[idx].y, ow = wins[idx].w, oh = wins[idx].h;
     int prev_focus = focus;
     wins[idx].minimized = 1;
@@ -326,6 +329,8 @@ int desktop_open_app(enum app_kind k) {
 }
 
 void desktop_close_win(int idx) {
+    if (dragging || resizing || move_live || move_win == idx)
+        desktop_abort_pointer_gesture();
     surface_free(&wins[idx].surf);
     wins[idx].open = 0;
     wins[idx].minimized = 0;

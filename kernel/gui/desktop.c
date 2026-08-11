@@ -55,12 +55,13 @@ void desktop_init(void) {
     ctx_menu = 0;
     ctx_item_count = 0;
     ctx_spec.hover_row = -1;
-    dragging = 0;
+        dragging = 0;
     resizing = 0;
     resize_edge = 0;
     band_live = 0;
     snap_live = 0;
     snap_hud_mode = 0;
+    move_win = -1;
     settings_page = 0;
     desktop_compose_reset_cursor_cache();
     desktop_files_init();
@@ -147,6 +148,11 @@ void desktop_run(void) {
                 key = 0;
             } else if (keyboard_ctrl_down() && keyboard_alt_down())
                 break;
+            else if (dragging || resizing || move_live) {
+                desktop_abort_pointer_gesture();
+                dirty_bits |= DIRTY_FULL;
+                key = 0;
+            }
             desktop_menus_close_popups();
             desktop_overlays_close_popups();
             key = 0;
@@ -478,6 +484,7 @@ void desktop_run(void) {
                             resizing = 1;
                             dragging = 0;
                             band_live = 1;
+                            move_win = i;
                             resize_edge = edge;
                             resize_origin_x = m.x;
                             resize_origin_y = m.y;
@@ -501,6 +508,7 @@ void desktop_run(void) {
                                 dragging = 1;
                                 resizing = 0;
                                 band_live = 0;
+                                move_win = i;
                                 drag_off_x = m.x - (int32_t)w->x;
                                 drag_off_y = m.y - (int32_t)w->y;
                                 move_prev_x = w->x;
@@ -559,26 +567,28 @@ void desktop_run(void) {
                 img_pan_win = -1;
             }
             if (dragging) {
+                int mw = move_win;
                 int hint = desktop_snap_hint(m.x, m.y);
-                if (hint)
-                    desktop_snap_apply(focus, hint);
+                if (hint && mw >= 0)
+                    desktop_snap_apply(mw, hint);
                 if (move_live)
                     desktop_opaque_move_end();
                 else
                     dirty_bits |= DIRTY_FULL;
-                if (focus >= 0) {
-                    surface_ensure(&wins[focus].surf, wins[focus].w, wins[focus].h);
-                    surface_mark_dirty(&wins[focus].surf);
+                if (mw >= 0 && wins[mw].open) {
+                    surface_ensure(&wins[mw].surf, wins[mw].w, wins[mw].h);
+                    surface_mark_dirty(&wins[mw].surf);
                 }
             }
-            if (resizing && focus >= 0 && band_live) {
-                wins[focus].x = band_x;
-                wins[focus].y = band_y;
-                wins[focus].w = band_w;
-                wins[focus].h = band_h;
-                desktop_clamp_win_geom(&wins[focus]);
-                surface_ensure(&wins[focus].surf, wins[focus].w, wins[focus].h);
-                surface_mark_dirty(&wins[focus].surf);
+            if (resizing && move_win >= 0 && band_live) {
+                int mw = move_win;
+                wins[mw].x = band_x;
+                wins[mw].y = band_y;
+                wins[mw].w = band_w;
+                wins[mw].h = band_h;
+                desktop_clamp_win_geom(&wins[mw]);
+                surface_ensure(&wins[mw].surf, wins[mw].w, wins[mw].h);
+                surface_mark_dirty(&wins[mw].surf);
                 dirty_bits |= DIRTY_FULL;
             } else if (resizing) {
                 dirty_bits |= DIRTY_FULL;
@@ -590,6 +600,7 @@ void desktop_run(void) {
             snap_live = 0;
             snap_hud_mode = 0;
             move_prev_valid = 0;
+            move_win = -1;
             mouse_clear_clicks();
         }
         if (term_select_drag && term_select_win >= 0 && (m.buttons & 1) &&
@@ -600,15 +611,15 @@ void desktop_run(void) {
             wins[img_pan_win].open && wins[img_pan_win].kind == APP_IMAGES) {
             desktop_images_drag(m.x, m.y);
         }
-        if (dragging && focus >= 0 && (m.buttons & 1)) {
+        if (dragging && move_win >= 0 && wins[move_win].open && (m.buttons & 1)) {
             int32_t nx = m.x - drag_off_x;
             int32_t ny = m.y - drag_off_y;
             if (nx < 0) nx = 0;
             if (ny < 0) ny = 0;
-            wins[focus].x = (uint32_t)nx;
-            wins[focus].y = (uint32_t)ny;
-            wins[focus].maximized = 0;
-            desktop_clamp_win_geom(&wins[focus]);
+            wins[move_win].x = (uint32_t)nx;
+            wins[move_win].y = (uint32_t)ny;
+            wins[move_win].maximized = 0;
+            desktop_clamp_win_geom(&wins[move_win]);
             int hint = desktop_snap_hint(m.x, m.y);
             if (hint) {
                 snap_live = 1;
@@ -617,6 +628,12 @@ void desktop_run(void) {
             } else {
                 snap_live = 0;
                 snap_hud_mode = 0;
+                if (band_live && !move_live) {
+                    band_x = wins[move_win].x;
+                    band_y = wins[move_win].y;
+                    band_w = wins[move_win].w;
+                    band_h = wins[move_win].h;
+                }
             }
             uint64_t now = timer_ticks();
             if (now - last_drag_tick >= 1) {
@@ -624,12 +641,16 @@ void desktop_run(void) {
                 if (!move_live) {
                     if (move_prev_valid)
                         damage_add(move_prev_x, move_prev_y, move_prev_w, move_prev_h);
-                    damage_add(wins[focus].x, wins[focus].y, wins[focus].w, wins[focus].h);
+                    if (band_live)
+                        damage_add(band_x, band_y, band_w, band_h);
+                    else
+                        damage_add(wins[move_win].x, wins[move_win].y,
+                                   wins[move_win].w, wins[move_win].h);
                 }
                 dirty_bits |= DIRTY_MOVE;
             }
         }
-        if (resizing && focus >= 0 && (m.buttons & 1)) {
+        if (resizing && move_win >= 0 && (m.buttons & 1)) {
             int32_t dw = m.x - resize_origin_x;
             int32_t dh = m.y - resize_origin_y;
             int32_t nx = (int32_t)resize_orig_x;
@@ -659,7 +680,7 @@ void desktop_run(void) {
             band_w = (uint32_t)nw;
             band_h = (uint32_t)nh;
             {
-                struct win tmp = wins[focus];
+                struct win tmp = wins[move_win];
                 tmp.x = band_x;
                 tmp.y = band_y;
                 tmp.w = band_w;
