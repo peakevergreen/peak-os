@@ -47,16 +47,33 @@ static void kbd_apply_peak(uint8_t code, int down) {
 }
 
 void usb_hid_kbd_report(const uint8_t report[8]) {
-    keyboard_set_modifiers((report[0] & 0x22) != 0, (report[0] & 0x11) != 0, (report[0] & 0x44) != 0);
+    /* Apply key ups before modifiers so Shift release + letter up still clear
+     * software repeat via keyboard_repeat_key_up (any-up clears). */
     uint8_t present[256];
     memset(present, 0, sizeof(present));
     for (int i = 2; i < 8; i++)
         if (report[i]) present[report[i]] = 1;
     for (int code = 0; code < 256; code++) {
         int was = kbd_bit((uint8_t)code), now = present[code];
-        if (now && !was) { kbd_set_bit((uint8_t)code, 1); kbd_apply_peak((uint8_t)code, 1); }
-        else if (!now && was) { kbd_set_bit((uint8_t)code, 0); kbd_apply_peak((uint8_t)code, 0); }
+        if (!now && was) {
+            kbd_set_bit((uint8_t)code, 0);
+            kbd_apply_peak((uint8_t)code, 0);
+        }
     }
+    keyboard_set_modifiers((report[0] & 0x22) != 0, (report[0] & 0x11) != 0, (report[0] & 0x44) != 0);
+    for (int code = 0; code < 256; code++) {
+        int was = kbd_bit((uint8_t)code), now = present[code];
+        if (now && !was) {
+            kbd_set_bit((uint8_t)code, 1);
+            kbd_apply_peak((uint8_t)code, 1);
+        }
+    }
+}
+
+void usb_hid_kbd_reset(void) {
+    memset(kbd_down, 0, sizeof(kbd_down));
+    keyboard_repeat_clear();
+    keyboard_set_modifiers(0, 0, 0);
 }
 
 void usb_hid_mouse_report(const uint8_t *report, int len) {

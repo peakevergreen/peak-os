@@ -23,6 +23,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Obscured Monitor falls back safely (no trash)
 - [ ] Toast expiry clears fully (no ghost toasts)
 - [ ] Typing in Terminal does not hitch the cursor / input loop
+- [ ] Hold Shift+letter, release Shift then letter — char stops (no sticky repeat)
 
 ## Cursor / present
 

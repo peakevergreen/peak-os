@@ -3,6 +3,7 @@
 #include "util.h"
 
 extern void usb_hid_kbd_report(const uint8_t report[8]);
+extern void usb_hid_kbd_reset(void);
 extern void usb_hid_mouse_report(const uint8_t *report, int len);
 extern struct usb_device *usb_alloc_device(void);
 extern void usb_register_hid_kbd(struct usb_device *d);
@@ -59,14 +60,19 @@ static void add_hid(uint8_t addr, uint8_t ep, uint16_t mps, int kbd,
 }
 
 void dwc2_hid_clear_for_addr(uint8_t addr) {
+    int cleared_kbd = 0;
     for (int i = 0; i < nhid;) {
         if (hid_eps[i].addr == addr) {
+            if (hid_eps[i].is_kbd)
+                cleared_kbd = 1;
             hid_eps[i] = hid_eps[nhid - 1];
             nhid--;
             continue;
         }
         i++;
     }
+    if (cleared_kbd)
+        usb_hid_kbd_reset();
 }
 
 void dwc2_hid_parse_config(uint8_t addr, uint8_t *cfg, int len, uint8_t speed,
