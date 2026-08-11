@@ -718,11 +718,17 @@ void desktop_run(void) {
         else if (!settings_show_clock())
             last_clock_secs = secs;
 
-        if (desktop_find_win(APP_GAME) >= 0 && timer_ticks() - last_game_tick >= 5) {
-            last_game_tick = timer_ticks();
-            game_tick();
-            dirty_bits |= DIRTY_GAME;
-            desktop_mark_win_surf_dirty(desktop_find_win(APP_GAME));
+        /* Pause Game when closed, minimized, locked, or unfocused — avoids
+         * perpetual DIRTY_GAME presents while the runner is hidden/idle. */
+        {
+            int gi = desktop_find_win(APP_GAME);
+            if (gi >= 0 && !wins[gi].minimized && !session_lock && !power_confirm &&
+                focus == gi && timer_ticks() - last_game_tick >= 5) {
+                last_game_tick = timer_ticks();
+                game_tick();
+                dirty_bits |= DIRTY_GAME;
+                desktop_mark_win_surf_dirty(gi);
+            }
         }
 
         sysmon_poll();
