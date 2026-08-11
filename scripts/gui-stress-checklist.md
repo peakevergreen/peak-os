@@ -158,3 +158,15 @@ True idle must reach `hlt` (no forever `dirty_bits` / deferred-present busy-spin
 - [ ] PeakFS load of corrupt/truncated image: fail closed (no half-cleared workspace)
 - [ ] Context menu: open menu → Ctrl+W target window → click menu item is a no-op
 - [ ] Resize mid-close / narrow chrome / Files DnD cancel on Files close-minimize (see Opaque drag section)
+
+## Phase 2 UI crash (regression)
+
+Focused pass for UI crash phase-2. Overlaps sections above for idle present-storm / Browser close teardown where noted.
+
+- [ ] Idle present-storm: Browser never opened / minimized after timer dirty — no forever present (see Raise / focus / session)
+- [ ] Close Browser then idle: no JS tick / teardown storm; reopen OK (see Raise / focus / session)
+- [ ] Multi-tab deferred nav: background tab `location.assign` / `reload` from timer — navigates that tab only (active tab JS untouched)
+- [ ] Fetch GC: extract `Response.json`, drop Response, force GC, then call — no crash / Exception
+- [ ] Soft-present cursor: idle with cursor over clock/toast — no cursor holes after soft present
+- [ ] Game pause when unfocused: sim ticks only while focused; minimize / unfocus / lock — idle settles (no DIRTY_GAME storm); restore+focus resumes
+- [ ] Wallpaper owned / autosave under heap pressure: autosave defers (serial: heap pressure); wallpaper survives VFS rewrite of PPM path
