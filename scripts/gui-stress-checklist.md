@@ -75,6 +75,12 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Settings → Look: theme / wallpaper / brand clicks hit correct rows
 - [ ] Settings → Display: scale click cycles 1–4
 
+## Images / surfaces
+
+- [ ] Images zoom/pan stays in viewport (no hang on large negative pan)
+- [ ] Oversized image decode fails closed (toast / no OOM)
+- [ ] Surface budget / OOM toast does not paint into a failed surface
+
 ## Session
 
 - [ ] Start → Lock; Enter unlocks

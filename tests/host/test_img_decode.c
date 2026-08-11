@@ -114,6 +114,28 @@ int main(void) {
 
     expect(img_decode_ppm((const uint8_t *)"P5\n1 1\n255\n0", 14, &img) != 0, "reject P5");
     expect(img_decode_bmp(bmp_ok, 10, &img) != 0, "reject short bmp");
+    expect(img_decode_ppm((const uint8_t *)"P6\n9999 9999\n255\n", 18, &img) != 0,
+           "reject huge ppm dims before alloc");
+    expect(img_decode_ppm((const uint8_t *)"P6\n0 1\n255\n", 11, &img) != 0, "reject zero width");
+    expect(img_decode_ppm((const uint8_t *)"P6\n800 800\n255\n", 15, &img) != 0,
+           "reject ppm over pixel budget");
+    {
+        /* BMP BITMAPINFOHEADER claiming 2000x2000 24bpp — dims rejected before kmalloc */
+        uint8_t huge_bmp[54];
+        memset(huge_bmp, 0, sizeof(huge_bmp));
+        huge_bmp[0] = 'B';
+        huge_bmp[1] = 'M';
+        huge_bmp[10] = 54;
+        huge_bmp[14] = 40;
+        huge_bmp[18] = 0xd0;
+        huge_bmp[19] = 0x07; /* width 2000 */
+        huge_bmp[22] = 0xd0;
+        huge_bmp[23] = 0x07; /* height 2000 */
+        huge_bmp[26] = 1;    /* planes */
+        huge_bmp[28] = 24;   /* bpp */
+        expect(img_decode_bmp(huge_bmp, sizeof(huge_bmp), &img) != 0,
+               "reject huge bmp dims before alloc");
+    }
 
     memset(&img, 0, sizeof(img));
     {
