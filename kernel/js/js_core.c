@@ -469,8 +469,8 @@ int js_set_timeout(struct js_runtime *rt, void *fn, uint32_t ms, int repeat) {
             rt->timers[i].repeat = repeat;
             rt->timers[i].fn = *(struct js_value *)fn;
             uint32_t ticks = ms / 10;
-            if (!ticks)
-                ticks = 1;
+            if (ticks < JS_TIMER_MIN_TICKS)
+                ticks = JS_TIMER_MIN_TICKS;
             rt->timers[i].interval_ticks = ticks;
             rt->timers[i].due_tick = timer_ticks() + ticks;
             return i + 1;
@@ -488,8 +488,10 @@ void js_clear_timer(struct js_runtime *rt, int id) {
 void js_drain_microtasks(struct js_runtime *rt) {
     if (!rt)
         return;
-    while (rt->micro_n > 0) {
+    int drained = 0;
+    while (rt->micro_n > 0 && drained < JS_MICRO_DRAIN_MAX) {
         struct js_value fn = rt->micro[--rt->micro_n];
+        drained++;
         if (fn.type == JT_FUNC || fn.type == JT_NATIVE) {
             struct js_value ret;
             js_val_call(rt, &fn, NULL, 0, NULL, &ret);

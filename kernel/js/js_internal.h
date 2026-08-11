@@ -115,6 +115,10 @@ enum js_op {
 #define JS_FRAME_MAX  64
 #define JS_TIMER_MAX  64
 #define JS_OBJ_MAX_DEFAULT 4096
+/* PIT is ~10ms/tick: refuse sub-2-tick timers so ms<10 cannot fire every tick. */
+#define JS_TIMER_MIN_TICKS 2
+/* Cap microtask jobs per drain so a self-enqueueing chain cannot monopolize a tick. */
+#define JS_MICRO_DRAIN_MAX 64
 
 struct js_frame {
     uint32_t ip;
