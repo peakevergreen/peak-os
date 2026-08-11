@@ -159,6 +159,7 @@ enum agent_intent {
     INTENT_PEAKVEC,
     INTENT_STORE,
     INTENT_RUN,
+    INTENT_WHY,
 };
 
 struct agent_slots {
@@ -176,6 +177,10 @@ static const struct {
 } intent_table[] = {
     { "what did", INTENT_RECALL },
     { "last ask", INTENT_RECALL },
+    { "why was", INTENT_WHY },
+    { "why denied", INTENT_WHY },
+    { "why my write", INTENT_WHY },
+    { "why was my", INTENT_WHY },
     { "store memory", INTENT_STORE },
     { "vector query", INTENT_PEAKVEC },
     { "system info", INTENT_SYSINFO },
@@ -750,6 +755,82 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
         }
         set_summary(summary, summary_cap, "showed audit");
+        memory_append_turn(goal, tools_used, AGENT_AUDIT_PATH, memory_outcome_from_summary(summary), summary);
+        return;
+    }
+
+    if (intent == INTENT_WHY) {
+        char audit[AGENT_READ_CONTENT_MAX];
+        if (agent_tool_audit_tail(audit, sizeof(audit)) != 0) {
+            TOOL_NOTE("audit.tail");
+            agent_tool_console_print("[agent] no audit entries to explain");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "why: empty audit");
+            memory_append_turn(goal, tools_used, AGENT_AUDIT_PATH, memory_outcome_from_summary(summary), summary);
+            return;
+        }
+        TOOL_NOTE("audit.tail");
+        /* Find last deny-* decision in the formatted tail. */
+        const char *last_deny = NULL;
+        for (const char *p = audit; *p; p++) {
+            if (!strncmp(p, "deny-", 5) ||
+                (p[0] == '|' && (!strncmp(p + 1, "deny-", 5) || !strncmp(p + 1, "denied", 6))))
+                last_deny = p;
+        }
+        /* Prefer full agent|… lines containing deny */
+        last_deny = NULL;
+        for (const char *p = audit; *p; p++) {
+            if (!strncmp(p, "agent|", 6)) {
+                const char *line = p;
+                const char *eol = p;
+                while (*eol && *eol != '\n')
+                    eol++;
+                for (const char *q = line; q < eol; q++) {
+                    if (!strncmp(q, "deny", 4) || !strncmp(q, "|denied", 7)) {
+                        last_deny = line;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!last_deny) {
+            agent_tool_console_print("[agent] no recent deny in audit — try a denied write first");
+            agent_tool_console_print(audit);
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "why: no deny found");
+        } else {
+            char linebuf[192];
+            size_t i = 0;
+            for (const char *p = last_deny; *p && *p != '\n' && i + 1 < sizeof(linebuf); p++)
+                linebuf[i++] = *p;
+            linebuf[i] = '\0';
+            agent_tool_console_print("[agent] last denial:");
+            agent_tool_console_print(linebuf);
+            if (contains_ci(linebuf, "deny-path"))
+                agent_tool_console_print(
+                    "[agent] explain: path is outside allow_paths "
+                    "(default /home/dev/workspace, /var/peak/sessions). "
+                    "Edit /etc/peak/agent.policy allow_paths=…");
+            else if (contains_ci(linebuf, "deny-tool"))
+                agent_tool_console_print(
+                    "[agent] explain: tool blocked by allow_tools/deny_tools in "
+                    "/etc/peak/agent.policy — check `policy catalog`");
+            else if (contains_ci(linebuf, "deny-privacy"))
+                agent_tool_console_print(
+                    "[agent] explain: net tools need a privacy grant "
+                    "(`privacy grant net`)");
+            else if (contains_ci(linebuf, "denied"))
+                agent_tool_console_print(
+                    "[agent] explain: write was denied at the GUI Y/N prompt");
+            else if (contains_ci(linebuf, "deny-audit") || contains_ci(linebuf, "deny-protected"))
+                agent_tool_console_print(
+                    "[agent] explain: audit/memory paths are protected from agent writes/rm");
+            else
+                agent_tool_console_print(
+                    "[agent] explain: see deny reason above; `policy` shows active rules");
+            TOOL_NOTE("console.print");
+            set_summary(summary, summary_cap, "why: explained deny");
+        }
         memory_append_turn(goal, tools_used, AGENT_AUDIT_PATH, memory_outcome_from_summary(summary), summary);
         return;
     }
