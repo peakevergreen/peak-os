@@ -114,6 +114,17 @@ int main(void) {
     eval_fails(rt, "var r=fetch('https://example.com/x'); r.json()", "invalid JSON");
     webapi_host_set_http(0, 200, "x", "");
 
+    /*
+     * Native Response.json userdata must keep the Response object alive:
+     * extract the method, drop the Response, force GC, then call — no crash.
+     */
+    webapi_host_set_http(0, 200, "{\"n\":7}", "");
+    eval_ok(rt, "var r=fetch('https://example.com/x'); var rj=r.json; r=null", "null");
+    for (int i = 0; i < 8; i++)
+        js_rt_gc(rt);
+    eval_ok(rt, "rj().n", "7");
+    webapi_host_set_http(0, 200, "x", "");
+
     /* Network / CORS failure → ok:false (not a silent success). */
     webapi_host_set_http(-1, 0, "", "");
     eval_ok(rt, "var r=fetch('https://example.com/x'); r.ok", "false");

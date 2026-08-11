@@ -194,6 +194,8 @@ int js_obj_set(struct js_runtime *rt, struct js_object *o, const char *key,
 int js_obj_get(struct js_runtime *rt, struct js_object *o, const char *key,
                struct js_value *out);
 void js_gc(struct js_runtime *rt);
+/* 1 if p is a live entry in rt->objs (safe to treat as struct js_object*). */
+int js_rt_obj_is_live(struct js_runtime *rt, const void *p);
 void js_install_builtins(struct js_runtime *rt);
 void js_drain_microtasks(struct js_runtime *rt);
 

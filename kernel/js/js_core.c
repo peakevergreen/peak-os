@@ -144,26 +144,49 @@ int js_obj_get(struct js_runtime *rt, struct js_object *o, const char *key,
     return -1;
 }
 
-static void mark_val(struct js_value v);
-static void mark_obj(struct js_object *o) {
+static void mark_val(struct js_runtime *rt, struct js_value v);
+static void mark_obj(struct js_runtime *rt, struct js_object *o);
+
+/*
+ * Native userdata is not always a js_object (e.g. storage string tags,
+ * browser_js_host*). Only mark when ud is still a live heap object.
+ */
+int js_rt_obj_is_live(struct js_runtime *rt, const void *p) {
+    if (!rt || !p)
+        return 0;
+    for (uint32_t i = 0; i < rt->obj_count; i++)
+        if (rt->objs[i] == p)
+            return 1;
+    return 0;
+}
+
+static void js_mark_userdata_if_obj(struct js_runtime *rt, void *ud) {
+    if (js_rt_obj_is_live(rt, ud))
+        mark_obj(rt, (struct js_object *)ud);
+}
+
+static void mark_obj(struct js_runtime *rt, struct js_object *o) {
     if (!o || o->marked)
         return;
     o->marked = 1;
     for (struct js_prop *p = o->props; p; p = p->next)
-        mark_val(p->val);
+        mark_val(rt, p->val);
     if (o->proto)
-        mark_obj(o->proto);
+        mark_obj(rt, o->proto);
     if (o->closure_env)
-        mark_obj(o->closure_env);
+        mark_obj(rt, o->closure_env);
+    /* Response.json/text, AbortController.abort, Promise.then hold peer objs. */
+    if (o->is_native && o->userdata)
+        js_mark_userdata_if_obj(rt, o->userdata);
 }
 
-static void mark_val(struct js_value v) {
+static void mark_val(struct js_runtime *rt, struct js_value v) {
     if (v.type == JT_STR && v.u.s)
         v.u.s->marked = 1;
     else if ((v.type == JT_OBJ || v.type == JT_ARR || v.type == JT_FUNC ||
               v.type == JT_NATIVE || v.type == JT_DOM) &&
              v.u.o)
-        mark_obj(v.u.o);
+        mark_obj(rt, v.u.o);
 }
 
 void js_gc(struct js_runtime *rt) {
@@ -176,7 +199,7 @@ void js_gc(struct js_runtime *rt) {
         if (rt->strs[i])
             rt->strs[i]->marked = 0;
     if (rt->global)
-        mark_obj(rt->global);
+        mark_obj(rt, rt->global);
     /* Interned strtab / typeof literals stay live across GC. */
     if (rt->str_imm) {
         for (uint32_t i = 0; i < rt->str_count; i++)
@@ -187,22 +210,22 @@ void js_gc(struct js_runtime *rt) {
         if (rt->typeof_str[i])
             rt->typeof_str[i]->marked = 1;
     for (uint32_t i = 0; i < rt->sp; i++)
-        mark_val(rt->stack[i]);
+        mark_val(rt, rt->stack[i]);
     for (int i = 0; i < rt->fp; i++) {
-        mark_val(rt->frames[i].this_v);
+        mark_val(rt, rt->frames[i].this_v);
         if (rt->frames[i].func)
-            mark_obj(rt->frames[i].func);
+            mark_obj(rt, rt->frames[i].func);
         if (rt->frames[i].env)
-            mark_obj(rt->frames[i].env);
+            mark_obj(rt, rt->frames[i].env);
     }
     for (int i = 0; i < JS_TIMER_MAX; i++)
         if (rt->timers[i].used)
-            mark_val(rt->timers[i].fn);
+            mark_val(rt, rt->timers[i].fn);
     for (int i = 0; i < rt->micro_n; i++)
-        mark_val(rt->micro[i]);
+        mark_val(rt, rt->micro[i]);
     for (int i = 0; i < 8; i++)
         if (rt->modules[i].used)
-            mark_val(rt->modules[i].exports);
+            mark_val(rt, rt->modules[i].exports);
     if (rt->host_mark)
         rt->host_mark(rt, rt->host_mark_ud);
 
@@ -319,10 +342,9 @@ void js_rt_set_host_mark(struct js_runtime *rt, js_host_mark_fn fn, void *userda
 }
 
 void js_gc_mark_val(struct js_runtime *rt, const void *val) {
-    (void)rt;
-    if (!val)
+    if (!rt || !val)
         return;
-    mark_val(*(const struct js_value *)val);
+    mark_val(rt, *(const struct js_value *)val);
 }
 
 void js_rt_rebind_native_userdata(struct js_runtime *rt, void *from, void *to) {
