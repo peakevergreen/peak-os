@@ -156,6 +156,7 @@ extern int move_prev_valid;
 extern uint32_t *move_pixmap, *move_underlay;
 extern uint32_t move_pw, move_ph;
 extern int move_live;
+extern int move_win;
 extern uint32_t band_x, band_y, band_w, band_h;
 extern int band_live;
 extern int snap_live;
@@ -209,6 +210,7 @@ void desktop_draw_cursor(int32_t x, int32_t y);
 void desktop_opaque_move_free(void);
 void desktop_opaque_move_begin(int idx);
 void desktop_opaque_move_end(void);
+void desktop_abort_pointer_gesture(void);
 
 void desktop_draw_win_content(int i);
 void desktop_draw_taskbar(void);

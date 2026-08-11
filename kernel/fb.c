@@ -219,13 +219,15 @@ void fb_copy_from_back(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                        uint32_t *dst, uint32_t dst_stride) {
     if (!g_back_ok || !dst)
         return;
+    uint32_t x0 = x, y0 = y;
     if (!display_clip_rect((uint32_t)g_fb.width, (uint32_t)g_fb.height,
                            x, y, w, h, &x, &y, &w, &h))
         return;
+    uint32_t ox = x - x0, oy = y - y0;
     uint32_t fw = (uint32_t)g_fb.width;
     for (uint32_t row = 0; row < h; row++) {
         const uint32_t *s = g_back + (uint64_t)(y + row) * fw + x;
-        uint32_t *d = dst + (uint64_t)row * dst_stride;
+        uint32_t *d = dst + (uint64_t)(oy + row) * dst_stride + ox;
         for (uint32_t col = 0; col < w; col++)
             d[col] = s[col];
     }
@@ -235,12 +237,14 @@ void fb_copy_to_back(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                      const uint32_t *src, uint32_t src_stride) {
     if (!g_back_ok || !src)
         return;
+    uint32_t x0 = x, y0 = y;
     if (!display_clip_rect((uint32_t)g_fb.width, (uint32_t)g_fb.height,
                            x, y, w, h, &x, &y, &w, &h))
         return;
+    uint32_t ox = x - x0, oy = y - y0;
     uint32_t fw = (uint32_t)g_fb.width;
     copy_u32_rows((uint8_t *)(g_back + (uint64_t)y * fw + x), (uint64_t)fw * 4,
-                  src, src_stride, w, h);
+                  src + (uint64_t)oy * src_stride + ox, src_stride, w, h);
 }
 
 void fb_set_draw_target(uint32_t *px, uint32_t w, uint32_t h, uint32_t stride) {

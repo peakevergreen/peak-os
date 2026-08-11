@@ -16,6 +16,8 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Edge resize shows rubber-band outline; content redraws on release
 - [ ] Snap to left/right half-screen still works
 - [ ] Drag title to top edge maximizes; accent snap preview shows near edges
+- [ ] Title-drag then Ctrl+W / Esc aborts cleanly (no stuck pixmap / wrong-window snap)
+- [ ] Maximized (or over-cap) title-drag uses outline, not dual full-size pixmap alloc
 
 ## Soft updates
 

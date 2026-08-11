@@ -373,10 +373,20 @@ void desktop_opaque_move_begin(int idx) {
     desktop_opaque_move_free();
     if (idx < 0 || idx >= MAX_WINS || !wins[idx].open || !fb_backbuffer_ok())
         return;
+    move_win = idx;
     struct win *w = &wins[idx];
     uint64_t px = (uint64_t)w->w * (uint64_t)w->h;
-    if (!w->w || !w->h || px > MOVE_PIX_CAP)
+    if (!w->w || !w->h)
         return;
+    if (w->maximized || px > MOVE_PIX_CAP) {
+        band_live = 1;
+        band_x = w->x;
+        band_y = w->y;
+        band_w = w->w;
+        band_h = w->h;
+        move_live = 0;
+        return;
+    }
     size_t bytes = (size_t)px * 4u;
     move_pixmap = (uint32_t *)kmalloc(bytes);
     move_underlay = (uint32_t *)kmalloc(bytes);
@@ -420,14 +430,31 @@ static void opaque_move_step(uint32_t old_x, uint32_t old_y,
 }
 
 void desktop_opaque_move_end(void) {
+    int idx = move_win;
+    move_win = -1;
     desktop_opaque_move_free();
-    if (focus >= 0 && wins[focus].open) {
-        damage_add_win(focus);
+    if (idx >= 0 && wins[idx].open) {
+        damage_add_win(idx);
         if (move_prev_valid)
             damage_add(move_prev_x, move_prev_y, move_prev_w, move_prev_h);
     } else {
         dirty_bits |= DIRTY_FULL;
     }
+}
+
+void desktop_abort_pointer_gesture(void) {
+    if (move_live)
+        desktop_opaque_move_end();
+    else
+        desktop_opaque_move_free();
+    dragging = 0;
+    resizing = 0;
+    resize_edge = 0;
+    band_live = 0;
+    snap_live = 0;
+    snap_hud_mode = 0;
+    move_prev_valid = 0;
+    move_win = -1;
 }
 
 static void draw_rubber_band(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
@@ -621,16 +648,16 @@ static int try_partial_present(void) {
 }
 
 void desktop_draw(void) {
-    if ((dirty_bits & DIRTY_MOVE) && move_live && dragging && focus >= 0 &&
-        wins[focus].open) {
+    if ((dirty_bits & DIRTY_MOVE) && move_live && dragging && move_win >= 0 &&
+        wins[move_win].open) {
         opaque_move_step(move_prev_x, move_prev_y,
-                         wins[focus].x, wins[focus].y,
-                         wins[focus].w, wins[focus].h);
+                         wins[move_win].x, wins[move_win].y,
+                         wins[move_win].w, wins[move_win].h);
         dirty_bits &= ~DIRTY_MOVE;
         return;
     }
 
-    if (resizing && band_live && !move_live && focus >= 0) {
+    if (snap_live && dragging && move_win >= 0) {
         damage_clear();
         if (move_prev_valid)
             damage_add(move_prev_x, move_prev_y, move_prev_w, move_prev_h);
@@ -650,7 +677,7 @@ void desktop_draw(void) {
         return;
     }
 
-    if (snap_live && dragging && focus >= 0) {
+    if (band_live && !move_live && move_win >= 0 && (resizing || dragging)) {
         damage_clear();
         if (move_prev_valid)
             damage_add(move_prev_x, move_prev_y, move_prev_w, move_prev_h);
@@ -686,20 +713,22 @@ void desktop_draw(void) {
         if (snap_live && dragging) {
             draw_rubber_band(band_x, band_y, band_w, band_h);
             desktop_draw_snap_hud(band_x, band_y, band_w, band_h);
+        } else if (band_live && dragging && !move_live) {
+            draw_rubber_band(band_x, band_y, band_w, band_h);
         }
         scene_ready = 1;
         present_scene(0);
-        if ((dragging || resizing) && focus >= 0 && wins[focus].open) {
-            if (resizing && band_live) {
+        if ((dragging || resizing) && move_win >= 0 && wins[move_win].open) {
+            if ((resizing || (dragging && !move_live)) && band_live) {
                 move_prev_x = band_x;
                 move_prev_y = band_y;
                 move_prev_w = band_w;
                 move_prev_h = band_h;
             } else {
-                move_prev_x = wins[focus].x;
-                move_prev_y = wins[focus].y;
-                move_prev_w = wins[focus].w;
-                move_prev_h = wins[focus].h;
+                move_prev_x = wins[move_win].x;
+                move_prev_y = wins[move_win].y;
+                move_prev_w = wins[move_win].w;
+                move_prev_h = wins[move_win].h;
             }
             move_prev_valid = 1;
         }
@@ -734,17 +763,17 @@ void desktop_draw(void) {
         scene_ready = 0;
         desktop_cursor_erase_front();
     }
-    if ((dragging || resizing) && focus >= 0 && wins[focus].open) {
-        if (resizing && band_live) {
+    if ((dragging || resizing) && move_win >= 0 && wins[move_win].open) {
+        if ((resizing || (dragging && !move_live)) && band_live) {
             move_prev_x = band_x;
             move_prev_y = band_y;
             move_prev_w = band_w;
             move_prev_h = band_h;
         } else {
-            move_prev_x = wins[focus].x;
-            move_prev_y = wins[focus].y;
-            move_prev_w = wins[focus].w;
-            move_prev_h = wins[focus].h;
+            move_prev_x = wins[move_win].x;
+            move_prev_y = wins[move_win].y;
+            move_prev_w = wins[move_win].w;
+            move_prev_h = wins[move_win].h;
         }
         move_prev_valid = 1;
     }
