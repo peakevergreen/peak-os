@@ -1,5 +1,16 @@
 #include "css.h"
+#include "fb.h"
 #include "util.h"
+
+/* Same as desktop_u — keep css_layout free of desktop_internal.h. */
+static int layout_u(int v) {
+    if (v < 0)
+        v = 0;
+    return (int)((uint32_t)v * fb_ui_scale());
+}
+
+static int layout_cell_h(void) { return (int)fb_cell_h(); }
+
 
 static int sel_match(struct dom_document *doc, int node_id, const char *sel) {
     struct dom_node *n = dom_node(doc, node_id);
@@ -142,26 +153,43 @@ static int push_box(struct css_box *boxes, int max_boxes, int *n, int *y, int *x
         return -1;
     int display = st->display;
     int block = force_block || display == 0;
+    int gap_y = layout_u(4);
+    int gap_x = layout_u(8);
+    int min_w = layout_u(40);
     int w = content_w - (st->margin + st->padding) * 2;
     if (st->width > 0 && st->width < w)
         w = st->width;
     if (st->max_width > 0 && st->max_width < w)
         w = st->max_width;
-    if (w < 40)
-        w = content_w > 40 ? content_w - 8 : content_w;
-    int h = st->height > 0 ? st->height : (st->font_size ? st->font_size + 6 : 20);
+    if (w < min_w)
+        w = content_w > min_w ? content_w - gap_x : content_w;
+    /* Heights track Peak cells / UI scale, not raw CSS px defaults. */
+    int h;
+    if (st->height > 0)
+        h = layout_u(st->height);
+    else if (st->font_size > 0)
+        h = layout_u(st->font_size) + layout_u(6);
+    else
+        h = layout_cell_h();
+    if (h < layout_cell_h())
+        h = layout_cell_h();
     if (kind == 1) { /* image */
         if (st->height > 0)
-            h = st->height;
+            h = layout_u(st->height);
         else
-            h = 48;
+            h = layout_u(48);
         if (st->width > 0)
             w = st->width;
     }
     if (kind == 2 || kind == 3) {
-        h = 24;
-        if (w > 280)
-            w = 280;
+        if (st->height > 0)
+            h = layout_u(st->height);
+        else
+            h = layout_u(24);
+        if (h < layout_cell_h())
+            h = layout_cell_h();
+        if (w > layout_u(280))
+            w = layout_u(280);
     }
 
     if (block || display != 1) {
@@ -171,11 +199,11 @@ static int push_box(struct css_box *boxes, int max_boxes, int *n, int *y, int *x
     } else {
         if (*x_inline + w > content_w) {
             *x_inline = st->margin + st->padding;
-            *y += h + 4;
+            *y += h + gap_y;
         }
         boxes[*n].x = *x_inline;
         boxes[*n].y = *y;
-        *x_inline += w + 8;
+        *x_inline += w + gap_x;
     }
     boxes[*n].node_id = node_id;
     boxes[*n].w = w;
@@ -187,7 +215,7 @@ static int push_box(struct css_box *boxes, int max_boxes, int *n, int *y, int *x
     else
         boxes[*n].text[0] = '\0';
     if (block || display != 1)
-        *y = boxes[*n].y + h + 4 + st->margin;
+        *y = boxes[*n].y + h + gap_y + st->margin;
     (*n)++;
     return 0;
 }
@@ -234,7 +262,10 @@ int css_layout(struct dom_document *doc, struct css_sheet *sheet,
             while (*p && n < max_boxes) {
                 char line[160];
                 size_t li = 0;
-                int cols = content_w / 8;
+                int glyph_w = (int)fb_cell_w();
+                if (glyph_w < 1)
+                    glyph_w = 8;
+                int cols = content_w / glyph_w;
                 if (cols < 20)
                     cols = 20;
                 if (cols > 150)
@@ -258,7 +289,7 @@ int css_layout(struct dom_document *doc, struct css_sheet *sheet,
             continue;
 
         if (!strcmp(node->tag, "br")) {
-            y += 16;
+            y += layout_cell_h();
             x_inline = 0;
             continue;
         }

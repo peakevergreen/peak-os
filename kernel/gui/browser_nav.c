@@ -444,7 +444,7 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
                         return;
                     if (form >= 0 && !t->jsh.prevent_default)
                         browser_form_submit(t, form);
-                    browser_rebuild_layout(t, (int)(w > 40 ? w - 24 : 640));
+                    browser_rebuild_layout(t, browser_layout_content_w());
                     needs_redraw = 1;
                     return;
                 }
@@ -452,7 +452,7 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
                     browser_js_dispatch_click(&t->jsh, b->node_id);
                 if (browser_js_flush_pending_nav(&t->jsh))
                     return;
-                browser_rebuild_layout(t, (int)(w > 40 ? w - 24 : 640));
+                browser_rebuild_layout(t, browser_layout_content_w());
                 needs_redraw = 1;
                 break;
             }

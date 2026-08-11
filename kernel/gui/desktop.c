@@ -599,6 +599,8 @@ void desktop_run(void) {
                     surface_ensure(&wins[mw].surf, wins[mw].w, wins[mw].h);
                     surface_mark_dirty(&wins[mw].surf);
                     dirty_bits |= DIRTY_FULL;
+                    if (wins[mw].kind == APP_BROWSER)
+                        browser_on_ui_scale();
                 }
             } else if (resizing) {
                 dirty_bits |= DIRTY_FULL;

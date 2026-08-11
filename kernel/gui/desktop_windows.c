@@ -142,6 +142,8 @@ void desktop_rescale_windows(void) {
         surface_ensure(&wins[i].surf, wins[i].w, wins[i].h);
         surface_mark_dirty(&wins[i].surf);
     }
+    /* Rebuild CSS layouts after geometry + scale are live. */
+    browser_on_ui_scale();
 }
 
 const char *desktop_app_title(enum app_kind k) {
@@ -219,6 +221,8 @@ void desktop_maximize_win(int idx) {
     surface_ensure(&w->surf, w->w, w->h);
     surface_mark_dirty(&w->surf);
     dirty_bits |= DIRTY_MOVE;
+    if (w->kind == APP_BROWSER)
+        browser_on_ui_scale();
 }
 
 void desktop_minimize_win(int idx) {

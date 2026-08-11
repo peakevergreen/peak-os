@@ -184,7 +184,9 @@ void browser_bookmark_go(int idx);
 int  browser_ctx_menu(struct ctx_menu_item *items, int max_items);
 int  browser_ctx_action(int action_id);
 void browser_tab_teardown_js(struct br_tab *t);
+int  browser_layout_content_w(void);
 void browser_rebuild_layout(struct br_tab *t, int content_w);
+void browser_on_ui_scale(void);
 int  browser_is_local_host(const char *url);
 void browser_normalize_url(const char *in, char *out, size_t out_cap);
 

@@ -22,6 +22,8 @@ int  browser_wants_redraw(void);
 void browser_clear_wants_redraw(void);
 /* Zero cached chrome hit rects (call on UI scale change before redraw). */
 void browser_clear_hit_rects(void);
+/* Rebuild CSS layouts for all tabs after UI scale or Browser resize. */
+void browser_on_ui_scale(void);
 /* Drain per-tab JS timers/microtasks; may set wants_redraw. */
 void browser_tick(void);
 /* Aggregate JS metrics across tabs (for Monitor). */

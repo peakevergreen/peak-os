@@ -1,6 +1,7 @@
 #include "browser.h"
 #include "browser_isolation.h"
 #include "browser_internal.h"
+#include "desktop_internal.h"
 #include "privacy.h"
 #include "browser_js.h"
 #include "webapi.h"
@@ -10,6 +11,7 @@
 #include "util.h"
 #include "dom.h"
 #include "css.h"
+#include "fb.h"
 #include "js.h"
 #include "heap.h"
 #include "timer.h"
@@ -312,10 +314,25 @@ static void load_page_images(struct br_tab *t) {
     kfree(buf);
 }
 
+/* Match browser_draw content width: draw_w - pad*2 - 12 (pad=6 → 24). */
+int browser_layout_content_w(void) {
+    int bi = desktop_find_win(APP_BROWSER);
+    if (bi < 0 || !wins[bi].open)
+        return 640;
+    uint32_t draw_w = wins[bi].w > desktop_u(8) ? wins[bi].w - desktop_u(8) : wins[bi].w;
+    int cw = (int)draw_w - 24;
+    if (cw < 40)
+        cw = 40;
+    return cw;
+}
+
 void browser_rebuild_layout(struct br_tab *t, int content_w) {
+    if (content_w < 40)
+        content_w = 40;
     t->nboxes = css_layout(&t->doc, &t->sheet, t->boxes, BR_MAX_BOXES, content_w);
     t->use_layout = t->nboxes > 0;
     /* Sync image box geometry from layout. */
+    int img_fallback_h = (int)(48u * fb_ui_scale());
     for (int i = 0; i < t->nimages; i++) {
         t->images[i].x = t->images[i].y = 0;
         t->images[i].w = (int)t->images[i].pw;
@@ -328,7 +345,7 @@ void browser_rebuild_layout(struct br_tab *t, int content_w) {
                 t->images[i].y = t->boxes[b].y;
                 if (t->images[i].pw > 0) {
                     t->boxes[b].w = t->images[i].w;
-                    t->boxes[b].h = t->images[i].h > 0 ? t->images[i].h : 48;
+                    t->boxes[b].h = t->images[i].h > 0 ? t->images[i].h : img_fallback_h;
                     t->images[i].h = t->boxes[b].h;
                 }
                 break;
@@ -337,6 +354,16 @@ void browser_rebuild_layout(struct br_tab *t, int content_w) {
     }
     if (t->use_layout)
         snprintf(t->layout_mode, sizeof(t->layout_mode), "css");
+}
+
+void browser_on_ui_scale(void) {
+    int cw = browser_layout_content_w();
+    for (int i = 0; i < ntabs; i++) {
+        if (!tabs[i].used || !tabs[i].use_layout)
+            continue;
+        browser_rebuild_layout(&tabs[i], cw);
+    }
+    needs_redraw = 1;
 }
 
 static void load_document(struct br_tab *t, const char *html) {
@@ -393,7 +420,7 @@ static void load_document(struct br_tab *t, const char *html) {
     }
     t->js_ok = !script_failed;
 
-    browser_rebuild_layout(t, 640);
+    browser_rebuild_layout(t, browser_layout_content_w());
     /* Prefer CSS layout whenever we have enough boxes; reader only on hard fail. */
     if (t->nboxes >= 2)
         t->use_layout = 1;
@@ -826,7 +853,7 @@ void browser_tick(void) {
             continue;
         if (tabs[i].dom_dirty) {
             tabs[i].dom_dirty = 0;
-            browser_rebuild_layout(&tabs[i], 640);
+            browser_rebuild_layout(&tabs[i], browser_layout_content_w());
             needs_redraw = 1;
         }
         /* Do not dirty for js_pending_work() — future timers must not peg paint. */
