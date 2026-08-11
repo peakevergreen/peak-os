@@ -197,6 +197,8 @@ int desktop_hit_resize_edge(struct win *w, int32_t mx, int32_t my);
 int desktop_hit_resize_grip(struct win *w, int32_t mx, int32_t my);
 void desktop_clamp_win_geom(struct win *w);
 void desktop_rescale_windows(void);
+/* After fb_set_ui_scale: dismiss overlays, abort gestures, clear hits, rescale. */
+void desktop_on_ui_scale_changed(void);
 const char *desktop_app_title(enum app_kind k);
 int desktop_find_win(enum app_kind k);
 void desktop_raise_win(int idx);
@@ -288,6 +290,7 @@ void desktop_terminal_select_end(void);
 
 void desktop_files_init(void);
 void desktop_files_goto(const char *dir, const char *select_name);
+void desktop_files_clear_crumb_hits(void);
 void desktop_files_draw(struct win *w);
 int desktop_files_key(int key);
 void desktop_files_wheel(int wheel);
@@ -346,6 +349,7 @@ void desktop_settings_init(void);
 void desktop_settings_draw(struct win *w);
 int desktop_settings_click(struct win *w, int32_t mx, int32_t my);
 int desktop_settings_key(int key);
+void desktop_settings_hits_reset(void);
 
 void desktop_agent_init(void);
 void desktop_app_opened(enum app_kind k);

@@ -10,9 +10,7 @@ void window_draw_frame(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
     uint32_t title_fg = t->fg;
     uint32_t shadow = t->bg;
     uint32_t s = fb_ui_scale();
-    uint32_t title_h = fb_cell_h() + 4 * s;
-    if (title_h < 22)
-        title_h = 22;
+    uint32_t title_h = desktop_title_h();
     uint32_t sh = 4 * s;
 
     fb_fill_rect(x + sh, y + sh, w, h, shadow);

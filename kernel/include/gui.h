@@ -14,5 +14,7 @@ void gui_term_set_edit(const char *prompt, const char *text, uint32_t caret,
 
 void window_draw_frame(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                        const char *title, uint32_t bg);
+/* Shared with window frames, client origins, and hit tests. */
+uint32_t desktop_title_h(void);
 
 #endif
