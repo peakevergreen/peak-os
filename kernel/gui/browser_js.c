@@ -58,12 +58,20 @@ int browser_js_flush_pending_nav(struct browser_js_host *h) {
     snprintf(url, sizeof(url), "%s", h->pending_url);
     h->pending_nav = 0;
     h->pending_url[0] = '\0';
+    /* Navigate the tab that owns this host — not browser_cur()/active. */
+    int tab = browser_tab_index_for_js_host(h);
     if (kind == 2) {
-        browser_reload();
+        if (tab >= 0)
+            browser_reload_tab(tab);
+        else
+            browser_reload();
         return 1;
     }
     if (kind == 1 && url[0]) {
-        browser_go(url);
+        if (tab >= 0)
+            browser_go_tab(tab, url);
+        else
+            browser_go(url);
         return 1;
     }
     return 0;
