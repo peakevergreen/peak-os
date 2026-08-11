@@ -280,6 +280,8 @@ static int webapi_json_parse(struct js_runtime *rt, const char *text, struct js_
 static int stub_response_text(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
     (void)argc;
     (void)argv;
+    if (!js_rt_obj_is_live(rt, ud))
+        return stub_fail(rt, ret, "Response.text: dead response");
     struct js_value resp;
     resp.type = JT_OBJ;
     resp.u.o = ud;
@@ -292,6 +294,8 @@ static int stub_response_text(struct js_runtime *rt, int argc, void *argv, void 
 
 static int stub_response_json(struct js_runtime *rt, int argc, void *argv, void *ret, void *ud) {
     (void)argc; (void)argv;
+    if (!js_rt_obj_is_live(rt, ud))
+        return stub_fail(rt, ret, "Response.json: dead response");
     struct js_value resp; resp.type = JT_OBJ; resp.u.o = ud;
     struct js_value body;
     if (js_val_get_prop(rt, &resp, "bodyText", &body) != 0 ||
@@ -623,12 +627,11 @@ static int stub_abort_fn(struct js_runtime *rt, int argc, void *argv, void *ret,
     (void)argc;
     (void)argv;
     js_val_set_undefined(ret);
-    struct js_object *sig_obj = ud;
-    if (!sig_obj)
+    if (!js_rt_obj_is_live(rt, ud))
         return 0;
     struct js_value signal;
     signal.type = JT_OBJ;
-    signal.u.o = sig_obj;
+    signal.u.o = (struct js_object *)ud;
     struct js_value t;
     js_val_set_bool(&t, 1);
     js_val_set_prop(rt, &signal, "aborted", &t);
