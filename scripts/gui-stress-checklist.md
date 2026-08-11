@@ -120,3 +120,16 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] `setTimeout(() => location.assign('peak://demo'), 0)` — no Exception 13 mid-timer
 - [ ] Monitor shows JS tab/object/timer counters when Browser has run scripts
 - [ ] External site that breaks JS budgets still shows reader fallback text
+
+## Stability campaign (regression)
+
+True idle must reach `hlt` (no forever `dirty_bits` / deferred-present busy-spin).
+
+- [ ] Idle desktop with Browser + pending `setTimeout`: fan settles; serial not flooded with presents
+- [ ] Sticky key: Shift+letter release order — no autorepeat flood; another key clears
+- [ ] Agent: second write while pending shows busy / already-pending (not opaque deny)
+- [ ] JS: close non-last tab; `location.assign` from timer — no Exception 13
+- [ ] Opaque title-drag then close/Esc: gesture aborts; no stuck underlay
+- [ ] Autosave / disksave: GUI stays interactive; VFS write during save returns busy
+- [ ] PeakFS load of corrupt/truncated image: fail closed (no half-cleared workspace)
+- [ ] Context menu: open menu → Ctrl+W target window → click menu item is a no-op
