@@ -123,24 +123,108 @@ void desktop_clamp_win_geom(struct win *w) {
         w->y = max_h > w->h ? max_h - w->h : 0;
 }
 
+/* Default open size at the current UI scale (shared by open + rescale). */
+static void desktop_app_default_size(enum app_kind k, uint32_t *out_w, uint32_t *out_h) {
+    struct framebuffer *fb = fb_get();
+    uint32_t cw = fb_cell_w();
+    uint32_t ch = fb_cell_h();
+    uint32_t w = TERM_COLS * cw + desktop_u(24);
+    uint32_t h = desktop_title_h() + TERM_VIEW * ch + desktop_u(40);
+
+    if (w < desktop_u(420))
+        w = desktop_u(420);
+
+    switch (k) {
+    case APP_SETTINGS:
+        w = desktop_u(480);
+        h = desktop_title_h() + desktop_u(380);
+        break;
+    case APP_AGENT:
+        w = desktop_u(420);
+        h = desktop_title_h() + desktop_u(260);
+        break;
+    case APP_GAME:
+        w = desktop_u(420);
+        h = desktop_title_h() + desktop_u(220);
+        break;
+    case APP_BROWSER:
+        w = desktop_u(520);
+        h = desktop_title_h() + desktop_u(320);
+        break;
+    case APP_MONITOR:
+        w = desktop_u(640);
+        h = desktop_title_h() + desktop_u(460);
+        break;
+    case APP_FILES:
+        w = desktop_u(480);
+        h = desktop_title_h() + desktop_u(360);
+        break;
+    case APP_NOTEPAD:
+        w = desktop_u(520);
+        h = desktop_title_h() + desktop_u(360);
+        break;
+    case APP_IMAGES:
+        w = desktop_u(560);
+        h = desktop_title_h() + desktop_u(420);
+        break;
+    case APP_DISKS:
+        w = desktop_u(480);
+        h = desktop_title_h() + desktop_u(340);
+        break;
+    case APP_NETEXP:
+        w = desktop_u(520);
+        h = desktop_title_h() + desktop_u(320);
+        break;
+    case APP_NETCTL:
+        w = desktop_u(520);
+        h = desktop_title_h() + desktop_u(380);
+        break;
+    case APP_TERM:
+        break;
+    }
+
+    if (fb->width > desktop_u(40) && w > (uint32_t)fb->width - desktop_u(40))
+        w = (uint32_t)fb->width - desktop_u(40);
+    if (out_w)
+        *out_w = w;
+    if (out_h)
+        *out_h = h;
+}
+
 void desktop_rescale_windows(void) {
     struct framebuffer *fb = fb_get();
+
     browser_clear_hit_rects();
     for (int i = 0; i < MAX_WINS; i++) {
-        if (!wins[i].open)
+        struct win *w = &wins[i];
+        uint32_t def_w, def_h;
+
+        if (!w->open)
             continue;
-        if (wins[i].maximized) {
-            wins[i].x = 0;
-            wins[i].y = 0;
-            wins[i].w = (uint32_t)fb->width;
-            wins[i].h = (uint32_t)fb->height > desktop_taskbar_h()
-                            ? (uint32_t)fb->height - desktop_taskbar_h()
-                            : (uint32_t)fb->height;
+
+        desktop_app_default_size(w->kind, &def_w, &def_h);
+
+        if (w->maximized) {
+            /* Keep maximized fill; refresh restore geom to the new defaults. */
+            w->rw = def_w;
+            w->rh = def_h;
+            w->x = 0;
+            w->y = 0;
+            w->w = (uint32_t)fb->width;
+            w->h = (uint32_t)fb->height > desktop_taskbar_h()
+                       ? (uint32_t)fb->height - desktop_taskbar_h()
+                       : (uint32_t)fb->height;
         } else {
-            desktop_clamp_win_geom(&wins[i]);
+            /* Terminal: TERM_COLS * cell_w (+ chrome / TERM_VIEW rows).
+             * Others: open_app defaults so scale↓ is not huge and scale↑
+             * is not min-clamp only. */
+            w->w = def_w;
+            w->h = def_h;
+            desktop_clamp_win_geom(w);
         }
-        surface_ensure(&wins[i].surf, wins[i].w, wins[i].h);
-        surface_mark_dirty(&wins[i].surf);
+
+        surface_ensure(&w->surf, w->w, w->h);
+        surface_mark_dirty(&w->surf);
     }
     /* Rebuild CSS layouts after geometry + scale are live. */
     browser_on_ui_scale();
@@ -295,78 +379,37 @@ int desktop_open_app(enum app_kind k) {
         }
     if (slot < 0)
         return -1;
-    struct framebuffer *fb = fb_get();
-    uint32_t cw = fb_cell_w();
-    uint32_t ch = fb_cell_h();
     memset(&wins[slot], 0, sizeof(wins[slot]));
     wins[slot].kind = k;
     wins[slot].open = 1;
-    wins[slot].w = TERM_COLS * cw + desktop_u(24);
-    if (wins[slot].w < desktop_u(420))
-        wins[slot].w = desktop_u(420);
-    wins[slot].h = desktop_title_h() + TERM_VIEW * ch + desktop_u(40);
+    desktop_app_default_size(k, &wins[slot].w, &wins[slot].h);
     if (k == APP_TERM) {
         desktop_term_reset_slot(slot);
         desktop_term_activate(slot);
         shell_redraw_prompt();
     }
     if (k == APP_SETTINGS) {
-        wins[slot].w = desktop_u(480);
-        wins[slot].h = desktop_title_h() + desktop_u(380);
         settings_page = 0;
         desktop_settings_init();
     }
-    if (k == APP_AGENT) {
-        wins[slot].w = desktop_u(420);
-        wins[slot].h = desktop_title_h() + desktop_u(260);
+    if (k == APP_AGENT)
         desktop_app_opened(k);
-    }
-    if (k == APP_GAME) {
-        wins[slot].w = desktop_u(420);
-        wins[slot].h = desktop_title_h() + desktop_u(220);
+    if (k == APP_GAME)
         game_reset();
-    }
-    if (k == APP_BROWSER) {
-        wins[slot].w = desktop_u(520);
-        wins[slot].h = desktop_title_h() + desktop_u(320);
+    if (k == APP_BROWSER)
         browser_reset();
-    }
-    if (k == APP_MONITOR) {
-        wins[slot].w = desktop_u(640);
-        wins[slot].h = desktop_title_h() + desktop_u(460);
+    if (k == APP_MONITOR)
         monitor_reset();
-    }
-    if (k == APP_FILES) {
-        wins[slot].w = desktop_u(480);
-        wins[slot].h = desktop_title_h() + desktop_u(360);
-    }
-    if (k == APP_NOTEPAD) {
-        wins[slot].w = desktop_u(520);
-        wins[slot].h = desktop_title_h() + desktop_u(360);
+    if (k == APP_NOTEPAD)
         desktop_notepad_init();
-    }
-    if (k == APP_IMAGES) {
-        wins[slot].w = desktop_u(560);
-        wins[slot].h = desktop_title_h() + desktop_u(420);
+    if (k == APP_IMAGES)
         desktop_images_init();
-    }
-    if (k == APP_DISKS) {
-        wins[slot].w = desktop_u(480);
-        wins[slot].h = desktop_title_h() + desktop_u(340);
+    if (k == APP_DISKS)
         desktop_disks_init();
-    }
-    if (k == APP_NETEXP) {
-        wins[slot].w = desktop_u(520);
-        wins[slot].h = desktop_title_h() + desktop_u(320);
+    if (k == APP_NETEXP)
         desktop_netexp_init();
-    }
-    if (k == APP_NETCTL) {
-        wins[slot].w = desktop_u(520);
-        wins[slot].h = desktop_title_h() + desktop_u(380);
+    if (k == APP_NETCTL)
         desktop_netctl_init();
-    }
-    if (wins[slot].w > fb->width - desktop_u(40))
-        wins[slot].w = (uint32_t)fb->width - desktop_u(40);
     wins[slot].x = desktop_u(40) + (uint32_t)(slot * 24);
     wins[slot].y = desktop_u(40) + (uint32_t)(slot * 24);
     desktop_clamp_win_geom(&wins[slot]);
