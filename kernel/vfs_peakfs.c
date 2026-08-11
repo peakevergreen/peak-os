@@ -5,6 +5,7 @@
 #include "privacy.h"
 #include "heap.h"
 #include "blobstore.h"
+#include "sched.h"
 
 /* Keep in sync with AGENT_AUDIT_PATH in agent_internal.h */
 #define PEAKFS_AUDIT_PATH "/var/peak/audit.log"
@@ -204,6 +205,7 @@ static int stream_write_entry(struct stream_ctx *c, const char *path, const void
                 return -1;
             p += chunk;
             left -= chunk;
+            sched_maybe_preempt();
         }
     }
     c->count++;
@@ -251,6 +253,7 @@ static int export_stream_cb(const char *path, struct vfs_node *node, void *vctx)
             if (stream_write(c, chunk, want) != 0)
                 return -1;
             pos += want;
+            sched_maybe_preempt();
         }
         c->count++;
         return 0;

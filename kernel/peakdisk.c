@@ -28,6 +28,8 @@ static uint32_t autosave_interval_sec = PEAKDISK_AUTOSAVE_DEFAULT_SEC;
 static uint64_t last_save_uptime_sec;
 static uint64_t dirty_since_uptime_sec;
 
+static void peakdisk_save_worker(void);
+
 void peakdisk_set_passphrase(const char *pass) {
     memzero_explicit(g_pass, sizeof(g_pass));
     g_pass_len = 0;
@@ -54,6 +56,8 @@ static int write_payload_streamed(const uint8_t *data, uint32_t len) {
         if (blockdev_write(PEAKDISK_LBA0 + 1 + s, 1, sector) != 0)
             return -1;
         off += chunk;
+        if ((s & 15u) == 15u)
+            sched_maybe_preempt();
     }
     return 0;
 }
@@ -98,6 +102,12 @@ uint32_t peakdisk_autosave_interval_sec(void) {
 }
 
 void peakdisk_autosave_tick(void) {
+    /* Retry worker spawn if queued but never started (task table full). */
+    if (save_queued && !save_busy) {
+        if (sched_spawn_kthread("disksave", peakdisk_save_worker) == 0)
+            return;
+        return;
+    }
     if (!workspace_dirty || !autosave_interval_sec || !blockdev_present())
         return;
     if (save_busy || save_queued)
@@ -154,6 +164,8 @@ int peakdisk_save(void) {
         return -1;
     }
     save_busy = 1;
+    peakdisk_progress_pct = 10;
+    sched_maybe_preempt();
 
     int need = vfs_export_ramdisk_size();
     if (need < 12) {
@@ -177,6 +189,8 @@ int peakdisk_save(void) {
         save_busy = 0;
         return -1;
     }
+    peakdisk_progress_pct = 25;
+    sched_maybe_preempt();
     int n = vfs_export_ramdisk(blob, (size_t)need);
     if (n < 12) {
         peakdisk_set_err(vfs_export_last_error()[0] ? vfs_export_last_error() : "PeakFS export failed");
@@ -193,6 +207,8 @@ int peakdisk_save(void) {
     uint8_t *enc = NULL;
     int encrypted = 0;
 
+    peakdisk_progress_pct = 45;
+    sched_maybe_preempt();
     /* PEAKDSK3: passphrase PBKDF2 → volume key. Key never stored in header.
      * Without a passphrase, fall back to clear PEAKDSK1 (no PEAKDSK2 header key). */
     if (random_ready(RANDOM_DOMAIN_CRYPTO) && g_pass_len > 0) {
@@ -223,6 +239,8 @@ int peakdisk_save(void) {
             }
         }
     }
+    peakdisk_progress_pct = 70;
+    sched_maybe_preempt();
     if (!encrypted) {
         memcpy(hdr, "PEAKDSK1", 8);
         memcpy(hdr + 8, &sz, 4);
@@ -306,8 +324,9 @@ int peakdisk_save_async(void) {
     }
     save_queued = 1;
     if (sched_spawn_kthread("disksave", peakdisk_save_worker) < 0) {
-        save_queued = 0;
-        return peakdisk_save();
+        /* Keep queued — never sync-save on the GUI thread; retry from tick. */
+        peakdisk_set_err("save queued (waiting for worker slot)");
+        return 0;
     }
     return 0;
 }

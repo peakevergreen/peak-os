@@ -41,6 +41,14 @@ static void vfs_set_error_path(const char *path, const char *msg) {
 static void vfs_note_workspace_dirty(void) {
     peakdisk_mark_dirty();
 }
+
+static int vfs_reject_if_saving(void) {
+    if (peakdisk_busy()) {
+        vfs_set_error("PeakDisk save in progress");
+        return PEAK_EBUSY;
+    }
+    return 0;
+}
 /* First-character child buckets: 0 = empty, else 1-based index into nodes[].
  * 16 buckets (was 32) halves BSS (~128 KiB) with the same first-char probe. */
 #define VFS_CHILD_BUCKETS 8u
@@ -308,6 +316,9 @@ struct vfs_node *vfs_create_file(const char *path) {
 }
 
 int vfs_write_file(const char *path, const void *data, size_t len) {
+    int busy = vfs_reject_if_saving();
+    if (busy)
+        return busy;
     char resolved[VFS_PATH_MAX];
     int pr = path_for_io(path, resolved, sizeof(resolved));
     if (pr != 0) return pr;
@@ -340,6 +351,9 @@ int vfs_write_file(const char *path, const void *data, size_t len) {
 }
 
 int vfs_bind_blob(const char *path, uint32_t blob_id, size_t size) {
+    int busy = vfs_reject_if_saving();
+    if (busy)
+        return busy;
     struct vfs_node *f = vfs_create_file(path);
     if (!f || f->type != VFS_FILE || !blob_id)
         return PEAK_EINVAL;
@@ -399,6 +413,9 @@ int vfs_read_at(const char *path, size_t off, void *buf, size_t len, size_t *out
 }
 
 int vfs_write_at(const char *path, size_t off, const void *buf, size_t len) {
+    int busy = vfs_reject_if_saving();
+    if (busy)
+        return busy;
     char resolved[VFS_PATH_MAX];
     int pr = path_for_io(path, resolved, sizeof(resolved));
     if (pr != 0) return pr;
@@ -582,6 +599,9 @@ void vfs_mode_string(enum vfs_type type, uint16_t mode, char *buf, size_t len) {
 }
 
 int vfs_chmod(const char *path, uint16_t mode) {
+    int busy = vfs_reject_if_saving();
+    if (busy)
+        return busy;
     struct vfs_node *n = vfs_lookup(path);
     if (!n)
         return PEAK_ENOENT;
@@ -611,6 +631,9 @@ int vfs_readlink(const char *path, char *buf, size_t buf_len, size_t *out_len) {
     vfs_set_error(""); return 0;
 }
 int vfs_symlink(const char *target, const char *linkpath) {
+    int busy = vfs_reject_if_saving();
+    if (busy)
+        return busy;
     if (!target || !target[0] || !linkpath) return PEAK_EINVAL;
     if (vfs_lookup(linkpath)) return PEAK_EEXIST;
     size_t tlen = strlen(target); if (tlen >= VFS_PATH_MAX) return PEAK_EINVAL;
@@ -658,6 +681,9 @@ static void unlink_from_parent(struct vfs_node *n) {
 }
 
 int vfs_unlink(const char *path) {
+    int busy = vfs_reject_if_saving();
+    if (busy)
+        return busy;
     struct vfs_node *n = vfs_lookup(path);
     if (!n)
         return PEAK_ENOENT;
@@ -696,6 +722,9 @@ int vfs_unlink(const char *path) {
 }
 
 int vfs_rmdir(const char *path) {
+    int busy = vfs_reject_if_saving();
+    if (busy)
+        return busy;
     struct vfs_node *n = vfs_lookup(path);
     if (!n)
         return PEAK_ENOENT;
@@ -733,6 +762,9 @@ int vfs_remove_tree(const char *path) {
 }
 
 int vfs_rename(const char *oldp, const char *newp) {
+    int busy = vfs_reject_if_saving();
+    if (busy)
+        return busy;
     struct vfs_node *n = vfs_lookup(oldp);
     if (!n || n == root)
         return PEAK_ENOENT;

@@ -40,6 +40,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Session lock / power confirm: idle does not spin-present every tick; Enter/Y/N still work
 - [ ] Idle with Browser open (pending setTimeout): CPU settles / hlt — no busy-spin present
 - [ ] Held mouse button alone does not prevent idle lock forever
+- [ ] Dirty workspace → wait autosave: desktop stays interactive (disksave yields)
 
 ## Pi HID (aarch64)
 
