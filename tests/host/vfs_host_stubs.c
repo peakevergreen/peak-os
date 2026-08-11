@@ -162,3 +162,16 @@ void privacy_set_listeners_localhost_only(int on) {
 
 void peakdisk_mark_dirty(void) {}
 
+static int g_peakdisk_busy;
+
+int peakdisk_busy(void) {
+    return g_peakdisk_busy;
+}
+
+void vfs_host_set_peakdisk_busy(int busy) {
+    g_peakdisk_busy = busy;
+}
+
+void sched_maybe_preempt(void) {}
+void sched_yield(void) {}
+

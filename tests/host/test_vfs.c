@@ -368,6 +368,17 @@ int main(void) {
 
     { reset_vfs(); vfs_mkdir("/home"); expect(vfs_write_file("/home/target","hello",5)==0,"tgt"); expect(vfs_symlink("/home/target","/home/link")==0,"sym"); struct vfs_stat st; expect(vfs_stat("/home/link",&st)==0,"st"); expect(st.type==VFS_SYMLINK,"typ"); expect(!strcmp(st.link_target,"/home/target"),"tgt2"); char target[VFS_PATH_MAX]; size_t n=0; expect(vfs_readlink("/home/link",target,sizeof(target),&n)==0,"rl"); char resolved[VFS_PATH_MAX]; expect(vfs_resolve("/home/link",resolved,sizeof(resolved))==0,"rs"); char buf[16]; size_t got=0; expect(vfs_read_file("/home/link",buf,sizeof(buf),&got)==0,"rd"); expect(vfs_symlink("target","/home/rel")==0,"rel"); expect(vfs_resolve("/home/rel",resolved,sizeof(resolved))==0,"rs2"); expect(vfs_symlink("/home/loop_b","/home/loop_a")==0,"la"); expect(vfs_symlink("/home/loop_a","/home/loop_b")==0,"lb"); expect(vfs_resolve("/home/loop_b",resolved,sizeof(resolved))==PEAK_ELOOP,"el"); }
 
+    {
+        void vfs_host_set_peakdisk_busy(int busy);
+        reset_vfs();
+        vfs_mkdir("/home");
+        vfs_host_set_peakdisk_busy(1);
+        expect(vfs_write_file("/home/x", "a", 1) == PEAK_EBUSY, "write busy during save");
+        expect(vfs_unlink("/home/x") == PEAK_EBUSY, "unlink busy during save");
+        vfs_host_set_peakdisk_busy(0);
+        expect(vfs_write_file("/home/x", "a", 1) == 0, "write after save");
+    }
+
     if (fails) {
         fprintf(stderr, "%d test(s) failed\n", fails);
         return 1;
