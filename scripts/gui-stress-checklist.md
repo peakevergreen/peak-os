@@ -70,6 +70,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] Type different text in each; confirm buffers stay independent
 - [ ] Scroll one with wheel / Up-Down; others unchanged
 - [ ] Close one; remaining still accept input
+- [ ] Close / minimize the active Terminal: shell I/O must not write a closed slot; no open Term → term_active fails closed (NULL)
 
 ## Toasts
 
@@ -170,3 +171,4 @@ Focused pass for UI crash phase-2. Overlaps sections above for idle present-stor
 - [ ] Soft-present cursor: idle with cursor over clock/toast — no cursor holes after soft present
 - [ ] Game pause when unfocused: sim ticks only while focused; minimize / unfocus / lock — idle settles (no DIRTY_GAME storm); restore+focus resumes
 - [ ] Wallpaper owned / autosave under heap pressure: autosave defers (serial: heap pressure); wallpaper survives VFS rewrite of PPM path
+- [ ] Terminal active fail-closed: close/minimize active Term — no writes to closed slot 0; reopen / other Term still accepts input

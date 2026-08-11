@@ -221,6 +221,8 @@ void desktop_minimize_win(int idx) {
         desktop_abort_pointer_gesture();
     if (wins[idx].kind == APP_FILES)
         desktop_files_drag_cancel();
+    if (wins[idx].kind == APP_TERM)
+        desktop_term_retire(idx);
     uint32_t ox = wins[idx].x, oy = wins[idx].y, ow = wins[idx].w, oh = wins[idx].h;
     int prev_focus = focus;
     wins[idx].minimized = 1;
@@ -362,6 +364,8 @@ void desktop_close_win(int idx) {
         desktop_abort_pointer_gesture();
     if (wins[idx].kind == APP_FILES)
         desktop_files_drag_cancel();
+    if (wins[idx].kind == APP_TERM)
+        desktop_term_retire(idx);
     if (ctx_menu && ctx_win == idx)
         desktop_ctx_close();
     if (wins[idx].kind == APP_BROWSER) {

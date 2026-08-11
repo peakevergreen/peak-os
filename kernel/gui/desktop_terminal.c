@@ -240,14 +240,49 @@ static struct term_state *term_active(void) {
     if (active_term >= 0 && active_term < MAX_WINS &&
         wins[active_term].open && wins[active_term].kind == APP_TERM)
         return term_slot(active_term);
+    /* Prefer the focused Terminal when active_term is stale. */
+    if (focus >= 0 && focus < MAX_WINS &&
+        wins[focus].open && wins[focus].kind == APP_TERM) {
+        active_term = focus;
+        return term_slot(focus);
+    }
     for (int i = 0; i < MAX_WINS; i++) {
         if (wins[i].open && wins[i].kind == APP_TERM) {
             active_term = i;
             return term_slot(i);
         }
     }
-    active_term = 0;
-    return term_slot(0);
+    active_term = -1;
+    return NULL;
+}
+
+static void term_clear_selection(struct term_state *t) {
+    if (!t)
+        return;
+    t->sel_row = t->sel_a = t->sel_b = -1;
+}
+
+/* Clear selection / active_term when a Terminal is closed or minimized. */
+void desktop_term_retire(int slot) {
+    if (slot < 0 || slot >= MAX_WINS)
+        return;
+    term_clear_selection(term_slot(slot));
+    if (active_term != slot)
+        return;
+    active_term = -1;
+    if (focus >= 0 && focus < MAX_WINS && focus != slot &&
+        wins[focus].open && !wins[focus].minimized &&
+        wins[focus].kind == APP_TERM) {
+        active_term = focus;
+        return;
+    }
+    for (int i = 0; i < MAX_WINS; i++) {
+        if (i == slot || !wins[i].open || wins[i].minimized ||
+            wins[i].kind != APP_TERM)
+            continue;
+        active_term = i;
+        return;
+    }
 }
 
 void desktop_term_reset_slot(int slot) {
@@ -275,6 +310,8 @@ void desktop_term_activate(int slot) {
 
 void gui_term_reset(void) {
     struct term_state *t = term_active();
+    if (!t)
+        return;
     memset(t->lines, 0, sizeof(t->lines));
     t->row = 0;
     t->col = 0;
@@ -296,6 +333,8 @@ void gui_term_reset(void) {
 void gui_term_set_edit(const char *prompt, const char *text, uint32_t caret,
                        int sel_a, int sel_b) {
     struct term_state *t = term_active();
+    if (!t)
+        return;
     char buf[TERM_COLS + 1];
     size_t o = 0;
     if (prompt) {
@@ -522,6 +561,8 @@ static void term_paste_clipboard(void) {
 
 void desktop_terminal_clear(void) {
     struct term_state *t = term_active();
+    if (!t)
+        return;
     memset(t->lines, 0, sizeof(t->lines));
     t->row = 0;
     t->col = 0;
@@ -540,6 +581,8 @@ void desktop_terminal_clear(void) {
 
 void term_clear_scrollback(void) {
     struct term_state *t = term_active();
+    if (!t)
+        return;
     for (uint32_t i = 0; i < t->row && i < TERM_ROWS; i++)
         memset(t->lines[i], 0, sizeof(t->lines[i]));
     t->scroll = 0;
@@ -553,7 +596,7 @@ void term_clear_scrollback(void) {
 
 void desktop_terminal_copy(void) {
     struct term_state *t = term_active();
-    if (!term_has_selection(t))
+    if (!t || !term_has_selection(t))
         return;
     term_copy_selection(t);
     notify_push_clipboard("selection");
@@ -581,7 +624,9 @@ void desktop_terminal_paste_previous(void) {
         return;
     }
     term_paste_buf(buf, n);
-    term_active()->full_redraw = 1;
+    struct term_state *t = term_active();
+    if (t)
+        t->full_redraw = 1;
     dirty_bits |= DIRTY_TERM;
     term_mark_active_surf_dirty();
     notify_push("Pasted previous clipboard");
@@ -590,7 +635,9 @@ void desktop_terminal_paste_previous(void) {
 
 void desktop_terminal_paste(void) {
     term_paste_clipboard();
-    term_active()->full_redraw = 1;
+    struct term_state *t = term_active();
+    if (t)
+        t->full_redraw = 1;
     dirty_bits |= DIRTY_TERM;
     term_mark_active_surf_dirty();
 }
@@ -599,6 +646,8 @@ int desktop_terminal_ctx_menu(struct ctx_menu_item *items, int max_items) {
     if (!items || max_items < 9)
         return 0;
     struct term_state *t = term_active();
+    if (!t)
+        return 0;
     int has_sel = term_has_selection(t);
     static char copysel_lbl[28];
     snprintf(copysel_lbl, sizeof(copysel_lbl), "Copy on select: %s",
@@ -662,6 +711,8 @@ int desktop_terminal_ctx_action(int action_id) {
         return 1;
     case CTX_ACT_TERM_FIND: {
         struct term_state *ts = term_active();
+        if (!ts)
+            return 1;
         ts->find_active = 1;
         ts->full_redraw = 1;
         dirty_bits |= DIRTY_TERM;
@@ -677,12 +728,13 @@ int desktop_terminal_ctx_action(int action_id) {
 }
 
 int desktop_terminal_find_active(void) {
-    return term_active()->find_active;
+    struct term_state *t = term_active();
+    return t ? t->find_active : 0;
 }
 
 void desktop_terminal_find_close(void) {
     struct term_state *t = term_active();
-    if (!t->find_active)
+    if (!t || !t->find_active)
         return;
     t->find_active = 0;
     t->find_len = 0;
@@ -695,9 +747,10 @@ void desktop_terminal_find_close(void) {
 }
 
 void desktop_terminal_select_end(void) {
-    if (!term_copy_on_select || !term_has_selection(term_active()))
+    struct term_state *t = term_active();
+    if (!t || !term_copy_on_select || !term_has_selection(t))
         return;
-    term_copy_selection(term_active());
+    term_copy_selection(t);
     notify_push_clipboard("selection");
     dirty_bits |= DIRTY_TOAST;
 }
@@ -712,6 +765,8 @@ static void term_scroll_up_buf(struct term_state *t) {
 
 void gui_term_putc(char c) {
     struct term_state *t = term_active();
+    if (!t)
+        return;
     t->scroll = 0;
     if (c == '\n') {
         t->col = 0;
@@ -877,6 +932,8 @@ int desktop_terminal_key(int key) {
         return 1;
     }
     struct term_state *tt = term_active();
+    if (!tt)
+        return 0;
     uint32_t vis = 0;
     if (active_term >= 0 && active_term < MAX_WINS && wins[active_term].open)
         term_visible_rows(&wins[active_term], &vis);
@@ -962,6 +1019,8 @@ int desktop_terminal_key(int key) {
 
 void desktop_terminal_wheel(int wheel) {
     struct term_state *tt = term_active();
+    if (!tt)
+        return;
     uint32_t vis = 0;
     if (active_term >= 0 && active_term < MAX_WINS && wins[active_term].open)
         term_visible_rows(&wins[active_term], &vis);
