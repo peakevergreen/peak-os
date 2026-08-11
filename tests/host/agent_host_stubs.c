@@ -13,6 +13,8 @@
 #include "net.h"
 #include "timer.h"
 #include "sched.h"
+#include "agent_internal.h"
+#include "agent.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +34,17 @@ static char g_dirs[16][VFS_PATH_MAX];
 static int g_dir_count;
 static int g_net_client_grant;
 
+/* Host write-approval queue (mirrors kernel agent.c for require_approval tests). */
+static int host_write_wait;
+static char host_write_path[VFS_PATH_MAX];
+static char host_write_content[AGENT_PENDING_CONTENT_MAX];
+
+void agent_host_clear_write_pending(void) {
+    host_write_wait = 0;
+    host_write_path[0] = '\0';
+    host_write_content[0] = '\0';
+}
+
 void agent_host_vfs_reset(void) {
     for (int i = 0; i < HOST_VFS_FILES; i++) {
         free(g_files[i].data);
@@ -39,6 +52,7 @@ void agent_host_vfs_reset(void) {
     }
     g_dir_count = 0;
     g_net_client_grant = 0;
+    agent_host_clear_write_pending();
 }
 
 static struct host_file *host_find(const char *path) {
@@ -272,11 +286,43 @@ int vfs_remove_tree(const char *path) {
     return PEAK_ENOENT;
 }
 
-/* Write-approval stub: treat as auto-approved path for host tool tests. */
 int agent_queue_write_approval(const char *path, const char *content) {
-    (void)path;
-    (void)content;
-    return -1;
+    if (host_write_wait)
+        return -2;
+    if (!path || !content)
+        return -1;
+    size_t cl = strlen(content);
+    if (cl >= AGENT_PENDING_CONTENT_MAX)
+        return -3;
+    size_t pl = strlen(path);
+    if (pl >= sizeof(host_write_path))
+        return -1;
+    memcpy(host_write_path, path, pl + 1);
+    memcpy(host_write_content, content, cl + 1);
+    host_write_wait = 1;
+    return 0;
+}
+
+int agent_write_pending(void) {
+    return host_write_wait;
+}
+
+const char *agent_pending_write_path(void) {
+    return host_write_wait ? host_write_path : "";
+}
+
+const char *agent_pending_write_content(void) {
+    return host_write_wait ? host_write_content : "";
+}
+
+void agent_approve_write(int yes) {
+    if (!host_write_wait)
+        return;
+    if (yes)
+        (void)vfs_write_file(host_write_path, host_write_content, strlen(host_write_content));
+    host_write_wait = 0;
+    host_write_path[0] = '\0';
+    host_write_content[0] = '\0';
 }
 
 void agent_transcript_note_audit(const char *op, const char *target, const char *decision) {

@@ -25,11 +25,18 @@ int uask_main(int argc, char **argv) {
     }
     if (argc == 2) {
         agent_ask(argv[1]);
+    } else {
+        char buf[512];
+        peak_join_args(argc, argv, 1, buf, sizeof(buf));
+        agent_ask(buf);
+    }
+    if (agent_write_pending()) {
+        console_printf(
+            "ask: write pending approval for %s\n"
+            "     open GUI → Agent (or Files/Notepad) and press Y approve / N deny\n",
+            agent_pending_write_path());
         return 0;
     }
-    char buf[512];
-    peak_join_args(argc, argv, 1, buf, sizeof(buf));
-    agent_ask(buf);
     return 0;
 }
 

@@ -187,14 +187,9 @@ int desktop_agent_key(int key) {
 }
 
 int desktop_agent_click(void) {
-    if (agent_input_len)
-        agent_ask(agent_input);
-    else
-        agent_ask("summarize workspace README");
-    agent_input_len = 0;
-    agent_input[0] = '\0';
-    agent_notify_done();
+    /* Focus only — do not submit a goal (Enter submits). */
     dirty_bits |= DIRTY_WIN;
+    desktop_mark_focus_surf_dirty();
     return 1;
 }
 

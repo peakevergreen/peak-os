@@ -120,10 +120,24 @@ int agent_tool_fs_write(const char *path, const char *content, int auto_ok) {
         return -1;
     }
     if (agent_policy_write_requires_approval() && !auto_ok) {
-        if (agent_queue_write_approval(norm, content) != 0)
-            return -1;
-        agent_audit_event("fs.write", norm, "pending");
-        return 1;
+        int q = agent_queue_write_approval(norm, content);
+        if (q == 0) {
+            agent_audit_event("fs.write", norm, "pending");
+            return 1;
+        }
+        if (q == -2) {
+            agent_audit_event("fs.write", norm, "busy");
+            agent_transcript_note_tool(
+                "write already pending — press Y/N in Agent (or Files/Notepad)");
+            return -2;
+        }
+        if (q == -3) {
+            agent_audit_event("fs.write", norm, "too-large");
+            agent_transcript_note_tool("write too large for approval buffer");
+            return -3;
+        }
+        agent_audit_event("fs.write", norm, "queue-fail");
+        return -1;
     }
     if (vfs_write_file(norm, content, strlen(content)) != 0)
         return -1;

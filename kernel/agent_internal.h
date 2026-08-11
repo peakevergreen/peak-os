@@ -28,7 +28,7 @@ int agent_policy_write_requires_approval(void);
 /* Fill human-readable deny reason (tool/path/audit). Returns 0 if written. */
 int agent_policy_deny_reason(const char *tool, const char *path, char *out, size_t out_len);
 
-/* Returns 0 ok, 1 pending approval, -1 denied/failed. */
+/* Returns 0 ok, 1 pending approval, -1 denied/failed, -2 already pending, -3 content too large. */
 int agent_queue_write_approval(const char *path, const char *content);
 
 void agent_audit_append(const char *line);
