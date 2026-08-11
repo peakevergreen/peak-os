@@ -19,7 +19,7 @@ static int repeat_key;
 static uint32_t repeat_delay_ticks = 25;
 static uint32_t repeat_rate_ticks = 3;
 static uint64_t repeat_next_tick;
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(PEAK_HOST_TEST)
 static uint16_t ps2_held_id;
 #endif
 
@@ -76,7 +76,7 @@ void keyboard_set_modifiers(int s, int c, int a) {
     shift = s; ctrl = c; alt = a;
 }
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(PEAK_HOST_TEST)
 static int kbd_wait_read(void) {
     for (int t = 100000; t; t--)
         if (inb(KBD_STATUS) & 1) return inb(KBD_DATA);
