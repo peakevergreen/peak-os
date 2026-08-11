@@ -58,10 +58,9 @@ int agent_tool_mem_recall(const char *goal, char *out, size_t out_len);
 int agent_tool_mem_store(const char *text);
 int agent_tool_peakvec_query(const char *ns, const char *query, char *out, size_t out_len);
 int agent_tool_audit_tail(char *out, size_t out_len);
+int agent_tool_fs_tree(const char *path, char *out, size_t out_len);
+int agent_tool_sys_ps(char *out, size_t out_len);
 
 void agent_plan_goal(const char *goal, char *summary, size_t summary_cap);
 
 #endif
-
-int agent_tool_fs_tree(const char *path, char *out, size_t out_len);
-int agent_tool_sys_ps(char *out, size_t out_len);

@@ -388,6 +388,14 @@ static void test_deny_reason_in_transcript(void) {
     expect(strstr(agent_host_last_transcript_tool(), "deny-tool:") != NULL, "net.ping deny in transcript");
 }
 
+static void test_planner_unparsed_goal(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    char summary[128];
+    agent_plan_goal("xyzzy plugh", summary, sizeof(summary));
+    expect(!strcmp(summary, "unparsed goal"), "unknown goal is not silent create");
+}
+
 static void test_planner_diff_and_fetch(void) {
     agent_host_vfs_reset();
     agent_policy_load_defaults();
@@ -424,6 +432,7 @@ int main(void) {
     test_fs_exec_allowlist();
     test_fs_diff_and_net_fetch();
     test_deny_reason_in_transcript();
+    test_planner_unparsed_goal();
     test_planner_diff_and_fetch();
 
     if (fails) {
