@@ -566,6 +566,24 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         } \
     } while (0)
 
+    /* Preview multi-step plans before executing. */
+    if (intent == INTENT_EDIT) {
+        agent_tool_console_print("[plan] 1. resolve path (fs.read|fs.search)");
+        agent_tool_console_print("[plan] 2. fs.read");
+        agent_tool_console_print("[plan] 3. transform");
+        agent_tool_console_print("[plan] 4. fs.write (may require Y/N)");
+        TOOL_NOTE("console.print");
+    } else if (intent == INTENT_CREATE) {
+        agent_tool_console_print("[plan] 1. fs.list workspace");
+        agent_tool_console_print("[plan] 2. scaffold template");
+        agent_tool_console_print("[plan] 3. fs.write (may require Y/N)");
+        TOOL_NOTE("console.print");
+    } else if (intent == INTENT_SUMMARIZE && slots.arg[0]) {
+        agent_tool_console_print("[plan] 1. fs.search");
+        agent_tool_console_print("[plan] 2. fs.read snippet");
+        TOOL_NOTE("console.print");
+    }
+
     if (intent == INTENT_UNKNOWN) {
         agent_tool_console_print(
             "[agent] could not parse goal. try: ask \"create fib.c\" | "
