@@ -203,6 +203,8 @@ void js_gc(struct js_runtime *rt) {
     for (int i = 0; i < 8; i++)
         if (rt->modules[i].used)
             mark_val(rt->modules[i].exports);
+    if (rt->host_mark)
+        rt->host_mark(rt, rt->host_mark_ud);
 
     uint32_t w = 0;
     for (uint32_t i = 0; i < rt->obj_count; i++) {
@@ -303,6 +305,34 @@ void js_rt_set_budgets(struct js_runtime *rt, uint32_t ins_budget, uint32_t max_
         rt->ins_budget = ins_budget;
     if (max_objs)
         rt->max_objs = max_objs;
+}
+
+void js_rt_gc(struct js_runtime *rt) {
+    js_gc(rt);
+}
+
+void js_rt_set_host_mark(struct js_runtime *rt, js_host_mark_fn fn, void *userdata) {
+    if (!rt)
+        return;
+    rt->host_mark = fn;
+    rt->host_mark_ud = userdata;
+}
+
+void js_gc_mark_val(struct js_runtime *rt, const void *val) {
+    (void)rt;
+    if (!val)
+        return;
+    mark_val(*(const struct js_value *)val);
+}
+
+void js_rt_rebind_native_userdata(struct js_runtime *rt, void *from, void *to) {
+    if (!rt || !from || from == to)
+        return;
+    for (uint32_t i = 0; i < rt->obj_count; i++) {
+        struct js_object *o = rt->objs[i];
+        if (o && o->is_native && o->userdata == from)
+            o->userdata = to;
+    }
 }
 
 void js_rt_reset(struct js_runtime *rt) {

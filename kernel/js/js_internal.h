@@ -172,6 +172,8 @@ struct js_runtime {
         struct js_value exports;
         int used;
     } modules[8];
+    js_host_mark_fn host_mark;
+    void *host_mark_ud;
 };
 
 /* compile */

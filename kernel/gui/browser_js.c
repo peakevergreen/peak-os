@@ -14,6 +14,17 @@
 #include "util.h"
 #include "heap.h"
 
+static void browser_js_mark_listeners(struct js_runtime *rt, void *ud) {
+    struct browser_js_host *h = ud;
+    if (!h)
+        return;
+    for (int i = 0; i < h->nlisteners; i++) {
+        if (!h->listeners[i].used)
+            continue;
+        js_gc_mark_val(rt, h->listeners[i].fn);
+    }
+}
+
 void browser_js_host_init(struct browser_js_host *h, struct js_runtime *rt,
                           struct dom_document *doc, int *dirty) {
     memset(h, 0, sizeof(*h));
@@ -21,6 +32,41 @@ void browser_js_host_init(struct browser_js_host *h, struct js_runtime *rt,
     h->doc = doc;
     h->dirty = dirty;
     h->handle_gen = 1;
+    if (rt)
+        js_rt_set_host_mark(rt, browser_js_mark_listeners, h);
+}
+
+void browser_js_fixup_after_move(struct browser_js_host *h, struct js_runtime *rt,
+                                   struct dom_document *doc, int *dirty, void *old_host) {
+    if (!h)
+        return;
+    h->rt = rt;
+    h->doc = doc;
+    h->dirty = dirty;
+    if (rt) {
+        js_rt_set_host_mark(rt, browser_js_mark_listeners, h);
+        if (old_host && old_host != (void *)h)
+            js_rt_rebind_native_userdata(rt, old_host, h);
+    }
+}
+
+int browser_js_flush_pending_nav(struct browser_js_host *h) {
+    if (!h || !h->pending_nav)
+        return 0;
+    int kind = h->pending_nav;
+    char url[160];
+    snprintf(url, sizeof(url), "%s", h->pending_url);
+    h->pending_nav = 0;
+    h->pending_url[0] = '\0';
+    if (kind == 2) {
+        browser_reload();
+        return 1;
+    }
+    if (kind == 1 && url[0]) {
+        browser_go(url);
+        return 1;
+    }
+    return 0;
 }
 
 void browser_js_invalidate_handles(struct browser_js_host *h) {
@@ -31,6 +77,10 @@ void browser_js_invalidate_handles(struct browser_js_host *h) {
         h->handle_gen = 1;
     h->nlisteners = 0;
     memset(h->listeners, 0, sizeof(h->listeners));
+    h->pending_nav = 0;
+    h->pending_url[0] = '\0';
+    if (h->rt)
+        js_rt_set_host_mark(h->rt, browser_js_mark_listeners, h);
 }
 
 void browser_console_clear(struct browser_js_host *h) {
@@ -423,8 +473,13 @@ int browser_js_dispatch_event(struct browser_js_host *h, int node_id, const char
             continue;
         if (strcmp(h->listeners[i].type, type) != 0)
             continue;
+        struct js_value *fn = (struct js_value *)h->listeners[i].fn;
+        if (!js_val_is_function(fn) || !fn->u.o) {
+            h->listeners[i].used = 0;
+            continue;
+        }
         struct js_value ret;
-        js_val_call(h->rt, h->listeners[i].fn, NULL, 0, NULL, &ret);
+        js_val_call(h->rt, fn, NULL, 0, NULL, &ret);
         mark_dirty(h);
     }
     return 0;
@@ -552,24 +607,29 @@ static int nat_class_toggle(struct js_runtime *rt, int argc, void *argv, void *r
 
 static int nat_location_assign(struct js_runtime *rt, int argc, void *argv, void *ret,
                                void *ud) {
-    (void)ud;
+    struct browser_js_host *h = ud;
     js_val_set_undefined(ret);
-    if (argc < 1)
+    if (!h || argc < 1)
         return 0;
     char url[160];
     js_val_to_cstring(rt, &((struct js_value *)argv)[0], url, sizeof(url));
-    if (url[0])
-        browser_go(url);
+    if (!url[0])
+        return 0;
+    h->pending_nav = 1;
+    snprintf(h->pending_url, sizeof(h->pending_url), "%s", url);
     return 0;
 }
 
 static int nat_location_reload(struct js_runtime *rt, int argc, void *argv, void *ret,
                                void *ud) {
+    struct browser_js_host *h = ud;
     (void)rt;
     (void)argc;
     (void)argv;
-    (void)ud;
     js_val_set_undefined(ret);
-    browser_reload();
+    if (!h)
+        return 0;
+    h->pending_nav = 2;
+    h->pending_url[0] = '\0';
     return 0;
 }

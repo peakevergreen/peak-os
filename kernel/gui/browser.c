@@ -61,6 +61,7 @@ void browser_tab_teardown_js(struct br_tab *t) {
         return;
     browser_js_invalidate_handles(&t->jsh);
     if (t->js) {
+        js_rt_set_host_mark(t->js, NULL, NULL);
         js_rt_destroy(t->js);
         t->js = NULL;
     }
@@ -724,6 +725,10 @@ void browser_tick(void) {
         if (!tabs[i].used || !tabs[i].js)
             continue;
         js_tick(tabs[i].js);
+        if (browser_js_flush_pending_nav(&tabs[i].jsh))
+            continue; /* tab may have been torn down / replaced */
+        if (!tabs[i].js)
+            continue;
         if (tabs[i].dom_dirty) {
             tabs[i].dom_dirty = 0;
             browser_rebuild_layout(&tabs[i], 640);
