@@ -36,19 +36,24 @@ Tool catalog and handlers live in `kernel/agent_tools.c`; policy in
 
 ## Planner
 
-Bounded in-guest rule/intent planner (not an LLM):
+Bounded in-guest rule/intent planner (not an LLM). Goals are parsed through a
+single verb+slot table (`parse_slots` in `agent_planner.c`) covering:
 
 - create / edit workspace files
-- summarize workspace (`fs.list`)
+- summarize workspace (`fs.list`) or search+snippet
 - search workspace (`fs.search`) or grep content (`fs.grep`)
 - diff two workspace files (`fs.diff`)
 - fetch URL (`net.fetch`, privacy-gated, bounded body)
 - ping host (`net.ping`, privacy-gated)
 - read a file
-- recall prior goals (`mem.recall`)
+- recall prior goals (`mem.recall`) / store note (`mem.store`)
+- PeakVec query (`peakvec.query`)
+- run allowlisted `/bin` cmd (`fs.exec`)
 - show audit tail (`audit.tail`)
-- system info (`sys.info`)
+- system info (`sys.info`) / process list (`sys.ps`) / file tree (`fs.tree`)
 - help
+
+Unrecognized goals fail loudly with a `try:` hint instead of silently creating a stub file.
 
 Session memory is structured (`turn|goal=…|t=…|p=…`) under `/var/peak/sessions/memory.txt` and **read back** on each `ask`. Turns are also upserted into PeakVec for semantic recall.
 

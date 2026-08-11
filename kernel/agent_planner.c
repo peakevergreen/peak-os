@@ -118,7 +118,8 @@ static int extract_filename(const char *goal, char *name, size_t name_len) {
 }
 
 enum agent_intent {
-    INTENT_CREATE = 1,
+    INTENT_UNKNOWN = 0,
+    INTENT_CREATE,
     INTENT_EDIT,
     INTENT_SUMMARIZE,
     INTENT_SEARCH,
@@ -132,51 +133,193 @@ enum agent_intent {
     INTENT_TREE,
     INTENT_PS,
     INTENT_HELP,
+    INTENT_PEAKVEC,
+    INTENT_STORE,
+    INTENT_RUN,
 };
 
-static enum agent_intent classify_intent(const char *goal) {
-    if (contains_ci(goal, "what did") || contains_ci(goal, "last ask") ||
-        contains_ci(goal, "remember") || contains_ci(goal, "recall") ||
-        contains_ci(goal, "memory"))
-        return INTENT_RECALL;
-    if (contains_ci(goal, "audit"))
-        return INTENT_AUDIT;
-    if (contains_ci(goal, "fetch "))
-        return INTENT_FETCH;
-    if (contains_ci(goal, "diff "))
-        return INTENT_DIFF;
-    if (contains_ci(goal, "sysinfo") || contains_ci(goal, "system info") ||
-        contains_ci(goal, "uptime"))
-        return INTENT_SYSINFO;
-    if (contains_ci(goal, "tree ") || contains_ci(goal, "file tree"))
-        return INTENT_TREE;
-    if (contains_ci(goal, " ps") || (goal[0] == 'p' && goal[1] == 's' && (goal[2] == ' ' || goal[2] == '\0')))
-        return INTENT_PS;
-    if (contains_ci(goal, "ping "))
-        return INTENT_PING;
-    if (contains_ci(goal, "search ") || contains_ci(goal, "find ") ||
-        contains_ci(goal, "grep "))
-        return INTENT_SEARCH;
-    if (contains_ci(goal, "summar") || contains_ci(goal, "list workspace") ||
-        contains_ci(goal, "what's in") || contains_ci(goal, "whats in"))
-        return INTENT_SUMMARIZE;
-    if (contains_ci(goal, "read ") || contains_ci(goal, "show ") ||
-        contains_ci(goal, "cat "))
-        return INTENT_READ;
-    if (contains_ci(goal, "edit ") || contains_ci(goal, "update ") ||
-        contains_ci(goal, "modify "))
-        return INTENT_EDIT;
-    if (contains_ci(goal, "create") || contains_ci(goal, "write ") ||
-        contains_ci(goal, "make "))
-        return INTENT_CREATE;
-    {
-        char tmp[64];
-        if (extract_filename(goal, tmp, sizeof(tmp)))
-            return INTENT_CREATE;
+struct agent_slots {
+    enum agent_intent intent;
+    char arg[160];      /* needle, host, url, memory text, cmdline, query */
+    char path[VFS_PATH_MAX];
+    char path_b[VFS_PATH_MAX];
+    int use_grep;       /* INTENT_SEARCH: prefer fs.grep */
+};
+
+/* Phrase table — first match wins. Longer / more specific phrases first. */
+static const struct {
+    const char *phrase;
+    enum agent_intent intent;
+} intent_table[] = {
+    { "what did", INTENT_RECALL },
+    { "last ask", INTENT_RECALL },
+    { "store memory", INTENT_STORE },
+    { "vector query", INTENT_PEAKVEC },
+    { "system info", INTENT_SYSINFO },
+    { "file tree", INTENT_TREE },
+    { "list workspace", INTENT_SUMMARIZE },
+    { "what's in", INTENT_SUMMARIZE },
+    { "whats in", INTENT_SUMMARIZE },
+    { "remember ", INTENT_STORE },
+    { "peakvec ", INTENT_PEAKVEC },
+    { "peakvec", INTENT_PEAKVEC },
+    { "summar", INTENT_SUMMARIZE },
+    { "memory", INTENT_RECALL },
+    { "recall", INTENT_RECALL },
+    { "remember", INTENT_RECALL },
+    { "audit", INTENT_AUDIT },
+    { "fetch ", INTENT_FETCH },
+    { "diff ", INTENT_DIFF },
+    { "sysinfo", INTENT_SYSINFO },
+    { "uptime", INTENT_SYSINFO },
+    { "tree ", INTENT_TREE },
+    { "ping ", INTENT_PING },
+    { "grep ", INTENT_SEARCH },
+    { "search ", INTENT_SEARCH },
+    { "find ", INTENT_SEARCH },
+    { "read ", INTENT_READ },
+    { "show ", INTENT_READ },
+    { "cat ", INTENT_READ },
+    { "edit ", INTENT_EDIT },
+    { "update ", INTENT_EDIT },
+    { "modify ", INTENT_EDIT },
+    { "create", INTENT_CREATE },
+    { "write ", INTENT_CREATE },
+    { "make ", INTENT_CREATE },
+    { "run ", INTENT_RUN },
+    { "help", INTENT_HELP },
+    { NULL, INTENT_UNKNOWN },
+};
+
+static void copy_token(const char *src, char *dst, size_t dst_len) {
+    size_t i = 0;
+    while (*src == ' ')
+        src++;
+    for (; *src && *src != ' ' && i + 1 < dst_len; src++)
+        dst[i++] = *src;
+    dst[i] = '\0';
+}
+
+static void copy_rest(const char *src, char *dst, size_t dst_len) {
+    size_t i = 0;
+    while (*src == ' ')
+        src++;
+    for (; *src && i + 1 < dst_len; src++)
+        dst[i++] = *src;
+    dst[i] = '\0';
+}
+
+static void workspace_path_from_name(const char *name, char *path, size_t path_len) {
+    if (!name || !name[0]) {
+        snprintf(path, path_len, "/home/dev/workspace/agent_out.txt");
+        return;
     }
-    if (contains_ci(goal, "help"))
-        return INTENT_HELP;
-    return INTENT_CREATE;
+    if (name[0] == '/') {
+        size_t i = 0;
+        for (; name[i] && i + 1 < path_len; i++)
+            path[i] = name[i];
+        path[i] = '\0';
+        return;
+    }
+    snprintf(path, path_len, "/home/dev/workspace/%s", name);
+}
+
+static void parse_slots(const char *goal, struct agent_slots *s) {
+    memset(s, 0, sizeof(*s));
+    s->intent = INTENT_UNKNOWN;
+    if (!goal || !goal[0])
+        return;
+
+    /* Bare "ps" */
+    if ((goal[0] == 'p' && goal[1] == 's' && (goal[2] == ' ' || goal[2] == '\0')) ||
+        contains_ci(goal, " ps")) {
+        s->intent = INTENT_PS;
+        return;
+    }
+
+    for (int i = 0; intent_table[i].phrase; i++) {
+        if (!contains_ci(goal, intent_table[i].phrase))
+            continue;
+        s->intent = intent_table[i].intent;
+        if (s->intent == INTENT_SEARCH && contains_ci(goal, "grep "))
+            s->use_grep = 1;
+
+        /* Slot-fill arg after the matched phrase when possible. */
+        const char *p = goal;
+        const char *ph = intent_table[i].phrase;
+        size_t plen = strlen(ph);
+        /* find phrase case-insensitively */
+        for (; *p; p++) {
+            size_t k = 0;
+            while (ph[k] && p[k]) {
+                char a = p[k], b = ph[k];
+                if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+                if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+                if (a != b)
+                    break;
+                k++;
+            }
+            if (k == plen) {
+                p += plen;
+                break;
+            }
+        }
+
+        if (s->intent == INTENT_DIFF) {
+            copy_token(p, s->path, sizeof(s->path));
+            while (*p && *p != ' ')
+                p++;
+            while (*p == ' ')
+                p++;
+            copy_token(p, s->path_b, sizeof(s->path_b));
+            if (s->path[0] && s->path[0] != '/') {
+                char tmp[VFS_PATH_MAX];
+                snprintf(tmp, sizeof(tmp), "/home/dev/workspace/%s", s->path);
+                memcpy(s->path, tmp, strlen(tmp) + 1);
+            }
+            if (!s->path_b[0])
+                snprintf(s->path_b, sizeof(s->path_b), "/home/dev/workspace/hello.c");
+            else if (s->path_b[0] != '/') {
+                char tmp[VFS_PATH_MAX];
+                snprintf(tmp, sizeof(tmp), "/home/dev/workspace/%s", s->path_b);
+                memcpy(s->path_b, tmp, strlen(tmp) + 1);
+            }
+            if (!s->path[0])
+                snprintf(s->path, sizeof(s->path), "/home/dev/workspace/README.md");
+        } else if (s->intent == INTENT_FETCH || s->intent == INTENT_PING ||
+                   s->intent == INTENT_SEARCH || s->intent == INTENT_RUN ||
+                   s->intent == INTENT_STORE || s->intent == INTENT_PEAKVEC ||
+                   s->intent == INTENT_SUMMARIZE) {
+            if (s->intent == INTENT_STORE || s->intent == INTENT_PEAKVEC ||
+                s->intent == INTENT_RUN)
+                copy_rest(p, s->arg, sizeof(s->arg));
+            else
+                copy_token(p, s->arg, sizeof(s->arg));
+        } else if (s->intent == INTENT_READ || s->intent == INTENT_EDIT ||
+                   s->intent == INTENT_CREATE || s->intent == INTENT_TREE) {
+            char name[64];
+            if (extract_filename(goal, name, sizeof(name)))
+                workspace_path_from_name(name, s->path, sizeof(s->path));
+            else if (s->intent == INTENT_TREE)
+                snprintf(s->path, sizeof(s->path), "/home/dev/workspace");
+            else if (s->intent == INTENT_READ)
+                snprintf(s->path, sizeof(s->path), "/home/dev/workspace/README.md");
+            else
+                workspace_path_from_name(NULL, s->path, sizeof(s->path));
+        }
+        return;
+    }
+
+    /* Filename-only goal → create */
+    {
+        char name[64];
+        if (extract_filename(goal, name, sizeof(name))) {
+            s->intent = INTENT_CREATE;
+            workspace_path_from_name(name, s->path, sizeof(s->path));
+            return;
+        }
+    }
+    s->intent = INTENT_UNKNOWN;
 }
 
 static void set_summary(char *summary, size_t summary_cap, const char *s) {
@@ -198,7 +341,9 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         agent_tool_console_print(recall);
     }
 
-    enum agent_intent intent = classify_intent(goal);
+    struct agent_slots slots;
+    parse_slots(goal, &slots);
+    enum agent_intent intent = slots.intent;
     char tools_used[64] = "";
     char path_used[VFS_PATH_MAX] = "";
     size_t tu = 0;
@@ -212,11 +357,20 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         } \
     } while (0)
 
-    if (contains_ci(goal, "peakvec") || contains_ci(goal, "vector query")) {
+    if (intent == INTENT_UNKNOWN) {
+        agent_tool_console_print(
+            "[agent] could not parse goal. try: ask \"create fib.c\" | "
+            "\"edit hello.c\" | \"grep needle\" | \"diff a b\" | "
+            "\"fetch http://example.com\" | \"summarize workspace\" | help");
+        TOOL_NOTE("console.print");
+        set_summary(summary, summary_cap, "unparsed goal");
+        memory_append_turn(goal, tools_used, NULL);
+        return;
+    }
+
+    if (intent == INTENT_PEAKVEC) {
         char qbuf[512];
-        const char *q = goal;
-        if (contains_ci(goal, "peakvec "))
-            q = goal + 8;
+        const char *q = slots.arg[0] ? slots.arg : goal;
         if (agent_tool_peakvec_query("agent", q, qbuf, sizeof(qbuf)) == 0) {
             TOOL_NOTE("peakvec.query");
             agent_tool_console_print(qbuf);
@@ -231,14 +385,8 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         return;
     }
 
-    if (contains_ci(goal, "remember ") || contains_ci(goal, "store memory")) {
-        const char *text = goal;
-        if (contains_ci(goal, "remember "))
-            text = goal + 9;
-        else if (contains_ci(goal, "store memory"))
-            text = goal + 12;
-        while (*text == ' ')
-            text++;
+    if (intent == INTENT_STORE) {
+        const char *text = slots.arg[0] ? slots.arg : goal;
         if (agent_tool_mem_store(text) == 0) {
             TOOL_NOTE("mem.store");
             agent_tool_console_print("[agent] stored in session memory + PeakVec");
@@ -255,7 +403,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
 
     if (intent == INTENT_TREE) {
         char buf[2048];
-        const char *root = "/home/dev/workspace";
+        const char *root = slots.path[0] ? slots.path : "/home/dev/workspace";
         if (agent_tool_fs_tree(root, buf, sizeof(buf)) == 0) {
             agent_tool_console_print(buf);
             TOOL_NOTE("fs.tree");
@@ -296,11 +444,11 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         return;
     }
 
-    if (!strncmp(goal, "run ", 4)) {
-        const char *cmdline = goal + 4;
+    if (intent == INTENT_RUN) {
+        const char *cmdline = slots.arg[0] ? slots.arg : "";
         agent_tool_console_print("[agent] fs.exec:");
         TOOL_NOTE("console.print");
-        if (agent_tool_fs_exec(cmdline) == 0) {
+        if (cmdline[0] && agent_tool_fs_exec(cmdline) == 0) {
             TOOL_NOTE("fs.exec");
             set_summary(summary, summary_cap, "ran allowlisted /bin cmd");
         } else {
@@ -360,28 +508,16 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
         return;
     }
 
-
     if (intent == INTENT_PING) {
-        char host[64];
-        host[0] = '\0';
-        const char *p = goal;
-        if (contains_ci(goal, "ping "))
-            p = goal + 5;
-        while (*p == ' ')
-            p++;
-        size_t i = 0;
-        for (; *p && *p != ' ' && i + 1 < sizeof(host); p++)
-            host[i++] = *p;
-        host[i] = '\0';
-        if (!host[0]) {
-            agent_tool_console_print("[agent] ping needs a host");
+        if (!slots.arg[0]) {
+            agent_tool_console_print("[agent] ping needs a host — try: ask \"ping example.com\"");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "ping failed");
             memory_append_turn(goal, tools_used, NULL);
             return;
         }
         char result[256];
-        if (agent_tool_net_ping(host, result, sizeof(result)) == 0) {
+        if (agent_tool_net_ping(slots.arg, result, sizeof(result)) == 0) {
             TOOL_NOTE("net.ping");
             agent_tool_console_print(result);
             TOOL_NOTE("console.print");
@@ -391,29 +527,20 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "ping failed");
         }
-        memory_append_turn(goal, tools_used, host);
+        memory_append_turn(goal, tools_used, slots.arg);
         return;
     }
 
     if (intent == INTENT_FETCH) {
-        char url[128];
-        url[0] = '\0';
-        const char *p = goal + 6;
-        while (*p == ' ')
-            p++;
-        size_t i = 0;
-        for (; *p && *p != ' ' && i + 1 < sizeof(url); p++)
-            url[i++] = *p;
-        url[i] = '\0';
-        if (!url[0]) {
-            agent_tool_console_print("[agent] fetch needs a URL");
+        if (!slots.arg[0]) {
+            agent_tool_console_print("[agent] fetch needs a URL — try: ask \"fetch http://example.com\"");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "fetch failed");
             memory_append_turn(goal, tools_used, NULL);
             return;
         }
         char result[AGENT_FETCH_BODY_MAX + 64];
-        if (agent_tool_net_fetch(url, result, sizeof(result)) == 0) {
+        if (agent_tool_net_fetch(slots.arg, result, sizeof(result)) == 0) {
             TOOL_NOTE("net.fetch");
             agent_tool_console_print(result);
             TOOL_NOTE("console.print");
@@ -423,40 +550,13 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "fetch failed");
         }
-        memory_append_turn(goal, tools_used, url);
+        memory_append_turn(goal, tools_used, slots.arg);
         return;
     }
 
     if (intent == INTENT_DIFF) {
-        char path_a[VFS_PATH_MAX] = "/home/dev/workspace/README.md";
-        char path_b[VFS_PATH_MAX] = "/home/dev/workspace/hello.c";
-        const char *p = goal + 5;
-        while (*p == ' ')
-            p++;
-        size_t ai = 0;
-        for (; *p && *p != ' ' && ai + 1 < sizeof(path_a); p++)
-            path_a[ai++] = *p;
-        path_a[ai] = '\0';
-        while (*p == ' ')
-            p++;
-        if (*p) {
-            size_t bi = 0;
-            for (; *p && *p != ' ' && bi + 1 < sizeof(path_b); p++)
-                path_b[bi++] = *p;
-            path_b[bi] = '\0';
-        }
-        if (path_a[0] && path_a[0] != '/') {
-            char tmp[VFS_PATH_MAX];
-            snprintf(tmp, sizeof(tmp), "/home/dev/workspace/%s", path_a);
-            memcpy(path_a, tmp, strlen(tmp) + 1);
-        }
-        if (path_b[0] && path_b[0] != '/') {
-            char tmp[VFS_PATH_MAX];
-            snprintf(tmp, sizeof(tmp), "/home/dev/workspace/%s", path_b);
-            memcpy(path_b, tmp, strlen(tmp) + 1);
-        }
         char diff[768];
-        if (agent_tool_fs_diff(path_a, path_b, diff, sizeof(diff)) == 0) {
+        if (agent_tool_fs_diff(slots.path, slots.path_b, diff, sizeof(diff)) == 0) {
             TOOL_NOTE("fs.diff");
             agent_tool_console_print("[agent] diff:");
             TOOL_NOTE("console.print");
@@ -467,77 +567,44 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "diff failed");
         }
-        memory_append_turn(goal, tools_used, path_a);
+        memory_append_turn(goal, tools_used, slots.path);
         return;
     }
 
-
     if (intent == INTENT_SEARCH) {
-        char needle[64];
-        needle[0] = '\0';
-        const char *p = goal;
-        if (contains_ci(goal, "grep "))
-            p = goal + 5;
-        else if (contains_ci(goal, "search "))
-            p = goal + 7;
-        else if (contains_ci(goal, "find "))
-            p = goal + 5;
-        while (*p == ' ')
-            p++;
-        size_t i = 0;
-        for (; *p && *p != ' ' && i + 1 < sizeof(needle); p++)
-            needle[i++] = *p;
-        needle[i] = '\0';
-        if (!needle[0]) {
-            agent_tool_console_print("[agent] search needs a term");
+        if (!slots.arg[0]) {
+            agent_tool_console_print("[agent] search needs a term — try: ask \"grep needle\"");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "search failed");
             memory_append_turn(goal, tools_used, NULL);
             return;
         }
         char hits[512];
-        int use_grep = contains_ci(goal, "grep ");
-        if (use_grep && agent_tool_fs_grep(needle, hits, sizeof(hits)) == 0) {
+        if (slots.use_grep && agent_tool_fs_grep(slots.arg, hits, sizeof(hits)) == 0) {
             TOOL_NOTE("fs.grep");
             agent_tool_console_print("[agent] grep matches:");
             TOOL_NOTE("console.print");
             agent_tool_console_print(hits);
             set_summary(summary, summary_cap, "grep hits");
-        } else if (!use_grep && agent_tool_fs_search(needle, hits, sizeof(hits)) == 0) {
+        } else if (!slots.use_grep && agent_tool_fs_search(slots.arg, hits, sizeof(hits)) == 0) {
             TOOL_NOTE("fs.search");
             agent_tool_console_print("[agent] search matches:");
             TOOL_NOTE("console.print");
             agent_tool_console_print(hits);
             set_summary(summary, summary_cap, "search results");
         } else {
-            agent_tool_console_print(use_grep ? "[agent] no grep matches" : "[agent] no matches");
+            agent_tool_console_print(slots.use_grep ? "[agent] no grep matches" : "[agent] no matches");
             TOOL_NOTE("console.print");
             set_summary(summary, summary_cap, "search empty");
         }
-        memory_append_turn(goal, tools_used, needle);
+        memory_append_turn(goal, tools_used, slots.arg);
         return;
     }
 
     if (intent == INTENT_SUMMARIZE) {
-        char term[64];
-        term[0] = '\0';
-        const char *p = goal;
-        if (contains_ci(goal, "summarize "))
-            p = goal + 10;
-        else if (contains_ci(goal, "what's in "))
-            p = goal + 10;
-        else if (contains_ci(goal, "whats in "))
-            p = goal + 9;
-        while (*p == ' ')
-            p++;
-        size_t ti = 0;
-        for (; *p && *p != ' ' && ti + 1 < sizeof(term); p++)
-            term[ti++] = *p;
-        term[ti] = '\0';
-
-        if (term[0]) {
+        if (slots.arg[0]) {
             char hits[512];
-            if (agent_tool_fs_search(term, hits, sizeof(hits)) == 0) {
+            if (agent_tool_fs_search(slots.arg, hits, sizeof(hits)) == 0) {
                 TOOL_NOTE("fs.search");
                 agent_tool_console_print("[agent] summarize search:");
                 TOOL_NOTE("console.print");
@@ -562,7 +629,7 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
                     }
                 }
                 set_summary(summary, summary_cap, "search summarize");
-                memory_append_turn(goal, tools_used, term);
+                memory_append_turn(goal, tools_used, slots.arg);
                 return;
             }
         }
@@ -583,23 +650,14 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     }
 
     if (intent == INTENT_READ) {
-        char name[64];
-        char path[VFS_PATH_MAX] = "/home/dev/workspace/README.md";
-        if (extract_filename(goal, name, sizeof(name))) {
-            memcpy(path, "/home/dev/workspace/", 20);
-            size_t j = 20;
-            for (size_t i = 0; name[i] && j + 1 < sizeof(path); i++)
-                path[j++] = name[i];
-            path[j] = '\0';
-        }
         char body[AGENT_READ_CONTENT_MAX];
         size_t n = 0;
-        if (agent_tool_fs_read(path, body, sizeof(body), &n) == 0) {
+        if (agent_tool_fs_read(slots.path, body, sizeof(body), &n) == 0) {
             TOOL_NOTE("fs.read");
-            agent_tool_console_print(path);
+            agent_tool_console_print(slots.path);
             TOOL_NOTE("console.print");
             agent_tool_console_print(body);
-            memcpy(path_used, path, strlen(path) + 1);
+            memcpy(path_used, slots.path, strlen(slots.path) + 1);
             set_summary(summary, summary_cap, "read file");
         } else {
             agent_tool_console_print("[agent] read failed");
@@ -618,15 +676,11 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
             console_write_ui(listing);
         }
 
-        char name[64];
-        char path[VFS_PATH_MAX] = "/home/dev/workspace/agent_out.txt";
-        if (extract_filename(goal, name, sizeof(name))) {
-            memcpy(path, "/home/dev/workspace/", 20);
-            size_t j = 20;
-            for (size_t i = 0; name[i] && j + 1 < sizeof(path); i++)
-                path[j++] = name[i];
-            path[j] = '\0';
-        }
+        char path[VFS_PATH_MAX];
+        if (slots.path[0])
+            memcpy(path, slots.path, strlen(slots.path) + 1);
+        else
+            workspace_path_from_name(NULL, path, sizeof(path));
 
         char content[AGENT_PENDING_CONTENT_MAX];
         memset(content, 0, sizeof(content));
