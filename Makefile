@@ -366,7 +366,7 @@ HOST_TEST_NAMES := \
 	phase7 gfx boot lan http_tcp js webapi random tls libpeak ubin_registry \
 	shell_split console_scroll display_present wallpaper_cache \
 	peakdisk peakvec guiproto vmm_usercopy blobstore heap_pmm agent_policy \
-	agent_tools desktop_titles ctr_path dom vfs cli_crypto cli_text5 cli_sys2 cli_awk cli_sed cli_jq cli_zip cli_grep cli_find cli_sortflags cli_filemagic cli_date img_decode parser_corpus http2_hpack
+	agent_tools desktop_titles ctr_path dom vfs cli_crypto cli_text5 cli_sys2 cli_awk cli_sed cli_jq cli_zip cli_grep cli_find cli_sortflags cli_filemagic cli_date img_decode parser_corpus http2_hpack keyboard_repeat
 HOST_TEST_BINS := $(addprefix $(HOST_TEST_DIR)/test_,$(HOST_TEST_NAMES))
 
 test: test-host
@@ -483,6 +483,8 @@ $(eval $(call HOST_TEST_RULE,vfs,tests/host/test_vfs.c tests/host/vfs_host_stubs
 $(eval $(call HOST_TEST_RULE,parser_corpus,tests/host/test_parser_corpus.c kernel/net/dns_util.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
 $(eval $(call HOST_TEST_RULE,http2_hpack,tests/host/test_http2_hpack.c kernel/net/hpack.c,\
+	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
+$(eval $(call HOST_TEST_RULE,keyboard_repeat,tests/host/test_keyboard_repeat.c kernel/keyboard.c,\
 	$(HOST_CFLAGS) -DPEAK_HOST_TEST $(HOST_TEST_INC_KERNEL)))
 
 smoke:

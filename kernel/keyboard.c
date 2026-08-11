@@ -52,7 +52,14 @@ void keyboard_repeat_key_down(int key) {
 }
 
 void keyboard_repeat_key_up(int key) {
-    if (repeat_key == key) repeat_key = 0;
+    /* Clear on any key-up: remapped peak keys (Shift+letter) may not match
+     * the stored repeat_key after modifiers change, which stuck autorepeat. */
+    (void)key;
+    repeat_key = 0;
+}
+
+void keyboard_repeat_clear(void) {
+    repeat_key = 0;
 }
 
 void keyboard_poll(void) {
@@ -156,7 +163,7 @@ static void keyboard_irq(void) {
 
 void keyboard_init(void) {
     head = tail = 0; shift = ctrl = alt = e0 = 0; repeat_key = 0;
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(PEAK_HOST_TEST)
     ps2_held_id = 0;
     kbd_set_typematic(KBD_PS2_TYPEMATIC);
     irq_install(1, keyboard_irq);

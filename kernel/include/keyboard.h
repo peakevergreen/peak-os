@@ -17,6 +17,7 @@ void keyboard_poll(void);
 void keyboard_set_repeat(uint32_t delay_ticks, uint32_t rate_ticks);
 void keyboard_repeat_key_down(int key);
 void keyboard_repeat_key_up(int key);
+void keyboard_repeat_clear(void);
 int keyboard_has_char(void);
 char keyboard_getchar(void);
 char keyboard_try_getchar(void);
