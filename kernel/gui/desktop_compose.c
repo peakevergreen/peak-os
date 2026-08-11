@@ -11,6 +11,8 @@
 #include "wallpaper.h"
 #include "notify.h"
 #include "util.h"
+#include "browser.h"
+#include "game.h"
 
 int dirty_bits;
 int scene_ready;
@@ -251,6 +253,11 @@ static void paint_win_to_surface(int i) {
             notify_push("Out of memory — window surface");
         else if (rc == SURFACE_ERR_BUDGET)
             notify_push("Surface budget exceeded");
+        /* Do not leave app wants latched — OOM must not peg the present loop. */
+        if (w->kind == APP_BROWSER)
+            browser_clear_wants_redraw();
+        else if (w->kind == APP_GAME)
+            game_clear_redraw();
         return;
     }
     uint32_t ox = w->x, oy = w->y;
