@@ -269,6 +269,7 @@ int desktop_notify_click_dismiss(int32_t mx, int32_t my);
 
 void desktop_term_reset_slot(int slot);
 void desktop_term_activate(int slot);
+void desktop_term_retire(int slot);
 int desktop_active_term_index(void);
 void desktop_terminal_init(void);
 void desktop_terminal_draw(struct win *w);

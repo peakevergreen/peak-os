@@ -614,8 +614,13 @@ void desktop_run(void) {
             mouse_clear_clicks();
         }
         if (term_select_drag && term_select_win >= 0 && (m.buttons & 1) &&
-            wins[term_select_win].open && wins[term_select_win].kind == APP_TERM) {
+            wins[term_select_win].open && !wins[term_select_win].minimized &&
+            wins[term_select_win].kind == APP_TERM) {
             desktop_terminal_click(&wins[term_select_win], m.x, m.y, 1);
+        } else if (term_select_drag && term_select_win >= 0 &&
+                   (!wins[term_select_win].open || wins[term_select_win].minimized)) {
+            term_select_drag = 0;
+            term_select_win = -1;
         }
         if (img_pan_drag && img_pan_win >= 0 && (m.buttons & 1) &&
             wins[img_pan_win].open && wins[img_pan_win].kind == APP_IMAGES) {
