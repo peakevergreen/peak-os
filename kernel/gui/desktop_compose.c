@@ -246,12 +246,13 @@ static int win_unobscured(int idx) {
 static void paint_win_to_surface(int i) {
     struct win *w = &wins[i];
     int rc = surface_ensure(&w->surf, w->w, w->h);
-    if (rc == SURFACE_ERR_NOMEM)
-        notify_push("Out of memory — window surface");
-    else if (rc == SURFACE_ERR_BUDGET)
-        notify_push("Surface budget exceeded");
-    else if (rc != 0)
+    if (rc != 0) {
+        if (rc == SURFACE_ERR_NOMEM)
+            notify_push("Out of memory — window surface");
+        else if (rc == SURFACE_ERR_BUDGET)
+            notify_push("Surface budget exceeded");
         return;
+    }
     uint32_t ox = w->x, oy = w->y;
     w->x = 0;
     w->y = 0;

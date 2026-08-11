@@ -247,34 +247,110 @@ static int img_can_pan(void) {
     return img_loaded && img_mode != IMG_MODE_FIT;
 }
 
+static void img_scaled_size(uint32_t *sw, uint32_t *sh) {
+    if (!sw || !sh)
+        return;
+    if (img_mode == IMG_MODE_ACTUAL) {
+        *sw = img.w;
+        *sh = img.h;
+    } else if (img_mode == IMG_MODE_ZOOM) {
+        *sw = (uint32_t)((uint64_t)img.w * (uint32_t)img_zoom / 100);
+        *sh = (uint32_t)((uint64_t)img.h * (uint32_t)img_zoom / 100);
+        if (*sw < 1)
+            *sw = 1;
+        if (*sh < 1)
+            *sh = 1;
+    } else {
+        *sw = 0;
+        *sh = 0;
+    }
+}
+
+/* Keep scaled image intersecting the viewport (avoids uint32 wrap + huge loops). */
+static void img_clamp_pan(uint32_t cw, uint32_t ch) {
+    uint32_t sw, sh;
+    if (!img_can_pan()) {
+        img_pan_x = img_pan_y = 0;
+        return;
+    }
+    img_scaled_size(&sw, &sh);
+    if (sw == 0 || sh == 0) {
+        img_pan_x = img_pan_y = 0;
+        return;
+    }
+    {
+        int32_t min_x = 1 - (int32_t)sw;
+        int32_t max_x = (int32_t)cw - 1;
+        int32_t min_y = 1 - (int32_t)sh;
+        int32_t max_y = (int32_t)ch - 1;
+        if (cw == 0)
+            min_x = max_x = 0;
+        if (ch == 0)
+            min_y = max_y = 0;
+        if (img_pan_x < min_x)
+            img_pan_x = min_x;
+        if (img_pan_x > max_x)
+            img_pan_x = max_x;
+        if (img_pan_y < min_y)
+            img_pan_y = min_y;
+        if (img_pan_y > max_y)
+            img_pan_y = max_y;
+    }
+}
+
 static void img_pan_by(int32_t dx, int32_t dy) {
     if (!img_can_pan())
         return;
     img_pan_x += dx;
     img_pan_y += dy;
+    {
+        int wi = desktop_find_win(APP_IMAGES);
+        if (wi >= 0) {
+            uint32_t tx, ty, cw, ch;
+            img_viewport_geom(&wins[wi], &tx, &ty, &cw, &ch);
+            img_clamp_pan(cw, ch);
+        }
+    }
     img_mark_dirty();
 }
 
-static void img_draw_scaled(struct win *w, uint32_t x0, uint32_t y0, uint32_t cw, uint32_t ch,
+/* Draw scaled image clipped to viewport [vx,vy)+[vw,vh); x0/y0 may be negative. */
+static void img_draw_scaled(struct win *w, int32_t x0, int32_t y0,
+                            uint32_t vx, uint32_t vy, uint32_t vw, uint32_t vh,
                             uint32_t sw, uint32_t sh) {
-    if (!img.rgb || sw == 0 || sh == 0)
+    int32_t x1, y1, x2, y2;
+    if (!img.rgb || sw == 0 || sh == 0 || vw == 0 || vh == 0)
         return;
-    for (uint32_t dy = 0; dy < sh; dy++) {
+    x1 = x0;
+    y1 = y0;
+    x2 = x0 + (int32_t)sw;
+    y2 = y0 + (int32_t)sh;
+    if (x1 < (int32_t)vx)
+        x1 = (int32_t)vx;
+    if (y1 < (int32_t)vy)
+        y1 = (int32_t)vy;
+    if (x2 > (int32_t)(vx + vw))
+        x2 = (int32_t)(vx + vw);
+    if (y2 > (int32_t)(vy + vh))
+        y2 = (int32_t)(vy + vh);
+    if (x1 >= x2 || y1 >= y2)
+        return;
+    for (int32_t py = y1; py < y2; py++) {
+        uint32_t dy = (uint32_t)(py - y0);
         uint32_t sy = (dy * img.h) / sh;
         if (sy >= img.h)
             sy = img.h - 1;
         const uint8_t *srow = img.rgb + (size_t)sy * (size_t)img.w * 3;
-        for (uint32_t dx = 0; dx < sw; dx++) {
+        for (int32_t px = x1; px < x2; px++) {
+            uint32_t dx = (uint32_t)(px - x0);
             uint32_t sx = (dx * img.w) / sw;
             if (sx >= img.w)
                 sx = img.w - 1;
             const uint8_t *p = srow + (size_t)sx * 3;
-            fb_put_pixel(x0 + dx, y0 + dy, fb_rgb(p[0], p[1], p[2]));
+            fb_put_pixel((uint32_t)px, (uint32_t)py, fb_rgb(p[0], p[1], p[2]));
         }
     }
     (void)w;
-    (void)cw;
-    (void)ch;
 }
 
 void desktop_images_draw(struct win *w) {
@@ -310,36 +386,49 @@ void desktop_images_draw(struct win *w) {
                     sh = (uint32_t)((uint64_t)img.h * cw / img.w);
                 }
             }
-            uint32_t ox = tx + (cw > sw ? (cw - sw) / 2 : 0);
-            uint32_t oy = vty + (vch > sh ? (vch - sh) / 2 : 0);
-            img_draw_scaled(w, ox, oy, cw, vch, sw, sh);
+            {
+                int32_t ox = (int32_t)tx + (cw > sw ? (int32_t)((cw - sw) / 2) : 0);
+                int32_t oy = (int32_t)vty + (vch > sh ? (int32_t)((vch - sh) / 2) : 0);
+                img_draw_scaled(w, ox, oy, tx, vty, cw, vch, sw, sh);
+            }
         } else if (img_mode == IMG_MODE_ACTUAL) {
-            uint32_t sw = img.w, sh = img.h;
-            if (sw > cw)
-                sw = cw;
-            if (sh > vch)
-                sh = vch;
-            int32_t ox = (int32_t)tx + img_pan_x;
-            int32_t oy = (int32_t)vty + img_pan_y;
-            if (ox < (int32_t)tx)
-                ox = (int32_t)tx;
-            if (oy < (int32_t)vty)
-                oy = (int32_t)vty;
-            for (uint32_t dy = 0; dy < sh; dy++) {
-                for (uint32_t dx = 0; dx < sw; dx++) {
-                    const uint8_t *p = img.rgb + ((size_t)dy * img.w + dx) * 3;
-                    fb_put_pixel((uint32_t)ox + dx, (uint32_t)oy + dy, fb_rgb(p[0], p[1], p[2]));
+            /* Offset source by pan so negative pan reveals lower-right of image. */
+            img_clamp_pan(cw, vch);
+            {
+                int32_t ox = (int32_t)tx + img_pan_x;
+                int32_t oy = (int32_t)vty + img_pan_y;
+                uint32_t src_x0 = 0, src_y0 = 0;
+                int32_t dx0 = ox, dy0 = oy;
+                uint32_t draw_w, draw_h;
+                if (dx0 < (int32_t)tx) {
+                    src_x0 = (uint32_t)((int32_t)tx - dx0);
+                    dx0 = (int32_t)tx;
+                }
+                if (dy0 < (int32_t)vty) {
+                    src_y0 = (uint32_t)((int32_t)vty - dy0);
+                    dy0 = (int32_t)vty;
+                }
+                draw_w = img.w > src_x0 ? img.w - src_x0 : 0;
+                draw_h = img.h > src_y0 ? img.h - src_y0 : 0;
+                if (dx0 + (int32_t)draw_w > (int32_t)(tx + cw))
+                    draw_w = (uint32_t)((int32_t)(tx + cw) - dx0);
+                if (dy0 + (int32_t)draw_h > (int32_t)(vty + vch))
+                    draw_h = (uint32_t)((int32_t)(vty + vch) - dy0);
+                for (uint32_t dy = 0; dy < draw_h; dy++) {
+                    for (uint32_t dx = 0; dx < draw_w; dx++) {
+                        const uint8_t *p =
+                            img.rgb + ((size_t)(src_y0 + dy) * img.w + (src_x0 + dx)) * 3;
+                        fb_put_pixel((uint32_t)dx0 + dx, (uint32_t)dy0 + dy,
+                                     fb_rgb(p[0], p[1], p[2]));
+                    }
                 }
             }
         } else {
-            uint32_t sw = (uint32_t)((uint64_t)img.w * (uint32_t)img_zoom / 100);
-            uint32_t sh = (uint32_t)((uint64_t)img.h * (uint32_t)img_zoom / 100);
-            if (sw < 1)
-                sw = 1;
-            if (sh < 1)
-                sh = 1;
-            img_draw_scaled(w, (uint32_t)((int32_t)tx + img_pan_x), (uint32_t)((int32_t)vty + img_pan_y),
-                            cw, vch, sw, sh);
+            uint32_t sw, sh;
+            img_clamp_pan(cw, vch);
+            img_scaled_size(&sw, &sh);
+            img_draw_scaled(w, (int32_t)tx + img_pan_x, (int32_t)vty + img_pan_y,
+                            tx, vty, cw, vch, sw, sh);
         }
     }
 
@@ -392,6 +481,14 @@ int desktop_images_key(int key) {
         img_zoom += 10;
         if (img_zoom > 400)
             img_zoom = 400;
+        {
+            int wi = desktop_find_win(APP_IMAGES);
+            if (wi >= 0) {
+                uint32_t tx, ty, cw, ch;
+                img_viewport_geom(&wins[wi], &tx, &ty, &cw, &ch);
+                img_clamp_pan(cw, ch);
+            }
+        }
         img_mark_dirty();
         return 1;
     }
@@ -400,6 +497,14 @@ int desktop_images_key(int key) {
         img_zoom -= 10;
         if (img_zoom < 25)
             img_zoom = 25;
+        {
+            int wi = desktop_find_win(APP_IMAGES);
+            if (wi >= 0) {
+                uint32_t tx, ty, cw, ch;
+                img_viewport_geom(&wins[wi], &tx, &ty, &cw, &ch);
+                img_clamp_pan(cw, ch);
+            }
+        }
         img_mark_dirty();
         return 1;
     }

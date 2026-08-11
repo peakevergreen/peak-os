@@ -4,15 +4,19 @@
 #include "util.h"
 #include "vfs.h"
 
-#define IMG_MAX_DIM   1024u
-#define IMG_MAX_RGB   (512u * 1024u)
+#define IMG_MAX_DIM     1024u
+#define IMG_MAX_PIXELS  (512u * 1024u / 3u) /* matches IMG_MAX_RGB / 3 */
+#define IMG_MAX_RGB     (512u * 1024u)
 
 static int is_space(char c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n';
 }
 
+/* Reject oversized dims before any kmalloc of pixel / inflate buffers. */
 static int img_dims_ok(uint32_t w, uint32_t h) {
     if (w == 0 || h == 0 || w > IMG_MAX_DIM || h > IMG_MAX_DIM)
+        return 0;
+    if ((uint64_t)w * (uint64_t)h > (uint64_t)IMG_MAX_PIXELS)
         return 0;
     if ((uint64_t)w * (uint64_t)h * 3u > IMG_MAX_RGB)
         return 0;
