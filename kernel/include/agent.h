@@ -13,6 +13,7 @@ const char *agent_last_summary(void);
 int agent_pending_approvals(void);
 int agent_write_pending(void);
 const char *agent_pending_write_path(void);
+const char *agent_pending_write_content(void);
 void agent_approve_write(int yes);
 const char *agent_tools_catalog(void);
 void agent_policy_reload_cli(void);

@@ -6,6 +6,7 @@
 #include "clipboard.h"
 #include "notify.h"
 #include "util.h"
+#include "agent.h"
 
 static int np_a11y_btn;
 
@@ -205,6 +206,44 @@ static void np_paste(void) {
     if (np_has_sel()) { np_delete_range(np_sel_a, np_sel_b + 1); np_caret = np_sel_a; np_clear_sel(); }
     np_insert(clip, (int)n); np_mark_dirty();
 }
+
+/* Load pending agent write into the buffer for review (does not approve). */
+static int np_apply_agent_patch(void) {
+    if (!agent_write_pending()) {
+        notify_push("No agent write pending");
+        dirty_bits |= DIRTY_TOAST;
+        return 0;
+    }
+    const char *path = agent_pending_write_path();
+    const char *content = agent_pending_write_content();
+    if (!path || !path[0] || !content) {
+        notify_push("Agent patch empty");
+        dirty_bits |= DIRTY_TOAST;
+        return 0;
+    }
+    size_t cl = strlen(content);
+    if (cl >= (size_t)(NOTEPAD_MAX - 1)) {
+        notify_push("Agent patch too large");
+        dirty_bits |= DIRTY_TOAST;
+        return 0;
+    }
+    size_t i = 0;
+    for (; path[i] && i + 1 < sizeof(np_path); i++)
+        np_path[i] = path[i];
+    np_path[i] = '\0';
+    memcpy(np_buf, content, cl + 1);
+    np_len = (int)cl;
+    np_caret = 0;
+    np_scroll = 0;
+    np_clear_sel();
+    np_dirty = 1;
+    np_find_open = 0;
+    notify_push("Agent patch applied to buffer");
+    dirty_bits |= DIRTY_TOAST;
+    np_mark_dirty();
+    return 1;
+}
+
 static int np_find_key(int key) {
     if (key == 27) { np_find_open = np_find_repl = 0; np_mark_dirty(); return 1; }
     if (key == '\n') { if (np_find_repl) np_replace_one(); else np_find_do(); return 1; }
@@ -251,8 +290,22 @@ void desktop_notepad_draw(struct win *w) {
             np_draw_focus_ring(fx, by, bw, ch);
         ty += ch + desktop_u(4);
     }
+    uint32_t agent_h = 0;
+    if (agent_write_pending()) {
+        const struct peak_theme *thcol = theme_get();
+        const char *pp = agent_pending_write_path();
+        char abar[128];
+        snprintf(abar, sizeof(abar), "Agent write: %s  ·  A apply  Y approve  N deny",
+                 pp && pp[0] ? pp : "?");
+        fb_fill_rect(tx, ty, inner, ch + desktop_u(4), thcol->surface);
+        fb_draw_string_fit(tx + desktop_u(4), ty + desktop_u(2), inner - desktop_u(8), abar,
+                           thcol->danger, thcol->surface);
+        agent_h = ch + desktop_u(6);
+        ty += agent_h;
+    }
     uint32_t find_h = np_find_open ? ch + desktop_u(6) : 0;
-    uint32_t area_h = w->h > th + ch * 2 + desktop_u(20) + find_h ? w->h - th - ch * 2 - desktop_u(20) - find_h : ch;
+    uint32_t used = (ty - w->y) + find_h + desktop_u(8);
+    uint32_t area_h = w->h > used ? w->h - used : ch;
     int vis = (int)(area_h / ch); if (vis > NOTEPAD_VIS) vis = NOTEPAD_VIS; if (vis < 1) vis = 1;
     np_clamp_scroll(vis);
     int rows = np_row_count(), gutter_cols = np_gutter_cols(rows);
@@ -301,6 +354,23 @@ void desktop_notepad_draw(struct win *w) {
 }
 
 int desktop_notepad_key(int key) {
+    /* While an agent write is pending, Y/N/A win over typing (except find-replace A=all). */
+    if (agent_write_pending() && !np_find_open) {
+        if (key == 'y' || key == 'Y') {
+            agent_approve_write(1);
+            np_mark_dirty();
+            return 1;
+        }
+        if (key == 'n' || key == 'N') {
+            agent_approve_write(0);
+            np_mark_dirty();
+            return 1;
+        }
+        if (key == 'a' || key == 'A') {
+            np_apply_agent_patch();
+            return 1;
+        }
+    }
     if (key == KEY_TAB || key == '\t') {
         np_a11y_btn = (np_a11y_btn + 1) % 3;
         np_mark_dirty();
@@ -377,6 +447,7 @@ int desktop_notepad_click(struct win *w, int32_t mx, int32_t my) {
 int desktop_notepad_ctx_menu(struct ctx_menu_item *items, int max_items) {
     if (!items || max_items < 2) return 0;
     int n = 0;
+    int pending = agent_write_pending();
 #define NADD(lbl, en, sep, act) do { if (n >= max_items) return n; \
     items[n].label=(lbl); items[n].enabled=(en); items[n].separator=(sep); items[n].action_id=(act); n++; } while (0)
     NADD("Cut", np_has_sel(), 0, CTX_ACT_NPAD_CUT);
@@ -386,6 +457,12 @@ int desktop_notepad_ctx_menu(struct ctx_menu_item *items, int max_items) {
     NADD("Find", 1, 0, CTX_ACT_NPAD_FIND);
     NADD("Save", 1, 0, CTX_ACT_NPAD_SAVE);
     NADD("Save As", 1, 0, CTX_ACT_NPAD_SAVEAS);
+    if (pending) {
+        NADD(NULL, 0, 1, CTX_ACT_NONE);
+        NADD("Apply agent patch", 1, 0, CTX_ACT_NPAD_APPLY_PATCH);
+        NADD("Approve agent write", 1, 0, CTX_ACT_NPAD_APPROVE);
+        NADD("Deny agent write", 1, 0, CTX_ACT_NPAD_DENY);
+    }
     NADD(NULL, 0, 1, CTX_ACT_NONE);
     NADD("Close window", 1, 0, CTX_ACT_CLOSE);
     return n;
@@ -400,6 +477,9 @@ int desktop_notepad_ctx_action(int action_id) {
     case CTX_ACT_NPAD_FIND: np_find_open = 1; np_find_repl = 0; np_find_pos = -1; np_mark_dirty(); return 1;
     case CTX_ACT_NPAD_SAVE: np_save(); np_mark_dirty(); return 1;
     case CTX_ACT_NPAD_SAVEAS: np_save_as_copy(); np_mark_dirty(); return 1;
+    case CTX_ACT_NPAD_APPLY_PATCH: np_apply_agent_patch(); return 1;
+    case CTX_ACT_NPAD_APPROVE: agent_approve_write(1); np_mark_dirty(); return 1;
+    case CTX_ACT_NPAD_DENY: agent_approve_write(0); np_mark_dirty(); return 1;
     default: return 0;
     }
 }
