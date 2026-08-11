@@ -305,6 +305,11 @@ void agent_host_clear_transcript_tool(void) {
     last_transcript_tool[0] = '\0';
 }
 
+void agent_transcript_push(const char *line) {
+    /* Host: treat plan lines like tool notes for observability. */
+    agent_transcript_note_tool(line);
+}
+
 void itoa_u(uint64_t val, char *buf, int base) {
     if (base != 10 && base != 16)
         base = 10;

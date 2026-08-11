@@ -63,7 +63,11 @@ int agent_tool_console_print(const char *msg) {
     console_write_ui(msg ? msg : "");
     if (msg && msg[0] && msg[strlen(msg) - 1] != '\n')
         console_write_ui("\n");
-    agent_transcript_note_tool(msg);
+    /* Plan lines stay distinct in the Agent transcript (not [tool]-prefixed). */
+    if (msg && !strncmp(msg, "[plan]", 6))
+        agent_transcript_push(msg);
+    else
+        agent_transcript_note_tool(msg);
     agent_audit_event("console.print", "-", "ok");
     return 0;
 }
