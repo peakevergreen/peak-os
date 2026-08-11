@@ -57,8 +57,10 @@ int desktop_point_in(int32_t px, int32_t py, uint32_t x, uint32_t y, uint32_t w,
 }
 
 uint32_t desktop_chrome_btn_strip_w(void) {
-    /* Title reserve / hit strip: 3 buttons (bs+gap) + close inset from right. */
-    return 3 * (desktop_u(14) + desktop_u(4)) + desktop_u(22);
+    uint32_t bsz = desktop_u(14);
+    uint32_t gap = desktop_u(4);
+    /* Same formula as desktop_chrome_btns need: close inset + max/min (bs+gap). */
+    return desktop_u(22) + 2 * (bsz + gap);
 }
 
 int desktop_chrome_btns(const struct win *w, uint32_t *close_x, uint32_t *max_x,
@@ -66,7 +68,7 @@ int desktop_chrome_btns(const struct win *w, uint32_t *close_x, uint32_t *max_x,
     uint32_t bsz = desktop_u(14);
     uint32_t gap = desktop_u(4);
     /* close at w-22; max/min each subtract (bs+gap) — need full strip or underflow. */
-    uint32_t need = desktop_u(22) + 2 * (bsz + gap);
+    uint32_t need = desktop_chrome_btn_strip_w();
     if (!w || w->w < need)
         return 0;
     uint32_t cx = w->x + w->w - desktop_u(22);
@@ -195,6 +197,8 @@ void desktop_rescale_windows(void) {
     struct framebuffer *fb = fb_get();
 
     browser_clear_hit_rects();
+    /* Settings hits are screen-absolute; drop until next draw rebuilds them. */
+    desktop_settings_hits_reset();
     for (int i = 0; i < MAX_WINS; i++) {
         struct win *w = &wins[i];
         uint32_t def_w, def_h;

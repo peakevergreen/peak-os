@@ -524,10 +524,23 @@ static void files_draw_status(struct win *w, uint32_t tx, uint32_t sy, uint32_t 
                        fg, desktop_color_surface());
 }
 
+/* Shared list origin for draw + hit (was ch*4 draw vs ch*3 hit). */
+static void files_list_origin(struct win *w, uint32_t *tx, uint32_t *ty, uint32_t *row_h) {
+    uint32_t ch = fb_cell_h();
+    if (tx)
+        *tx = w->x + desktop_u(12);
+    if (ty)
+        *ty = w->y + desktop_title_h() + desktop_u(8) + ch * 4 + desktop_u(4);
+    if (row_h)
+        *row_h = ch;
+}
+
 void desktop_files_draw(struct win *w) {
     files_clamp_sel();
     uint32_t ch = fb_cell_h(), th = desktop_title_h();
     uint32_t tx = w->x + desktop_u(12), ty = w->y + th + desktop_u(8);
+    uint32_t list_tx, list_ty, row_h;
+    files_list_origin(w, &list_tx, &list_ty, &row_h);
     uint32_t inner = w->w > desktop_u(24) ? w->w - desktop_u(24) : w->w;
     uint32_t name_w = inner > desktop_u(120) ? inner - desktop_u(72) : inner / 2;
     uint32_t size_x = tx + name_w;
@@ -548,16 +561,16 @@ void desktop_files_draw(struct win *w) {
     uint32_t area_h = w->h > th + ch * 4 + desktop_u(24) + status_h
                           ? w->h - th - ch * 4 - desktop_u(24) - status_h
                           : ch;
-    int max_rows = (int)(area_h / ch);
+    int max_rows = (int)(area_h / row_h);
     if (max_rows > FILES_ROWS) max_rows = FILES_ROWS;
     if (max_rows < 1) max_rows = 1;
     struct vfs_dirent ents[FILES_ROWS];
     int n = vfs_readdir(files_cwd, ents, FILES_ROWS);
     if (n < 0) n = 0;
     if (n == 0) {
-        fb_draw_string(tx, ty + ch * 4 + desktop_u(4), "This folder is empty", desktop_color_dim(), desktop_color_bg());
-        fb_draw_string(tx, ty + ch * 5 + desktop_u(4), "n new file · Ctrl+V paste · u go up", desktop_color_dim(), desktop_color_bg());
-        fb_draw_string(tx, ty + ch * 6 + desktop_u(4), "Copy or cut elsewhere, then paste here", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(list_tx, list_ty, "This folder is empty", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(list_tx, list_ty + row_h, "n new file · Ctrl+V paste · u go up", desktop_color_dim(), desktop_color_bg());
+        fb_draw_string(list_tx, list_ty + row_h * 2, "Copy or cut elsewhere, then paste here", desktop_color_dim(), desktop_color_bg());
         files_draw_status(w, tx, w->y + w->h - status_h - desktop_u(4), inner);
         return;
     }
@@ -568,7 +581,7 @@ void desktop_files_draw(struct win *w) {
     int have_pending = files_pending_in_cwd(pending_name, sizeof(pending_name));
     for (int i = 0; i < max_rows && files_scroll + i < n; i++) {
         int idx = files_scroll + i;
-        uint32_t rowy = ty + ch * 4 + desktop_u(4) + (uint32_t)i * ch;
+        uint32_t rowy = list_ty + (uint32_t)i * row_h;
         int selected = files_in_sel_range(idx);
         int is_pending = have_pending && ents[idx].type == VFS_FILE &&
                          !strcmp(ents[idx].name, pending_name);
@@ -601,7 +614,7 @@ void desktop_files_draw(struct win *w) {
         if (below > 0) snprintf(obuf, sizeof(obuf), "+%d below", below);
         else if (files_scroll > 0) snprintf(obuf, sizeof(obuf), "+%d above", files_scroll);
         else obuf[0] = '\0';
-        if (obuf[0]) fb_draw_string_fit(tx, ty + ch * 3 + desktop_u(4) + (uint32_t)max_rows * ch, inner, obuf, desktop_color_dim(), desktop_color_bg());
+        if (obuf[0]) fb_draw_string_fit(list_tx, list_ty + (uint32_t)max_rows * row_h, inner, obuf, desktop_color_dim(), desktop_color_bg());
     }
     files_draw_status(w, tx, w->y + w->h - status_h - desktop_u(4), inner);
 }
@@ -739,8 +752,12 @@ static void files_activate(void) {
 }
 
 static int files_hit_row(struct win *w, int32_t my, int *row_out) {
-    int row = (int)((my - (int32_t)(w->y + desktop_title_h() + desktop_u(8) + fb_cell_h() * 3 + desktop_u(4))) / (int32_t)fb_cell_h());
-    if (row_out) *row_out = row; return row >= 0;
+    uint32_t tx, ty, row_h;
+    files_list_origin(w, &tx, &ty, &row_h);
+    (void)tx;
+    int row = (int)((my - (int32_t)ty) / (int32_t)row_h);
+    if (row_out) *row_out = row;
+    return row >= 0;
 }
 
 void desktop_files_ctx_prepare(struct win *w, int32_t mx, int32_t my) {
