@@ -153,20 +153,22 @@ void browser_restore_closed_tab(void) {
 void browser_input(char c) {
     struct br_tab *t = browser_cur();
 
+    /* Drop stale focus before typing (e.g. node orphaned by innerHTML). */
+    if (!editing && t->focus_node >= 0 && !dom_node(&t->doc, t->focus_node)) {
+        t->focus_node = -1;
+        t->focus_kind = 0;
+        t->focus_value[0] = '\0';
+    }
+
     /* Focused form control typing (when not editing URL bar). */
     if (!editing && t->focus_node >= 0 && t->focus_kind > 0) {
         if (c == '\n' || c == '\r') {
             if (t->focus_kind == 1 || t->focus_kind == 2) {
                 dom_set_attr(&t->doc, t->focus_node, "value", t->focus_value);
                 browser_js_dispatch_input(&t->jsh, t->focus_node, t->focus_value);
-                int form = t->focus_node;
-                for (int p = t->doc.nodes[t->focus_node].parent; p >= 0;
-                     p = t->doc.nodes[p].parent) {
-                    if (!strcmp(t->doc.nodes[p].tag, "form")) {
-                        form = p;
-                        break;
-                    }
-                }
+                int form = dom_find_ancestor(&t->doc, t->focus_node, "form");
+                if (form < 0)
+                    form = t->focus_node;
                 browser_js_dispatch_event(&t->jsh, form, "submit");
                 if (browser_js_flush_pending_nav(&t->jsh))
                     return;
@@ -413,13 +415,9 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
                 if (!strcmp(n->tag, "input") || !strcmp(n->tag, "textarea")) {
                     const char *type = dom_get_attr(&t->doc, b->node_id, "type");
                     if (type && (!strcmp(type, "submit") || !strcmp(type, "button"))) {
-                        int form = b->node_id;
-                        for (int p = n->parent; p >= 0; p = t->doc.nodes[p].parent) {
-                            if (!strcmp(t->doc.nodes[p].tag, "form")) {
-                                form = p;
-                                break;
-                            }
-                        }
+                        int form = dom_find_ancestor(&t->doc, b->node_id, "form");
+                        if (form < 0)
+                            form = b->node_id;
                         t->jsh.prevent_default = 0;
                         browser_js_dispatch_event(&t->jsh, form, "submit");
                         if (browser_js_flush_pending_nav(&t->jsh))
@@ -437,13 +435,7 @@ void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h) {
                     return;
                 }
                 if (!strcmp(n->tag, "button")) {
-                    int form = -1;
-                    for (int p = n->parent; p >= 0; p = t->doc.nodes[p].parent) {
-                        if (!strcmp(t->doc.nodes[p].tag, "form")) {
-                            form = p;
-                            break;
-                        }
-                    }
+                    int form = dom_find_ancestor(&t->doc, n->parent, "form");
                     browser_js_dispatch_click(&t->jsh, b->node_id);
                     if (browser_js_flush_pending_nav(&t->jsh))
                         return;

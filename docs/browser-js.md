@@ -37,7 +37,7 @@ If layout cannot produce enough boxes, the tab falls back to the reader-mode blo
 - **Fetch:** HTTP/2 client can store up to 64 KiB when peers send DATA (WINDOW_UPDATE / PING ACK); browser body budget 256 KiB; truncation noted in status. Live QEMU CDN matrix often yields empty bodies (`frames=0`) — see B-HTTPS-H2.
 - **CSS:** Inline `<style>` plus fetched `<link rel=stylesheet>` (bounded); specificity; width/max-width/height/text-align/border; inline flow + form/img boxes.
 - **Images:** PNG/JPEG (and PPM/BMP) via `img_decode_*`; painted in layout when decoded.
-- **Forms:** `input` / `textarea` / `button` focus + typing; GET/POST submit (`application/x-www-form-urlencoded`).
+- **Forms:** `input` / `textarea` / `button` focus + typing; GET/POST submit (`application/x-www-form-urlencoded`). Form ancestor walks go through `dom_node()` and stop on NULL / cycles / out of `nnodes`. Before typing, stale `focus_node` is cleared when `!dom_node(...)`. `dom_set_inner_html` marks orphaned subtrees unused so focus fails closed after mutation.
 - **JS bridge:** `click` / `input` / `change` / `submit` / `keydown`; `querySelectorAll`; classList helpers; `location.assign` / `reload`; `Response.text()`.
 - **Chrome:** Multi-entry back/forward (16); status shows H1/H2, JS ok/err, box count, bytes.
 

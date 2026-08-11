@@ -25,6 +25,24 @@ struct dom_node *dom_node(struct dom_document *doc, int id) {
     return &doc->nodes[id];
 }
 
+int dom_find_ancestor(struct dom_document *doc, int id, const char *tag) {
+    if (!doc || !tag || id < 0)
+        return -1;
+    int steps = 0;
+    for (int p = id; p >= 0 && steps < doc->nnodes; steps++) {
+        struct dom_node *n = dom_node(doc, p);
+        if (!n)
+            return -1;
+        if (n->type == DOM_ELEMENT && !strcmp(n->tag, tag))
+            return p;
+        int next = n->parent;
+        if (next == p)
+            return -1; /* self-cycle */
+        p = next;
+    }
+    return -1;
+}
+
 static int alloc_node(struct dom_document *doc) {
     if (doc->nnodes >= DOM_MAX_NODES)
         return -1;
@@ -266,11 +284,31 @@ int dom_query_selector(struct dom_document *doc, int root, const char *sel) {
     return -1;
 }
 
+/* Mark orphaned subtree unused so dom_node() fails closed for stale ids. */
+static void mark_subtree_unused(struct dom_document *doc, int id, int depth) {
+    if (!doc || id < 0 || depth > DOM_MAX_NODES)
+        return;
+    struct dom_node *n = dom_node(doc, id);
+    if (!n)
+        return;
+    int child = n->first_child;
+    int sib = n->next_sibling;
+    n->used = 0;
+    n->first_child = -1;
+    n->next_sibling = -1;
+    n->parent = -1;
+    mark_subtree_unused(doc, child, depth + 1);
+    mark_subtree_unused(doc, sib, depth + 1);
+}
+
 void dom_set_inner_html(struct dom_document *doc, int id, const char *html) {
     struct dom_node *n = dom_node(doc, id);
     if (!n || n->type != DOM_ELEMENT)
         return;
+    int old = n->first_child;
     n->first_child = -1;
+    if (old >= 0)
+        mark_subtree_unused(doc, old, 0);
     if (!html || !html[0]) {
         doc->dirty = 1;
         return;

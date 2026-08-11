@@ -94,11 +94,66 @@ static void test_compound_selector(void) {
     expect(dom_query_selector(&doc, root, "p.missing") == -1, "compound miss");
 }
 
+static void test_find_ancestor_safe(void) {
+    struct dom_document doc;
+    dom_doc_init(&doc);
+
+    int form = dom_create_element(&doc, "form");
+    int div = dom_create_element(&doc, "div");
+    int input = dom_create_element(&doc, "input");
+    expect(form >= 0 && div >= 0 && input >= 0, "create form tree");
+    expect(dom_append_child(&doc, form, div) == 0, "form->div");
+    expect(dom_append_child(&doc, div, input) == 0, "div->input");
+
+    expect(dom_find_ancestor(&doc, input, "form") == form, "find form from input");
+    expect(dom_find_ancestor(&doc, form, "form") == form, "form matches self");
+    expect(dom_find_ancestor(&doc, input, "table") == -1, "missing ancestor");
+
+    /* Corrupt parent: out of nnodes — must stop, not OOB. */
+    doc.nodes[input].parent = doc.nnodes + 50;
+    expect(dom_find_ancestor(&doc, input, "form") == -1, "oob parent stops");
+
+    /* Self-cycle on parent link. */
+    doc.nodes[input].parent = input;
+    expect(dom_find_ancestor(&doc, input, "form") == -1, "self-cycle stops");
+
+    /* Two-node cycle. */
+    doc.nodes[input].parent = div;
+    doc.nodes[div].parent = input;
+    expect(dom_find_ancestor(&doc, input, "form") == -1, "cycle stops");
+}
+
+static void test_inner_html_orphans_unused(void) {
+    struct dom_document doc;
+    dom_doc_init(&doc);
+
+    int panel = dom_create_element(&doc, "div");
+    int child = dom_create_element(&doc, "input");
+    int nested = dom_create_element(&doc, "span");
+    expect(panel >= 0 && child >= 0 && nested >= 0, "create innerHTML tree");
+    expect(dom_append_child(&doc, panel, child) == 0, "panel->child");
+    expect(dom_append_child(&doc, child, nested) == 0, "child->nested");
+    expect(dom_node(&doc, child) != NULL, "child live before");
+    expect(dom_node(&doc, nested) != NULL, "nested live before");
+
+    dom_set_inner_html(&doc, panel, "hi");
+    expect(dom_node(&doc, child) == NULL, "orphaned child unused");
+    expect(dom_node(&doc, nested) == NULL, "orphaned nested unused");
+    expect(dom_node(&doc, panel) != NULL, "panel still live");
+    /* Stale focus_node pattern: cleared when !dom_node. */
+    int focus_node = child;
+    if (!dom_node(&doc, focus_node))
+        focus_node = -1;
+    expect(focus_node == -1, "stale focus cleared after innerHTML");
+}
+
 int main(void) {
     test_class_token_match();
     test_root_scoped_scan();
     test_id_and_tag();
     test_compound_selector();
+    test_find_ancestor_safe();
+    test_inner_html_orphans_unused();
     if (fails) {
         fprintf(stderr, "test_dom: %d failure(s)\n", fails);
         return 1;

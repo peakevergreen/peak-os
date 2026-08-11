@@ -71,6 +71,10 @@ int dom_query_selector(struct dom_document *doc, int root, const char *sel);
 int dom_get_element_by_id(struct dom_document *doc, const char *id);
 void dom_set_inner_html(struct dom_document *doc, int id, const char *html);
 
+/* Walk ancestors via dom_node(); stop on NULL / cycle / out of nnodes.
+ * Returns matching element id, or -1. Starts at `id` (inclusive). */
+int dom_find_ancestor(struct dom_document *doc, int id, const char *tag);
+
 /* Collect visible text blocks for reader/paint fallback. */
 int dom_collect_text(struct dom_document *doc, int id, char *out, size_t cap);
 
