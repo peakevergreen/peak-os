@@ -11,6 +11,8 @@
 #include "privacy.h"
 
 void agent_host_vfs_reset(void);
+const char *agent_host_last_transcript_tool(void);
+void agent_host_clear_transcript_tool(void);
 
 static int fails;
 
@@ -362,6 +364,30 @@ static void test_fs_diff_and_net_fetch(void) {
     expect(agent_tool_net_fetch("ftp://example.com/", out, sizeof(out)) != 0, "net.fetch rejects ftp");
 }
 
+static void test_deny_reason_in_transcript(void) {
+    agent_host_vfs_reset();
+    agent_policy_load_defaults();
+    seed_policy(
+        "allow_paths=/home/dev/workspace\n"
+        "allow_tools=fs.read,console.print\n"
+        "deny_tools=fs.write,net.ping\n"
+        "require_approval=0\n");
+    agent_policy_reload();
+
+    agent_host_clear_transcript_tool();
+    expect(agent_tool_fs_write("/home/dev/workspace/x.c", "x", 1) != 0, "fs.write denied by deny_tools");
+    expect(strstr(agent_host_last_transcript_tool(), "deny-tool:") != NULL, "fs.write deny in transcript");
+
+    agent_host_clear_transcript_tool();
+    expect(agent_tool_fs_read("/etc/passwd", NULL, 0, NULL) != 0, "fs.read path denied");
+    expect(strstr(agent_host_last_transcript_tool(), "deny-path:") != NULL, "fs.read deny-path in transcript");
+
+    agent_host_clear_transcript_tool();
+    char out[64];
+    expect(agent_tool_net_ping("example.com", out, sizeof(out)) != 0, "net.ping denied by deny_tools");
+    expect(strstr(agent_host_last_transcript_tool(), "deny-tool:") != NULL, "net.ping deny in transcript");
+}
+
 static void test_planner_diff_and_fetch(void) {
     agent_host_vfs_reset();
     agent_policy_load_defaults();
@@ -397,6 +423,7 @@ int main(void) {
     test_audit_tail_formatted();
     test_fs_exec_allowlist();
     test_fs_diff_and_net_fetch();
+    test_deny_reason_in_transcript();
     test_planner_diff_and_fetch();
 
     if (fails) {

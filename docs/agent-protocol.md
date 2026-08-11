@@ -60,6 +60,8 @@ Defaults allow `/home/dev/workspace` and `/var/peak/sessions`. Seeded policy inc
 
 Shell `policy` prints the active policy with labeled sections (paths, tools, approval). `policy catalog [filter]` lists all agent tools with allow/deny and deny-reason strings; `policy --filter <needle>` filters path/tool rows.
 
+Denied tool calls note a human-readable reason into the Agent transcript (via `agent_policy_deny_reason` for path/tool denials, plus explicit notes for privacy, syntax, scheme, and protected-path denials).
+
 ## Audit / memory / vectors
 
 - `/var/peak/audit.log` — structured `actor|op|target|decision`
