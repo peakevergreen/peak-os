@@ -198,6 +198,9 @@ void desktop_minimize_win(int idx) {
     uint32_t ox = wins[idx].x, oy = wins[idx].y, ow = wins[idx].w, oh = wins[idx].h;
     int prev_focus = focus;
     wins[idx].minimized = 1;
+    /* Pause Browser ticks via desktop loop gate; clear latch so idle can hlt. */
+    if (wins[idx].kind == APP_BROWSER)
+        browser_clear_wants_redraw();
     /* Soft-budget reclaim may drop pixels; restore path surface_ensure redraws. */
     surface_set_reclaimable(&wins[idx].surf, 1);
     if (focus == idx) {
@@ -333,6 +336,11 @@ void desktop_close_win(int idx) {
         desktop_abort_pointer_gesture();
     if (ctx_menu && ctx_win == idx)
         desktop_ctx_close();
+    if (wins[idx].kind == APP_BROWSER) {
+        /* Tear down tabs/JS so timers cannot run after close; reopen resets again. */
+        browser_reset();
+        browser_clear_wants_redraw();
+    }
     surface_free(&wins[idx].surf);
     wins[idx].open = 0;
     wins[idx].minimized = 0;
