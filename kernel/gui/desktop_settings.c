@@ -241,6 +241,10 @@ static void settings_hits_reset(void) {
     settings_hit_n = 0;
 }
 
+void desktop_settings_hits_reset(void) {
+    settings_hits_reset();
+}
+
 static void settings_hit_add(uint32_t x, uint32_t y, uint32_t w, uint32_t h,
                              enum settings_hit_act act, int param) {
     if (settings_hit_n >= SETTINGS_HIT_MAX)
@@ -651,7 +655,7 @@ static void settings_hit_dispatch(enum settings_hit_act act, int param) {
             settings_cycle_gui_scale();
         settings_persist();
         settings_notify_persist("/etc/peak/display", "Display");
-        desktop_rescale_windows();
+        desktop_on_ui_scale_changed();
         break;
     case SHIT_THEME:
         if (param >= 0 && param < theme_count()) {

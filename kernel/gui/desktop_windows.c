@@ -144,6 +144,18 @@ void desktop_rescale_windows(void) {
     }
 }
 
+void desktop_on_ui_scale_changed(void) {
+    desktop_menus_close_popups();
+    desktop_overlays_close_popups();
+    desktop_abort_pointer_gesture();
+    desktop_settings_hits_reset();
+    desktop_files_clear_crumb_hits();
+    browser_clear_hit_rects();
+    desktop_rescale_windows();
+    cursor_mx = cursor_my = -1;
+    dirty_bits |= DIRTY_FULL;
+}
+
 const char *desktop_app_title(enum app_kind k) {
     switch (k) {
     case APP_TERM: return "Terminal";

@@ -34,10 +34,15 @@ static void files_draw_focus_ring(uint32_t x, uint32_t y, uint32_t w, uint32_t h
     fb_fill_rect(x + w - t, y, t, h, c);
 }
 
+void desktop_files_clear_crumb_hits(void) {
+    files_crumb_hit_n = 0;
+}
+
 void desktop_files_init(void) {
     files_sel = files_sel_anchor = files_scroll = files_del_arm = files_ctx_empty = 0;
     files_clip_cut = 0;
     files_sel_bits = 0;
+    files_crumb_hit_n = 0;
     files_clip_path[0] = '\0';
 }
 

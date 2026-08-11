@@ -326,8 +326,7 @@ void desktop_run(void) {
         } else if (key == 's' || key == 'S') {
             settings_cycle_gui_scale();
             settings_persist();
-            desktop_rescale_windows();
-            dirty_bits |= DIRTY_FULL;
+            desktop_on_ui_scale_changed();
         }
 
         struct mouse_state m;
