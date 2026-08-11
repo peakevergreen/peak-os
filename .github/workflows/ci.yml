@@ -6,6 +6,10 @@ on:
     branches: [main, master]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   DEBIAN_FRONTEND: noninteractive
 
@@ -24,14 +28,8 @@ jobs:
           key: apt-iso-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install toolchain
         run: |
-          sudo mkdir -p /var/cache/apt/archives
-          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
-            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
-          fi
           chmod +x scripts/ci-install-deps.sh
           ./scripts/ci-install-deps.sh iso
-          mkdir -p "$HOME/apt-archives"
-          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Doctor + ISO
         run: |
           export PATH="/usr/lib/llvm-*/bin:$PATH"
@@ -64,14 +62,8 @@ jobs:
           key: apt-rpi-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install toolchain
         run: |
-          sudo mkdir -p /var/cache/apt/archives
-          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
-            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
-          fi
           chmod +x scripts/ci-install-deps.sh
           ./scripts/ci-install-deps.sh rpi
-          mkdir -p "$HOME/apt-archives"
-          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Doctor + pi-image
         run: |
           export PATH="/usr/lib/llvm-*/bin:$PATH"
@@ -106,14 +98,8 @@ jobs:
           key: apt-host-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install tools
         run: |
-          sudo mkdir -p /var/cache/apt/archives
-          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
-            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
-          fi
           chmod +x scripts/ci-install-deps.sh
           ./scripts/ci-install-deps.sh host
-          mkdir -p "$HOME/apt-archives"
-          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download ISO artifact
         uses: actions/download-artifact@v4
         with:
@@ -156,14 +142,8 @@ jobs:
           key: apt-smoke-qemu-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install QEMU + OVMF
         run: |
-          sudo mkdir -p /var/cache/apt/archives
-          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
-            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
-          fi
           chmod +x scripts/ci-install-deps.sh
           ./scripts/ci-install-deps.sh smoke-qemu
-          mkdir -p "$HOME/apt-archives"
-          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download ISO
         uses: actions/download-artifact@v4
         with:
@@ -190,14 +170,8 @@ jobs:
           key: apt-smoke-peakfs-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install tools
         run: |
-          sudo mkdir -p /var/cache/apt/archives
-          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
-            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
-          fi
           chmod +x scripts/ci-install-deps.sh
           ./scripts/ci-install-deps.sh smoke-peakfs
-          mkdir -p "$HOME/apt-archives"
-          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download ISO
         uses: actions/download-artifact@v4
         with:
@@ -225,14 +199,8 @@ jobs:
           key: apt-smoke-aarch64-${{ hashFiles('scripts/ci-install-deps.sh') }}
       - name: Install QEMU
         run: |
-          sudo mkdir -p /var/cache/apt/archives
-          if [ -d "$HOME/apt-archives" ] && [ "$(ls -A "$HOME/apt-archives" 2>/dev/null)" ]; then
-            sudo cp -a "$HOME/apt-archives/." /var/cache/apt/archives/ || true
-          fi
           chmod +x scripts/ci-install-deps.sh
           ./scripts/ci-install-deps.sh smoke-aarch64
-          mkdir -p "$HOME/apt-archives"
-          sudo cp -a /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
       - name: Download Pi artifacts
         uses: actions/download-artifact@v4
         with:
