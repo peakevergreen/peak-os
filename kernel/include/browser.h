@@ -20,6 +20,8 @@ int browser_tab_index_for_js_host(const struct browser_js_host *h);
 void browser_click(int32_t lx, int32_t ly, uint32_t w, uint32_t h);
 int  browser_wants_redraw(void);
 void browser_clear_wants_redraw(void);
+/* Zero cached chrome hit rects (call on UI scale change before redraw). */
+void browser_clear_hit_rects(void);
 /* Drain per-tab JS timers/microtasks; may set wants_redraw. */
 void browser_tick(void);
 /* Aggregate JS metrics across tabs (for Monitor). */

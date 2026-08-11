@@ -125,6 +125,7 @@ void desktop_clamp_win_geom(struct win *w) {
 
 void desktop_rescale_windows(void) {
     struct framebuffer *fb = fb_get();
+    browser_clear_hit_rects();
     for (int i = 0; i < MAX_WINS; i++) {
         if (!wins[i].open)
             continue;

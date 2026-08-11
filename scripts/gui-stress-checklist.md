@@ -118,6 +118,7 @@ Product profile: **1080p @ UI scale 3**.
 - [ ] `gui` → sign in → idle: serial shows no DNS/TCP/HTTP/TLS attempts and no `TLS certificate unverified`
 - [ ] Browser default tab is local Peak JS demo (`peak://demo`, no network)
 - [ ] Explicit Browser Go without trust pin fails inside Browser only (no desktop startup failure)
+- [ ] TLS error page: Retry / Accept / Forget clickable at UI scale 1 and 4 (client-relative hits)
 
 ## Browser JavaScript
 
