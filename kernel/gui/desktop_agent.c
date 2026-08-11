@@ -86,19 +86,22 @@ void desktop_agent_draw(struct win *w) {
     uint32_t lh = fb_char_h() + desktop_u(4);
     uint32_t input_h = lh * AGENT_INPUT_LINES + desktop_u(12);
     uint32_t filter_h = agent_transcript_filter_active() ? lh + desktop_u(8) : 0;
-    uint32_t appr_h = agent_write_pending() ? lh * 3 + desktop_u(16) : 0;
+    uint32_t appr_h = 0;
+    if (agent_write_pending())
+        appr_h = lh * 3 + desktop_u(16);
+    else if (agent_pending_approvals() > 0)
+        appr_h = lh * 2 + desktop_u(8);
     uint32_t gap = desktop_u(4);
-    uint32_t reserved = input_h + appr_h + filter_h + gap * 2;
-    uint32_t trans_h = ah > reserved ? ah - reserved : ah / 2;
+    uint32_t reserved = input_h + appr_h + filter_h + gap * 3;
+    uint32_t trans_h = ah > reserved ? ah - reserved : lh * 3;
     agent_gui_draw(ax, ay, aw, trans_h);
     uint32_t cy = ay + trans_h + gap;
     if (agent_write_pending()) {
         agent_approval_draw(ax, cy, aw, appr_h);
         cy += appr_h + gap;
     } else if (agent_pending_approvals() > 0) {
-        uint32_t qh = lh * 2 + desktop_u(8);
         agent_approval_queue_draw(ax, cy, aw);
-        cy += qh + gap;
+        cy += appr_h + gap;
     }
     if (agent_transcript_filter_active()) {
         agent_filter_bar_draw(ax, cy, aw, lh);
@@ -193,4 +196,13 @@ int desktop_agent_click(void) {
     agent_notify_done();
     dirty_bits |= DIRTY_WIN;
     return 1;
+}
+
+void desktop_agent_wheel(int wheel) {
+    if (!wheel)
+        return;
+    if (agent_transcript_scroll(wheel > 0 ? 1 : -1)) {
+        dirty_bits |= DIRTY_WIN;
+        desktop_mark_focus_surf_dirty();
+    }
 }

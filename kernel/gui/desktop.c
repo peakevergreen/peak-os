@@ -345,6 +345,8 @@ void desktop_run(void) {
                 monitor_input(m.wheel > 0 ? '[' : ']');
                 dirty_bits |= DIRTY_MONITOR;
                 desktop_mark_focus_surf_dirty();
+            } else if (agent_focus) {
+                desktop_agent_wheel(m.wheel);
             }
         }
 

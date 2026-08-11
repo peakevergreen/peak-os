@@ -341,6 +341,7 @@ void desktop_app_opened(enum app_kind k);
 void desktop_agent_draw(struct win *w);
 int desktop_agent_key(int key);
 int desktop_agent_click(void);
+void desktop_agent_wheel(int wheel);
 
 void desktop_compose_reset_cursor_cache(void);
 

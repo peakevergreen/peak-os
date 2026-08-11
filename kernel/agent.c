@@ -298,53 +298,76 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     uint32_t line_h = ch + 4 * s;
     fb_fill_rect(x, y, w, h, bg);
     fb_fill_rect(x, y, w, 2 * s, acc);
-    fb_draw_string(x + 8 * s, y + 8 * s, "Peak Agent", fg, bg);
-    fb_draw_string(x + 8 * s, y + 8 * s + line_h,
-                   "tools: read write list exec search grep stat sys.info net.ping", dim, bg);
+    fb_draw_string_fit(x + 8 * s, y + 8 * s, w - 16 * s, "Peak Agent", fg, bg);
+    fb_draw_string_fit(x + 8 * s, y + 8 * s + line_h, w - 16 * s,
+                       "tools: read write list exec search grep stat sys.info net.ping",
+                       dim, bg);
 
-    uint32_t ty = y + 8 * s + 2 * line_h;
-    uint32_t body_h = h > 140 * s ? h - 80 * s : (h * 3) / 5;
-    if (body_h < line_h * 2)
-        body_h = line_h * 2;
+    uint32_t hdr = 8 * s + 2 * line_h + 4 * s;
+    uint32_t foot = line_h; /* scroll hint row */
+    if (hdr + foot >= h)
+        foot = 0;
+    uint32_t body_h = h > hdr + foot ? h - hdr - foot : line_h;
     int vis = (int)(body_h / line_h);
     if (vis > AGENT_TLINES)
         vis = AGENT_TLINES;
-    if (vis < 3)
-        vis = 3;
+    if (vis < 1)
+        vis = 1;
 
+    uint32_t ty = y + hdr;
     int start = tcount - vis - tscroll;
     if (start < 0)
         start = 0;
-    for (int row = 0; row < vis; row++) {
-        int idx = start + row;
-        const char *txt = "(no session — type a goal below)";
-        if (idx >= 0 && idx < tcount) {
-            if (agent_transcript_filter[0]) {
-                const char *f = agent_transcript_filter;
-                const char *s = tlines[idx];
-                int ok = 0;
-                for (; *s; s++) {
-                    if (*s == *f) { f++; if (!*f) { ok = 1; break; } }
-                    else f = agent_transcript_filter;
+
+    /* Compact filter: only draw matching lines (no blank gaps). */
+    int drawn = 0;
+    int idx = start;
+    while (drawn < vis && idx < tcount) {
+        const char *txt = tlines[idx];
+        int show = 1;
+        if (agent_transcript_filter[0]) {
+            const char *f = agent_transcript_filter;
+            const char *p = txt;
+            show = 0;
+            for (; *p; p++) {
+                if (*p == *f) {
+                    f++;
+                    if (!*f) {
+                        show = 1;
+                        break;
+                    }
+                } else {
+                    f = agent_transcript_filter;
                 }
-                if (!ok) { txt = "(filtered)"; if (agent_transcript_filter[0]) txt = "…"; continue; }
             }
-            txt = tlines[idx];
         }
-        else if (tcount == 0 && row == vis - 1)
-            txt = last_summary[0] ? last_summary : txt;
-        uint32_t line_fg = fg; if (txt[0]=='[' && (!strncmp(txt,"[audit]",7)||!strncmp(txt,"[tool]",6)||!strncmp(txt,"[pending",8)||!strncmp(txt,"[write",6))) line_fg = dim; fb_draw_string_fit(x + 8 * s, ty + (uint32_t)row * line_h, w - 16 * s, txt, line_fg, bg);
+        idx++;
+        if (!show)
+            continue;
+        uint32_t line_fg = fg;
+        if (txt[0] == '[' &&
+            (!strncmp(txt, "[audit]", 7) || !strncmp(txt, "[tool]", 6) ||
+             !strncmp(txt, "[pending", 8) || !strncmp(txt, "[write", 6) ||
+             !strncmp(txt, "[plan]", 6)))
+            line_fg = dim;
+        fb_draw_string_fit(x + 8 * s, ty + (uint32_t)drawn * line_h, w - 16 * s,
+                           txt, line_fg, bg);
+        drawn++;
+    }
+    if (tcount == 0 && drawn == 0) {
+        const char *empty = last_summary[0] ? last_summary
+                                            : "(no session — type a goal below)";
+        fb_draw_string_fit(x + 8 * s, ty, w - 16 * s, empty, fg, bg);
     }
 
-    if (tcount > vis) {
+    if (foot && tcount > vis) {
         char hint[64];
-        snprintf(hint, sizeof(hint), "scroll %d/%d  Up/Down  Ctrl+Up/Down  Home/End", tscroll, tcount - vis);
-        fb_draw_string_fit(x + 8 * s, ty + (uint32_t)vis * line_h, w - 16 * s, hint, dim, bg);
+        snprintf(hint, sizeof(hint), "scroll %d/%d  Up/Down  Ctrl+Up/Down  Home/End",
+                 tscroll, tcount - vis);
+        fb_draw_string_fit(x + 8 * s, ty + (uint32_t)vis * line_h, w - 16 * s,
+                           hint, dim, bg);
     }
-
-    uint32_t fy = ty + (uint32_t)(vis + (tcount > vis ? 1 : 0)) * line_h + 4 * s;
-    agent_approval_queue_draw(x + 8 * s, fy, w - 16 * s);
-
+    /* Approval queue is drawn by desktop_agent_draw (single path). */
 }
 
 int agent_transcript_filter_active(void) {
