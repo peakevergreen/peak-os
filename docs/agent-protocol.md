@@ -55,7 +55,7 @@ single verb+slot table (`parse_slots` in `agent_planner.c`) covering:
 
 Unrecognized goals fail loudly with a `try:` hint instead of silently creating a stub file.
 
-Session memory is structured (`turn|goal=…|t=…|p=…`) under `/var/peak/sessions/memory.txt` and **read back** on each `ask`. Turns are also upserted into PeakVec for semantic recall.
+Session memory is structured (`turn|goal=…|t=…|p=…|o=ok|r=summary`) under `/var/peak/sessions/memory.txt` and **read back** on each `ask`. Turns are also upserted into PeakVec for semantic recall. Outcome `o=` is `ok` / `error` / `denied` / `pending`; `r=` holds the short result summary.
 
 ## Policy
 
