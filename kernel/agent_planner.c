@@ -329,6 +329,168 @@ static void set_summary(char *summary, size_t summary_cap, const char *s) {
     summary[i] = '\0';
 }
 
+static int path_is_c(const char *path) {
+    size_t n = path ? strlen(path) : 0;
+    return n >= 2 && path[n - 2] == '.' && path[n - 1] == 'c';
+}
+
+static int path_is_md(const char *path) {
+    size_t n = path ? strlen(path) : 0;
+    return n >= 3 && path[n - 3] == '.' && path[n - 2] == 'm' && path[n - 1] == 'd';
+}
+
+static int path_is_txt(const char *path) {
+    size_t n = path ? strlen(path) : 0;
+    return n >= 4 && path[n - 4] == '.' && path[n - 3] == 't' &&
+           path[n - 2] == 'x' && path[n - 1] == 't';
+}
+
+/* Returns 1 if a known template was applied, 0 if no match (caller should refuse). */
+static int scaffold_create(const char *goal, const char *path,
+                           char *out, size_t out_cap) {
+    if (!out || out_cap < 32)
+        return 0;
+    out[0] = '\0';
+    int is_c = path_is_c(path);
+    int is_md = path_is_md(path);
+
+    if (is_c && contains_ci(goal, "fib")) {
+        snprintf(out, out_cap,
+                 "/* peak-agent: fibonacci */\n"
+                 "#include <stdio.h>\n"
+                 "static int fib(int n) {\n"
+                 "    if (n < 2) return n;\n"
+                 "    return fib(n - 1) + fib(n - 2);\n"
+                 "}\n"
+                 "int main(void) {\n"
+                 "    for (int i = 0; i < 10; i++)\n"
+                 "        printf(\"%%d\\n\", fib(i));\n"
+                 "    return 0;\n"
+                 "}\n");
+        return 1;
+    }
+    if (is_c && (contains_ci(goal, "hello") || contains_ci(goal, "hello world"))) {
+        snprintf(out, out_cap,
+                 "/* peak-agent: hello */\n"
+                 "#include <stdio.h>\n"
+                 "int main(void) {\n"
+                 "    printf(\"hello, peak\\n\");\n"
+                 "    return 0;\n"
+                 "}\n");
+        return 1;
+    }
+    if (is_c && (contains_ci(goal, "http") || contains_ci(goal, "server"))) {
+        snprintf(out, out_cap,
+                 "/* peak-agent: http stub (guest has no sockets in this scaffold) */\n"
+                 "#include <stdio.h>\n"
+                 "int main(void) {\n"
+                 "    printf(\"http stub — use net.fetch / Peak Browser for live HTTP\\n\");\n"
+                 "    return 0;\n"
+                 "}\n");
+        return 1;
+    }
+    if (is_c && contains_ci(goal, "makefile")) {
+        /* unusual; fall through */
+    }
+    if (contains_ci(goal, "makefile") || contains_ci(path, "makefile")) {
+        snprintf(out, out_cap,
+                 "# peak-agent Makefile\n"
+                 "CC=clang\n"
+                 "CFLAGS=-Wall -Wextra\n"
+                 "all: main\n"
+                 "main: main.c\n"
+                 "\t$(CC) $(CFLAGS) -o $@ $<\n"
+                 "clean:\n"
+                 "\trm -f main\n");
+        return 1;
+    }
+    if (is_md && (contains_ci(goal, "readme") || contains_ci(path, "README"))) {
+        snprintf(out, out_cap,
+                 "# Workspace notes\n\n"
+                 "Created by peak-agent.\n\n"
+                 "## Goal\n\n%s\n",
+                 goal ? goal : "");
+        return 1;
+    }
+    if (is_c) {
+        /* Generic but non-empty C — still varies via goal comment; body is hello-style. */
+        snprintf(out, out_cap,
+                 "/* peak-agent create */\n"
+                 "/* goal: %s */\n"
+                 "#include <stdio.h>\n"
+                 "int main(void) {\n"
+                 "    printf(\"ok\\n\");\n"
+                 "    return 0;\n"
+                 "}\n",
+                 goal ? goal : "");
+        return 1;
+    }
+    if (is_md || path_is_txt(path)) {
+        snprintf(out, out_cap, "# peak-agent\n\n%s\n", goal ? goal : "");
+        return 1;
+    }
+    /* Unknown extension / no template match */
+    return 0;
+}
+
+/* Apply a real transform to existing content. Returns 1 on success, 0 if no transform matched. */
+static int apply_edit_transform(const char *goal, const char *existing, size_t existing_n,
+                                char *out, size_t out_cap) {
+    if (!out || out_cap < 8 || !existing)
+        return 0;
+    out[0] = '\0';
+
+    if (contains_ci(goal, "error handling") || contains_ci(goal, "check return") ||
+        contains_ci(goal, "null check")) {
+        /* Wrap main body with a simple errno-style note + guard stub at top. */
+        snprintf(out, out_cap,
+                 "%.*s"
+                 "\n/* peak-agent edit: added error-handling stub */\n"
+                 "static int peak_check(int rc, const char *what) {\n"
+                 "    if (rc != 0) {\n"
+                 "        /* TODO: log %%s failed */\n"
+                 "        (void)what;\n"
+                 "        return -1;\n"
+                 "    }\n"
+                 "    return 0;\n"
+                 "}\n",
+                 (int)(existing_n < out_cap / 2 ? existing_n : out_cap / 2), existing);
+        return 1;
+    }
+    if (contains_ci(goal, "print") || contains_ci(goal, "printf") ||
+        contains_ci(goal, "log ")) {
+        snprintf(out, out_cap,
+                 "%.*s"
+                 "\n/* peak-agent edit: printf helper */\n"
+                 "static void peak_log(const char *msg) {\n"
+                 "    /* printf(\"%%s\\n\", msg); */\n"
+                 "    (void)msg;\n"
+                 "}\n",
+                 (int)(existing_n < out_cap / 2 ? existing_n : out_cap / 2), existing);
+        return 1;
+    }
+    if (contains_ci(goal, "recursion") || contains_ci(goal, "recursive")) {
+        snprintf(out, out_cap,
+                 "%.*s"
+                 "\n/* peak-agent edit: recursive helper */\n"
+                 "static int peak_recur(int n) {\n"
+                 "    if (n <= 0) return 0;\n"
+                 "    return n + peak_recur(n - 1);\n"
+                 "}\n",
+                 (int)(existing_n < out_cap / 2 ? existing_n : out_cap / 2), existing);
+        return 1;
+    }
+    if (contains_ci(goal, "todo") || contains_ci(goal, "comment")) {
+        snprintf(out, out_cap,
+                 "%.*s"
+                 "\n/* TODO(peak-agent): %s */\n",
+                 (int)(existing_n < out_cap - 80 ? existing_n : out_cap - 80), existing,
+                 goal ? goal : "follow-up");
+        return 1;
+    }
+    return 0;
+}
+
 void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
     console_write_ui("[agent] planner\n");
     console_printf_ui("[agent] goal: %s\n", goal);
@@ -684,54 +846,38 @@ void agent_plan_goal(const char *goal, char *summary, size_t summary_cap) {
 
         char content[AGENT_PENDING_CONTENT_MAX];
         memset(content, 0, sizeof(content));
-        size_t o = 0;
-        int is_c = 0;
-        for (const char *q = path; *q; q++) {
-            if (q[0] == '.' && q[1] == 'c' && q[2] == '\0')
-                is_c = 1;
-        }
 
         if (intent == INTENT_EDIT) {
             char existing[AGENT_READ_CONTENT_MAX];
             size_t n = 0;
             if (agent_tool_fs_read(path, existing, sizeof(existing), &n) == 0 && n) {
                 TOOL_NOTE("fs.read");
-                for (size_t i = 0; i < n && o + 1 < sizeof(content); i++)
-                    content[o++] = existing[i];
-                const char *mark = "\n/* peak-agent edit: ";
-                for (const char *q = mark; *q && o + 1 < sizeof(content); q++)
-                    content[o++] = *q;
-                for (const char *q = goal; *q && o + 4 < sizeof(content); q++)
-                    content[o++] = *q;
-                content[o++] = '*';
-                content[o++] = '/';
-                content[o++] = '\n';
-                content[o] = '\0';
+                if (!apply_edit_transform(goal, existing, n, content, sizeof(content))) {
+                    agent_tool_console_print(
+                        "[agent] no edit transform matched — try: "
+                        "\"edit … error handling\" | \"edit … print\" | "
+                        "\"edit … recursion\" | \"edit … todo\"");
+                    TOOL_NOTE("console.print");
+                    set_summary(summary, summary_cap, "edit refused");
+                    memory_append_turn(goal, tools_used, path);
+                    return;
+                }
             } else {
                 intent = INTENT_CREATE;
             }
         }
 
         if (intent == INTENT_CREATE || content[0] == '\0') {
-            o = 0;
-            if (is_c) {
-                const char *prefix = "/* generated by peak-agent */\n/* goal: ";
-                for (const char *q = prefix; *q; q++)
-                    content[o++] = *q;
-                for (const char *q = goal; *q && o + 8 < sizeof(content); q++)
-                    content[o++] = *q;
-                const char *suffix = " */\nint main(void) { return 0; }\n";
-                for (const char *q = suffix; *q && o + 1 < sizeof(content); q++)
-                    content[o++] = *q;
-            } else {
-                const char *prefix = "# peak-agent\n\ngoal: ";
-                for (const char *q = prefix; *q; q++)
-                    content[o++] = *q;
-                for (const char *q = goal; *q && o + 2 < sizeof(content); q++)
-                    content[o++] = *q;
-                content[o++] = '\n';
+            if (!scaffold_create(goal, path, content, sizeof(content))) {
+                agent_tool_console_print(
+                    "[agent] no create template matched — try: "
+                    "\"create fib.c\" | \"create hello.c\" | "
+                    "\"create README.md\" | \"create Makefile\"");
+                TOOL_NOTE("console.print");
+                set_summary(summary, summary_cap, "create refused");
+                memory_append_turn(goal, tools_used, path);
+                return;
             }
-            content[o] = '\0';
         }
 
         console_printf_ui("[agent] tool fs.write %s\n", path);
