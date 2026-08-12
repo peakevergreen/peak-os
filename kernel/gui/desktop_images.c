@@ -227,18 +227,25 @@ static uint32_t img_status_h(void) {
     return fb_cell_h() + desktop_u(4);
 }
 
+/* Path/header strip below title — shared by viewport origin + height budget. */
+static uint32_t img_header_h(void) {
+    return desktop_u(6) + fb_cell_h() + desktop_u(4);
+}
+
+/* Shared viewport for draw + pan hit (was magic desktop_u(20) height vs formula origin). */
 static void img_viewport_geom(struct win *w, uint32_t *tx, uint32_t *ty, uint32_t *cw, uint32_t *ch) {
     uint32_t th = desktop_title_h();
+    uint32_t header_h = img_header_h();
     if (tx)
         *tx = w->x + desktop_u(8);
     if (ty)
-        *ty = w->y + th + desktop_u(6) + fb_cell_h() + desktop_u(4);
+        *ty = w->y + th + header_h;
     if (cw)
         *cw = w->w > desktop_u(16) ? w->w - desktop_u(16) : w->w;
     if (ch) {
         uint32_t status = img_status_h();
-        *ch = w->h > th + desktop_u(20) + status
-                  ? w->h - th - desktop_u(20) - status
+        *ch = w->h > th + header_h + status
+                  ? w->h - th - header_h - status
                   : desktop_u(40);
     }
 }
