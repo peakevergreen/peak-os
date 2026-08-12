@@ -28,15 +28,15 @@ static uint32_t block_fg(struct br_tab *t, enum br_kind k) {
 static uint32_t block_gap(enum br_kind k, uint32_t ch) {
     switch (k) {
     case BR_H1:
-        return ch / 2 + 6;
+        return ch / 2 + browser_u(6);
     case BR_H2:
-        return ch / 3 + 4;
+        return ch / 3 + browser_u(4);
     case BR_HR:
-        return ch / 2 + 4;
+        return ch / 2 + browser_u(4);
     case BR_SPACER:
         return ch / 3;
     default:
-        return 3;
+        return browser_u(3);
     }
 }
 
@@ -338,7 +338,7 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
                 const char *label = b->text;
                 if (b->node_id == t->focus_node && t->focus_value[0])
                     label = t->focus_value;
-                fb_draw_string(bx + 4, draw_y + 4, label, t->page_fg, bgc);
+                fb_draw_string(bx + browser_u(4), draw_y + browser_u(4), label, t->page_fg, bgc);
                 continue;
             }
             if (b->style.background.set) {
@@ -368,7 +368,7 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
                 uint32_t ly = cy + ch / 3;
                 if (ly + 2 < max_y)
                     fb_fill_rect(cx, ly, content_w, 2, t->page_muted);
-                cy += block_gap(k, ch) + 4;
+                cy += block_gap(k, ch) + browser_u(4);
                 continue;
             }
 

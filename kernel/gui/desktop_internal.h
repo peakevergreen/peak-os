@@ -193,6 +193,9 @@ int desktop_chrome_btns(const struct win *w, uint32_t *close_x, uint32_t *max_x,
                         uint32_t *min_x, uint32_t *by, uint32_t *bs);
 uint32_t desktop_win_min_w(void);
 uint32_t desktop_win_min_h(void);
+/* Browser content rect inside a window (draw + click must agree). */
+void browser_client_rect(const struct win *w, uint32_t *x, uint32_t *y,
+                         uint32_t *cw, uint32_t *ch);
 int desktop_hit_resize_edge(struct win *w, int32_t mx, int32_t my);
 int desktop_hit_resize_grip(struct win *w, int32_t mx, int32_t my);
 void desktop_clamp_win_geom(struct win *w);
