@@ -156,11 +156,16 @@ static int push_box(struct css_box *boxes, int max_boxes, int *n, int *y, int *x
     int gap_y = layout_u(4);
     int gap_x = layout_u(8);
     int min_w = layout_u(40);
-    int w = content_w - (st->margin + st->padding) * 2;
-    if (st->width > 0 && st->width < w)
-        w = st->width;
-    if (st->max_width > 0 && st->max_width < w)
-        w = st->max_width;
+    /* Horizontal metrics track UI scale like heights (raw CSS px → layout_u). */
+    int margin = layout_u(st->margin);
+    int padding = layout_u(st->padding);
+    int css_w = st->width > 0 ? layout_u(st->width) : 0;
+    int css_max_w = st->max_width > 0 ? layout_u(st->max_width) : 0;
+    int w = content_w - (margin + padding) * 2;
+    if (css_w > 0 && css_w < w)
+        w = css_w;
+    if (css_max_w > 0 && css_max_w < w)
+        w = css_max_w;
     if (w < min_w)
         w = content_w > min_w ? content_w - gap_x : content_w;
     /* Heights track Peak cells / UI scale, not raw CSS px defaults. */
@@ -178,8 +183,9 @@ static int push_box(struct css_box *boxes, int max_boxes, int *n, int *y, int *x
             h = layout_u(st->height);
         else
             h = layout_u(48);
-        if (st->width > 0)
-            w = st->width;
+        /* CSS width scales for placeholder boxes; decoded blit dims stay raw px. */
+        if (css_w > 0)
+            w = css_w;
     }
     if (kind == 2 || kind == 3) {
         if (st->height > 0)
@@ -193,12 +199,12 @@ static int push_box(struct css_box *boxes, int max_boxes, int *n, int *y, int *x
     }
 
     if (block || display != 1) {
-        *x_inline = st->margin + st->padding;
+        *x_inline = margin + padding;
         boxes[*n].x = *x_inline;
-        boxes[*n].y = *y + st->margin;
+        boxes[*n].y = *y + margin;
     } else {
         if (*x_inline + w > content_w) {
-            *x_inline = st->margin + st->padding;
+            *x_inline = margin + padding;
             *y += h + gap_y;
         }
         boxes[*n].x = *x_inline;
@@ -215,7 +221,7 @@ static int push_box(struct css_box *boxes, int max_boxes, int *n, int *y, int *x
     else
         boxes[*n].text[0] = '\0';
     if (block || display != 1)
-        *y = boxes[*n].y + h + gap_y + st->margin;
+        *y = boxes[*n].y + h + gap_y + margin;
     (*n)++;
     return 0;
 }
