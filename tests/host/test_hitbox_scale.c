@@ -2,12 +2,15 @@
  * Host tests for UI-scale hit metrics (mirrors desktop/browser helpers without
  * linking full GUI — same approach as test_desktop_titles.c).
  *
- * Covers contracts that exist on main:
+ * Covers contracts that exist on main (plus fail-closed clear mirrors):
  *   desktop_u / desktop_title_h scale consistency
  *   browser_clear_hit_rects zeros widths (fail-closed hits)
  *   shared Files list origin formula (draw + hit must agree)
  *   browser_layout_content_w matches browser_draw (scaled pad inset)
  *   shared browser_client_rect (draw + click height pad u(6))
+ *   browser_chrome_h and desktop_chrome_btn_strip_w scale with UI
+ *   Monitor export hit clear fails closed
+ *   Net Control DHCP / outbound row Y from shared layout
  */
 #include <stdio.h>
 #include <stdint.h>
@@ -84,8 +87,77 @@ static void browser_client_rect(uint32_t win_x, uint32_t win_y, uint32_t win_w, 
         *ch = win_h - desktop_title_h() - desktop_u(6);
 }
 
-/* Mirror browser_u from browser_internal.h */
+
+/* Mirror browser_u / chrome metrics from browser_internal.h */
 static uint32_t browser_u(uint32_t v) { return v * fb_ui_scale(); }
+
+struct browser_chrome_metrics {
+    uint32_t ch;
+    uint32_t pad;
+    uint32_t gap;
+    uint32_t gap_lg;
+    uint32_t tab_pad;
+};
+
+static void browser_chrome_metrics_init(struct browser_chrome_metrics *m) {
+    m->ch = fb_cell_h();
+    m->pad = browser_u(6);
+    m->gap = browser_u(4);
+    m->gap_lg = browser_u(8);
+    m->tab_pad = browser_u(6);
+}
+
+static uint32_t browser_chrome_tab_h(const struct browser_chrome_metrics *m) {
+    return m->ch + m->tab_pad;
+}
+
+/* Matches draw: tab_h + ch + pad*2 + 8 [+ bm_h + 4]. */
+static uint32_t browser_chrome_h(const struct browser_chrome_metrics *m,
+                                 uint32_t tab_h, uint32_t bm_h) {
+    uint32_t h = tab_h + m->ch + m->pad * 2 + m->gap_lg;
+    if (bm_h > 0)
+        h += bm_h + m->gap;
+    return h;
+}
+
+/*
+ * Intended layout content width (must match browser_draw):
+ *   draw_w - pad*2 - browser_u(12).
+ */
+static int browser_layout_content_w_for_draw_w(uint32_t draw_w) {
+    struct browser_chrome_metrics cm;
+    browser_chrome_metrics_init(&cm);
+    int cw = (int)draw_w - (int)(cm.pad * 2 + browser_u(12));
+    if (cw < 40)
+        cw = 40;
+    return cw;
+}
+
+static int browser_draw_content_w_for_draw_w(uint32_t draw_w) {
+    uint32_t pad = browser_u(6);
+    int cw = (int)draw_w - (int)(pad * 2 + browser_u(12));
+    if (cw < 40)
+        cw = 40;
+    return cw;
+}
+
+/* Mirror desktop_chrome_btn_strip_w (desktop_windows.c). */
+static uint32_t desktop_chrome_btn_strip_w(void) {
+    uint32_t bsz = desktop_u(14);
+    uint32_t gap = desktop_u(4);
+    return desktop_u(22) + 2 * (bsz + gap);
+}
+
+/*
+ * Mirror monitor_clear_hit_rects contract (export w/h zeroed → fail-closed).
+ */
+struct monitor_hits {
+    uint32_t export_x, export_y, export_w, export_h;
+};
+
+static void monitor_clear_hit_rects(struct monitor_hits *h) {
+    h->export_w = h->export_h = 0;
+}
 
 static int fails;
 
@@ -206,9 +278,8 @@ static void test_browser_layout_content_w(void) {
         g_scale = s;
         uint32_t win_w = 800;
         uint32_t draw_w = win_w > desktop_u(8) ? win_w - desktop_u(8) : win_w;
-        uint32_t pad = browser_u(6); /* browser_chrome_metrics.pad */
-        int draw_cw = (int)draw_w - (int)(pad * 2 + browser_u(12));
-        int layout_cw = (int)draw_w - (int)(pad * 2 + browser_u(12));
+        int draw_cw = browser_draw_content_w_for_draw_w(draw_w);
+        int layout_cw = browser_layout_content_w_for_draw_w(draw_w);
         expect(layout_cw == draw_cw, "layout content_w matches draw");
         expect(layout_cw == (int)draw_w - (int)(6 * s * 2 + 12 * s),
                "content_w = draw_w - (pad*2 + 12) * scale");
@@ -218,6 +289,58 @@ static void test_browser_layout_content_w(void) {
             expect(layout_cw != (int)draw_w - 24, "scale>1: not hardcoded -24");
     }
     g_scale = 1;
+}
+
+
+static void test_browser_chrome_h(void) {
+    uint32_t prev = 0;
+    for (uint32_t s = 1; s <= 4; s++) {
+        g_scale = s;
+        struct browser_chrome_metrics cm;
+        browser_chrome_metrics_init(&cm);
+        uint32_t tab_h = browser_chrome_tab_h(&cm);
+        uint32_t h0 = browser_chrome_h(&cm, tab_h, 0);
+        uint32_t bm_h = fb_cell_h();
+        uint32_t h1 = browser_chrome_h(&cm, tab_h, bm_h);
+
+        expect(tab_h == cm.ch + browser_u(6), "tab_h = ch + tab_pad");
+        expect(h0 == tab_h + cm.ch + cm.pad * 2 + cm.gap_lg, "chrome_h without bookmarks");
+        expect(h1 == h0 + bm_h + cm.gap, "chrome_h adds bm_h + gap");
+        expect(h0 >= prev, "chrome_h non-decreasing across scales");
+        prev = h0;
+    }
+    g_scale = 1;
+}
+
+static void test_desktop_chrome_btn_strip_w(void) {
+    uint32_t prev = 0;
+    for (uint32_t s = 1; s <= 4; s++) {
+        g_scale = s;
+        uint32_t bsz = desktop_u(14);
+        uint32_t gap = desktop_u(4);
+        uint32_t need = desktop_chrome_btn_strip_w();
+        expect(need == desktop_u(22) + 2 * (bsz + gap), "strip_w formula");
+        expect(need == (22 + 2 * (14 + 4)) * s, "strip_w scales linearly");
+        expect(need >= prev, "strip_w non-decreasing");
+        expect(need > 0, "strip_w positive");
+        prev = need;
+    }
+    g_scale = 1;
+}
+
+static void test_monitor_clear_hit_rects(void) {
+    struct monitor_hits h;
+    h.export_x = 10;
+    h.export_y = 20;
+    h.export_w = 80;
+    h.export_h = 18;
+    expect(point_in(40, 28, h.export_x, h.export_y, h.export_w, h.export_h),
+           "export hit live before clear");
+    monitor_clear_hit_rects(&h);
+    expect(h.export_w == 0 && h.export_h == 0, "export w/h zeroed");
+    expect(h.export_x == 10 && h.export_y == 20, "export xy preserved");
+    expect(!point_in(40, 28, h.export_x, h.export_y, h.export_w, h.export_h),
+           "export fail-closed after clear");
 }
 
 /* Mirror netctl_layout DHCP / outbound offsets (desktop_netctl.c). */
@@ -247,6 +370,9 @@ int main(void) {
     test_browser_chrome_pads_scale();
     test_browser_layout_content_w();
     test_browser_client_rect();
+    test_browser_chrome_h();
+    test_desktop_chrome_btn_strip_w();
+    test_monitor_clear_hit_rects();
     test_netctl_layout_rows();
 
     if (fails) {

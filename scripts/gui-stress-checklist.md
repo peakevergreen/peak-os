@@ -96,10 +96,13 @@ Focused pass: change UI scale, then confirm clicks land on the drawn controls (n
 - [ ] After scale 1↔4: titlebar min / max / close chrome hits match buttons (narrow strip still gated)
 - [ ] Open Start / context / help menu, then change scale → menus dismiss; no stale menu hits after redraw
 - [ ] Net Control: DHCP renew click + Outbound/Kill/Persist right-click target drawn rows (scale 1 and 4)
+- [ ] After scale 1↔4: Notepad Save / Find buttons hit the drawn controls (shared toolbar geom)
+- [ ] After scale 1↔4: Images pan/zoom stays aligned to the drawn viewport (header/status geometry)
+- [ ] After scale 1↔4: Monitor Export fails closed until redraw (no stale export hit)
 
 ## Images / surfaces
 
-- [ ] Images zoom/pan stays in viewport (no hang on large negative pan)
+- [ ] Images zoom/pan stays in viewport (no hang on large negative pan; scale 1↔4 covered under Hitboxes / UI scale)
 - [ ] Oversized image decode fails closed (toast / no OOM)
 - [ ] Surface budget / OOM toast does not paint into a failed surface
 
