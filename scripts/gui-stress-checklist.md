@@ -95,6 +95,7 @@ Focused pass: change UI scale, then confirm clicks land on the drawn controls (n
 - [ ] After scale 1↔4: Files list rows select the drawn row (shared list origin)
 - [ ] After scale 1↔4: titlebar min / max / close chrome hits match buttons (narrow strip still gated)
 - [ ] Open Start / context / help menu, then change scale → menus dismiss; no stale menu hits after redraw
+- [ ] Net Control: DHCP renew click + Outbound/Kill/Persist right-click target drawn rows (scale 1 and 4)
 
 ## Images / surfaces
 
