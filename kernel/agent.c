@@ -27,6 +27,11 @@ static char agent_transcript_filter[24];
 static int agent_filter_active;
 static char last_tool_result[AGENT_TLINE];
 
+/* Match desktop_agent: fb_cell_h() + desktop_u(4) without desktop_internal.h. */
+static uint32_t agent_line_h(void) {
+    return fb_cell_h() + 4u * fb_ui_scale();
+}
+
 static void transcript_push_one(const char *line) {
     if (!line)
         return;
@@ -151,7 +156,7 @@ int agent_export_transcript(const char *path) {
 
 void agent_approval_queue_draw(uint32_t x, uint32_t y, uint32_t w) {
     const struct peak_theme *th = theme_get();
-    uint32_t lh = fb_char_h() + 4;
+    uint32_t lh = agent_line_h();
     char line[96];
     if (pending <= 0) {
         fb_draw_string(x, y, "Approval queue: empty", th->dim, th->surface);
@@ -305,8 +310,7 @@ void agent_gui_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     uint32_t acc = th->accent;
     uint32_t dim = th->dim;
     uint32_t s = fb_ui_scale();
-    uint32_t ch = fb_char_h();
-    uint32_t line_h = ch + 4 * s;
+    uint32_t line_h = agent_line_h();
     fb_fill_rect(x, y, w, h, bg);
     fb_fill_rect(x, y, w, 2 * s, acc);
     fb_draw_string_fit(x + 8 * s, y + 8 * s, w - 16 * s, "Peak Agent", fg, bg);
