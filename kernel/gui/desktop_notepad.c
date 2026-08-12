@@ -21,6 +21,37 @@ static void np_draw_focus_ring(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
     fb_fill_rect(x + w - t, y, t, h, c);
 }
 
+/* Shared Save/Find button rects + text origin for draw and mouse hits. */
+struct np_chrome_geom {
+    uint32_t tx;
+    uint32_t save_x, save_y, save_w, save_h;
+    uint32_t find_x, find_y, find_w, find_h;
+    uint32_t text_y;
+    uint32_t ch;
+};
+
+static void np_chrome_geom(struct win *w, struct np_chrome_geom *g) {
+    uint32_t ch = fb_cell_h();
+    uint32_t tx = w->x + desktop_u(8);
+    uint32_t ty = w->y + desktop_title_h() + desktop_u(6);
+    uint32_t bw = desktop_u(56);
+    ty += ch + desktop_u(4); /* path header */
+    g->tx = tx;
+    g->ch = ch;
+    g->save_x = tx;
+    g->save_y = ty;
+    g->save_w = bw;
+    g->save_h = ch;
+    g->find_x = tx + bw + desktop_u(8);
+    g->find_y = ty;
+    g->find_w = bw;
+    g->find_h = ch;
+    ty += ch + desktop_u(4);
+    if (agent_write_pending())
+        ty += ch + desktop_u(6);
+    g->text_y = ty;
+}
+
 #define NOTEPAD_MAX 16384
 #define NOTEPAD_VIS   20
 #define NP_FIND_MAX   48
@@ -268,29 +299,24 @@ static int np_find_key(int key) {
 }
 
 void desktop_notepad_draw(struct win *w) {
-    uint32_t ch = fb_cell_h(), cw = fb_cell_w(), th = desktop_title_h();
-    uint32_t tx = w->x + desktop_u(8), ty = w->y + th + desktop_u(6);
+    struct np_chrome_geom g;
+    np_chrome_geom(w, &g);
+    uint32_t ch = g.ch, cw = fb_cell_w(), th = desktop_title_h();
+    uint32_t tx = g.tx, ty = w->y + th + desktop_u(6);
     uint32_t inner = w->w > desktop_u(16) ? w->w - desktop_u(16) : w->w;
     const char *show = np_path[0] ? np_path : "Untitled";
     for (const char *p = np_path; *p; p++) if (*p == '/') show = p + 1;
     char hdr[96]; snprintf(hdr, sizeof(hdr), "%s%s", show, np_dirty ? " *" : "");
     fb_draw_string_fit(tx, ty, inner, hdr, desktop_color_accent(), desktop_color_bg());
-    ty += ch + desktop_u(4);
-    {
-        uint32_t bw = desktop_u(56);
-        uint32_t by = ty;
-        fb_draw_string(tx, by, "Save", np_a11y_btn == 1 ? desktop_color_bg() : desktop_color_fg(),
-                       np_a11y_btn == 1 ? desktop_color_accent() : desktop_color_surface());
-        if (np_a11y_btn == 1)
-            np_draw_focus_ring(tx, by, bw, ch);
-        uint32_t fx = tx + bw + desktop_u(8);
-        fb_draw_string(fx, by, "Find", np_a11y_btn == 2 ? desktop_color_bg() : desktop_color_fg(),
-                       np_a11y_btn == 2 ? desktop_color_accent() : desktop_color_surface());
-        if (np_a11y_btn == 2)
-            np_draw_focus_ring(fx, by, bw, ch);
-        ty += ch + desktop_u(4);
-    }
-    uint32_t agent_h = 0;
+    fb_draw_string(g.save_x, g.save_y, "Save", np_a11y_btn == 1 ? desktop_color_bg() : desktop_color_fg(),
+                   np_a11y_btn == 1 ? desktop_color_accent() : desktop_color_surface());
+    if (np_a11y_btn == 1)
+        np_draw_focus_ring(g.save_x, g.save_y, g.save_w, g.save_h);
+    fb_draw_string(g.find_x, g.find_y, "Find", np_a11y_btn == 2 ? desktop_color_bg() : desktop_color_fg(),
+                   np_a11y_btn == 2 ? desktop_color_accent() : desktop_color_surface());
+    if (np_a11y_btn == 2)
+        np_draw_focus_ring(g.find_x, g.find_y, g.find_w, g.find_h);
+    ty = g.save_y + g.save_h + desktop_u(4);
     if (agent_write_pending()) {
         const struct peak_theme *thcol = theme_get();
         const char *pp = agent_pending_write_path();
@@ -300,9 +326,8 @@ void desktop_notepad_draw(struct win *w) {
         fb_fill_rect(tx, ty, inner, ch + desktop_u(4), thcol->surface);
         fb_draw_string_fit(tx + desktop_u(4), ty + desktop_u(2), inner - desktop_u(8), abar,
                            thcol->danger, thcol->surface);
-        agent_h = ch + desktop_u(6);
-        ty += agent_h;
     }
+    ty = g.text_y;
     uint32_t find_h = np_find_open ? ch + desktop_u(6) : 0;
     uint32_t used = (ty - w->y) + find_h + desktop_u(8);
     uint32_t area_h = w->h > used ? w->h - used : ch;
@@ -436,20 +461,22 @@ int desktop_notepad_key(int key) {
     return 0;
 }
 
-/* Y of first text row — must match desktop_notepad_draw (hdr + Save/Find [+ agent]). */
-static int32_t np_list_origin_y(struct win *w) {
-    uint32_t ch = fb_cell_h();
-    int32_t y = (int32_t)(w->y + desktop_title_h() + desktop_u(6));
-    y += (int32_t)(ch + desktop_u(4)); /* path header */
-    y += (int32_t)(ch + desktop_u(4)); /* Save / Find row */
-    if (agent_write_pending())
-        y += (int32_t)(ch + desktop_u(6));
-    return y;
-}
-
 int desktop_notepad_click(struct win *w, int32_t mx, int32_t my) {
-    (void)mx;
-    int row = (int)((my - np_list_origin_y(w)) / (int32_t)fb_cell_h());
+    struct np_chrome_geom g;
+    np_chrome_geom(w, &g);
+    if (desktop_point_in(mx, my, g.save_x, g.save_y, g.save_w, g.save_h)) {
+        np_save();
+        np_mark_dirty();
+        return 1;
+    }
+    if (desktop_point_in(mx, my, g.find_x, g.find_y, g.find_w, g.find_h)) {
+        np_find_open = 1;
+        np_find_repl = 0;
+        np_find_pos = -1;
+        np_mark_dirty();
+        return 1;
+    }
+    int row = (int)((my - (int32_t)g.text_y) / (int32_t)g.ch);
     if (row < 0) return 0;
     row += np_scroll; if (row >= np_row_count()) row = np_row_count() - 1;
     np_caret = np_row_start(row); np_clear_sel(); np_mark_dirty(); return 1;
