@@ -7,6 +7,7 @@
  *   browser_clear_hit_rects zeros widths (fail-closed hits)
  *   shared Files list origin formula (draw + hit must agree)
  *   browser_layout_content_w matches browser_draw (scaled pad inset)
+ *   shared browser_client_rect (draw + click height pad u(6))
  */
 #include <stdio.h>
 #include <stdint.h>
@@ -68,6 +69,19 @@ static void files_list_origin(uint32_t win_x, uint32_t win_y,
         *ty = win_y + desktop_title_h() + desktop_u(8) + ch * 4 + desktop_u(4);
     if (row_h)
         *row_h = ch;
+}
+
+/* Mirror browser_client_rect (desktop_windows.c) — draw + click must agree. */
+static void browser_client_rect(uint32_t win_x, uint32_t win_y, uint32_t win_w, uint32_t win_h,
+                                uint32_t *x, uint32_t *y, uint32_t *cw, uint32_t *ch) {
+    if (x)
+        *x = win_x + desktop_u(4);
+    if (y)
+        *y = win_y + desktop_title_h() + desktop_u(2);
+    if (cw)
+        *cw = win_w - desktop_u(8);
+    if (ch)
+        *ch = win_h - desktop_title_h() - desktop_u(6);
 }
 
 /* Mirror browser_u from browser_internal.h */
@@ -161,6 +175,23 @@ static void test_browser_chrome_pads_scale(void) {
         expect(browser_u(6) == 6 * s, "browser pad scales");
         expect(browser_u(4) == 4 * s, "browser gap scales");
         expect(browser_u(8) == 8 * s, "browser gap_lg scales");
+        expect(browser_u(3) == 3 * s, "browser block default gap scales");
+    }
+    g_scale = 1;
+}
+
+static void test_browser_client_rect(void) {
+    for (uint32_t s = 1; s <= 4; s++) {
+        g_scale = s;
+        uint32_t x, y, cw, ch;
+        browser_client_rect(40, 30, 400, 300, &x, &y, &cw, &ch);
+        expect(x == 40 + desktop_u(4), "browser client x");
+        expect(y == 30 + desktop_title_h() + desktop_u(2), "browser client y");
+        expect(cw == 400 - desktop_u(8), "browser client w");
+        /* Draw used u(6); old click path used u(8) — shared helper is u(6). */
+        expect(ch == 300 - desktop_title_h() - desktop_u(6), "browser client h uses u(6)");
+        expect(point_in((int32_t)(x + cw / 2), (int32_t)(y + ch / 2), x, y, cw, ch),
+               "browser client center is inside rect");
     }
     g_scale = 1;
 }
@@ -215,6 +246,7 @@ int main(void) {
     test_files_list_origin();
     test_browser_chrome_pads_scale();
     test_browser_layout_content_w();
+    test_browser_client_rect();
     test_netctl_layout_rows();
 
     if (fails) {

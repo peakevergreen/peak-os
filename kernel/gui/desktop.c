@@ -540,9 +540,9 @@ void desktop_run(void) {
                         } else if (w->kind == APP_NETCTL) {
                             desktop_netctl_click(w, m.x, m.y);
                         } else if (w->kind == APP_BROWSER) {
-                            browser_click(m.x - (int32_t)(w->x + desktop_u(4)),
-                                          m.y - (int32_t)(w->y + desktop_title_h() + desktop_u(2)),
-                                          w->w - desktop_u(8), w->h - desktop_title_h() - desktop_u(8));
+                            uint32_t bx, by, bw, bh;
+                            browser_client_rect(w, &bx, &by, &bw, &bh);
+                            browser_click(m.x - (int32_t)bx, m.y - (int32_t)by, bw, bh);
                             dirty_bits |= DIRTY_BROWSER;
                         } else if (w->kind == APP_MONITOR) {
                             /* Export btn hit rects are absolute (set in monitor_draw). */

@@ -89,7 +89,7 @@ Product profile: **1080p @ UI scale 3**.
 
 Focused pass: change UI scale, then confirm clicks land on the drawn controls (no stale hit caches).
 
-- [ ] Settings → Look: click scale chips 1× ↔ 4× (chips set that scale directly; not a cycle)
+- [ ] Settings → Display: click scale chips 1× ↔ 4× (chips set that scale directly; not a cycle)
 - [ ] After scale change: Settings → Look theme / wallpaper / brand rows still hit the correct control
 - [ ] After scale 1↔4: Browser TLS error Retry / Accept / Forget still clickable (client-relative hits)
 - [ ] After scale 1↔4: Files list rows select the drawn row (shared list origin)

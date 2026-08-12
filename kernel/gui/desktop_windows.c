@@ -85,6 +85,20 @@ int desktop_chrome_btns(const struct win *w, uint32_t *close_x, uint32_t *max_x,
 uint32_t desktop_win_min_w(void) { return desktop_u(180); }
 uint32_t desktop_win_min_h(void) { return desktop_title_h() + desktop_u(100); }
 
+void browser_client_rect(const struct win *w, uint32_t *x, uint32_t *y,
+                         uint32_t *cw, uint32_t *ch) {
+    if (!w)
+        return;
+    if (x)
+        *x = w->x + desktop_u(4);
+    if (y)
+        *y = w->y + desktop_title_h() + desktop_u(2);
+    if (cw)
+        *cw = w->w - desktop_u(8);
+    if (ch)
+        *ch = w->h - desktop_title_h() - desktop_u(6);
+}
+
 int desktop_hit_resize_grip(struct win *w, int32_t mx, int32_t my) {
     uint32_t g = resize_grip();
     return desktop_point_in(mx, my, w->x + w->w - g, w->y + w->h - g, g, g);
@@ -638,8 +652,9 @@ void desktop_draw_win_content(int i) {
         game_draw(w->x + desktop_u(4), w->y + desktop_title_h() + desktop_u(2),
                   w->w - desktop_u(8), w->h - desktop_title_h() - desktop_u(6));
     } else if (w->kind == APP_BROWSER) {
-        browser_draw(w->x + desktop_u(4), w->y + desktop_title_h() + desktop_u(2),
-                     w->w - desktop_u(8), w->h - desktop_title_h() - desktop_u(6));
+        uint32_t bx, by, bw, bh;
+        browser_client_rect(w, &bx, &by, &bw, &bh);
+        browser_draw(bx, by, bw, bh);
     } else if (w->kind == APP_MONITOR) {
         monitor_draw(w->x + desktop_u(4), w->y + desktop_title_h() + desktop_u(2),
                      w->w - desktop_u(8), w->h - desktop_title_h() - desktop_u(6));
