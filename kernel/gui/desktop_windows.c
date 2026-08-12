@@ -241,6 +241,7 @@ void desktop_on_ui_scale_changed(void) {
     desktop_settings_hits_reset();
     desktop_files_clear_crumb_hits();
     browser_clear_hit_rects();
+    monitor_clear_hit_rects();
     desktop_rescale_windows();
     cursor_mx = cursor_my = -1;
     dirty_bits |= DIRTY_FULL;

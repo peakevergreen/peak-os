@@ -14,5 +14,7 @@ void monitor_toggle_pause(void);
 int  monitor_is_paused(void);
 /* Absolute FB coords — hit rects stored during monitor_draw. */
 int  monitor_export_click_at(int32_t mx, int32_t my);
+/* Zero export hit rects on UI scale change (rebuild on next draw). */
+void monitor_clear_hit_rects(void);
 
 #endif

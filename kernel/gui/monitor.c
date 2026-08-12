@@ -66,6 +66,10 @@ void monitor_clear_redraw(void) {
     needs_redraw = 0;
 }
 
+void monitor_clear_hit_rects(void) {
+    mon_export_w = mon_export_h = 0;
+}
+
 void monitor_toggle_pause(void) {
     paused = !paused;
     needs_redraw = 1;
