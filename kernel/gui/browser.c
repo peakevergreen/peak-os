@@ -314,13 +314,15 @@ static void load_page_images(struct br_tab *t) {
     kfree(buf);
 }
 
-/* Match browser_draw content width: draw_w - pad*2 - 12 (pad=6 → 24). */
+/* Match browser_draw content width: draw_w - pad*2 - browser_u(12). */
 int browser_layout_content_w(void) {
     int bi = desktop_find_win(APP_BROWSER);
     if (bi < 0 || !wins[bi].open)
         return 640;
     uint32_t draw_w = wins[bi].w > desktop_u(8) ? wins[bi].w - desktop_u(8) : wins[bi].w;
-    int cw = (int)draw_w - 24;
+    struct browser_chrome_metrics cm;
+    browser_chrome_metrics_init(&cm);
+    int cw = (int)draw_w - (int)(cm.pad * 2 + browser_u(12));
     if (cw < 40)
         cw = 40;
     return cw;

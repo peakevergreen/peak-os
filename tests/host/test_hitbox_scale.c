@@ -6,6 +6,7 @@
  *   desktop_u / desktop_title_h scale consistency
  *   browser_clear_hit_rects zeros widths (fail-closed hits)
  *   shared Files list origin formula (draw + hit must agree)
+ *   browser_layout_content_w matches browser_draw (scaled pad inset)
  */
 #include <stdio.h>
 #include <stdint.h>
@@ -164,6 +165,30 @@ static void test_browser_chrome_pads_scale(void) {
     g_scale = 1;
 }
 
+/*
+ * browser_layout_content_w must match browser_draw:
+ *   content_w = draw_w - pad*2 - browser_u(12)  (pad = browser_u(6))
+ * Old layout used hardcoded -24, which only matches at scale 1.
+ */
+static void test_browser_layout_content_w(void) {
+    for (uint32_t s = 1; s <= 4; s++) {
+        g_scale = s;
+        uint32_t win_w = 800;
+        uint32_t draw_w = win_w > desktop_u(8) ? win_w - desktop_u(8) : win_w;
+        uint32_t pad = browser_u(6); /* browser_chrome_metrics.pad */
+        int draw_cw = (int)draw_w - (int)(pad * 2 + browser_u(12));
+        int layout_cw = (int)draw_w - (int)(pad * 2 + browser_u(12));
+        expect(layout_cw == draw_cw, "layout content_w matches draw");
+        expect(layout_cw == (int)draw_w - (int)(6 * s * 2 + 12 * s),
+               "content_w = draw_w - (pad*2 + 12) * scale");
+        if (s == 1)
+            expect(layout_cw == (int)draw_w - 24, "scale1: equals old -24");
+        else
+            expect(layout_cw != (int)draw_w - 24, "scale>1: not hardcoded -24");
+    }
+    g_scale = 1;
+}
+
 /* Mirror netctl_layout DHCP / outbound offsets (desktop_netctl.c). */
 static void test_netctl_layout_rows(void) {
     for (uint32_t s = 1; s <= 4; s++) {
@@ -189,6 +214,7 @@ int main(void) {
     test_browser_clear_hit_rects();
     test_files_list_origin();
     test_browser_chrome_pads_scale();
+    test_browser_layout_content_w();
     test_netctl_layout_rows();
 
     if (fails) {
