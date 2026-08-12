@@ -10,12 +10,74 @@
 #include "util.h"
 #include "tls_session.h"
 #include "tls.h"
-#include "tls_session.h"
-#include "tls.h"
 
 static int nc_kill_arm;
-static int nc_row; /* context target row */
+static int nc_row; /* context target: 0=outbound 1=kill 2=persist 3=dhcp/-1 */
 static char nc_status[48];
+
+/* Shared row metrics so draw / click / ctx agree under UI scale. */
+struct netctl_layout {
+    uint32_t tx;
+    uint32_t row_h;
+    uint32_t title_y;
+    uint32_t link_y;
+    uint32_t dns_y;
+    uint32_t privacy_hdr_y;
+    uint32_t outbound_y; /* label — ctx row 0 */
+    uint32_t outbound_st_y;
+    uint32_t kill_y;     /* label — ctx row 1 */
+    uint32_t kill_st_y;
+    uint32_t persist_y;  /* label — ctx row 2 */
+    uint32_t persist_st_y;
+    uint32_t actions_hdr_y;
+    uint32_t dhcp_y;     /* click + ctx row 3 */
+    uint32_t status_y;
+    uint32_t rng_y;
+    uint32_t tls_y;
+};
+
+static void netctl_layout(struct win *w, struct netctl_layout *L) {
+    uint32_t ch = fb_cell_h();
+    uint32_t th = desktop_title_h();
+    uint32_t row = ch + desktop_u(6);
+    uint32_t y = w->y + th + desktop_u(10);
+
+    L->tx = w->x + desktop_u(12);
+    L->row_h = row;
+    L->title_y = y;
+    y += row;
+    L->link_y = y;
+    y += row;
+    L->dns_y = y;
+    y += row * 2; /* blank + privacy header */
+    L->privacy_hdr_y = y;
+    y += row;
+    L->outbound_y = y;
+    y += row;
+    L->outbound_st_y = y;
+    y += row;
+    L->kill_y = y;
+    y += row;
+    L->kill_st_y = y;
+    y += row;
+    L->persist_y = y;
+    y += row;
+    L->persist_st_y = y;
+    y += row * 2; /* blank + Actions */
+    L->actions_hdr_y = y;
+    y += row;
+    L->dhcp_y = y;
+    y += row;
+    L->status_y = y;
+    y += row;
+    L->rng_y = y;
+    y += row;
+    L->tls_y = y;
+}
+
+static int point_in_row(int32_t my, uint32_t y, uint32_t row_h) {
+    return (uint32_t)my >= y && (uint32_t)my < y + row_h;
+}
 
 static const char *persist_label(int p) {
     switch (p) {
@@ -54,11 +116,8 @@ static void nc_dhcp_renew(void) {
 }
 
 void desktop_netctl_draw(struct win *w) {
-    uint32_t ch = fb_cell_h();
-    uint32_t th = desktop_title_h();
-    uint32_t tx = w->x + desktop_u(12);
-    uint32_t ty = w->y + th + desktop_u(10);
-    uint32_t row = ch + desktop_u(6);
+    struct netctl_layout L;
+    netctl_layout(w, &L);
     char line[72];
     struct net_info ni;
     net_get_info(&ni);
@@ -66,68 +125,58 @@ void desktop_netctl_draw(struct win *w) {
     net_format_ip(ni.ip, ip, sizeof(ip));
     net_format_ip(ni.dns, dns, sizeof(dns));
 
-    fb_draw_string(tx, ty, "Network Control", desktop_color_accent(), desktop_color_bg());
-    ty += row;
+    fb_draw_string(L.tx, L.title_y, "Network Control", desktop_color_accent(), desktop_color_bg());
     snprintf(line, sizeof(line), "Link: %s  IP %s", ni.up ? "up" : "down", ip);
-    fb_draw_string(tx, ty, line, desktop_color_fg(), desktop_color_bg());
-    ty += row;
+    fb_draw_string(L.tx, L.link_y, line, desktop_color_fg(), desktop_color_bg());
     snprintf(line, sizeof(line), "DNS %s  (%s)", dns, ni.addr_mode ? ni.addr_mode : "?");
-    fb_draw_string(tx, ty, line, desktop_color_dim(), desktop_color_bg());
-    ty += row * 2;
+    fb_draw_string(L.tx, L.dns_y, line, desktop_color_dim(), desktop_color_bg());
 
-    fb_draw_string(tx, ty, "Allow-list / privacy", desktop_color_accent(), desktop_color_bg());
-    ty += row;
-    fb_draw_string(tx, ty, "Outbound net-allow", desktop_color_fg(), desktop_color_bg());
-    ty += row;
+    fb_draw_string(L.tx, L.privacy_hdr_y, "Allow-list / privacy", desktop_color_accent(),
+                   desktop_color_bg());
+    fb_draw_string(L.tx, L.outbound_y, "Outbound net-allow", desktop_color_fg(), desktop_color_bg());
     snprintf(line, sizeof(line), "  %s — right-click to grant",
              privacy_net_client_allowed() ? "granted" : "blocked");
-    fb_draw_string(tx, ty, line, privacy_net_client_allowed() ? desktop_color_accent() : desktop_color_dim(),
+    fb_draw_string(L.tx, L.outbound_st_y, line,
+                   privacy_net_client_allowed() ? desktop_color_accent() : desktop_color_dim(),
                    desktop_color_bg());
-    ty += row;
-    fb_draw_string(tx, ty, "Kill switch", desktop_color_fg(), desktop_color_bg());
-    ty += row;
+    fb_draw_string(L.tx, L.kill_y, "Kill switch", desktop_color_fg(), desktop_color_bg());
     if (nc_kill_arm && !privacy_net_kill_switch())
-        fb_draw_string(tx, ty, "  click again to ENABLE (blocks all net)", theme_get()->danger,
-                       desktop_color_bg());
+        fb_draw_string(L.tx, L.kill_st_y, "  click again to ENABLE (blocks all net)",
+                       theme_get()->danger, desktop_color_bg());
     else {
         snprintf(line, sizeof(line), "  %s — double-click row to toggle",
                  privacy_net_kill_switch() ? "ON (blocked)" : "off");
-        fb_draw_string(tx, ty, line, privacy_net_kill_switch() ? theme_get()->danger : desktop_color_dim(),
+        fb_draw_string(L.tx, L.kill_st_y, line,
+                       privacy_net_kill_switch() ? theme_get()->danger : desktop_color_dim(),
                        desktop_color_bg());
     }
-    ty += row;
-    fb_draw_string(tx, ty, "Persistence profile", desktop_color_fg(), desktop_color_bg());
-    ty += row;
+    fb_draw_string(L.tx, L.persist_y, "Persistence profile", desktop_color_fg(), desktop_color_bg());
     snprintf(line, sizeof(line), "  %s — right-click to cycle", persist_label(privacy_persist_profile()));
-    fb_draw_string(tx, ty, line, desktop_color_fg(), desktop_color_bg());
-    ty += row * 2;
+    fb_draw_string(L.tx, L.persist_st_y, line, desktop_color_fg(), desktop_color_bg());
 
-    fb_draw_string(tx, ty, "Actions", desktop_color_accent(), desktop_color_bg());
-    ty += row;
-    fb_draw_string(tx, ty, "DHCP renew (click)", desktop_color_fg(), desktop_color_bg());
-    ty += row;
+    fb_draw_string(L.tx, L.actions_hdr_y, "Actions", desktop_color_accent(), desktop_color_bg());
+    fb_draw_string(L.tx, L.dhcp_y, "DHCP renew (click)", desktop_color_fg(), desktop_color_bg());
     if (nc_status[0])
-        fb_draw_string(tx, ty, nc_status, desktop_color_accent(), desktop_color_bg());
+        fb_draw_string(L.tx, L.status_y, nc_status, desktop_color_accent(), desktop_color_bg());
     else
-        fb_draw_string(tx, ty, "Right-click for copy IP / Settings", desktop_color_dim(), desktop_color_bg());
-    ty += row;
+        fb_draw_string(L.tx, L.status_y, "Right-click for copy IP / Settings", desktop_color_dim(),
+                       desktop_color_bg());
     uint32_t rf = random_status_flags();
     snprintf(line, sizeof(line), "RNG flags=0x%x%s%s", (unsigned)rf,
              (rf & RANDOM_READY_CRYPTO) ? " CRYPTO" : "",
              (rf & RANDOM_FLAG_WEAK) ? " WEAK" : "");
-    fb_draw_string(tx, ty, line, desktop_color_dim(), desktop_color_bg());
-    ty += row;
+    fb_draw_string(L.tx, L.rng_y, line, desktop_color_dim(), desktop_color_bg());
     snprintf(line, sizeof(line), "TLS cache %d/%d  last resume %s",
              tls_session_used_count(), tls_session_max_slots(),
              tls_last_handshake_resumed() ? "yes" : "no");
-    fb_draw_string(tx, ty, line, desktop_color_fg(), desktop_color_bg());
+    fb_draw_string(L.tx, L.tls_y, line, desktop_color_fg(), desktop_color_bg());
 }
 
 int desktop_netctl_click(struct win *w, int32_t mx, int32_t my) {
     (void)mx;
-    uint32_t ch = fb_cell_h();
-    uint32_t ty = w->y + desktop_title_h() + desktop_u(10) + (ch + desktop_u(6)) * 9;
-    if ((uint32_t)my >= ty && (uint32_t)my < ty + ch + desktop_u(6)) {
+    struct netctl_layout L;
+    netctl_layout(w, &L);
+    if (point_in_row(my, L.dhcp_y, L.row_h)) {
         nc_dhcp_renew();
         return 1;
     }
@@ -141,11 +190,17 @@ int desktop_netctl_key(int key) {
 
 void desktop_netctl_ctx_prepare(struct win *w, int32_t mx, int32_t my) {
     (void)mx;
-    uint32_t ch = fb_cell_h();
-    uint32_t row_h = ch + desktop_u(6);
-    uint32_t base = w->y + desktop_title_h() + desktop_u(10) + row_h * 4;
-    nc_row = (int)((my - (int32_t)base) / (int32_t)row_h);
-    if (nc_row < 0)
+    struct netctl_layout L;
+    netctl_layout(w, &L);
+    if (point_in_row(my, L.outbound_y, L.row_h) || point_in_row(my, L.outbound_st_y, L.row_h))
+        nc_row = 0;
+    else if (point_in_row(my, L.kill_y, L.row_h) || point_in_row(my, L.kill_st_y, L.row_h))
+        nc_row = 1;
+    else if (point_in_row(my, L.persist_y, L.row_h) || point_in_row(my, L.persist_st_y, L.row_h))
+        nc_row = 2;
+    else if (point_in_row(my, L.dhcp_y, L.row_h))
+        nc_row = 3;
+    else
         nc_row = -1;
 }
 
@@ -163,6 +218,8 @@ int desktop_netctl_ctx_menu(struct ctx_menu_item *items, int max_items) {
              CTX_ACT_NC_KILLSW);
     } else if (nc_row == 2) {
         CADD("Cycle persist profile", 1, 0, CTX_ACT_NC_PERSIST);
+    } else if (nc_row == 3) {
+        CADD("DHCP renew", 1, 0, CTX_ACT_NC_DHCP);
     } else {
         CADD("Grant outbound (session)", !privacy_net_client_allowed(), 0, CTX_ACT_NC_ALLOW);
         CADD("DHCP renew", 1, 0, CTX_ACT_NC_DHCP);

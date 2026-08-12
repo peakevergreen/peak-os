@@ -164,11 +164,32 @@ static void test_browser_chrome_pads_scale(void) {
     g_scale = 1;
 }
 
+/* Mirror netctl_layout DHCP / outbound offsets (desktop_netctl.c). */
+static void test_netctl_layout_rows(void) {
+    for (uint32_t s = 1; s <= 4; s++) {
+        g_scale = s;
+        uint32_t row = fb_cell_h() + desktop_u(6);
+        uint32_t title_y = 100 + desktop_title_h() + desktop_u(10);
+        /* title, link, dns, blank(+2), privacy, outbound → outbound at +5 rows */
+        uint32_t outbound_y = title_y + row * 5;
+        /* … kill, kill_st, persist, persist_st, blank(+2), actions, dhcp → +13 from title */
+        uint32_t dhcp_y = title_y + row * 13;
+        expect(outbound_y - title_y == row * 5, "netctl outbound row offset");
+        expect(dhcp_y - title_y == row * 13, "netctl DHCP row offset (not *9)");
+        expect(point_in(120, (int32_t)(dhcp_y + row / 2), 100, dhcp_y, 200, row),
+               "DHCP hit at shared layout Y");
+        expect(!point_in(120, (int32_t)(title_y + row * 9 + row / 2), 100, dhcp_y, 200, row),
+               "old *9 Y is not DHCP");
+    }
+    g_scale = 1;
+}
+
 int main(void) {
     test_desktop_u_title_h();
     test_browser_clear_hit_rects();
     test_files_list_origin();
     test_browser_chrome_pads_scale();
+    test_netctl_layout_rows();
 
     if (fails) {
         fprintf(stderr, "%d hitbox_scale test(s) failed\n", fails);
