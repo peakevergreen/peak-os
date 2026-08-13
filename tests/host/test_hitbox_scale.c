@@ -13,6 +13,7 @@
  *   title clip + strip_w share reservation; chrome_btns gated when w < strip_w
  *   Monitor export hit clear fails closed
  *   Net Control DHCP / outbound row Y from shared layout
+ *   Game HUD text pads scale (hud_u 8/4); sprites/physics unchanged
  */
 #include <stdio.h>
 #include <stdint.h>
@@ -414,6 +415,16 @@ static void test_netctl_layout_rows(void) {
     g_scale = 1;
 }
 
+/* Mirror game.c hud_u insets (text pads only). */
+static void test_game_hud_pads(void) {
+    g_scale = 1;
+    expect(desktop_u(8) == 8 && desktop_u(4) == 4, "scale1 HUD pads 8/4");
+    g_scale = 4;
+    expect(desktop_u(8) == 32 && desktop_u(4) == 16, "scale4 HUD pads 32/16");
+    expect(desktop_u(8) != 8, "scale4 not hardcoded +8");
+    g_scale = 1;
+}
+
 int main(void) {
     test_desktop_u_title_h();
     test_browser_clear_hit_rects();
@@ -426,6 +437,7 @@ int main(void) {
     test_desktop_chrome_btn_strip_w();
     test_monitor_clear_hit_rects();
     test_netctl_layout_rows();
+    test_game_hud_pads();
 
     if (fails) {
         fprintf(stderr, "%d hitbox_scale test(s) failed\n", fails);
