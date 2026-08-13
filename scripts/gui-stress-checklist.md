@@ -99,6 +99,7 @@ Focused pass: change UI scale, then confirm clicks land on the drawn controls (n
 - [ ] After scale 1↔4: Notepad Save / Find buttons hit the drawn controls (shared toolbar geom)
 - [ ] After scale 1↔4: Images pan/zoom stays aligned to the drawn viewport (header/status geometry)
 - [ ] After scale 1↔4: Monitor Export fails closed until redraw (no stale export hit)
+- [ ] After scale 1↔4: Game HUD Dist/Score/Pack text inset scales with UI (no mouse targets)
 
 ## Images / surfaces
 

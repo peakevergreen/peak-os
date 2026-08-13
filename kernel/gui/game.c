@@ -462,14 +462,19 @@ static void draw_runner(uint32_t ox, uint32_t y, uint32_t base_y, uint32_t near_
         fb_fill_rect(rx + 1, ry + 2, 2, 2, t->cursor);
 }
 
+/* HUD text insets only — world/sprite pixel art stays unscaled. */
+static uint32_t hud_u(uint32_t v) { return v * fb_ui_scale(); }
+
 static void draw_pack_hud(uint32_t x, uint32_t y, const struct peak_theme *t) {
     char line[64];
     uint32_t ch = fb_cell_h();
+    uint32_t pad_x = hud_u(8);
+    uint32_t pad_y = hud_u(4);
     snprintf(line, sizeof(line), "Dist %lu  Score %d", distance, score);
-    fb_draw_string(x + 8, y + 4, line, t->fg, t->bg);
+    fb_draw_string(x + pad_x, y + pad_y, line, t->fg, t->bg);
 
     snprintf(line, sizeof(line), "A/D move  W/Space jump  R reset");
-    fb_draw_string(x + 8, y + 4 + ch, line, t->dim, t->bg);
+    fb_draw_string(x + pad_x, y + pad_y + ch, line, t->dim, t->bg);
 
     /* Pack row */
     size_t o = 0;
@@ -485,7 +490,7 @@ static void draw_pack_hud(uint32_t x, uint32_t y, const struct peak_theme *t) {
     }
     if (o <= 5)
         snprintf(packline, sizeof(packline), "Pack: (empty)");
-    fb_draw_string(x + 8, y + 4 + ch * 2, packline, t->accent, t->bg);
+    fb_draw_string(x + pad_x, y + pad_y + ch * 2, packline, t->accent, t->bg);
 }
 
 void game_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
