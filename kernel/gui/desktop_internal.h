@@ -188,6 +188,8 @@ uint32_t desktop_color_border(void);
 
 int desktop_point_in(int32_t px, int32_t py, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
 uint32_t desktop_chrome_btn_strip_w(void);
+void desktop_title_text_geom(uint32_t win_w, uint32_t *pad_x, uint32_t *pad_y,
+                             uint32_t *tw);
 /* Titlebar min/max/close rects; 0 if window too narrow for the button strip. */
 int desktop_chrome_btns(const struct win *w, uint32_t *close_x, uint32_t *max_x,
                         uint32_t *min_x, uint32_t *by, uint32_t *bs);

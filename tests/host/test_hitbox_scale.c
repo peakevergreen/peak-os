@@ -10,6 +10,7 @@
  *   content_w floor is browser_u(40) (160 at scale 4, not hardcoded 40)
  *   shared browser_client_rect (draw + click height pad u(6))
  *   browser_chrome_h and desktop_chrome_btn_strip_w scale with UI
+ *   title clip + strip_w share reservation; chrome_btns gated when w < strip_w
  *   Monitor export hit clear fails closed
  *   Net Control DHCP / outbound row Y from shared layout
  */
@@ -150,6 +151,29 @@ static uint32_t desktop_chrome_btn_strip_w(void) {
     uint32_t bsz = desktop_u(14);
     uint32_t gap = desktop_u(4);
     return desktop_u(22) + 2 * (bsz + gap);
+}
+
+/* Mirror desktop_title_text_geom — title clip + chrome strip share one reservation. */
+static void desktop_title_text_geom(uint32_t win_w, uint32_t *pad_x, uint32_t *pad_y,
+                                    uint32_t *tw) {
+    uint32_t s = desktop_u(3);
+    if (s < 2)
+        s = 2;
+    uint32_t px = s + desktop_u(6);
+    uint32_t py = s + desktop_u(2);
+    uint32_t btn_w = desktop_chrome_btn_strip_w();
+    uint32_t text_w = (win_w > px + btn_w + s) ? (win_w - px - btn_w - s) : desktop_u(40);
+    if (pad_x)
+        *pad_x = px;
+    if (pad_y)
+        *pad_y = py;
+    if (tw)
+        *tw = text_w;
+}
+
+/* Mirror desktop_chrome_btns underflow gate (#339): omit buttons if w < strip_w. */
+static int desktop_chrome_btns_fit(uint32_t win_w) {
+    return win_w >= desktop_chrome_btn_strip_w();
 }
 
 /*
@@ -342,6 +366,15 @@ static void test_desktop_chrome_btn_strip_w(void) {
         expect(need >= prev, "strip_w non-decreasing");
         expect(need > 0, "strip_w positive");
         prev = need;
+
+        uint32_t win_w = 400 * s;
+        uint32_t pad_x, pad_y, tw;
+        desktop_title_text_geom(win_w, &pad_x, &pad_y, &tw);
+        uint32_t inset = desktop_u(3) < 2 ? 2 : desktop_u(3);
+        expect(pad_x + tw + need + inset <= win_w, "title + strip fit in window");
+        expect(desktop_chrome_btns_fit(win_w), "wide window shows chrome btns");
+        expect(!desktop_chrome_btns_fit(need - 1), "w < strip_w: #339 underflow gate");
+        expect(desktop_chrome_btns_fit(need), "w == strip_w: buttons allowed");
     }
     g_scale = 1;
 }

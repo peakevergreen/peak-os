@@ -63,6 +63,24 @@ uint32_t desktop_chrome_btn_strip_w(void) {
     return desktop_u(22) + 2 * (bsz + gap);
 }
 
+void desktop_title_text_geom(uint32_t win_w, uint32_t *pad_x, uint32_t *pad_y,
+                             uint32_t *tw) {
+    /* Focused inset (desktop_u(3)) so title never runs under chrome buttons. */
+    uint32_t s = desktop_u(3);
+    if (s < 2)
+        s = 2;
+    uint32_t px = s + desktop_u(6);
+    uint32_t py = s + desktop_u(2);
+    uint32_t btn_w = desktop_chrome_btn_strip_w();
+    uint32_t text_w = (win_w > px + btn_w + s) ? (win_w - px - btn_w - s) : desktop_u(40);
+    if (pad_x)
+        *pad_x = px;
+    if (pad_y)
+        *pad_y = py;
+    if (tw)
+        *tw = text_w;
+}
+
 int desktop_chrome_btns(const struct win *w, uint32_t *close_x, uint32_t *max_x,
                         uint32_t *min_x, uint32_t *by, uint32_t *bs) {
     uint32_t bsz = desktop_u(14);
@@ -569,18 +587,6 @@ static void draw_win_chrome(struct win *w, int focused) {
         fb_fill_rect(w->x + s, w->y + s, s, th - 2 * s, a);
         fb_fill_rect(w->x + w->w - 2 * s, w->y + s, s, th - 2 * s, a);
         fb_fill_rect(w->x + 2 * s, w->y + s, w->w - 4 * s, s, a);
-    }
-    /* Title clear of border + focus inset (and of chrome buttons on the right). */
-    {
-        uint32_t s = focused ? desktop_u(3) : desktop_u(1);
-        if (s < 2) s = 2;
-        uint32_t title_bg = theme_get()->title;
-        uint32_t pad_x = s + desktop_u(6);
-        uint32_t pad_y = s + desktop_u(2);
-        uint32_t btn_w = desktop_chrome_btn_strip_w();
-        uint32_t tw = (w->w > pad_x + btn_w + s) ? (w->w - pad_x - btn_w - s) : desktop_u(40);
-        fb_fill_rect(w->x + pad_x, w->y + pad_y, tw, fb_cell_h() + desktop_u(2), title_bg);
-        fb_draw_string(w->x + pad_x, w->y + pad_y, title, desktop_color_fg(), title_bg);
     }
     {
         uint32_t close_x, max_x, min_x, by, bs;
