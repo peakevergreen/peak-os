@@ -25,7 +25,7 @@ Historical (prior campaign): GA-001…004 Fixed (#288–#291).
 | GA-113 | P2 | Settings chip | Settings Display | Clean scale chips | Stray `,` before highlighted `3x` | `047-b-settings.png` | **Fixed** |
 | GA-114 | P2 | Toast stack | Open 4 apps quickly | Stacked toasts + clean desktop | Detached Settings/Agent chrome + vertical border ghosts | `025-a-toast-stack.png` | **Fixed** |
 | GA-115 | P2 | Export path toast | Monitor export / sysmon | Toast above taskbar, readable | Path bleeds over taskbar | `053-b-agent.png`, `055-b-game.png` | **Fixed** |
-| GA-116 | P2 | Browser demo | peak://demo Count | Clear button + working click | Gap/missing button chrome; count stayed 0 after click | `044`, `045-b-browser-count-click.png` | **Deferred** |
+| GA-116 | P2 | Browser demo | peak://demo Count | Clear button + working click | Gap/missing button chrome; count stayed 0 after click | `044`, `045-b-browser-count-click.png` | **Fixed** |
 | GA-117 | P2 | Images chrome | Open Images | Single title bar | Ghost Images+`x` in body | `041-b-images.png` | **Fixed** |
 | GA-118 | P2 | Notepad chrome | Open Notepad | Single title bar | Ghost Notepad+`x` top-right | `007-a-start-launch-notepad.png` | **Fixed** |
 | GA-119 | P2 | Files chrome | Open Files | Single title bar | Ghost Files+`x` top-right | `016-a-files-open.png` | **Fixed** |

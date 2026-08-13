@@ -149,7 +149,7 @@ void shell_init(void) {
     shell_history_init();
     shell_alias_init();
     console_write("\n");
-    console_write("  PeakOS 0.2 — arrows move  Ctrl+A select-all  Ctrl+C/X/V copy/cut/paste\n");
+    console_write("  PeakOS 0.3.0-ai — arrows move  Ctrl+A select-all  Ctrl+C/X/V copy/cut/paste\n");
     console_write("  Up/Down history  !! / !n expand  Tab complete  alias  cd -\n");
     console_write("  Ctrl+F search scrollback  |  gui → desktop (Ctrl+Alt+Esc back to CLI)\n");
     console_write("  Workspace: /home/dev/workspace  |  ask \"...\"  |  theme\n\n");
