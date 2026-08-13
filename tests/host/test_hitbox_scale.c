@@ -7,6 +7,7 @@
  *   browser_clear_hit_rects zeros widths (fail-closed hits)
  *   shared Files list origin formula (draw + hit must agree)
  *   browser_layout_content_w matches browser_draw (scaled pad inset)
+ *   content_w floor is browser_u(40) (160 at scale 4, not hardcoded 40)
  *   shared browser_client_rect (draw + click height pad u(6))
  *   browser_chrome_h and desktop_chrome_btn_strip_w scale with UI
  *   Monitor export hit clear fails closed
@@ -124,21 +125,24 @@ static uint32_t browser_chrome_h(const struct browser_chrome_metrics *m,
  * Intended layout content width (must match browser_draw):
  *   draw_w - pad*2 - browser_u(12).
  */
+static int browser_layout_min_cw(void) { return (int)browser_u(40); }
+
+static int browser_clamp_content_w(int cw) {
+    int min_cw = browser_layout_min_cw();
+    return cw < min_cw ? min_cw : cw;
+}
+
 static int browser_layout_content_w_for_draw_w(uint32_t draw_w) {
     struct browser_chrome_metrics cm;
     browser_chrome_metrics_init(&cm);
     int cw = (int)draw_w - (int)(cm.pad * 2 + browser_u(12));
-    if (cw < 40)
-        cw = 40;
-    return cw;
+    return browser_clamp_content_w(cw);
 }
 
 static int browser_draw_content_w_for_draw_w(uint32_t draw_w) {
     uint32_t pad = browser_u(6);
     int cw = (int)draw_w - (int)(pad * 2 + browser_u(12));
-    if (cw < 40)
-        cw = 40;
-    return cw;
+    return browser_clamp_content_w(cw);
 }
 
 /* Mirror desktop_chrome_btn_strip_w (desktop_windows.c). */
@@ -291,6 +295,20 @@ static void test_browser_layout_content_w(void) {
     g_scale = 1;
 }
 
+/* Narrow windows must floor at browser_u(40), not hardcoded 40. */
+static void test_browser_content_w_floor(void) {
+    g_scale = 1;
+    expect(browser_clamp_content_w(10) == 40, "scale1 floor 40");
+    expect(browser_clamp_content_w(40) == 40, "scale1 floor equal");
+    expect(browser_clamp_content_w(80) == 80, "scale1 above floor");
+    g_scale = 4;
+    expect(browser_clamp_content_w(10) == 160, "scale4 floor 160 not 40");
+    expect(browser_clamp_content_w(40) == 160, "scale4 old 40 is below floor");
+    expect(browser_clamp_content_w(200) == 200, "scale4 above floor");
+    expect(browser_layout_content_w_for_draw_w(20) == 160, "scale4 narrow draw_w floors");
+    g_scale = 1;
+}
+
 
 static void test_browser_chrome_h(void) {
     uint32_t prev = 0;
@@ -369,6 +387,7 @@ int main(void) {
     test_files_list_origin();
     test_browser_chrome_pads_scale();
     test_browser_layout_content_w();
+    test_browser_content_w_floor();
     test_browser_client_rect();
     test_browser_chrome_h();
     test_desktop_chrome_btn_strip_w();
