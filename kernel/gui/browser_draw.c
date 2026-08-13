@@ -328,7 +328,8 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
                 }
                 if (!painted) {
                     fb_fill_rect(bx, draw_y, bw, bh, t->page_surface);
-                    fb_draw_string(bx + 2, draw_y + 2, b->text, t->page_muted, t->page_surface);
+                    fb_draw_string(bx + browser_u(2), draw_y + browser_u(2), b->text,
+                                   t->page_muted, t->page_surface);
                 }
                 continue;
             }
@@ -345,8 +346,13 @@ void browser_draw(uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
                 uint32_t bgc = css_to_rgb(&b->style.background, t->page_surface);
                 fb_fill_rect(bx, draw_y, bw, bh, bgc);
             }
-            if (b->style.border)
-                fb_fill_rect(bx, draw_y + bh - 1, bw, 1, t->page_muted);
+            if (b->style.border) {
+                uint32_t bt = browser_u(1);
+                if (bt < 1)
+                    bt = 1;
+                uint32_t by = (bh > bt) ? draw_y + bh - bt : draw_y;
+                fb_fill_rect(bx, by, bw, bt, t->page_muted);
+            }
             fb_draw_string(bx, draw_y, b->text, fg, t->page_bg);
             (void)cy;
         }

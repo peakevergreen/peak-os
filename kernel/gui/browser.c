@@ -323,14 +323,11 @@ int browser_layout_content_w(void) {
     struct browser_chrome_metrics cm;
     browser_chrome_metrics_init(&cm);
     int cw = (int)draw_w - (int)(cm.pad * 2 + browser_u(12));
-    if (cw < 40)
-        cw = 40;
-    return cw;
+    return browser_clamp_content_w(cw);
 }
 
 void browser_rebuild_layout(struct br_tab *t, int content_w) {
-    if (content_w < 40)
-        content_w = 40;
+    content_w = browser_clamp_content_w(content_w);
     t->nboxes = css_layout(&t->doc, &t->sheet, t->boxes, BR_MAX_BOXES, content_w);
     t->use_layout = t->nboxes > 0;
     /* Sync image box geometry from layout. */

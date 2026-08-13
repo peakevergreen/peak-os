@@ -61,6 +61,14 @@ static inline uint32_t browser_chrome_h(const struct browser_chrome_metrics *m,
     return h;
 }
 
+/* Same floor as css_layout min_w = layout_u(40). */
+static inline int browser_layout_min_cw(void) { return (int)browser_u(40); }
+
+static inline int browser_clamp_content_w(int cw) {
+    int min_cw = browser_layout_min_cw();
+    return cw < min_cw ? min_cw : cw;
+}
+
 #define BR_URL_MAX    160
 #define BR_BODY_MAX   (256 * 1024)
 #define BR_MAX_BLOCKS 256
