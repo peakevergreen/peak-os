@@ -18,6 +18,7 @@ __pycache__/
 # IDE / tooling
 .idea/
 .vscode/
+.cursor/
 *.swp
 *~
 compile_commands.json
