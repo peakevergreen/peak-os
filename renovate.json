@@ -1,10 +1,22 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "labels": ["dependencies"],
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "dependencies"
+  ],
   "rangeStrategy": "bump",
   "prHourlyLimit": 4,
   "prConcurrentLimit": 5,
-  "commitMessagePrefix": "chore(deps):"
+  "commitMessagePrefix": "chore(deps):",
+  "packageRules": [
+    {
+      "description": "Hold all major updates (including Django) until approved on the Renovate dashboard",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    }
+  ]
 }
-
