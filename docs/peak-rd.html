@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Peak OS — R&amp;D</title>
-  <meta name="description" content="Peak OS is a from-scratch, AI-first developer OS: freestanding C kernel, Peak bootloaders, in-guest agent, networking, desktop, and browser. No Linux. No host bridges." />
+  <meta name="description" content="Peak OS is an AI-first developer OS written in C from the bootloader up. Agent, network, desktop, and browser run in the guest. No Linux. No host bridges." />
   <meta property="og:title" content="Peak OS — R&amp;D" />
-  <meta property="og:description" content="From-scratch, AI-first developer OS. Agents, workspace, and memory as system primitives — not host sidecars." />
+  <meta property="og:description" content="An AI-first OS that isn't Linux with a chat box on top. Agent, tools, and memory live in the guest." />
   <meta property="og:type" content="article" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -421,8 +421,8 @@
         Peak OS
       </h1>
     </div>
-    <p class="hero-line">A from-scratch, AI-first developer OS.</p>
-    <p class="hero-sub">Freestanding C. Own bootloaders. In-guest agent, network, desktop, and browser. No Linux. No host bridges.</p>
+    <p class="hero-line">An AI-first OS that isn't Linux with a chat box on top.</p>
+    <p class="hero-sub">Written in C from the bootloader up. Agent, network, desktop, and browser all run in the guest. No Linux. No host bridges.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/peakevergreen/peak-os">View on GitHub</a>
       <a class="btn btn-ghost" href="#thesis">Read the thesis</a>
@@ -434,109 +434,109 @@
     <section id="thesis">
       <div class="prose reveal">
         <p class="section-label">01 — Thesis</p>
-        <h2>The agent belongs in the kernel’s neighborhood, not on the host.</h2>
-        <p class="lede">Peak OS is Peak Evergreen’s R&amp;D bet that an “AI-first” developer environment should be a real operating system — not a chat panel glued to Linux, and not a hobby kernel that stops at a shell prompt.</p>
-        <p>Most hobby OS projects prove that boot works. Most “AI OS” demos prove that a model can call tools over SSH. Peak aims past both: a freestanding kernel with Peak-authored BIOS and UEFI loaders (and a Raspberry Pi shim), a VFS workspace, an in-guest planner called <strong>peak-agent</strong>, a multi-window desktop, an HTTP(S) browser surface, containers, and a local vector index — all Peak C inside the guest.</p>
-        <blockquote class="pull">Agents, tools, and project context are system primitives. Inference stays an in-guest planner. There is no host LLM bridge by default.</blockquote>
-        <p>That sentence is the product architecture. The north star is deliberately small:</p>
+        <h2>The agent should live in the OS, not on the host.</h2>
+        <p class="lede">Most “AI OS” demos are Linux plus a model that shells out over SSH. Most hobby kernels stop at a prompt. Peak OS is the thing in between.</p>
+        <p>It's a real kernel with its own bootloaders, a workspace, an in-guest planner called <strong>peak-agent</strong>, a desktop, TLS, a browser, containers, and local memory — all Peak C inside the guest.</p>
+        <blockquote class="pull">The agent, the tools, and the project context are OS primitives. The planner stays in the guest. There is no host LLM bridge by default.</blockquote>
+        <p>That's the architecture:</p>
         <p class="mono" style="color: var(--dim); margin: 1.25rem 0;">userspace shell → peak-agent (local) → tools (fs / exec)</p>
-        <p>Under <code>/var/peak/</code> live the durable primitives: workspace policy, action audit, session memory, and PeakVec recall. Capabilities gate what a subject may touch. Privacy grants gate the network. Opening the desktop does not phone home.</p>
+        <p>Policy, audit, session memory, and PeakVec live under <code>/var/peak/</code>. Capabilities decide what the agent can touch. Network needs an explicit grant. Opening the desktop doesn't phone home.</p>
       </div>
     </section>
 
     <section id="problem">
       <div class="prose reveal">
-        <p class="section-label">02 — The problem shape</p>
-        <h2>What “AI OS” usually means — and why that is not interesting enough.</h2>
-        <p>Today’s default path is convenient and opaque at once: a general-purpose Linux host, a container runtime, a cloud model, and a sidecar that shells out. The “operating system” part of the story is borrowed. The agent’s memory is an app concern. The trust boundary is fuzzy — serial bridges, host proxies, and copy-pasted credentials blur where the guest ends and the lab laptop begins.</p>
-        <p>Hobby kernels have the opposite failure mode. They stop when the serial console prints <code>hello</code>. Networking, TLS, a desktop, a browser, and an agent that can write files under policy never arrive — because those are years of vertical integration, and the demo does not require them.</p>
-        <p>Peak OS treats that gap as the research question: <em>can you build a single-user research workstation where the interesting parts are Peak-authored, inspectable, and local-first — without pretending to be Linux?</em></p>
-        <p>The purity constraint makes the claim falsifiable. CI runs <code>scripts/purity-check.sh</code>: no Limine, no COM2/COM3 host bridges, no <code>peak-host-proxy</code>, no <code>agent_poll_host</code>. If the agent works, it works in-guest. If HTTPS works, Peak’s stack spoke TLS. That honesty is the point of the project.</p>
+        <p class="section-label">02 — The problem</p>
+        <h2>The usual “AI OS” is someone else's kernel.</h2>
+        <p>The convenient path is a Linux host, a container, a cloud model, and a sidecar. You didn't build the OS. The agent's memory is an app problem. Trust gets fuzzy — serial bridges, host proxies, credentials sitting on the laptop.</p>
+        <p>Hobby kernels fail the other way. They print <code>hello</code> and call it done. Networking, TLS, a desktop, a browser, and an agent that can write files under policy never show up, because the demo doesn't need them.</p>
+        <p>The question I actually care about: can you build a single-user research workstation where the interesting parts are yours, inspectable, and local — without pretending to be Linux?</p>
+        <p>CI enforces that. <code>scripts/purity-check.sh</code> bans Limine, COM2/COM3 host bridges, <code>peak-host-proxy</code>, and <code>agent_poll_host</code>. If the agent works, it works in the guest. If HTTPS works, Peak's stack spoke TLS. That's the point.</p>
       </div>
     </section>
 
     <section id="solves">
       <div class="prose reveal">
-        <p class="section-label">03 — Trying to solve</p>
-        <h2>Problems Peak OS is actively attacking.</h2>
-        <p class="lede">Not every systems problem — a focused set that makes an AI-native workstation coherent.</p>
+        <p class="section-label">03 — What I'm solving</p>
+        <h2>A usable developer surface, with the agent inside it.</h2>
+        <p class="lede">Not every systems problem. A focused set that makes an AI-native workstation actually coherent.</p>
 
         <div class="split">
           <div>
-            <h3>Vertical developer surface</h3>
+            <h3>The whole stack, not just boot</h3>
             <ul class="list-tight">
               <li>
                 <strong>Past the bootloader</strong>
-                <span>CLI utilities, multi-window desktop, browser tabs, net tools, and <code>ctr</code> demos inside one Peak kernel — so “it boots” is not the end of the story.</span>
+                <span>CLI, multi-window desktop, browser tabs, net tools, and <code>ctr</code> demos in one Peak kernel. “It boots” is not the finish line.</span>
               </li>
               <li>
-                <strong>In-guest networking that is real</strong>
-                <span>DHCP, DNS, TCP, TLS 1.2/1.3, HTTP/2 ALPN client, WebPKI and optional TOFU — Peak C, not a host userspace stack borrowed for the demo. Live CDN HTTPS bodies are still often empty (Partial — TLS fingerprint / B-HTTPS-H2).</span>
+                <strong>Networking that actually lives in the guest</strong>
+                <span>DHCP, DNS, TCP, TLS 1.2/1.3, HTTP/2 ALPN, WebPKI, optional TOFU — Peak C, not a borrowed host stack. Live CDN HTTPS bodies are still often empty (Partial — TLS fingerprint / B-HTTPS-H2).</span>
               </li>
               <li>
-                <strong>Dual-arch path</strong>
-                <span>x86_64 QEMU (BIOS/UEFI) as the daily research loop; flashable aarch64 Raspberry Pi SD image with Pi 3 as the primary hardware gate.</span>
+                <strong>Two architectures</strong>
+                <span>x86_64 QEMU is the daily loop. There's a flashable aarch64 Pi SD image; Pi 3 is the hardware gate.</span>
               </li>
             </ul>
           </div>
           <div>
-            <h3>Local-first agency</h3>
+            <h3>Local-first, on purpose</h3>
             <ul class="list-tight">
               <li>
-                <strong>Agent as OS citizen</strong>
-                <span><code>ask "…"</code> and a GUI Agent window drive a bounded planner over allowlisted tools (<code>fs.*</code>, <code>net.*</code>, <code>mem.recall</code>, …) with policy, audit, and write approval.</span>
+                <strong>Agent as an OS citizen</strong>
+                <span><code>ask "…"</code> and a GUI Agent window run a bounded planner over allowlisted tools (<code>fs.*</code>, <code>net.*</code>, <code>mem.recall</code>, …) with policy, audit, and write approval.</span>
               </li>
               <li>
-                <strong>Context as infrastructure</strong>
-                <span>Session memory and PeakVec (hashed n-gram embeddings, cosine search, blobstore-backed) sit beside VFS — not as a SaaS RAG bolt-on.</span>
+                <strong>Memory next to the filesystem</strong>
+                <span>Session memory and PeakVec sit beside VFS. Hashed n-grams, cosine search, blobstore-backed. Local only. No model weights.</span>
               </li>
               <li>
-                <strong>Privacy as product property</strong>
-                <span>No telemetry. Network-idle GUI. Explicit persist profiles (<code>private</code> / <code>workspace</code> / <code>full</code>). Explicit net grants and a kill switch. Kerckhoffs: schemes public, seeds secret.</span>
+                <strong>Privacy you can actually check</strong>
+                <span>No telemetry. Desktop stays network-idle until you grant it. Persist profiles (<code>private</code> / <code>workspace</code> / <code>full</code>), net grants, kill switch. Schemes are public; seeds stay secret.</span>
               </li>
             </ul>
           </div>
         </div>
 
         <h3>Trust you can read</h3>
-        <p>Capability bits (<code>CAP_AGENT</code>, <code>CAP_VEC</code>, <code>CAP_NET_*</code>, …), NX/W^X, ASLR/KASLR/canaries, fail-closed entropy for release crypto, and an audit log under <code>/var/peak/audit.log</code> are part of the narrative — not a separate “security phase” bolted on after the screenshots look nice. Peak Evergreen wants the research workstation to be <em>explainable</em>: what persisted, what went on the wire, what the agent was allowed to do.</p>
+        <p>Capability bits (<code>CAP_AGENT</code>, <code>CAP_VEC</code>, <code>CAP_NET_*</code>), NX/W^X, ASLR/KASLR/canaries, fail-closed entropy for release crypto, and an audit log at <code>/var/peak/audit.log</code> are part of the product, not a later “security phase.” I want this workstation to be explainable: what persisted, what went on the wire, what the agent was allowed to do.</p>
       </div>
     </section>
 
     <section id="non-goals">
       <div class="prose reveal">
         <p class="section-label">04 — Not solving</p>
-        <h2>What Peak OS is deliberately not.</h2>
-        <p class="lede">Scope discipline is part of the R&amp;D story. Calling non-goals early keeps the page honest when it lands on peakevergreen.</p>
+        <h2>What this is not.</h2>
+        <p class="lede">Scope discipline is part of the story. Calling non-goals early keeps the page honest.</p>
 
         <ul class="list-tight not-list">
           <li>
-            <strong>Not a Linux ABI / glibc userspace</strong>
-            <span>Peak <code>/bin/*</code> builtins and ELF scaffolding — not “drop your Debian userspace on our hobby kernel.” That would collapse the purity claim.</span>
+            <strong>Not Linux userspace</strong>
+            <span>Peak <code>/bin/*</code> builtins and ELF scaffolding. I'm not dropping Debian onto a hobby kernel — that would kill the whole point.</span>
           </li>
           <li>
             <strong>Not a host LLM sidecar</strong>
-            <span>No serial agent bridges, no default remote model. The planner is a bounded in-guest rule/intent engine. An optional remote LLM over TLS may exist later; it must never be the default path.</span>
+            <span>No serial agent bridges, no default remote model. The planner is a bounded in-guest engine. A remote LLM over TLS might show up later. It will never be the default.</span>
           </li>
           <li>
-            <strong>Not Chromium, not OCI, not Pinecone</strong>
-            <span>The browser is a Peak JS + DOM/CSS subset. <code>ctr</code> is not runc/containerd (no image pulls, netns, or process isolation theater). PeakVec is not a cloud vector database — no model weights, local hashed embeddings only.</span>
+            <strong>Not Chromium, Docker, or Pinecone</strong>
+            <span>The browser is a Peak JS / DOM subset. <code>ctr</code> is not runc (no image pulls, netns, or process-isolation theater). PeakVec is local hashed embeddings, not a cloud vector DB.</span>
           </li>
           <li>
             <strong>Not GPU / Wayland / multi-monitor</strong>
-            <span>Software linear framebuffer and compositor. Commercial polish targets (1080p @ UI scale 3) exist; hardware accel is deferred unless Monitor proves a new bottleneck.</span>
+            <span>Software framebuffer and compositor. 1080p @ UI scale 3 is the polish target. Hardware accel waits unless Monitor shows a real bottleneck.</span>
           </li>
           <li>
-            <strong>Not production hardened — yet</strong>
-            <span>Treat Peak as experimental research / commercial-hobby software. Verified boot and signed release ceremony are incomplete. Full ring-3 browser isolation is still deepening. Session lock is a privacy cover (Enter unlocks) — not authentication.</span>
+            <strong>Not production-hardened yet</strong>
+            <span>Treat it like research, because it is. Verified boot and signed releases are incomplete. Browser ring-3 isolation is still deepening. Session lock is a privacy cover (Enter unlocks) — not authentication.</span>
           </li>
           <li>
-            <strong>Not defending the hostile hypervisor</strong>
-            <span>Threat model non-goals include a hostile QEMU host and physical bus attackers / hardware side channels. Secure deletion is best-effort against snapshots you do not control.</span>
+            <strong>Not defending a hostile hypervisor</strong>
+            <span>A hostile QEMU host and physical bus attackers are out of scope. Secure deletion is best-effort against snapshots you don't control.</span>
           </li>
           <li>
             <strong>Not done on Pi silicon</strong>
-            <span>Pi 3 SD images build in CI; HDMI/USB/PeakFS hardware acceptance is still the gate. Pi 4/5 Ethernet, xHCI, Wi‑Fi, and GPU paths are staged or stubs. SMP secondaries stay parked.</span>
+            <span>Pi 3 SD images build in CI; HDMI/USB/PeakFS hardware acceptance is still the gate. Pi 4/5 Ethernet, xHCI, Wi‑Fi, and GPU are stubs. SMP secondaries stay parked.</span>
           </li>
         </ul>
       </div>
@@ -544,28 +544,28 @@
 
     <section id="interesting">
       <div class="prose reveal">
-        <p class="section-label">05 — What’s interesting</p>
-        <h2>Why this is worth an R&amp;D page.</h2>
+        <p class="section-label">05 — What's interesting</p>
+        <h2>Why I keep working on this.</h2>
 
-        <h3>Purity as a product constraint</h3>
-        <p>Most demos cheat quietly. Peak encodes the cheat as a CI failure. The guest must carry its own boot, net, TLS, agent, and UI. That forces architecture: a versioned <strong>BootInfo</strong> ABI from Peak loaders into <code>kernel_entry</code>, thin <code>arch_*</code> / <code>platform_*</code> / <code>blockdev</code> / <code>netdev</code> seams, and portable subsystems above them (VFS/PeakFS, GUI, Peak JS, peak-agent, PeakVec).</p>
+        <h3>Purity is a CI gate, not a slogan</h3>
+        <p>Most demos cheat quietly. Peak makes the cheat fail the build. The guest has to carry its own boot, net, TLS, agent, and UI. That forces a real <strong>BootInfo</strong> ABI from Peak loaders into <code>kernel_entry</code>, thin <code>arch_*</code> / <code>platform_*</code> / <code>blockdev</code> / <code>netdev</code> seams, and VFS, GUI, Peak JS, peak-agent, and PeakVec on top.</p>
 
-        <h3>Agent + PeakVec as kernel-adjacent primitives</h3>
-        <p>Tool catalog and policy live in-kernel. Writes can require GUI Y/N. Turns land in session memory and upsert into PeakVec for semantic recall. Syscalls <code>SYS_agent</code> and <code>SYS_peakvec</code> make the story systemic rather than “an Electron app we also ship.” The interesting claim is not “we have an LLM” — Peak does not, by default — but “workspace agency has a policy surface, an audit trail, and local recall without cloud embeddings.”</p>
+        <h3>The agent isn't an Electron app we also ship</h3>
+        <p>Tools and policy live in-kernel. Writes can require a GUI Y/N. Turns go into session memory and PeakVec. Syscalls <code>SYS_agent</code> and <code>SYS_peakvec</code> make this systemic. The interesting claim isn't “we have an LLM” — we don't, by default. It's that workspace agency has policy, an audit trail, and local recall with no cloud embeddings.</p>
 
-        <h3>In-guest “cloud-shaped” surfaces without Linux</h3>
-        <p>TLS with WebPKI, a software-composited desktop, a browser that fetches only on explicit Go, and a tiny container runtime that serves demos over Peak TCP. None of these need to win a standards bake-off to be research-valuable. Together they answer: <em>does the stack compose?</em></p>
+        <h3>Cloud-shaped surfaces without Linux</h3>
+        <p>TLS with WebPKI, a software desktop, a browser that only fetches when you hit Go, a tiny container runtime over Peak TCP. None of that has to win a standards bake-off. Together they answer a simpler question: <em>does the stack actually compose?</em></p>
 
         <h3>Enhancement-pass culture</h3>
-        <p>The tree carries a long sequence of numbered passes (through Wave 7 / ~Pass 158), locked by <code>smoke-cli</code> gates. That is not marketing cadence — it is how Peak Evergreen keeps vertical integration from rotting. The changelog is a research log of “what became true in the guest this week.”</p>
+        <p>The tree has a long sequence of numbered passes (through Wave 7 / ~Pass 158), locked by <code>smoke-cli</code>. That's not marketing cadence. It's how vertical integration doesn't rot. The changelog is a log of what became true in the guest this week.</p>
       </div>
     </section>
 
     <section id="architecture">
       <div class="prose reveal">
         <p class="section-label">06 — Architecture</p>
-        <h2>One path from firmware to shell.</h2>
-        <p>Firmware (SeaBIOS, OVMF, or VideoCore) hands off to a Peak loader — BIOS El Torito, UEFI application, or Pi shim. The loader builds BootInfo (memory map, framebuffer, HHDM, optional DTB) and enters the higher-half kernel. Shared subsystems — VFS, GUI, net, agent — sit above the HAL. The user meets a shell and a desktop.</p>
+        <h2>Firmware to shell, one path.</h2>
+        <p>Firmware (SeaBIOS, OVMF, or VideoCore) hands off to a Peak loader — BIOS El Torito, UEFI, or Pi shim. The loader builds BootInfo (memory map, framebuffer, HHDM, optional DTB) and jumps into the higher-half kernel. VFS, GUI, net, and the agent sit above a thin HAL. You get a shell and a desktop.</p>
         <div class="flow" aria-label="Boot to desktop flow">
           <span class="flow-node">Firmware</span>
           <span class="flow-arrow" aria-hidden="true">→</span>
@@ -577,16 +577,16 @@
           <span class="flow-arrow" aria-hidden="true">→</span>
           <span class="flow-node">Shell &amp; desktop</span>
         </div>
-        <p style="margin-top: 1.75rem;">Higher-half at <code>0xffffffff80000000</code>, HHDM at <code>0xffff800000000000</code>. PeakFS streams persist to PeakDisk (ATA on PC, SDHCI on Pi). Blobstore backs large objects and PeakVec pages. None of that needs to be memorized to understand the thesis — but it is why the screenshots are not a theme skin over someone else’s kernel.</p>
+        <p style="margin-top: 1.75rem;">Higher-half at <code>0xffffffff80000000</code>, HHDM at <code>0xffff800000000000</code>. PeakFS streams persist to PeakDisk (ATA on PC, SDHCI on Pi). Blobstore backs large objects and PeakVec pages. You don't need to memorize that to get the thesis — but it's why the screenshots aren't a theme skin over someone else's kernel.</p>
       </div>
     </section>
 
     <section id="proof">
       <div class="wrap reveal">
         <div class="prose" style="margin-bottom: 0;">
-          <p class="section-label">07 — Proof surface</p>
+          <p class="section-label">07 — Proof</p>
           <h2>What it looks like in QEMU today.</h2>
-          <p class="lede">Captured from the guest framebuffer. Relative paths point at <code>assets/screenshots/</code> in this repo — rewrite them when you drop this file onto a personal or peakevergreen site.</p>
+          <p class="lede">Screendumps from the guest framebuffer. Relative paths point at <code>assets/screenshots/</code> in this repo.</p>
         </div>
         <div class="gallery">
           <figure>
@@ -611,9 +611,9 @@
 
     <section id="status">
       <div class="prose reveal">
-        <p class="section-label">08 — Status &amp; honesty</p>
-        <h2>Where the research sits.</h2>
-        <p>Baseline tag <code>v0.1.0-mvp</code>; current line <strong>0.3.0-ai</strong>. The interesting work is already in-tree: agent, PeakVec, TLS/WebPKI, desktop polish passes, browser interactive-bar <em>code</em>, container demos. Honest gaps are also in-tree — live public HTTPS body fetch is still Partial (B-HTTPS-H2), documented rather than papered over.</p>
+        <p class="section-label">08 — Status</p>
+        <h2>Where it actually is.</h2>
+        <p>Started at <code>v0.1.0-mvp</code>. Current line is <strong>0.3.0-ai</strong>. Agent, PeakVec, TLS/WebPKI, desktop polish, browser interactive-bar code, and container demos are in-tree. The gaps are in-tree too — live public HTTPS body fetch is still Partial (B-HTTPS-H2). Documented, not papered over.</p>
 
         <dl class="status-grid">
           <div class="status-row">
@@ -642,8 +642,8 @@
           </div>
         </dl>
 
-        <p>Privacy promises that already hold as product claims: no telemetry; local-only agent; network-idle GUI; explicit persistence; explicit network disclosure; identifier minimization; release serial must not print seeds, canaries, or passphrases.</p>
-        <p>If you only remember one sentence: <strong>Peak OS is trying to make an AI-native research workstation true in the guest — and equally trying not to fake that truth with Linux, Limine, or a host bridge.</strong></p>
+        <p>Privacy claims that already hold: no telemetry; local-only agent; network-idle GUI; explicit persistence; explicit network disclosure; identifier minimization; release serial must not print seeds, canaries, or passphrases.</p>
+        <p><strong>I'm trying to make an AI-native workstation true in the guest. I'm not going to fake that with Linux, Limine, or a host bridge.</strong></p>
       </div>
     </section>
   </main>
